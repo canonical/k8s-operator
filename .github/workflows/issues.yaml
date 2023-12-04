@@ -1,0 +1,11 @@
+name: Sync issues to Jira
+
+on:
+  issues:
+    # available via github.event.action
+    types: [opened, reopened, closed]
+
+jobs:
+  issues-to-jira:
+    uses: canonical/operator-workflows/.github/workflows/jira.yaml@main
+    secrets: inherit
