@@ -44,7 +44,7 @@ class K8sCharm(ops.CharmBase):
         Learn more about config at https://juju.is/docs/sdk/config
 
         Args:
-            event: event triggering the handler.
+            _event: event triggering the handler.
         """
         # Fetch an invalid config name
         self.model.config["log-level"].lower()
