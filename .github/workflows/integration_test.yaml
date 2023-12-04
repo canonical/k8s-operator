@@ -8,6 +8,8 @@ jobs:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     secrets: inherit
     with:
+      provider: lxd
+      juju-channel: 3.1/stable
       chaos-app-label: app.kubernetes.io/name=indico
       chaos-enabled: false
       chaos-experiments: pod-delete
