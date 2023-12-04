@@ -3,48 +3,36 @@
 # This file populates the Overview on Charmhub.
 # See https://juju.is/docs/sdk/metadata-reference for a checklist and guidance.
 
-# The charm package name, no spaces (required)
-# See https://juju.is/docs/sdk/naming#heading--naming-charms for guidance.
-name: is-charms-template
- 
-# The following metadata are human-readable and will be published prominently on Charmhub.
-
-# (Recommended)
-display-name: Charm Template
+name: k8s
+display-name: Kubernetes
 
 # (Required)
-summary: A very short one-line summary of the charm.
+summary: A machine charm for K8s 
 docs: https://discourse.charmhub.io
-issues: https://github.com/canonical/is-charms-template-repo/issues
+issues: https://github.com/canonical/k8s-operator/issues
 maintainers: 
-  - https://launchpad.net/~canonical-is-devops
-source: https://github.com/canonical/is-charms-template-repo
+  - https://launchpad.net/~containers
+source: https://github.com/canonical/k8s-operator
+
+assumes:
+  - juju > 3.1
 
 description: |
-  A single sentence that says what the charm is, concisely and memorably.
+  A machine charm which operates a complete Kubernetes cluster.
 
-  A paragraph of one to three short sentences, that describe what the charm does.
+  This charm installs and operates a Kubernetes cluster via the k8s snap. It exposes
+  relations to co-operate with other kubernetes components such as optional CNIs, 
+  optional cloud-providers, optional schedulers, external backing stores, and external
+  certificate storage.
 
-  A third paragraph that explains what need the charm meets.
+  This charm provides the following running components:
+  * kube-apiserver
+  * kube-scheduler
+  * kube-controller-manager
+  * kube-proxy
+  * kubelet
+  * containerd
 
-  Finally, a paragraph that describes whom the charm is useful for.
-
-# The containers and resources metadata apply to Kubernetes charms only.
-# Remove them if not required.
-
-# Your workload’s containers.
-containers:
-  httpbin:
-    resource: httpbin-image
-
-# This field populates the Resources tab on Charmhub.
-resources:
-  # An OCI image resource for each container listed above.
-  # You may remove this if your charm will run without a workload sidecar container.
-  httpbin-image:
-    type: oci-image
-    description: OCI image for httpbin
-    # The upstream-source field is ignored by Juju. It is included here as a reference
-    # so the integration testing suite knows which image to deploy during testing. This field
-    # is also used by the 'canonical/charming-actions' Github action for automated releasing.
-    upstream-source: kennethreitz/httpbin
+  This charm can optionally disable the following components:
+  * A Kubernetes Backing Store
+  * A Kubernetes CNI

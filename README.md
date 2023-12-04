@@ -8,18 +8,34 @@ Avoid using this README file for information that is maintained or published els
 Use links instead.
 -->
 
-# is-charms-template
+# k8s charms
 
-Charmhub package name: operator-template
-More information: https://charmhub.io/is-charms-template
+[![Unit Tests](https://github.com/canonical/k8s-operator/actions/workflows/test.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/test.yaml)
+[![Integration Tests](https://github.com/canonical/k8s-operator/actions/workflows/integration_test.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/integration_test.yaml)
 
-Describe your charm in one or two sentences.
+Charmhub package name: k8s
+More information: https://charmhub.io/k8s
+
+A machine charm which operates a complete Kubernetes cluster.
+
+This charm installs and operates a Kubernetes cluster via the k8s snap. It exposes
+relations to co-operate with other kubernetes components such as optional CNIs, 
+optional cloud-providers, optional schedulers, external backing stores, and external
+certificate managers.
+
+This charm provides the following running components:
+* kube-apiserver
+* kube-scheduler
+* kube-controller-manager
+* kube-proxy
+* kubelet
+* containerd
+
+This charm can optionally disable the following components:
+* A Kubernetes Backing Store
+* A Kubernetes CNI
 
 ## Other resources
-
-<!-- If your charm is documented somewhere else other than Charmhub, provide a link separately. -->
-
-- [Read more](https://example.com)
 
 - [Contributing](CONTRIBUTING.md) <!-- or link to other contribution documentation -->
 
