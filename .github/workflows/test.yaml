@@ -5,7 +5,11 @@ on:
 
 jobs:
   unit-tests:
+    strategy:
+      matrix:
+        charm: ["k8s", "k8s-worker"]
     uses: canonical/operator-workflows/.github/workflows/test.yaml@main
     secrets: inherit
     with:
       self-hosted-runner:  false
+      working-directory:  charms/${{ matrix.charm }}/
