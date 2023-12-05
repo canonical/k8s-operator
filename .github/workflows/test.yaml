@@ -12,4 +12,4 @@ jobs:
     secrets: inherit
     with:
       self-hosted-runner:  false
-      working-directory:  charms/${{ matrix.charm }}/
+      working-directory:  ./charms/${{ matrix.charm }}/
