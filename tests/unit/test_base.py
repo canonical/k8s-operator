@@ -23,6 +23,11 @@ def harness():
 
 
 def test_config_changed_invalid(harness):
-    # Trigger a config-changed event with an updated value
+    # Trigger a config-changed event with an unknown-config option
     with pytest.raises(ValueError):
-        harness.update_config({"log-level": "foobar"})
+        harness.update_config({"unknown-config": "foobar"})
+
+
+def test_update_status(harness):
+    harness.charm.on.update_status.emit()
+    assert harness.model.unit.status == ops.ActiveStatus("Ready")

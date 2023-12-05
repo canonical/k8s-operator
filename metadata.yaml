@@ -15,7 +15,7 @@ maintainers:
 source: https://github.com/canonical/k8s-operator
 
 assumes:
-  - juju > 3.1
+  - juju >= 3.1
 
 description: |
   A machine charm which operates a complete Kubernetes cluster.
