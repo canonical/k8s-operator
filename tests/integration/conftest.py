@@ -9,12 +9,13 @@ from itertools import chain
 from pathlib import Path
 from typing import Optional
 
+import pytest
 import pytest_asyncio
 import yaml
 from pytest_operator.plugin import OpsTest
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
 
     Args:
@@ -73,7 +74,7 @@ class Charm:
 
         return {name: self._craft_resource(name, resource) for name, resource in resources.items()}
 
-    def _craft_resource(self, _name: str, resource: dict):
+    def _craft_resource(self, _name: str, resource: dict) -> Optional[str]:
         """Build resource from metadata item.
 
         Args:
@@ -111,7 +112,12 @@ class Charm:
 
 
 @contextlib.asynccontextmanager
-async def deploy_model(request, ops_test, model_name, *deploy_args: CharmDeploymentArgs):
+async def deploy_model(
+    request: pytest.FixtureRequest,
+    ops_test: OpsTest,
+    model_name: str,
+    *deploy_args: CharmDeploymentArgs,
+):
     """Add a juju model, deploy apps into it, wait for them to be active.
 
     Args:
@@ -123,7 +129,7 @@ async def deploy_model(request, ops_test, model_name, *deploy_args: CharmDeploym
     Yields:
         model object
     """
-    config = {}
+    config: Optional[dict] = {}
     if request.config.option.model_config:
         config = ops_test.read_model_config(request.config.option.model_config)
     credential_name = ops_test.cloud_name
@@ -152,11 +158,11 @@ async def deploy_model(request, ops_test, model_name, *deploy_args: CharmDeploym
 
 
 @pytest_asyncio.fixture(scope="module")
-async def kubernetes_cluster(request, ops_test):
+async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
     model = "main"
     charm_names = ("k8s", "k8s-worker")
-    charms = [Charm(ops_test, Path("charms") / _) for _ in charm_names]
+    charms = [Charm(ops_test, Path("charms") / p) for p in charm_names]
     charm_files = await asyncio.gather(*[charm.resolve() for charm in charms])
     deployments = [
         CharmDeploymentArgs(

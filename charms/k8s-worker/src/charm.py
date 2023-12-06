@@ -5,13 +5,14 @@
 
 # Learn more at: https://juju.is/docs/sdk
 
-"""Charm the service.
+"""K8s-worker Charm.
 
-Refer to the following post for a quick-start guide that will help you
-develop a new k8s charm using the Operator Framework:
+A machine charm which operates a Kubernetes worker.
 
-https://discourse.charmhub.io/t/4208
+This charm installs and operates a Kubernetes worker via the k8s snap. It exposes
+relations to co-operate with other kubernetes components.
 """
+
 
 import logging
 

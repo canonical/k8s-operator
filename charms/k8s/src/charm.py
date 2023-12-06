@@ -5,12 +5,14 @@
 
 # Learn more at: https://juju.is/docs/sdk
 
-"""Charm the service.
+"""K8s Charm.
 
-Refer to the following post for a quick-start guide that will help you
-develop a new k8s charm using the Operator Framework:
+A machine charm which operates a complete Kubernetes cluster.
 
-https://discourse.charmhub.io/t/4208
+This charm installs and operates a Kubernetes cluster via the k8s snap. It exposes
+relations to co-operate with other kubernetes components such as optional CNIs,
+optional cloud-providers, optional schedulers, external backing stores, and external
+certificate storage.
 """
 
 import logging
