@@ -1,4 +1,4 @@
-name: Auto-update charm libraries
+name: Auto-update K8s-worker charm libraries
 
 on:
   schedule:
@@ -8,3 +8,5 @@ jobs:
   auto-update-libs:
     uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@main
     secrets: inherit
+    with:
+      working-directory:  ./charms/k8s-worker/
