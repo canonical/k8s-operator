@@ -4,24 +4,30 @@
 """Fixtures for charm tests."""
 import asyncio
 import contextlib
+import logging
 from dataclasses import asdict, dataclass
 from itertools import chain
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import pytest
 import pytest_asyncio
 import yaml
 from pytest_operator.plugin import OpsTest
 
+log = logging.getLogger(__name__)
+
 
 def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
 
+    --charm-file can be called multiple times for each
+      supplied charm
+
     Args:
         parser: Pytest parser.
     """
-    parser.addoption("--charm-file", action="store")
+    parser.addoption("--charm-file", dest="charm_files", action="append")
 
 
 @dataclass
@@ -90,8 +96,8 @@ class Charm:
             return oci_image
         return None
 
-    async def resolve(self) -> Path:
-        """Build the charm with ops_test.
+    async def resolve(self, charm_files: List[str]) -> Path:
+        """Build or find the charm with ops_test.
 
         Return:
             path to charm file
@@ -101,13 +107,21 @@ class Charm:
         """
         if self._charmfile is None:
             try:
-                charm_name = f"{self.app_name}*.charm"
-                potentials = chain(*(path.glob(charm_name) for path in (Path(), self.path)))
-                self._charmfile, *_ = filter(None, potentials)
+                header = f"{self.app_name}_"
+                charm_name = header + "*.charm"
+                print(charm_files)
+                potentials = chain(
+                    map(Path, charm_files),  # Look in pytest arguments
+                    Path().glob(charm_name),  # Look in top-level path
+                    self.path.glob(charm_name),  # Look in charm-level path
+                )
+                self._charmfile, *_ = filter(lambda s: s.name.startswith(header), potentials)
+                log.info("For %s found charmfile %s", self.app_name, self._charmfile)
             except ValueError:
+                log.info("For %s build charmfile", self.app_name)
                 self._charmfile = await self.ops_test.build_charm(self.path)
         if self._charmfile is None:
-            raise FileNotFoundError(f"{self.app_name}*.charm not found")
+            raise FileNotFoundError(f"{self.app_name}_*.charm not found")
         return self._charmfile.resolve()
 
 
@@ -141,19 +155,20 @@ async def deploy_model(
             config=config,
         )
     with ops_test.model_context(model_name) as the_model:
-        await asyncio.gather(
-            *(
-                the_model.deploy(**asdict(charm))
-                for charm in deploy_args
-                if charm.application_name not in the_model.applications
-            ),
-            the_model.wait_for_idle(
-                apps=[n.application_name for n in deploy_args],
-                status="active",
-                raise_on_blocked=True,
-                timeout=15 * 60,
-            ),
-        )
+        async with ops_test.fast_forward():
+            await asyncio.gather(
+                *(
+                    the_model.deploy(**asdict(charm))
+                    for charm in deploy_args
+                    if charm.application_name not in the_model.applications
+                ),
+                the_model.wait_for_idle(
+                    apps=[n.application_name for n in deploy_args],
+                    status="active",
+                    raise_on_blocked=True,
+                    timeout=15 * 60,
+                ),
+            )
         yield the_model
 
 
@@ -163,7 +178,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     model = "main"
     charm_names = ("k8s", "k8s-worker")
     charms = [Charm(ops_test, Path("charms") / p) for p in charm_names]
-    charm_files = await asyncio.gather(*[charm.resolve() for charm in charms])
+    charm_files = await asyncio.gather(*[charm.resolve(request.config.option.charm_files) for charm in charms])
     deployments = [
         CharmDeploymentArgs(
             entity_url=str(path),

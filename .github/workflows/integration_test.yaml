@@ -5,7 +5,7 @@ on:
 
 jobs:
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
+    uses: addyess/operator-workflows/.github/workflows/integration_test.yaml@integration/multi-charm-artifacts
     secrets: inherit
     with:
       provider: lxd
