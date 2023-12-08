@@ -5,8 +5,6 @@
 
 name: k8s
 display-name: Kubernetes
-
-# (Required)
 summary: A machine charm for K8s 
 docs: https://discourse.charmhub.io
 issues: https://github.com/canonical/k8s-operator/issues
@@ -15,7 +13,7 @@ maintainers:
 source: https://github.com/canonical/k8s-operator
 
 assumes:
-  - juju > 3.1
+  - juju >= 3.1
 
 description: |
   A machine charm which operates a complete Kubernetes cluster.

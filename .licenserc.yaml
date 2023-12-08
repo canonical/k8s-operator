@@ -1,0 +1,47 @@
+header:
+  - license:
+      copyright-owner: Canonical Ltd.
+      content: |
+        Copyright [year] [owner]
+        Licensed under the Apache2.0. See LICENSE file in charm source for details.
+    paths:
+      - 'lib/**'
+    comment: on-failure
+  - license:
+      spdx-id: Apache-2.0
+      copyright-owner: Canonical Ltd.
+      content: |
+        Copyright [year] [owner]
+        See LICENSE file for licensing details.
+    paths:
+      - '**'
+    paths-ignore:
+      - '.github/**'
+      - '**/.gitkeep'
+      - '**/*.cfg'
+      - '**/*.conf'
+      - '**/*.ini'
+      - '**/*.j2'
+      - '**/*.json'
+      - '**/*.md'
+      - '**/*.rule'
+      - '**/*.tmpl'
+      - '**/*.txt'
+      - '**/*.xml'
+      - '.codespellignore'
+      - '.dockerignore'
+      - '.flake8'
+      - '.jujuignore'
+      - '.gitignore'
+      - '.licenserc.yaml'
+      - '.trivyignore'
+      - '.woke.yaml'
+      - '.woke.yml'
+      - 'CODEOWNERS'
+      - 'icon.svg'
+      - 'LICENSE'
+      - 'pyproject.toml'
+      - 'trivy.yaml'
+      - 'zap_rules.tsv'
+      - 'lib/**'
+    comment: on-failure

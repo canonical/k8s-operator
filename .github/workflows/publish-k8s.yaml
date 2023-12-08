@@ -1,4 +1,4 @@
-name: Publish to edge
+name: Publish K8s to edge
 
 on:
   workflow_dispatch:
@@ -12,3 +12,4 @@ jobs:
     secrets: inherit
     with:
       channel: latest/edge
+      working-directory:  ./charms/k8s/
