@@ -33,9 +33,23 @@ jobs:
           charmcraft pack -v
           echo "CHARM_FILE=$(ls ${{env.CHARM_NAME}}_*.charm)" >> $GITHUB_ENV
       - name: Upload charm artifact
-        if: ${{ env.CHARM_NAME != 'UNKNOWN' && !cancelled() }}
+        if: ${{ env.CHARM_FILE != '' && !cancelled() }}
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.CHARM_NAME }}-charm
+          path: ${{ inputs.working-directory }}/${{ env.CHARM_FILE }}
+          if-no-files-found: error
+      - name: Upload charm artifact
+        if: ${{ env.CHARM_FILE != '' && !cancelled() }}
+        uses: actions/upload-artifact@v3
+        with:
+          # Hack Alert
+          #
+          # when the integration-tests run, it doesn't find a env.CHARM_NAME
+          # so it doesn't download the charm artifact
+          # but if we upload this built-charm to the artifact named
+          # UNKNOWN-charm, all of the charms pushed to this artifact name
+          # will be discovered by the integration tests
+          name: UNKNOWN-charm
           path: ${{ inputs.working-directory }}/${{ env.CHARM_FILE }}
           if-no-files-found: error

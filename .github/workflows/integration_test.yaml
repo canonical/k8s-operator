@@ -19,7 +19,7 @@ jobs:
     secrets: inherit
     with:
       provider: lxd
-      juju-channel: 3.1/stable
+      juju-channel: 3.3/stable
       chaos-enabled: false
       load-test-enabled: false
       zap-enabled: false
