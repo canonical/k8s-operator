@@ -1,20 +1,19 @@
-<!--
-Avoid using this README file for information that is maintained or published elsewhere, e.g.:
-
-* metadata.yaml > published on Charmhub
-* documentation > published on (or linked to from) Charmhub
-* detailed contribution guide > documentation or CONTRIBUTING.md
-
-Use links instead.
--->
-
 # k8s charms
 
-[![Unit Tests](https://github.com/canonical/k8s-operator/actions/workflows/test.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/test.yaml)
+[![Tests K8s](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s.yaml)
+[![Tests K8s Worker](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s-worker.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s-worker.yaml)
 [![Integration Tests](https://github.com/canonical/k8s-operator/actions/workflows/integration_test.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/integration_test.yaml)
+<!-- Remove this comment when the charms are published on CharmHub
 
-Charmhub package name: k8s
-More information: https://charmhub.io/k8s
+ [![Get K8s from the Charmhub](https://charmhub.io/k8s/badge.svg)](https://charmhub.io/k8s)
+ [![Get K8s-Worker from the Charmhub](https://charmhub.io/k8s-worker/badge.svg)](https://charmhub.io/k8s-worker)
+
+  Charmhub package name: k8s
+  More information: https://charmhub.io/k8s
+
+  Charmhub package name: k8s-worker
+  More information: https://charmhub.io/k8s-worker
+-->
 
 A machine charm which operates a complete Kubernetes cluster.
 
