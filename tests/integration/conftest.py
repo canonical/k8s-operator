@@ -27,7 +27,7 @@ def pytest_addoption(parser: pytest.Parser):
     Args:
         parser: Pytest parser.
     """
-    parser.addoption("--charm-file", dest="charm_files", action="append")
+    parser.addoption("--charm-file", dest="charm_files", action="append", default=list())
 
 
 @dataclass
@@ -109,7 +109,6 @@ class Charm:
             try:
                 header = f"{self.app_name}_"
                 charm_name = header + "*.charm"
-                print(charm_files)
                 potentials = chain(
                     map(Path, charm_files),  # Look in pytest arguments
                     Path().glob(charm_name),  # Look in top-level path
