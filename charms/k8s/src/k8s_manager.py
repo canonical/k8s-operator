@@ -1,3 +1,6 @@
+# Copyright 2023 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 """Module for managing Kubernetes Snap interactions."""
 import json
 import socket
