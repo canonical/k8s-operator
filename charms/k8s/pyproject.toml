@@ -39,7 +39,7 @@ explicit_package_bases = true
 namespace_packages = true
 
 [tool.pylint]
-disable = "wrong-import-order,redefined-outer-name"
+disable = "wrong-import-order,redefined-outer-name,too-few-public-methods"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
