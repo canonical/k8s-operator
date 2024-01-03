@@ -23,6 +23,7 @@ import ops
 logger = logging.getLogger(__name__)
 
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
+K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/control.socket"
 
 
 class K8sCharm(ops.CharmBase):
