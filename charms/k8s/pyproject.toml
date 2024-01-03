@@ -45,7 +45,7 @@ namespace_packages = true
 # Ignore no-self-argument due to pydantic validators
 disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument"
 # Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
-extension-pkg-whitelist = "pydantic"
+extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
 
 [tool.pytest.ini_options]
 minversion = "6.0"
