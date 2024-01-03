@@ -1,0 +1,55 @@
+# Copyright 2023 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: Build Charms
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        type: string
+        description: Image runner for building the images
+        default: ubuntu-22.04
+      working-directory:
+        type: string
+        description: The working directory for jobs
+        default: "./"
+
+jobs:
+  build-charms:
+    name: Build and push charms
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4.1.1
+      - uses: canonical/setup-lxd@v0.1.1
+      - name: Extract charm name
+        working-directory: ${{ inputs.working-directory }}
+        run: echo "CHARM_NAME=$([ -f metadata.yaml ] && yq '.name' metadata.yaml || echo UNKNOWN)" >> $GITHUB_ENV
+      - name: Pack charm
+        if: ${{ env.CHARM_NAME != 'UNKNOWN' && !cancelled() }}
+        working-directory: ${{ inputs.working-directory }}/${{ matrix.path }}
+        run: |
+          sudo snap install charmcraft --classic --channel latest/stable
+          charmcraft pack -v
+          echo "CHARM_FILE=$(ls ${{env.CHARM_NAME}}_*.charm)" >> $GITHUB_ENV
+      - name: Upload charm artifact
+        if: ${{ env.CHARM_FILE != '' && !cancelled() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.CHARM_NAME }}-charm
+          path: ${{ inputs.working-directory }}/${{ env.CHARM_FILE }}
+          if-no-files-found: error
+      - name: Upload charm artifact
+        if: ${{ env.CHARM_FILE != '' && !cancelled() }}
+        uses: actions/upload-artifact@v3
+        with:
+          # Hack Alert
+          #
+          # when the integration-tests run, it doesn't find a env.CHARM_NAME
+          # so it doesn't download the charm artifact
+          # but if we upload this built-charm to the artifact named
+          # UNKNOWN-charm, all of the charms pushed to this artifact name
+          # will be discovered by the integration tests
+          name: UNKNOWN-charm
+          path: ${{ inputs.working-directory }}/${{ env.CHARM_FILE }}
+          if-no-files-found: error

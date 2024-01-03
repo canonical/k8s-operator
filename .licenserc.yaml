@@ -1,6 +1,7 @@
 header:
   - license:
       copyright-owner: Canonical Ltd.
+      copyright-year: 2024
       content: |
         Copyright [year] [owner]
         Licensed under the Apache2.0. See LICENSE file in charm source for details.

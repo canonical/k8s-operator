@@ -4,12 +4,22 @@ on:
   pull_request:
 
 jobs:
+  build-all-charms:
+    strategy:
+      matrix:
+        path:
+          - "./charms/k8s/"
+          - "./charms/k8s-worker/"
+    uses: ./.github/workflows/build-charm.yaml
+    with:
+      working-directory:  ${{ matrix.path }}
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
+    needs: [build-all-charms]
     secrets: inherit
     with:
       provider: lxd
-      juju-channel: 3.1/stable
+      juju-channel: 3.3/stable
       chaos-enabled: false
       load-test-enabled: false
       zap-enabled: false

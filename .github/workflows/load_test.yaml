@@ -8,6 +8,8 @@ jobs:
   load-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     with:
+      provider: lxd
+      juju-channel: 3.3/stable
       load-test-enabled: true
       load-test-run-args: "-e LOAD_TEST_HOST=localhost"
     secrets: inherit
