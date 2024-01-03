@@ -1,2 +1,2 @@
 ops >= 2.2.0
-pydantic == 1.*
+pydantic ==2.*
