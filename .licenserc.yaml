@@ -17,6 +17,7 @@ header:
     paths:
       - '**'
     paths-ignore:
+      - '**/lib/charms/operator_libs_linux/**'
       - '.github/**'
       - '**/.gitkeep'
       - '**/*.cfg'
