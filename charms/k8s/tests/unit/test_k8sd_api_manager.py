@@ -104,6 +104,7 @@ class TestK8sdAPIManager(unittest.TestCase):
     """Test K8sdAPIManager"""
 
     def setUp(self):
+        """Setup environment."""
         self.mock_factory = MagicMock()
         self.api_manager = K8sdAPIManager(factory=self.mock_factory)
 
