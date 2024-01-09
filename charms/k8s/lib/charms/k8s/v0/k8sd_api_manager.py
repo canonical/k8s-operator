@@ -1,7 +1,31 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Module for managing Kubernetes Snap interactions."""
+"""Module for managing k8sd API interactions.
+
+This module provides a high-level interface for interacting with K8sd. It
+simplifies tasks such as token management and component updates.
+
+The core of the module is the K8sdAPIManager, which handles the creation
+and management of HTTP connections to interact with the k8sd API. This
+class utilises different connection factories (UnixSocketConnectionFactory
+and HTTPConnectionFactory) to establish connections through either Unix
+sockets or HTTP protocols.
+
+Example usage for creating a join token for K8sd:
+
+```python
+try:
+    factory = UnixSocketConnectionFactory('/path/to/socket')
+    api_manager = K8sdAPIManager(factory)
+    join_token = api_manager.create_join_token('node-name')
+except K8sdAPIManagerError as e:
+    logger.error("An error occurred: %s", e.message)
+```
+
+Similarly, the module allows for requesting authentication tokens and
+managing K8s components.
+"""
 import json
 import socket
 from contextlib import contextmanager
@@ -9,6 +33,16 @@ from http.client import HTTPConnection, HTTPException
 from typing import List, Type, TypeVar
 
 from pydantic import BaseModel, Field, validator
+
+# The unique Charmhub library identifier, never change it
+LIBID = "6a5f235306864667a50437c08ba7e83f"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 1
 
 
 class K8sdAPIManagerError(Exception):
@@ -74,24 +108,6 @@ class BaseRequestModel(BaseModel):
         """
         if v != 0:
             raise ValueError(f"Error code must be 0. Received {v}")
-        return v
-
-    @validator("error", always=True)
-    def check_error(cls, v, values):
-        """Validate the error field.
-
-        Args:
-            v (str): The value of the error_code field to validate.
-            values (dict): Dictionary of field values.
-
-        Returns:
-            str: The validated error message.
-
-        Raises:
-            ValueError: If the error_code is non-zero and the error message is missing.
-        """
-        if "error_code" in values and values["error_code"] != 0 and not v:
-            raise ValueError("Error message must be provided for non-zero error code")
         return v
 
 
