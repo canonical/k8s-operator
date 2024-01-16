@@ -1,6 +1,6 @@
 # K8s Charm
 
-This defines a charm named `k8s`, an application which deploys the `k8s` snap providing an opinioned distribution of Canonical Kubernetes within juju which is extensible, managable, and observable via the juju eco-system. The units deployed by this charm operate multiple kubernetes binaries maintained by Canonical (`kubelet`, `kube-proxy`, `kube-scheduler`, `kube-controller-manager`, and `kube-apiserver`)
+This defines a charm named `k8s`, an application which deploys the `k8s` snap providing an opinioned distribution of Canonical Kubernetes within juju which is extensible, manage-able, and observable via the juju eco-system. The units deployed by this charm operate multiple kubernetes binaries maintained by Canonical (`kubelet`, `kube-proxy`, `kube-scheduler`, `kube-controller-manager`, and `kube-apiserver`)
 
 ## Deploy
 Deploy the charm from the charmhub store with a single command to have a single node cluster. 

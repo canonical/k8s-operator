@@ -41,7 +41,11 @@ K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 
 
 class K8sCharm(ops.CharmBase):
-    """A charm for managing a K8s cluster via the k8s snap."""
+    """A charm for managing a K8s cluster via the k8s snap.
+    Attrs:
+        is_worker: true if this is a worker charm unit
+        is_control_plane: true if this is a control-plane charm unit
+    """
 
     def __init__(self, *args):
         """Initialise the K8s charm.
@@ -57,11 +61,12 @@ class K8sCharm(ops.CharmBase):
 
         self.reconciler = Reconciler(self, self._reconcile)
 
-        self.worker = self.meta.name == "k8s-worker"
+        self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
 
     @property
-    def is_control_plane(self):
+    def is_control_plane(self) -> bool:
+        """Returns true if the unit is not a worker."""
         return not self.is_worker
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
