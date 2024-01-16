@@ -1,0 +1,7 @@
+venv
+tox.ini
+tests/
+pyproject.toml
+.coverage
+.tox
+.mypy_cache

@@ -9,7 +9,7 @@ jobs:
       matrix:
         path:
           - "./charms/k8s/"
-          - "./charms/k8s-worker/"
+          - "./charms/k8s/worker/"
     uses: ./.github/workflows/build-charm.yaml
     with:
       working-directory:  ${{ matrix.path }}

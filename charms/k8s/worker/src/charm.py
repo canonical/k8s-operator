@@ -57,7 +57,12 @@ class K8sCharm(ops.CharmBase):
 
         self.reconciler = Reconciler(self, self._reconcile)
 
+        self.worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
+
+    @property
+    def is_control_plane(self):
+        return not self.is_worker
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -99,15 +104,8 @@ class K8sCharm(ops.CharmBase):
             # TODO: Make port (and address) configurable.
             self.api_manager.bootstrap_k8s_snap(name, f"{str(address)}:6400")
 
-    def _create_cluster_tokens(self):
-        """Create tokens for the units in the peer cluster relation."""
-        if not self.unit.is_leader():
-            return
-
-        relation = self.model.get_relation("cluster")
-        if not relation:
-            return
-
+    def _distribute_cluster_tokens(self, relation, _role):
+        """Create tokens for the units."""
         units = {u for u in relation.units if u.name != self.unit.name}
         app_databag = relation.data.get(self.model.app, {})
 
@@ -121,6 +119,15 @@ class K8sCharm(ops.CharmBase):
             secret = self.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.app][unit.name] = secret.id or ""
+
+
+    def _create_cluster_tokens(self):
+        """Create tokens for the units in the cluster and k8s-cluster relations."""
+        if not self.unit.is_leader() or not self.is_control_plane:
+            return
+
+        if peer := self.model.get_relation("cluster"):
+            self._distribute_cluster_tokens(peer, "control-plane")
 
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
@@ -180,7 +187,7 @@ class K8sCharm(ops.CharmBase):
         """Reconcile state change events."""
         self._install_k8s_snap()
         self._apply_snap_requirements()
-        if self.unit.is_leader():
+        if self.unit.is_leader() and self.is_control_plane:
             self._bootstrap_k8s_snap()
             self._enable_components()
             self._create_cluster_tokens()
@@ -201,7 +208,7 @@ class K8sCharm(ops.CharmBase):
         else:
             status.add(ops.WaitingStatus("Waiting for k8s to be ready."))
 
-    def _on_update_status(self, _):
+    def _on_update_status(self, _event: ops.UpdateStatusEvent):
         """Handle update-status event."""
         if not self.reconciler.stored.reconciled:
             return

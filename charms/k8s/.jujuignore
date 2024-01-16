@@ -1,0 +1,9 @@
+worker/venv
+worker/tox.ini
+worker/tests/
+worker/charmcraft.yaml
+worker/actions.yaml
+worker/config.yaml
+worker/.coverage
+worker/.tox
+worker/.mypy_cache

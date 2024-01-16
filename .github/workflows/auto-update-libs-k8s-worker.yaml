@@ -9,4 +9,4 @@ jobs:
     uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@main
     secrets: inherit
     with:
-      working-directory:  ./charms/k8s-worker/
+      working-directory:  ./charms/k8s/worker/

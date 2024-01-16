@@ -3,14 +3,52 @@
 # This file configures Charmcraft.
 # See https://juju.is/docs/sdk/charmcraft-config for guidance.
 
+name: k8s
+title: Kubernetes
+summary: A machine charm for K8s
+description: |-
+  A machine charm which operates a complete Kubernetes cluster.
+
+  This charm installs and operates a Kubernetes cluster via the k8s snap. It exposes
+  relations to co-operate with other kubernetes components such as optional CNIs,
+  optional cloud-providers, optional schedulers, external backing stores, and external
+  certificate storage.
+
+  This charm provides the following running components:
+  * kube-apiserver
+  * kube-scheduler
+  * kube-controller-manager
+  * kube-proxy
+  * kubelet
+  * containerd
+
+  This charm can optionally disable the following components:
+  * A Kubernetes Backing Store
+  * A Kubernetes CNI
+links:
+  contact: https://launchpad.net/~containers
+  documentation: https://discourse.charmhub.io
+  issues:
+  - https://github.com/canonical/k8s-operator/issues
+  source:
+    - https://github.com/canonical/k8s-operator
+
+assumes:
+  - juju >= 3.1
+
 type: charm
 bases:
   - build-on:
     - name: ubuntu
-      channel: "22.04"
+      channel: "20.04"
+      architectures: [amd64]
     run-on:
     - name: ubuntu
+      channel: "20.04"
+      architectures: [amd64]
+    - name: ubuntu
       channel: "22.04"
+      architectures: [amd64]
 config:
   options:
     channel:
@@ -21,3 +59,8 @@ config:
 parts:
   charm:
     build-packages: [git]
+    charm-entrypoint: worker/src/charm.py
+
+peer:
+  cluster:
+    interface: cluster
