@@ -9,4 +9,4 @@ jobs:
     secrets: inherit
     with:
       self-hosted-runner:  false
-      working-directory:  ./charms/k8s/worker
+      working-directory:  ./charms/k8s/worker/
