@@ -1,9 +1,6 @@
 [tool.bandit]
 exclude_dirs = ["/venv/", "tests"]
-<<<<<<< HEAD
 skips = ["B404","B603"]
-=======
->>>>>>> 467edae (linting issues)
 [tool.bandit.assert_used]
 skips = ["*/*test.py", "*/test_*.py", "*tests/*.py"]
 
@@ -28,12 +25,8 @@ exclude = [".git", "__pycache__", ".tox", "build", "dist", "*.egg_info", "venv"]
 select = ["E", "W", "F", "C", "N", "R", "D", "H"]
 # Ignore W503, E501 because using black creates errors with this
 # Ignore D107 Missing docstring in __init__
-<<<<<<< HEAD
 # Ignore N805 first argument should be named self. Pydantic validators do not comply.
 ignore = ["W503", "E501", "D107", "N805"]
-=======
-ignore = ["W503", "E501", "D107"]
->>>>>>> 467edae (linting issues)
 
 # D100, D101, D102, D103: Ignore missing docstrings in tests
 per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,D205,D212,D415"]

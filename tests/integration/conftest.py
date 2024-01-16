@@ -68,7 +68,7 @@ class Charm:
     @property
     def metadata(self) -> dict:
         """Charm Metadata."""
-        return yaml.safe_load((self.path / "metadata.yaml").read_text())
+        return yaml.safe_load((self.path / "charmcraft.yaml").read_text())
 
     @property
     def app_name(self) -> str:
@@ -180,8 +180,8 @@ async def deploy_model(
 async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
     model = "main"
-    charm_names = ("k8s", "k8s-worker")
-    charms = [Charm(ops_test, Path("charms") / p) for p in charm_names]
+    charm_path = ("k8s", "k8s/worker")
+    charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
