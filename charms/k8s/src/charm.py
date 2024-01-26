@@ -29,8 +29,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     UnixSocketConnectionFactory,
 )
 from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
-from ops.model import WaitingStatus
-from pydantic import ValidationError
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -107,7 +105,8 @@ class K8sCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("Installing k8s snap")
         k8s_snap = self.snap_cache["k8s"]
         if not k8s_snap.present:
-            k8s_snap.ensure(SnapState.Latest, channel="edge")
+            channel = self.config["channel"]
+            k8s_snap.ensure(SnapState.Latest, channel=channel)
 
     def _on_install(self, event):
         """Handle install event for the charm.
@@ -115,24 +114,27 @@ class K8sCharm(ops.CharmBase):
         Args:
             event: The event that triggered this handler.
         """
+        # TODO: Implement clustering using leader units.
         try:
             self._install_k8s_snap()
             self._apply_snap_requirements()
             self._bootstrap_k8s_snap()
             self._enable_components()
-            self.unit.status = WaitingStatus("K8s not ready")
-        except (ValidationError, InvalidResponseError) as e:
+            self.unit.status = ops.WaitingStatus("Waiting for K8s to be ready")
+        except InvalidResponseError as e:
             logger.warning("Failed to query k8s snap. Reason: %s", e)
             self.unit.status = ops.WaitingStatus("Waiting for K8sd API.")
+            event.defer()
         except SnapError as e:
             logger.error("Failed to install k8s snap. Reason: %s", e.message)
             self.unit.status = ops.BlockedStatus("Failed to install k8s snap")
+            event.defer()
         except subprocess.CalledProcessError as e:
             logger.error("Failed to run subprocess: %s", e)
+            event.defer()
         except K8sdConnectionError as e:
             logger.warning("Unable to contact K8sd API: %s", e)
             self.unit.status = ops.WaitingStatus("Waiting for K8sd API.")
-        finally:
             event.defer()
 
     def _on_update_status(self, event: ops.UpdateStatusEvent):
@@ -146,12 +148,12 @@ class K8sCharm(ops.CharmBase):
                 if version := self._get_snap_version():
                     self.unit.set_workload_version(version)
                 self.unit.status = ops.ActiveStatus("Ready")
-        except ValidationError:
+        except InvalidResponseError:
             self.unit.status = ops.WaitingStatus("Waiting for K8s to be ready")
+            event.defer()
         except K8sdConnectionError:
             logger.exception("Unable to contact K8sdAPI")
             self.unit.status = ops.WaitingStatus("Waiting for K8sd API")
-        finally:
             event.defer()
 
 

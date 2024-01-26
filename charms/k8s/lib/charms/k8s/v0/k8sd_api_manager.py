@@ -43,7 +43,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 1
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +144,10 @@ class CreateJoinTokenResponse(BaseRequestModel):
     """Response model for join token creation requests.
 
     Attributes:
-        metadata (TokenMetadata): Metadata containing the newly created join token.
+        token (str): Metadata containing the newly created join token.
     """
 
-    metadata: TokenMetadata
+    token: str = Field(..., alias="metadata")
 
 
 class ClusterMember(BaseModel):
@@ -213,31 +213,6 @@ class GetClusterStatusResponse(BaseRequestModel):
     """
 
     metadata: Optional[ClusterMetadata] = None
-
-    @validator("error_code", always=True)
-    def check_error_code(cls, v, values):
-        """Override the base model validator for error_code to allow any value.
-
-        Args:
-            v (int): The value of the error_code field.
-            values (dict): The values dictionary.
-
-        Returns:
-            int: The unvalidated error code.
-        """
-        return v
-
-    @validator("status_code", always=True)
-    def check_status_code(cls, v):
-        """Override the base model validator for status_code to allow any value.
-
-        Args:
-            v (int): The value of the status_code field.
-
-        Returns:
-            int: The unvalidated status code.
-        """
-        return v
 
 
 T = TypeVar("T", bound=BaseRequestModel)
@@ -373,17 +348,22 @@ class K8sdAPIManager:
         """
         try:
             with self.factory.create_connection() as connection:
-                if body is not None:
-                    body_data = json.dumps(body)
-                else:
-                    body_data = None
+                body_data = json.dumps(body) if body is not None else None
+                headers = {"Content-Type": "application/json"} if body_data else {}
+
                 connection.request(
                     method,
                     endpoint,
                     body=body_data,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                 )
                 response = connection.getresponse()
+
+                if not 200 <= response.status < 300:
+                    raise InvalidResponseError(
+                        f"Request failed with status {response.status}: {response.reason}"
+                    )
+
                 data = response.read().decode()
             return response_cls.parse_raw(data)
 
@@ -401,10 +381,10 @@ class K8sdAPIManager:
         Returns:
             str: The generated join token if successful.
         """
-        endpoint = "/1.0/k8sd/tokens"
+        endpoint = "/cluster/1.0/tokens"
         body = {"name": name}
         join_response = self._send_request(endpoint, "POST", CreateJoinTokenResponse, body)
-        return join_response.metadata.token
+        return join_response.token
 
     def enable_component(self, name: str, enable: bool):
         """Enable or disable a k8s component.
@@ -423,9 +403,13 @@ class K8sdAPIManager:
         Returns:
             bool: True if the cluster has been bootstrapped, False otherwise.
         """
-        endpoint = "/1.0/k8sd/cluster"
-        cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
-        return cluster_status.error_code == 0
+        try:
+            endpoint = "/1.0/k8sd/cluster"
+            cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
+            return cluster_status.error_code == 0
+        except InvalidResponseError as e:
+            logger.error("Invalid response while checking if cluster is bootstrapped: %s", e)
+        return False
 
     def is_cluster_ready(self):
         """Check if the Kubernetes cluster is ready.
