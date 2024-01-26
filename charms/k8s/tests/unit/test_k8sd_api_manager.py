@@ -111,6 +111,7 @@ class TestK8sdAPIManager(unittest.TestCase):
     def test_create_join_token_invalid_response(self):
         mock_connection = MagicMock()
         self.mock_factory.create_connection.return_value.__enter__.return_value = mock_connection
+        mock_connection.getresponse.return_value.status = 500
         mock_connection.getresponse.return_value.read.return_value = (
             '{"invalid": "response"}'.encode()
         )
@@ -127,9 +128,9 @@ class TestK8sdAPIManager(unittest.TestCase):
     def test_create_join_token_success(self):
         mock_connection = MagicMock()
         self.mock_factory.create_connection.return_value.__enter__.return_value = mock_connection
+        mock_connection.getresponse.return_value.status = 200
         mock_connection.getresponse.return_value.read.return_value = (
-            '{"status_code": 200, "type": "test", "error_code": 0, '
-            + '"metadata": {"token": "test-token"}}'
+            '{"status_code": 200, "type": "test", "error_code": 0, ' + '"metadata": "test-token"}'
         ).encode()
 
         token = self.api_manager.create_join_token("test-node")
@@ -137,7 +138,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         self.assertEqual(token, "test-token")
         mock_connection.request.assert_called_once_with(
             "POST",
-            "/1.0/k8sd/tokens",
+            "/cluster/1.0/tokens",
             body='{"name": "test-node"}',
             headers={"Content-Type": "application/json"},
         )
@@ -145,12 +146,12 @@ class TestK8sdAPIManager(unittest.TestCase):
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_create_join_token(self, mock_send_request):
         mock_send_request.return_value = CreateJoinTokenResponse(
-            status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="foo")
+            status_code=200, type="test", error_code=0, metadata="foo"
         )
 
         self.api_manager.create_join_token("test-node")
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/tokens", "POST", {"name": "test-node"}, CreateJoinTokenResponse
+            "/cluster/1.0/tokens", "POST", CreateJoinTokenResponse, {"name": "test-node"}
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -161,7 +162,10 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         self.api_manager.enable_component("foo", True)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", {"status": "enable"}, UpdateComponentResponse
+            "/1.0/k8sd/components/foo",
+            "PUT",
+            UpdateComponentResponse,
+            {"status": "enabled"},
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -172,7 +176,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         self.api_manager.enable_component("foo", False)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", {"status": "disable"}, UpdateComponentResponse
+            "/1.0/k8sd/components/foo", "PUT", UpdateComponentResponse, {"status": "disabled"}
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -189,6 +193,6 @@ class TestK8sdAPIManager(unittest.TestCase):
         mock_send_request.assert_called_once_with(
             "/1.0/kubernetes/auth/tokens",
             "POST",
-            {"username": test_user, "groups": test_groups},
             AuthTokenResponse,
+            {"username": test_user, "groups": test_groups},
         )

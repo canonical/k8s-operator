@@ -1,5 +1,6 @@
 [tool.bandit]
 exclude_dirs = ["/venv/", "tests"]
+skips = ["B404","B603"]
 [tool.bandit.assert_used]
 skips = ["*/*test.py", "*/test_*.py", "*tests/*.py"]
 
@@ -43,7 +44,7 @@ namespace_packages = true
 [tool.pylint]
 # Ignore too-few-public-methods due to pydantic models
 # Ignore no-self-argument due to pydantic validators
-disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument"
+disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument,fixme"
 # Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
 extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
 
@@ -77,3 +78,5 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+[tool.pyright]
+extraPaths = ["./lib"]
