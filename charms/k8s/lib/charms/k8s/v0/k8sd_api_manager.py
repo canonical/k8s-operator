@@ -27,10 +27,11 @@ Similarly, the module allows for requesting authentication tokens and
 managing K8s components.
 """
 import json
+import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import List, Type, TypeVar
+from typing import List, Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field, validator
 
@@ -42,7 +43,9 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
+
+logger = logging.getLogger(__name__)
 
 
 class K8sdAPIManagerError(Exception):
@@ -94,11 +97,12 @@ class BaseRequestModel(BaseModel):
         return v
 
     @validator("error_code", always=True)
-    def check_error_code(cls, v):
+    def check_error_code(cls, v, values):
         """Validate the error_code field.
 
         Args:
             v (int): The value of the error_code field to validate.
+            values (dict): The values dictionary.
 
         Returns:
             int: The validated error code if it is 0.
@@ -107,7 +111,8 @@ class BaseRequestModel(BaseModel):
             ValueError: If the error_code is not 0.
         """
         if v != 0:
-            raise ValueError(f"Error code must be 0. Received {v}")
+            error_message = values.get("error", "Unknown error")
+            raise ValueError(f"Error code must be 0, received {v}. Error message: {error_message}")
         return v
 
 
@@ -143,6 +148,96 @@ class CreateJoinTokenResponse(BaseRequestModel):
     """
 
     metadata: TokenMetadata
+
+
+class ClusterMember(BaseModel):
+    """Represents a member in the k8sd cluster.
+
+    Attributes:
+        Name (str): Name of the cluster member.
+        Address (str): Address of the cluster member.
+        Role (str): Role of the member in the cluster.
+        Fingerprint (str): Fingerprint for the member.
+        Status (str): Current status of the member.
+    """
+
+    Name: str
+    Address: str
+    Role: str
+    Fingerprint: str
+    Status: str
+
+
+class ClusterComponent(BaseModel):
+    """Represents a component in the k8sd cluster.
+
+    Attributes:
+        name (str): Name of the component.
+        status (str): Current status of the component.
+    """
+
+    name: str
+    status: str
+
+
+class ClusterStatus(BaseModel):
+    """Represents the overall status of the k8sd cluster.
+
+    Attributes:
+        Ready (bool): Indicates if the cluster is ready.
+        Members (List[ClusterMember]): List of members in the cluster.
+        Components (List[ClusterComponent]): List of components in the cluster.
+    """
+
+    Ready: bool
+    Members: List[ClusterMember]
+    Components: List[ClusterComponent]
+
+
+class ClusterMetadata(BaseModel):
+    """Metadata containing status information about the k8sd cluster.
+
+    Attributes:
+        status (ClusterStatus): The status of the k8sd cluster.
+    """
+
+    status: ClusterStatus
+
+
+class GetClusterStatusResponse(BaseRequestModel):
+    """Response model for getting the status of the k8sd cluster.
+
+    Attributes:
+        metadata (Optional[ClusterMetadata]): Metadata containing the cluster status.
+                                              Can be None if the status is not available.
+    """
+
+    metadata: Optional[ClusterMetadata] = None
+
+    @validator("error_code", always=True)
+    def check_error_code(cls, v, values):
+        """Override the base model validator for error_code to allow any value.
+
+        Args:
+            v (int): The value of the error_code field.
+            values (dict): The values dictionary.
+
+        Returns:
+            int: The unvalidated error code.
+        """
+        return v
+
+    @validator("status_code", always=True)
+    def check_status_code(cls, v):
+        """Override the base model validator for status_code to allow any value.
+
+        Args:
+            v (int): The value of the status_code field.
+
+        Returns:
+            int: The unvalidated status code.
+        """
+        return v
 
 
 T = TypeVar("T", bound=BaseRequestModel)
@@ -258,7 +353,9 @@ class K8sdAPIManager:
         """
         self.factory = factory
 
-    def _send_request(self, endpoint: str, method: str, body: dict, response_cls: Type[T]) -> T:
+    def _send_request(
+        self, endpoint: str, method: str, response_cls: Type[T], body: Optional[dict] = None
+    ) -> T:
         """Send a request to the k8sd API endpoint.
 
         Args:
@@ -276,10 +373,14 @@ class K8sdAPIManager:
         """
         try:
             with self.factory.create_connection() as connection:
+                if body is not None:
+                    body_data = json.dumps(body)
+                else:
+                    body_data = None
                 connection.request(
                     method,
                     endpoint,
-                    body=json.dumps(body),
+                    body=body_data,
                     headers={"Content-Type": "application/json"},
                 )
                 response = connection.getresponse()
@@ -302,7 +403,7 @@ class K8sdAPIManager:
         """
         endpoint = "/1.0/k8sd/tokens"
         body = {"name": name}
-        join_response = self._send_request(endpoint, "POST", body, CreateJoinTokenResponse)
+        join_response = self._send_request(endpoint, "POST", CreateJoinTokenResponse, body)
         return join_response.metadata.token
 
     def enable_component(self, name: str, enable: bool):
@@ -313,8 +414,30 @@ class K8sdAPIManager:
             enable (bool): True to enable, False to disable the component.
         """
         endpoint = f"/1.0/k8sd/components/{name}"
-        body = {"status": "enable" if enable else "disable"}
-        self._send_request(endpoint, "PUT", body, UpdateComponentResponse)
+        body = {"status": "enabled" if enable else "disabled"}
+        self._send_request(endpoint, "PUT", UpdateComponentResponse, body)
+
+    def is_cluster_bootstrapped(self) -> bool:
+        """Check if K8sd has been bootstrapped.
+
+        Returns:
+            bool: True if the cluster has been bootstrapped, False otherwise.
+        """
+        endpoint = "/1.0/k8sd/cluster"
+        cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
+        return cluster_status.error_code == 0
+
+    def is_cluster_ready(self):
+        """Check if the Kubernetes cluster is ready.
+
+        Returns:
+            bool: True if the cluster is ready, False otherwise.
+        """
+        endpoint = "/1.0/k8sd/cluster"
+        cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
+        if cluster_status.metadata:
+            return cluster_status.metadata.status.Ready
+        return False
 
     def request_auth_token(self, username: str, groups: List[str]) -> str:
         """Request a Kubernetes authentication token.
@@ -328,5 +451,5 @@ class K8sdAPIManager:
         """
         endpoint = "/1.0/kubernetes/auth/tokens"
         body = {"username": username, "groups": groups}
-        auth_response = self._send_request(endpoint, "POST", body, AuthTokenResponse)
+        auth_response = self._send_request(endpoint, "POST", AuthTokenResponse, body)
         return auth_response.metadata.token

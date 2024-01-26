@@ -150,7 +150,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         self.api_manager.create_join_token("test-node")
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/tokens", "POST", {"name": "test-node"}, CreateJoinTokenResponse
+            "/1.0/k8sd/tokens", "POST", CreateJoinTokenResponse, {"name": "test-node"}
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -161,7 +161,10 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         self.api_manager.enable_component("foo", True)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", {"status": "enable"}, UpdateComponentResponse
+            "/1.0/k8sd/components/foo",
+            "PUT",
+            UpdateComponentResponse,
+            {"status": "enabled"},
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -172,7 +175,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         self.api_manager.enable_component("foo", False)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", {"status": "disable"}, UpdateComponentResponse
+            "/1.0/k8sd/components/foo", "PUT", UpdateComponentResponse, {"status": "disabled"}
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -189,6 +192,6 @@ class TestK8sdAPIManager(unittest.TestCase):
         mock_send_request.assert_called_once_with(
             "/1.0/kubernetes/auth/tokens",
             "POST",
-            {"username": test_user, "groups": test_groups},
             AuthTokenResponse,
+            {"username": test_user, "groups": test_groups},
         )

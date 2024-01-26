@@ -1,5 +1,6 @@
 [tool.bandit]
 exclude_dirs = ["/venv/", "tests"]
+skips = ["B404","B603"]
 [tool.bandit.assert_used]
 skips = ["*/*test.py", "*/test_*.py", "*tests/*.py"]
 
@@ -77,3 +78,5 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+[tool.pyright]
+extraPaths = ["./lib"]
