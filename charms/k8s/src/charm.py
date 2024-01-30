@@ -129,7 +129,7 @@ class K8sCharm(ops.CharmBase):
             k8s_snap.ensure(SnapState.Latest, channel=channel)
 
     @on_error(
-        ops.WaitingStatus("Failed to update status"),
+        ops.WaitingStatus("Cluster not yet ready"),
         subprocess.CalledProcessError,
         InvalidResponseError,
         K8sdConnectionError,
