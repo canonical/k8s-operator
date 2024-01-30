@@ -64,6 +64,7 @@ class K8sCharm(ops.CharmBase):
         # TODO: Implement clustering using leader units.
         self._install_k8s_snap()
         self._apply_snap_requirements()
+        self._check_k8sd_ready()
         self._bootstrap_k8s_snap()
         self._enable_components()
         self._update_status()
@@ -82,14 +83,28 @@ class K8sCharm(ops.CharmBase):
         ]
         for c in commands:
             subprocess.check_call(shlex.split(c))
+    
+    @on_error(
+        WaitingStatus("Waiting for k8sd"), InvalidResponseError, K8sdConnectionError
+    )
+    def _check_k8sd_ready(self):
+        """Check if k8sd is ready to accept requests."""
+        status.add(ops.MaintenanceStatus("Check k8sd ready"))
+        self.api_manager.check_k8sd_ready()            
 
-    @on_error(ops.WaitingStatus("Failed to bootstrap k8s snap"), subprocess.CalledProcessError)
+    @on_error(ops.WaitingStatus("Failed to bootstrap k8s snap"), InvalidResponseError, K8sdConnectionError)
     def _bootstrap_k8s_snap(self):
-        """Bootstrap the k8s if it's not already bootstrapped."""
+        """Bootstrap k8s if it's not already bootstrapped."""
+        # TODO: Remove `is_cluster_bootstrapped` check once https://github.com/canonical/k8s-snap/pull/99 landed.
         if not self.api_manager.is_cluster_bootstrapped():
             status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
-            cmd = "k8s bootstrap"
-            subprocess.check_call(shlex.split(cmd))
+            binding = self.model.get_binding("juju-info")
+            address = binding and binding.network.ingress_address
+            # k8s/x to k8s-x to avoid trouble with urls etc.
+            name = self.unit.name.replace("/", "-")
+
+            # TODO: Make port (and address) configurable.
+            self.api_manager.bootstrap_k8s_snap(name, f"{str(address)}:6400")
 
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError

@@ -116,8 +116,8 @@ class BaseRequestModel(BaseModel):
         return v
 
 
-class UpdateComponentResponse(BaseRequestModel):
-    """Response model for updating a k8s component."""
+class EmptyResponse(BaseRequestModel):
+    """Response model for request that do not expect any return value."""
 
 
 class TokenMetadata(BaseModel):
@@ -349,7 +349,7 @@ class K8sdAPIManager:
         try:
             with self.factory.create_connection() as connection:
                 body_data = json.dumps(body) if body is not None else None
-                headers = {"Content-Type": "application/json"} if body_data else {}
+                headers = {"Content-Type": "application/json"} if body_data is not None else {}
 
                 connection.request(
                     method,
@@ -395,7 +395,7 @@ class K8sdAPIManager:
         """
         endpoint = f"/1.0/k8sd/components/{name}"
         body = {"status": "enabled" if enable else "disabled"}
-        self._send_request(endpoint, "PUT", UpdateComponentResponse, body)
+        self._send_request(endpoint, "PUT", EmptyResponse, body)
 
     def is_cluster_bootstrapped(self) -> bool:
         """Check if K8sd has been bootstrapped.
@@ -414,6 +414,8 @@ class K8sdAPIManager:
     def is_cluster_ready(self):
         """Check if the Kubernetes cluster is ready.
 
+        The cluster is ready if at least one k8s node is in READY state.
+
         Returns:
             bool: True if the cluster is ready, False otherwise.
         """
@@ -422,6 +424,29 @@ class K8sdAPIManager:
         if cluster_status.metadata:
             return cluster_status.metadata.status.Ready
         return False
+
+    def check_k8sd_ready(self) -> str:
+        """Check if k8sd is ready.
+
+        Returns:
+            bool: True if k8sd is ready to accept API requests, False otherwise.
+
+        """
+        endpoint = "/cluster/1.0/ready"
+        self._send_request(endpoint, "GET", EmptyResponse)
+    
+    def bootstrap_k8s_snap(self, name: str, address: str) -> None:
+        """Bootstrap the k8s cluster.
+
+        TODO: Add bootstrap config support
+        """
+        endpoint = "/cluster/control"
+        body = {
+            "bootstrap": True,
+            "name": name, 
+            "address": address
+        }
+        self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def request_auth_token(self, username: str, groups: List[str]) -> str:
         """Request a Kubernetes authentication token.
