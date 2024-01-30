@@ -30,4 +30,4 @@ def test_config_changed_invalid(harness):
 
 def test_update_status(harness):
     harness.charm.on.update_status.emit()
-    assert harness.model.unit.status == ops.WaitingStatus("Waiting for K8sd API")
+    assert harness.model.unit.status == ops.BlockedStatus("Failed to install k8s snap.")

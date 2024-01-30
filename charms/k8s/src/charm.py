@@ -21,7 +21,9 @@ import shlex
 import subprocess
 from typing import Optional
 
+import charms.contextual_status as status
 import ops
+from charms.contextual_status import WaitingStatus, on_error
 from charms.k8s.v0.k8sd_api_manager import (
     InvalidResponseError,
     K8sdAPIManager,
@@ -29,9 +31,10 @@ from charms.k8s.v0.k8sd_api_manager import (
     UnixSocketConnectionFactory,
 )
 from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
+from charms.reconciler import Reconciler
 
 # Log messages can be retrieved using juju debug-log
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
@@ -47,20 +50,32 @@ class K8sCharm(ops.CharmBase):
             args: Arguments passed to the CharmBase parent constructor.
         """
         super().__init__(*args)
-        self.framework.observe(self.on.update_status, self._on_update_status)
-        self.framework.observe(self.on.install, self._on_install)
 
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET)
         self.api_manager = K8sdAPIManager(factory)
         self.snap_cache = SnapCache()
 
+        self.reconciler = Reconciler(self, self._reconcile)
+
+        self.framework.observe(self.on.update_status, self._on_update_status)
+
+    def _reconcile(self, _):
+        """Reconcile state change events."""
+        # TODO: Implement clustering using leader units.
+        self._install_k8s_snap()
+        self._apply_snap_requirements()
+        self._bootstrap_k8s_snap()
+        self._enable_components()
+        self._update_status()
+
+    @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
         """Apply necessary snap requirements for the k8s snap.
 
         This method executes necessary scripts to ensure that the snap
         meets the network and interface requirements.
         """
-        self.unit.status = ops.MaintenanceStatus("Applying K8s requirements")
+        status.add(ops.MaintenanceStatus("Applying K8s requirements"))
         commands = [
             "/snap/k8s/current/k8s/connect-interfaces.sh",
             "/snap/k8s/current/k8s/network-requirements.sh",
@@ -68,18 +83,22 @@ class K8sCharm(ops.CharmBase):
         for c in commands:
             subprocess.check_call(shlex.split(c))
 
+    @on_error(ops.WaitingStatus("Failed to bootstrap k8s snap"), subprocess.CalledProcessError)
     def _bootstrap_k8s_snap(self):
         """Bootstrap the k8s if it's not already bootstrapped."""
         if not self.api_manager.is_cluster_bootstrapped():
-            self.unit.status = ops.MaintenanceStatus("Bootstrapping Cluster")
+            status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
             cmd = "k8s bootstrap"
-            subprocess.check_call(shlex.split(cmd), shell=False)
+            subprocess.check_call(shlex.split(cmd))
 
+    @on_error(
+        WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
+    )
     def _enable_components(self):
         """Enable necessary components for the Kubernetes cluster."""
-        self.unit.status = ops.MaintenanceStatus("Enabling DNS")
+        status.add(ops.MaintenanceStatus("Enabling DNS"))
         self.api_manager.enable_component("dns", True)
-        self.unit.status = ops.MaintenanceStatus("Enabling Network")
+        status.add(ops.MaintenanceStatus("Enabling Network"))
         self.api_manager.enable_component("network", True)
 
     def _get_snap_version(self) -> Optional[str]:
@@ -97,64 +116,38 @@ class K8sCharm(ops.CharmBase):
         if match:
             return match.group()
 
-        logger.info("Snap k8s not found or no version available.")
+        log.info("Snap k8s not found or no version available.")
         return None
 
+    @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
     def _install_k8s_snap(self):
         """Install the k8s snap package."""
-        self.unit.status = ops.MaintenanceStatus("Installing k8s snap")
+        status.add(ops.MaintenanceStatus("Installing k8s snap"))
         k8s_snap = self.snap_cache["k8s"]
         if not k8s_snap.present:
             channel = self.config["channel"]
             k8s_snap.ensure(SnapState.Latest, channel=channel)
 
-    def _on_install(self, event):
-        """Handle install event for the charm.
+    @on_error(
+        ops.WaitingStatus("Cluster not yet ready"),
+        subprocess.CalledProcessError,
+        InvalidResponseError,
+        K8sdConnectionError,
+    )
+    def _update_status(self):
+        """Check k8s snap status."""
+        if self.api_manager.is_cluster_ready():
+            if version := self._get_snap_version():
+                self.unit.set_workload_version(version)
+        else:
+            status.add(ops.WaitingStatus("Waiting for k8s to be ready."))
 
-        Args:
-            event: The event that triggered this handler.
-        """
-        # TODO: Implement clustering using leader units.
-        try:
-            self._install_k8s_snap()
-            self._apply_snap_requirements()
-            self._bootstrap_k8s_snap()
-            self._enable_components()
-            self.unit.status = ops.WaitingStatus("Waiting for K8s to be ready")
-        except InvalidResponseError as e:
-            logger.warning("Failed to query k8s snap. Reason: %s", e)
-            self.unit.status = ops.WaitingStatus("Waiting for K8sd API.")
-            event.defer()
-        except SnapError as e:
-            logger.error("Failed to install k8s snap. Reason: %s", e.message)
-            self.unit.status = ops.BlockedStatus("Failed to install k8s snap")
-            event.defer()
-        except subprocess.CalledProcessError as e:
-            logger.error("Failed to run subprocess: %s", e)
-            event.defer()
-        except K8sdConnectionError as e:
-            logger.warning("Unable to contact K8sd API: %s", e)
-            self.unit.status = ops.WaitingStatus("Waiting for K8sd API.")
-            event.defer()
-
-    def _on_update_status(self, event: ops.UpdateStatusEvent):
-        """Handle update-status event.
-
-        Args:
-            event: event triggering the handler.
-        """
-        try:
-            if self.api_manager.is_cluster_ready():
-                if version := self._get_snap_version():
-                    self.unit.set_workload_version(version)
-                self.unit.status = ops.ActiveStatus("Ready")
-        except InvalidResponseError:
-            self.unit.status = ops.WaitingStatus("Waiting for K8s to be ready")
-            event.defer()
-        except K8sdConnectionError:
-            logger.exception("Unable to contact K8sdAPI")
-            self.unit.status = ops.WaitingStatus("Waiting for K8sd API")
-            event.defer()
+    def _on_update_status(self, _):
+        """Handle update-status event."""
+        if not self.reconciler.stored.reconciled:
+            return
+        with status.context(self.unit):
+            self._update_status()
 
 
 if __name__ == "__main__":  # pragma: nocover
