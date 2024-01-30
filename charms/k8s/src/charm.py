@@ -66,6 +66,9 @@ class K8sCharm(ops.CharmBase):
             self._bootstrap_k8s_snap()
             self._enable_components()
             self._update_status()
+        except InvalidResponseError as e:
+            log.error("Invalid response from K8sd: %s", e)
+            status.add(ops.WaitingStatus("Waiting for K8sd API."))
         except SnapError as e:
             log.error("Failed to install k8s snap. Reason: %s", e.message)
             status.add(ops.BlockedStatus("Failed to install k8s snap"))
