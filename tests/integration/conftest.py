@@ -27,7 +27,7 @@ def pytest_addoption(parser: pytest.Parser):
     Args:
         parser: Pytest parser.
     """
-    parser.addoption("--charm-file", dest="charm_files", action="append", default=list())
+    parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
 
 
 @dataclass
@@ -99,6 +99,9 @@ class Charm:
 
     async def resolve(self, charm_files: List[str]) -> Path:
         """Build or find the charm with ops_test.
+
+        Args:
+            charm_files: The list charms files to resolve
 
         Return:
             path to charm file
@@ -178,7 +181,9 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     model = "main"
     charm_names = ("k8s", "k8s-worker")
     charms = [Charm(ops_test, Path("charms") / p) for p in charm_names]
-    charm_files = await asyncio.gather(*[charm.resolve(request.config.option.charm_files) for charm in charms])
+    charm_files = await asyncio.gather(
+        *[charm.resolve(request.config.option.charm_files) for charm in charms]
+    )
     deployments = [
         CharmDeploymentArgs(
             entity_url=str(path),
