@@ -13,3 +13,4 @@ jobs:
     with:
       channel: latest/edge
       working-directory:  ./charms/k8s/worker/
+      tag-prefix: k8s-worker
