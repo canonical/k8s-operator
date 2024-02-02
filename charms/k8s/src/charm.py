@@ -184,8 +184,7 @@ class K8sCharm(ops.CharmBase):
             self._bootstrap_k8s_snap()
             self._enable_components()
             self._create_cluster_tokens()
-        else:
-            self._join_cluster()
+        self._join_cluster()
         self._update_status()
 
     @on_error(
