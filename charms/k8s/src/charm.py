@@ -62,7 +62,6 @@ class K8sCharm(ops.CharmBase):
         self.framework.observe(self.on.update_status, self._on_update_status)
         self._stored.set_default(joined=False)
 
-
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
         """Apply necessary snap requirements for the k8s snap.
