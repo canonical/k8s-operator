@@ -34,3 +34,7 @@ description: |
   This charm can optionally disable the following components:
   * A Kubernetes Backing Store
   * A Kubernetes CNI
+
+peers:
+  cluster:
+    interface: cluster

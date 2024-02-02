@@ -39,12 +39,14 @@ class CharmDeploymentArgs:
         application_name:  name of juju application
         resources:         all resources for this charm
         series:            os series for the machine
+        num_units:         unit instances of the charm
     """
 
     entity_url: str
     application_name: str
     resources: dict
     series: str
+    num_units: int
 
 
 @dataclass
@@ -189,6 +191,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
             application_name=charm.app_name,
             resources=charm.resources,
             series="jammy",
+            num_units=1 if charm.app_name == "k8s-worker" else 2,
         )
         for path, charm in zip(charm_files, charms)
     ]
