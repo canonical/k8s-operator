@@ -111,7 +111,12 @@ class K8sCharm(ops.CharmBase):
             self.api_manager.bootstrap_k8s_snap(name, f"{str(address)}:6400")
 
     def _distribute_cluster_tokens(self, relation, _role):
-        """Create tokens for the units."""
+        """Distribute role based tokens as secrets on a relation.
+
+        Args:
+            relation: The relation for which to create tokens
+            _role: "worker" or "control-plane" role
+        """
         units = {u for u in relation.units if u.name != self.unit.name}
         app_databag = relation.data.get(self.model.app, {})
 
@@ -133,6 +138,8 @@ class K8sCharm(ops.CharmBase):
 
         if peer := self.model.get_relation("cluster"):
             self._distribute_cluster_tokens(peer, "control-plane")
+
+        # TODO handle requesting cluster tokens for workers
 
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
