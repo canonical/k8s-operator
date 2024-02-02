@@ -29,5 +29,6 @@ def test_config_changed_invalid(harness):
 
 
 def test_update_status(harness):
+    harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
     harness.charm.on.update_status.emit()
-    assert harness.model.unit.status == ops.BlockedStatus("Failed to install k8s snap.")
+    assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")

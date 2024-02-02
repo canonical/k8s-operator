@@ -217,8 +217,11 @@ class K8sCharm(ops.CharmBase):
         """Handle update-status event."""
         if not self.reconciler.stored.reconciled:
             return
-        with status.context(self.unit):
-            self._update_status()
+        try:
+            with status.context(self.unit):
+                self._update_status()
+        except status.ReconcilerError:
+            log.exception("Can't to update_status")
 
 
 if __name__ == "__main__":  # pragma: nocover

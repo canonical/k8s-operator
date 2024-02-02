@@ -40,3 +40,10 @@ bases:
     - name: ubuntu
       channel: "22.04"
       architectures: [amd64]
+config:
+  options:
+    channel:
+      default: edge
+      type: string
+      description: |
+        Snap channel to install k8s snap from
