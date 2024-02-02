@@ -43,8 +43,6 @@ K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 class K8sCharm(ops.CharmBase):
     """A charm for managing a K8s cluster via the k8s snap."""
 
-    _stored = ops.StoredState()
-
     def __init__(self, *args):
         """Initialise the K8s charm.
 
@@ -60,7 +58,6 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
 
         self.framework.observe(self.on.update_status, self._on_update_status)
-        self._stored.set_default(joined=False)
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -165,7 +162,7 @@ class K8sCharm(ops.CharmBase):
     @on_error(WaitingStatus("Waiting for Cluster token"), TypeError)
     def _join_cluster(self):
         """Retrieve the join token from secret databag and join the cluster."""
-        if self.unit.is_leader() or self._stored.joined:
+        if self.api_manager.is_cluster_bootstrapped():
             return
 
         status.add(ops.MaintenanceStatus("Joining cluster"))
@@ -178,7 +175,6 @@ class K8sCharm(ops.CharmBase):
             token = content["token"]
             cmd = f"k8s join-cluster {shlex.quote(token)}"
             subprocess.check_call(shlex.split(cmd))
-            self._stored.joined = True
 
     def _reconcile(self, _):
         """Reconcile state change events."""
