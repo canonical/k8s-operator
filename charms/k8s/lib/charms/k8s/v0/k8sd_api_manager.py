@@ -425,27 +425,22 @@ class K8sdAPIManager:
             return cluster_status.metadata.status.Ready
         return False
 
-    def check_k8sd_ready(self) -> str:
-        """Check if k8sd is ready.
-
-        Returns:
-            bool: True if k8sd is ready to accept API requests, False otherwise.
-
-        """
+    def check_k8sd_ready(self):
+        """Check if k8sd is ready."""
         endpoint = "/cluster/1.0/ready"
         self._send_request(endpoint, "GET", EmptyResponse)
-    
+
     def bootstrap_k8s_snap(self, name: str, address: str) -> None:
         """Bootstrap the k8s cluster.
+
+        Args:
+            name: name of the node
+            address: address to which k8sd should be bound
 
         TODO: Add bootstrap config support
         """
         endpoint = "/cluster/control"
-        body = {
-            "bootstrap": True,
-            "name": name, 
-            "address": address
-        }
+        body = {"bootstrap": True, "name": name, "address": address}
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def request_auth_token(self, username: str, groups: List[str]) -> str:

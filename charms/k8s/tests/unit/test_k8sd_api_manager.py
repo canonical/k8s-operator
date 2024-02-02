@@ -13,12 +13,12 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
     CreateJoinTokenResponse,
+    EmptyResponse,
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
     TokenMetadata,
     UnixSocketHTTPConnection,
-    UpdateComponentResponse,
 )
 
 
@@ -108,6 +108,20 @@ class TestK8sdAPIManager(unittest.TestCase):
         self.mock_factory = MagicMock()
         self.api_manager = K8sdAPIManager(factory=self.mock_factory)
 
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_bootstrap_k8s_snap(self, mock_send_request):
+        mock_send_request.return_value = EmptyResponse(
+            status_code=200, type="test", error_code=0, metadata="foo"
+        )
+
+        self.api_manager.bootstrap_k8s_snap("test-node", "127.0.0.1:6400")
+        mock_send_request.assert_called_once_with(
+            "/cluster/control",
+            "POST",
+            EmptyResponse,
+            {"bootstrap": True, "name": "test-node", "address": "127.0.0.1:6400"},
+        )
+
     def test_create_join_token_invalid_response(self):
         mock_connection = MagicMock()
         self.mock_factory.create_connection.return_value.__enter__.return_value = mock_connection
@@ -156,27 +170,23 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_enable_component__enable(self, mock_send_request):
-        mock_send_request.return_value = UpdateComponentResponse(
-            status_code=200, type="test", error_code=0
-        )
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         self.api_manager.enable_component("foo", True)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/components/foo",
             "PUT",
-            UpdateComponentResponse,
+            EmptyResponse,
             {"status": "enabled"},
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_enable_component__disable(self, mock_send_request):
-        mock_send_request.return_value = UpdateComponentResponse(
-            status_code=200, type="test", error_code=0
-        )
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         self.api_manager.enable_component("foo", False)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", UpdateComponentResponse, {"status": "disabled"}
+            "/1.0/k8sd/components/foo", "PUT", EmptyResponse, {"status": "disabled"}
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
