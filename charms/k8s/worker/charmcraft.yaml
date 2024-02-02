@@ -50,5 +50,5 @@ config:
 
 requires:
   cluster:
-    # TODO: confirm this should be a new relation or maybe kube-control
-    interface: k8s-cluster
+    # TODO: confirm this should be a the token interface
+    interface: tokens
