@@ -42,6 +42,7 @@ K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 
 class K8sCharm(ops.CharmBase):
     """A charm for managing a K8s cluster via the k8s snap.
+
     Attrs:
         is_worker: true if this is a worker charm unit
         is_control_plane: true if this is a control-plane charm unit
@@ -124,7 +125,6 @@ class K8sCharm(ops.CharmBase):
             secret = self.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.app][unit.name] = secret.id or ""
-
 
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
