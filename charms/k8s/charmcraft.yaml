@@ -18,10 +18,6 @@ config:
       type: string
       description: |
         Snap channel to install k8s snap from
-peers:
-  cluster:
-    interface: cluster
-
 parts:
   charm:
     build-packages: [git]
