@@ -45,11 +45,20 @@ config:
     channel:
       default: edge
       type: string
-      description: |
-        Snap channel to install k8s snap from
+      description: Snap channel of the k8s snap
 parts:
   charm:
     build-packages: [git]
+    charm-entrypoint: k8s/src/charm.py
+  lib:
+    # move the ./k8s/lib path to ./lib since 
+    # charmcraft assumes it to be there once the charm runs
+    after: [charm]
+    plugin: nil
+    source: ./
+    override-prime: |
+      rm -rf $CRAFT_PRIME/lib
+      mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
 
 requires:
   cluster:

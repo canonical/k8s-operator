@@ -1,0 +1,2 @@
+-r k8s/requirements.txt
+

@@ -17,4 +17,4 @@ juju add-unit k8s
 ```
 
 ## Configuring
-The charm's `config.yaml` defines  options for every node in the kubernetes cluster exp
+The charm's `charmcraft.yaml` defines  options for every node in the kubernetes cluster exp

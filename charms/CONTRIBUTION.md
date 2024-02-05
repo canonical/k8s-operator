@@ -5,17 +5,19 @@
 The `k8s` and `k8s-worker` charms are noticeably tucked into one-another.  
 
 ```
-└── k8s
+└── worker
     ├── charmcraft.yaml
     ├── requirements.txt
-    └── worker
+    └── k8s
         ├── charmcraft.yaml
+        ├── lib
+        │   └── charms/...
         ├── requirements.txt
         └── src
             └── charm.py
 ```
 
-While unfamiliar to some charm developers, this lets both charms share the exact same `src` folder. This is accomplished by using the `parts.charm.charm-entrypoint` value in the `k8s` directory set to `worker/src/charm.py`.
+While unfamiliar to some charm developers, this lets both charms share the exact same `src` folder. This is accomplished by using the `parts.charm.charm-entrypoint` value in the `worker` directory set to `k8s/src/charm.py`.
 
 ### What's unique
 
@@ -29,11 +31,11 @@ metadata.yaml
 requirements.yaml
 ```
 
-In order to exclude the `worker` exclusive components from the `k8s` charm,charmcraft will read the `k8s/.jujuignore` file to determine what to leave out of the final charm.
+In order to exclude the `k8s` exclusive components from the `k8s-worker` charm, charmcraft will read the `worker/.jujuignore` file to determine what to leave out of the final charm.
 
 ### What's not
 
-The shared portions of each charm are within `k8s/worker` (except for the above mentioned exclusions).  This includes shared libraries from `k8s/worker/lib`, shared source from `k8s/worker/src`, shared python dependencies from `k8s/worker/requirements.txt`
+The shared portions of each charm are within `worker/k8s` (except for the above mentioned exclusions).  This includes shared libraries from `worker/k8s/lib`, shared source from `worker/k8s/src`, shared python dependencies from `worker/k8s/requirements.txt`
 
 ### How to distinguish which charm code should engage
 
