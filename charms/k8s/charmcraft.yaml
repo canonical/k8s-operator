@@ -67,7 +67,8 @@ parts:
     plugin: nil
     source: ./
     override-prime: |
-      mv worker/lib lib
+      rm -rf $CRAFT_PRIME/lib
+      mv $CRAFT_PRIME/worker/lib $CRAFT_PRIME/lib
 
 peers:
   cluster:
