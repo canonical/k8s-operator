@@ -178,7 +178,7 @@ class K8sCharm(ops.CharmBase):
             channel = self.config["channel"]
             k8s_snap.ensure(SnapState.Latest, channel=channel)
 
-    @on_error(WaitingStatus("Waiting for Cluster token"), TypeError)
+    @on_error(WaitingStatus("Waiting for Cluster token"), TypeError, K8sdConnectionError)
     def _join_cluster(self):
         """Retrieve the join token from secret databag and join the cluster."""
         if self.api_manager.is_cluster_bootstrapped():
