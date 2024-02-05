@@ -47,6 +47,9 @@ config:
       type: string
       description: |
         Snap channel to install k8s snap from
+parts:
+  charm:
+    build-packages: [git]
 
 requires:
   cluster:
