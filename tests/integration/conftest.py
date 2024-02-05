@@ -122,8 +122,10 @@ class Charm:
                 self._charmfile, *_ = filter(lambda s: s.name.startswith(header), potentials)
                 log.info("For %s found charmfile %s", self.app_name, self._charmfile)
             except ValueError:
-                log.info("For %s build charmfile", self.app_name)
-                self._charmfile = await self.ops_test.build_charm(self.path)
+                log.warning("No pre-built charm is available, let's build it")
+        if self._charmfile is None:
+            log.info("For %s build charmfile", self.app_name)
+            self._charmfile = await self.ops_test.build_charm(self.path)
         if self._charmfile is None:
             raise FileNotFoundError(f"{self.app_name}_*.charm not found")
         return self._charmfile.resolve()

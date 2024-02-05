@@ -214,6 +214,10 @@ class K8sCharm(ops.CharmBase):
     )
     def _update_status(self):
         """Check k8s snap status."""
+        if self.is_worker:
+            # TODO: replace with code to confirm that the worker
+            # is part of the joined cluster
+            return
         if self.api_manager.is_cluster_ready():
             if version := self._get_snap_version():
                 self.unit.set_workload_version(version)

@@ -34,7 +34,7 @@ jobs:
           echo "CHARM_FILE=$(ls ${{env.CHARM_NAME}}_*.charm)" >> $GITHUB_ENV
       - name: Upload charm artifact
         if: ${{ env.CHARM_FILE != '' && !cancelled() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.CHARM_NAME }}-charm
           path: ${{ inputs.working-directory }}/${{ env.CHARM_FILE }}

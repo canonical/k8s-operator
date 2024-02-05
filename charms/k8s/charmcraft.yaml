@@ -60,6 +60,14 @@ parts:
   charm:
     build-packages: [git]
     charm-entrypoint: worker/src/charm.py
+  lib:
+    # move the ./worker/lib path to ./lib since 
+    # charmcraft assumes it to be there once the charm runs
+    after: [charm]
+    plugin: nil
+    source: ./
+    override-prime: |
+      mv worker/lib lib
 
 peers:
   cluster:
