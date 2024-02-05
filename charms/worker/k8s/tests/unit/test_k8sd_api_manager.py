@@ -199,6 +199,18 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_remove_node(self, mock_send_request):
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+
+        self.api_manager.remove_node("test-node")
+        mock_send_request.assert_called_once_with(
+            "/1.0/k8sd/cluster/test-node",
+            "DELETE",
+            EmptyResponse,
+            None
+        )
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_enable_component__enable(self, mock_send_request):
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 

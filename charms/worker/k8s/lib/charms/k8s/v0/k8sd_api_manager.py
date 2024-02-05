@@ -403,6 +403,16 @@ class K8sdAPIManager:
 
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
+    def remove_node(self, name):
+        """Remove a node from the cluster.
+
+        Args:
+            name (str): Name of the node that should be removed.
+        """
+        endpoint = f"/1.0/k8sd/cluster/{name}"
+
+        self._send_request(endpoint, "DELETE", EmptyResponse, None)
+
     def enable_component(self, name: str, enable: bool):
         """Enable or disable a k8s component.
 
