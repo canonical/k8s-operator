@@ -74,5 +74,5 @@ peers:
     interface: cluster
 
 provides:
-  tokens:
-    interface: tokens
+  k8s-cluster:
+    interface: k8s-cluster

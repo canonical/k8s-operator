@@ -53,5 +53,8 @@ parts:
 
 requires:
   cluster:
-    # TODO: confirm this should be a the token interface
-    interface: tokens
+    interface: k8s-cluster
+    # interface to connect with the k8s charm to provide
+    # authentication token via a secret in order to cluster
+    # this machine as a worker unit.
+    #   juju integrate k8s:k8s-cluster k8s-worker:cluster
