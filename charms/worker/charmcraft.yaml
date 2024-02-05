@@ -1,0 +1,69 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+# This file configures Charmcraft.
+# See https://juju.is/docs/sdk/charmcraft-config for guidance.
+
+name: k8s-worker
+title: Kubernetes Worker
+summary: A machine charm for a K8s Worker
+description: |
+  A machine charm which operates a Kubernetes worker.
+
+  This charm installs and operates a Kubernetes worker via the k8s snap. It exposes
+  relations to co-operate with other kubernetes components
+
+  This charm provides the following running components:
+  * kube-proxy
+  * kubelet
+  * containerd
+links:
+  contact: https://launchpad.net/~containers
+  documentation: https://discourse.charmhub.io
+  issues:
+  - https://github.com/canonical/k8s-operator/issues
+  source:
+    - https://github.com/canonical/k8s-operator
+
+assumes:
+  - juju >= 3.1
+
+type: charm
+bases:
+  - build-on:
+    - name: ubuntu
+      channel: "20.04"
+      architectures: [amd64]
+    run-on:
+    - name: ubuntu
+      channel: "20.04"
+      architectures: [amd64]
+    - name: ubuntu
+      channel: "22.04"
+      architectures: [amd64]
+config:
+  options:
+    channel:
+      default: edge
+      type: string
+      description: Snap channel of the k8s snap
+parts:
+  charm:
+    build-packages: [git]
+    charm-entrypoint: k8s/src/charm.py
+  lib:
+    # move the ./k8s/lib path to ./lib since 
+    # charmcraft assumes it to be there once the charm runs
+    after: [charm]
+    plugin: nil
+    source: ./
+    override-prime: |
+      rm -rf $CRAFT_PRIME/lib
+      mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
+
+requires:
+  cluster:
+    interface: k8s-cluster
+    # interface to connect with the k8s charm to provide
+    # authentication token via a secret in order to cluster
+    # this machine as a worker unit.
+    #   juju integrate k8s:k8s-cluster k8s-worker:cluster

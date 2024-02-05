@@ -68,7 +68,7 @@ class Charm:
     @property
     def metadata(self) -> dict:
         """Charm Metadata."""
-        return yaml.safe_load((self.path / "metadata.yaml").read_text())
+        return yaml.safe_load((self.path / "charmcraft.yaml").read_text())
 
     @property
     def app_name(self) -> str:
@@ -122,8 +122,10 @@ class Charm:
                 self._charmfile, *_ = filter(lambda s: s.name.startswith(header), potentials)
                 log.info("For %s found charmfile %s", self.app_name, self._charmfile)
             except ValueError:
-                log.info("For %s build charmfile", self.app_name)
-                self._charmfile = await self.ops_test.build_charm(self.path)
+                log.warning("No pre-built charm is available, let's build it")
+        if self._charmfile is None:
+            log.info("For %s build charmfile", self.app_name)
+            self._charmfile = await self.ops_test.build_charm(self.path)
         if self._charmfile is None:
             raise FileNotFoundError(f"{self.app_name}_*.charm not found")
         return self._charmfile.resolve()
@@ -180,8 +182,8 @@ async def deploy_model(
 async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
     model = "main"
-    charm_names = ("k8s", "k8s-worker")
-    charms = [Charm(ops_test, Path("charms") / p) for p in charm_names]
+    charm_path = ("worker/k8s", "worker")
+    charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )

@@ -12,4 +12,5 @@ jobs:
     secrets: inherit
     with:
       channel: latest/edge
-      working-directory:  ./charms/k8s-worker/
+      working-directory:  ./charms/worker/k8s/
+      tag-prefix: k8s-worker

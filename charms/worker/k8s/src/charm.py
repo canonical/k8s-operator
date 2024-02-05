@@ -41,7 +41,12 @@ K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 
 
 class K8sCharm(ops.CharmBase):
-    """A charm for managing a K8s cluster via the k8s snap."""
+    """A charm for managing a K8s cluster via the k8s snap.
+
+    Attrs:
+        is_worker: true if this is a worker charm unit
+        is_control_plane: true if this is a control-plane charm unit
+    """
 
     def __init__(self, *args):
         """Initialise the K8s charm.
@@ -57,7 +62,13 @@ class K8sCharm(ops.CharmBase):
 
         self.reconciler = Reconciler(self, self._reconcile)
 
+        self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
+
+    @property
+    def is_control_plane(self) -> bool:
+        """Returns true if the unit is not a worker."""
+        return not self.is_worker
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -99,15 +110,13 @@ class K8sCharm(ops.CharmBase):
             # TODO: Make port (and address) configurable.
             self.api_manager.bootstrap_k8s_snap(name, f"{str(address)}:6400")
 
-    def _create_cluster_tokens(self):
-        """Create tokens for the units in the peer cluster relation."""
-        if not self.unit.is_leader():
-            return
+    def _distribute_cluster_tokens(self, relation, _role):
+        """Distribute role based tokens as secrets on a relation.
 
-        relation = self.model.get_relation("cluster")
-        if not relation:
-            return
-
+        Args:
+            relation: The relation for which to create tokens
+            _role: "worker" or "control-plane" role
+        """
         units = {u for u in relation.units if u.name != self.unit.name}
         app_databag = relation.data.get(self.model.app, {})
 
@@ -121,6 +130,16 @@ class K8sCharm(ops.CharmBase):
             secret = self.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.app][unit.name] = secret.id or ""
+
+    def _create_cluster_tokens(self):
+        """Create tokens for the units in the cluster and k8s-cluster relations."""
+        if not self.unit.is_leader() or not self.is_control_plane:
+            return
+
+        if peer := self.model.get_relation("cluster"):
+            self._distribute_cluster_tokens(peer, "control-plane")
+
+        # TODO handle requesting cluster tokens for workers
 
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
@@ -159,7 +178,7 @@ class K8sCharm(ops.CharmBase):
             channel = self.config["channel"]
             k8s_snap.ensure(SnapState.Latest, channel=channel)
 
-    @on_error(WaitingStatus("Waiting for Cluster token"), TypeError)
+    @on_error(WaitingStatus("Waiting for Cluster token"), TypeError, K8sdConnectionError)
     def _join_cluster(self):
         """Retrieve the join token from secret databag and join the cluster."""
         if self.api_manager.is_cluster_bootstrapped():
@@ -180,7 +199,7 @@ class K8sCharm(ops.CharmBase):
         """Reconcile state change events."""
         self._install_k8s_snap()
         self._apply_snap_requirements()
-        if self.unit.is_leader():
+        if self.unit.is_leader() and self.is_control_plane:
             self._bootstrap_k8s_snap()
             self._enable_components()
             self._create_cluster_tokens()
@@ -195,18 +214,25 @@ class K8sCharm(ops.CharmBase):
     )
     def _update_status(self):
         """Check k8s snap status."""
+        if self.is_worker:
+            # TODO: replace with code to confirm that the worker
+            # is part of the joined cluster
+            return
         if self.api_manager.is_cluster_ready():
             if version := self._get_snap_version():
                 self.unit.set_workload_version(version)
         else:
             status.add(ops.WaitingStatus("Waiting for k8s to be ready."))
 
-    def _on_update_status(self, _):
+    def _on_update_status(self, _event: ops.UpdateStatusEvent):
         """Handle update-status event."""
         if not self.reconciler.stored.reconciled:
             return
-        with status.context(self.unit):
-            self._update_status()
+        try:
+            with status.context(self.unit):
+                self._update_status()
+        except status.ReconcilerError:
+            log.exception("Can't to update_status")
 
 
 if __name__ == "__main__":  # pragma: nocover

@@ -1,0 +1,11 @@
+k8s/venv
+k8s/tox.ini
+k8s/tests/
+k8s/charmcraft.yaml
+k8s/actions.yaml
+k8s/config.yaml
+k8s/.coverage
+k8s/.tox
+k8s/.mypy_cache
+k8s/lxd-profile.yaml
+__pycache__/
