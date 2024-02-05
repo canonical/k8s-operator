@@ -61,7 +61,7 @@ parts:
     build-packages: [git]
     charm-entrypoint: worker/src/charm.py
 
-peer:
+peers:
   cluster:
     interface: cluster
 
