@@ -24,7 +24,7 @@ jobs:
       - uses: canonical/setup-lxd@v0.1.1
       - name: Extract charm name
         working-directory: ${{ inputs.working-directory }}
-        run: echo "CHARM_NAME=$([ -f metadata.yaml ] && yq '.name' metadata.yaml || echo UNKNOWN)" >> $GITHUB_ENV
+        run: echo "CHARM_NAME=$([ -f charmcraft.yaml ] && yq '.name' charmcraft.yaml || echo UNKNOWN)" >> $GITHUB_ENV
       - name: Pack charm
         if: ${{ env.CHARM_NAME != 'UNKNOWN' && !cancelled() }}
         working-directory: ${{ inputs.working-directory }}/${{ matrix.path }}
