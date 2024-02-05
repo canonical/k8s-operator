@@ -41,7 +41,7 @@ jobs:
           if-no-files-found: error
       - name: Upload charm artifact
         if: ${{ env.CHARM_FILE != '' && !cancelled() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           # Hack Alert
           #
