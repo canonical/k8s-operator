@@ -144,10 +144,10 @@ class CreateJoinTokenResponse(BaseRequestModel):
     """Response model for join token creation requests.
 
     Attributes:
-        token (str): Metadata containing the newly created join token.
+        metadata (TokenMetadata): Metadata containing the join token.
     """
 
-    token: str = Field(..., alias="metadata")
+    metadata: TokenMetadata
 
 
 class ClusterMember(BaseModel):
@@ -190,8 +190,8 @@ class ClusterStatus(BaseModel):
     """
 
     Ready: bool
-    Members: List[ClusterMember]
-    Components: List[ClusterComponent]
+    Members: Optional[List[ClusterMember]]
+    Components: Optional[List[ClusterComponent]]
 
 
 class ClusterMetadata(BaseModel):
@@ -372,19 +372,36 @@ class K8sdAPIManager:
         except (socket.error, HTTPException) as e:
             raise K8sdConnectionError(f"HTTP or Socket error: {e}") from e
 
-    def create_join_token(self, name: str):
+    def create_join_token(self, name: str, worker: bool = False):
         """Create a join token.
 
         Args:
             name (str): Name of the node.
+            worker (bool): Whether the node should join as control-plane or worker.
 
         Returns:
             str: The generated join token if successful.
         """
-        endpoint = "/cluster/1.0/tokens"
-        body = {"name": name}
+        endpoint = "/1.0/k8sd/cluster/tokens"
+        body = {
+            "name": name,
+            "worker": worker,
+        }
         join_response = self._send_request(endpoint, "POST", CreateJoinTokenResponse, body)
-        return join_response.token
+        return join_response.metadata.token
+
+    def join_cluster(self, name: str, address: str, token: str):
+        """Join a node to the k8s cluster.
+
+        Args:
+            name (str): Name of the node.
+            address (str): address to which k8sd should be bound
+            token (str): The join token for this node.
+        """
+        endpoint = "/1.0/k8sd/cluster/join"
+        body = {"name": name, "address": address, "token": token}
+
+        self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def enable_component(self, name: str, enable: bool):
         """Enable or disable a k8s component.
@@ -434,8 +451,8 @@ class K8sdAPIManager:
         """Bootstrap the k8s cluster.
 
         Args:
-            name: name of the node
-            address: address to which k8sd should be bound
+            name (str): name of the node
+            address (str): address to which k8sd should be bound
 
         TODO: Add bootstrap config support
         """

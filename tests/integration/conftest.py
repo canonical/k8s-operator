@@ -167,13 +167,14 @@ async def deploy_model(
                     the_model.deploy(**asdict(charm))
                     for charm in deploy_args
                     if charm.application_name not in the_model.applications
-                ),
-                the_model.wait_for_idle(
-                    apps=[n.application_name for n in deploy_args],
-                    status="active",
-                    raise_on_blocked=True,
-                    timeout=15 * 60,
-                ),
+                )
+            )
+            await the_model.integrate("k8s", "k8s-worker:cluster")
+            await the_model.wait_for_idle(
+                apps=[n.application_name for n in deploy_args],
+                status="active",
+                raise_on_blocked=True,
+                timeout=15 * 60,
             )
         yield the_model
 
