@@ -79,8 +79,8 @@ class K8sCharm(ops.CharmBase):
         """
         status.add(ops.MaintenanceStatus("Applying K8s requirements"))
         commands = [
-            "/snap/k8s/current/k8s/connect-interfaces.sh",
-            "/snap/k8s/current/k8s/network-requirements.sh",
+            "/snap/k8s/current/k8s/hack/connect-interfaces.sh",
+            "/snap/k8s/current/k8s/hack/network-requirements.sh",
         ]
         for c in commands:
             subprocess.check_call(shlex.split(c))
