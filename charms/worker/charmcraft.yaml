@@ -18,7 +18,7 @@ description: |
   * containerd
 links:
   contact: https://launchpad.net/~containers
-  documentation: https://discourse.charmhub.io
+  documentation: https://discourse.charmhub.io/t/k8s-worker-docs-index/13135
   issues:
   - https://github.com/canonical/k8s-operator/issues
   source:
