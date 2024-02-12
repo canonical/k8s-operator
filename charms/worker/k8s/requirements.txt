@@ -1,5 +1,6 @@
 ops >= 2.2.0
 cosl == 0.0.8
 pydantic == 1.*
-charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
-charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
+charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
+charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@main
+charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@KU-325/pass-kubectl-path#subdirectory=ops

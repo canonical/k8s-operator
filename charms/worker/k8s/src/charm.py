@@ -34,6 +34,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdConnectionError,
     UnixSocketConnectionFactory,
 )
+from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
 from charms.reconciler import Reconciler
 
@@ -47,6 +48,7 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 KUBECONFIG = Path.home() / ".kube/config"
 ETC_KUBERNETES = Path("/etc/kubernetes")
+KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
 
 
@@ -67,11 +69,12 @@ class K8sCharm(ops.CharmBase):
         super().__init__(*args)
 
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
+        self.label_maker = LabelMaker(self, kubeconfig_path=KUBECONFIG, kubectl=KUBECTL_PATH)
         self.api_manager = K8sdAPIManager(factory)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.api_manager)
-        self.collector = TokenCollector(self, self._get_node_name())
+        self.collector = TokenCollector(self, self.get_node_name())
         self.snap_cache = SnapCache()
 
         self.cos_agent = COSAgentProvider(
@@ -118,13 +121,22 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
 
-    def _get_node_name(self) -> str:
+    def get_node_name(self) -> str:
         """Return the lowercase hostname.
 
         Returns:
             the hostname of the machine.
         """
         return socket.gethostname().lower()
+
+    def get_cloud_name(self) -> str:
+        """Return the underlying cloud if determined.
+
+        Returns:
+            the cloud of the machine.
+        """
+        # TODO: Implement cloud-native feature
+        return ""
 
     @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
     def _install_k8s_snap(self):
@@ -163,7 +175,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
             binding = self.model.get_binding("juju-info")
             address = binding and binding.network.ingress_address
-            node_name = self._get_node_name()
+            node_name = self.get_node_name()
             # TODO: Make port (and address) configurable.
             self.api_manager.bootstrap_k8s_snap(node_name, f"{str(address)}:{K8SD_PORT}")
 
@@ -185,7 +197,7 @@ class K8sCharm(ops.CharmBase):
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         if peer := self.model.get_relation("cluster"):
-            node_name = self._get_node_name()
+            node_name = self.get_node_name()
             peer.data[self.unit]["node-name"] = node_name
             peer.data[self.unit]["joined"] = node_name
 
@@ -245,7 +257,7 @@ class K8sCharm(ops.CharmBase):
         try:
             with self.collector.recover_token(relation) as token:
                 return self.cos.get_metrics_endpoints(
-                    self._get_node_name(), token, self.is_control_plane
+                    self.get_node_name(), token, self.is_control_plane
                 )
         except AssertionError:
             log.exception("Failed to get COS token.")
@@ -291,7 +303,7 @@ class K8sCharm(ops.CharmBase):
         with self.collector.recover_token(relation) as token:
             binding = self.model.get_binding(relation.name)
             address = binding and binding.network.ingress_address
-            node_name = self._get_node_name()
+            node_name = self.get_node_name()
             cluster_addr = f"{address}:{K8SD_PORT}"
             self.api_manager.join_cluster(node_name, cluster_addr, token)
 
@@ -309,6 +321,7 @@ class K8sCharm(ops.CharmBase):
         self._join_cluster()
         self._configure_cos_integration()
         self._update_status()
+        self._apply_node_labels()
         if self.is_control_plane:
             self._generate_kubeconfig()
 
@@ -336,6 +349,17 @@ class K8sCharm(ops.CharmBase):
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
         src = ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
         KUBECONFIG.write_bytes(src.read_bytes())
+
+    @status.on_error(ops.WaitingStatus("Waiting to apply node labels"), LabelMaker.NodeLabelError)
+    def _apply_node_labels(self):
+        """Apply labels to the node."""
+        status.add(ops.MaintenanceStatus("Apply Node Labels"))
+        node = self.get_node_name()
+        if self.label_maker.active_labels() is not None:
+            self.label_maker.apply_node_labels()
+            log.info("Node %s labelled successfully", node)
+        else:
+            log.info("Node %s not yet labelled", node)
 
     def _on_update_status(self, _event: ops.UpdateStatusEvent):
         """Handle update-status event."""
