@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 KUBECONFIG = Path.home() / ".kube/config"
+ETC_KUBERNETES = Path("/etc/kubernetes")
 K8SD_PORT = 6400
 
 
@@ -278,9 +279,8 @@ class K8sCharm(ops.CharmBase):
         """Generate kubeconfig."""
         status.add(ops.MaintenanceStatus("Generating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        cmd = "k8s kubectl config view --raw"
-        output = subprocess.check_output(shlex.split(cmd))
-        KUBECONFIG.write_bytes(output)
+        src = ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
+        KUBECONFIG.write_bytes(src.read_bytes())
 
     def _on_update_status(self, _event: ops.UpdateStatusEvent):
         """Handle update-status event."""
