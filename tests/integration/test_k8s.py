@@ -43,7 +43,7 @@ async def ready_nodes(k8s, expected_count):
     log.info("Found %d/%d nodes...", len(nodes), expected_count)
     assert len(nodes) == expected_count, f"Expect {expected_count} nodes in the list"
     for node, ready in nodes.items():
-        log.info("Node %s is %sready...", node, "" if ready else "not ")
+        log.info("Node %s is %s..", node, "ready" if ready else "not ready")
         assert ready, f"Node not yet ready: {node}."
     return nodes
 
