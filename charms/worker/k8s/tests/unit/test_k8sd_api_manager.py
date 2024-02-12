@@ -144,7 +144,8 @@ class TestK8sdAPIManager(unittest.TestCase):
         self.mock_factory.create_connection.return_value.__enter__.return_value = mock_connection
         mock_connection.getresponse.return_value.status = 200
         mock_connection.getresponse.return_value.read.return_value = (
-            '{"status_code": 200, "type": "test", "error_code": 0, ' + '"metadata": "test-token"}'
+            '{"status_code": 200, "type": "test", \
+                "error_code": 0, "metadata":{"token":"test-token"}}'
         ).encode()
 
         token = self.api_manager.create_join_token("test-node")
@@ -152,20 +153,49 @@ class TestK8sdAPIManager(unittest.TestCase):
         self.assertEqual(token, "test-token")
         mock_connection.request.assert_called_once_with(
             "POST",
-            "/cluster/1.0/tokens",
-            body='{"name": "test-node"}',
+            "/1.0/k8sd/cluster/tokens",
+            body='{"name": "test-node", "worker": false}',
             headers={"Content-Type": "application/json"},
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_create_join_token(self, mock_send_request):
         mock_send_request.return_value = CreateJoinTokenResponse(
-            status_code=200, type="test", error_code=0, metadata="foo"
+            status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="test-token")
         )
 
         self.api_manager.create_join_token("test-node")
         mock_send_request.assert_called_once_with(
-            "/cluster/1.0/tokens", "POST", CreateJoinTokenResponse, {"name": "test-node"}
+            "/1.0/k8sd/cluster/tokens",
+            "POST",
+            CreateJoinTokenResponse,
+            {"name": "test-node", "worker": False},
+        )
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_create_join_token_worker(self, mock_send_request):
+        mock_send_request.return_value = CreateJoinTokenResponse(
+            status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="test-token")
+        )
+
+        self.api_manager.create_join_token("test-node", worker=True)
+        mock_send_request.assert_called_once_with(
+            "/1.0/k8sd/cluster/tokens",
+            "POST",
+            CreateJoinTokenResponse,
+            {"name": "test-node", "worker": True},
+        )
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_join_cluster(self, mock_send_request):
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+
+        self.api_manager.join_cluster("test-node", "127.0.0.1:6400", "test-token")
+        mock_send_request.assert_called_once_with(
+            "/1.0/k8sd/cluster/join",
+            "POST",
+            EmptyResponse,
+            {"name": "test-node", "address": "127.0.0.1:6400", "token": "test-token"},
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
