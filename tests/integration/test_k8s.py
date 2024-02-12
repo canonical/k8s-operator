@@ -32,7 +32,6 @@ async def ready_nodes(k8s, expected_count):
     log.info("Parsing node list...")
     node_list = json.loads(result.results["stdout"])
     assert node_list["kind"] == "List", "Should have found a list of nodes"
-    log.info("Finding ready nodes...")
     nodes = {
         node["metadata"]["name"]: all(
             condition["status"] == "False"
@@ -41,10 +40,10 @@ async def ready_nodes(k8s, expected_count):
         )
         for node in node_list["items"]
     }
-    log.info(f"Found {len(nodes)} nodes...")
+    log.info("Found %d/%d nodes...", len(nodes), expected_count)
     assert len(nodes) == expected_count, f"Expect {expected_count} nodes in the list"
     for node, ready in nodes.items():
-        log.info(f"Node {node} is not yet ready...")
+        log.info("Node %s is %sready...", node, "" if ready else "not ")
         assert ready, f"Node not yet ready: {node}."
     return nodes
 
