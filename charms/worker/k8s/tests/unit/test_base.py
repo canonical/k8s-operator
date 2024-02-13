@@ -42,7 +42,6 @@ def mock_reconciler_handlers(harness):
         "_check_k8sd_ready",
         "_join_cluster",
         "_update_status",
-        "_generate_kubeconfig",
         "_apply_node_labels",
     }
     if harness.charm.is_control_plane:
@@ -50,6 +49,7 @@ def mock_reconciler_handlers(harness):
             "_bootstrap_k8s_snap",
             "_enable_components",
             "_create_cluster_tokens",
+            "_generate_kubeconfig",
         }
 
     handlers = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]

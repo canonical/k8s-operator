@@ -130,13 +130,18 @@ class K8sCharm(ops.CharmBase):
         return socket.gethostname().lower()
 
     def get_cloud_name(self) -> str:
-        """Return the underlying cloud if determined.
+        """Return the underlying cloud name.
 
         Returns:
-            the cloud of the machine.
+            the cloud hosting the machine.
         """
-        # TODO: Implement cloud-native feature
+        # TODO: adjust to detect the correct cloud
         return ""
+
+    @property
+    def _source_kubeconfig(self) -> Path:
+        """Return the highest authority kube config for this unit."""
+        return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
 
     @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
     def _install_k8s_snap(self):
@@ -347,8 +352,7 @@ class K8sCharm(ops.CharmBase):
         """Generate kubeconfig."""
         status.add(ops.MaintenanceStatus("Generating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        src = ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
-        KUBECONFIG.write_bytes(src.read_bytes())
+        KUBECONFIG.write_bytes(self._source_kubeconfig.read_bytes())
 
     @status.on_error(ops.WaitingStatus("Waiting to apply node labels"), LabelMaker.NodeLabelError)
     def _apply_node_labels(self):
