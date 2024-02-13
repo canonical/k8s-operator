@@ -14,7 +14,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 log = logging.getLogger(__name__)
 
 
-@retry(reraise=True, stop=stop_after_attempt(10), wait=wait_fixed(15))
+@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(15))
 async def ready_nodes(k8s, expected_count):
     """Get a list of the ready nodes.
 
@@ -25,21 +25,26 @@ async def ready_nodes(k8s, expected_count):
     Returns:
         list of nodes
     """
+    log.info("Finding all nodes...")
     action = await k8s.run("k8s kubectl get nodes -o json")
     result = await action.wait()
     assert result.results["return-code"] == 0, "Failed to get nodes with kubectl"
+    log.info("Parsing node list...")
     node_list = json.loads(result.results["stdout"])
     assert node_list["kind"] == "List", "Should have found a list of nodes"
-    nodes = [
-        node
-        for node in node_list["items"]
-        if all(
+    nodes = {
+        node["metadata"]["name"]: all(
             condition["status"] == "False"
             for condition in node["status"]["conditions"]
             if condition["type"] != "Ready"
         )
-    ]
+        for node in node_list["items"]
+    }
+    log.info("Found %d/%d nodes...", len(nodes), expected_count)
     assert len(nodes) == expected_count, f"Expect {expected_count} nodes in the list"
+    for node, ready in nodes.items():
+        log.info("Node %s is %s..", node, "ready" if ready else "not ready")
+        assert ready, f"Node not yet ready: {node}."
     return nodes
 
 
@@ -47,4 +52,6 @@ async def ready_nodes(k8s, expected_count):
 async def test_nodes_ready(kubernetes_cluster):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
-    await ready_nodes(k8s.units[0], 3)
+    worker = kubernetes_cluster.applications["k8s-worker"]
+    expected_nodes = len(k8s.units) + len(worker.units)
+    await ready_nodes(k8s.units[0], expected_nodes)
