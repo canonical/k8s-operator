@@ -39,8 +39,10 @@ def mock_reconciler_handlers(harness):
     handler_names = {
         "_install_k8s_snap",
         "_apply_snap_requirements",
+        "_check_k8sd_ready",
         "_join_cluster",
         "_update_status",
+        "_generate_kubeconfig",
         "_apply_node_labels",
     }
     if harness.charm.is_control_plane:
