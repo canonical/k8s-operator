@@ -67,9 +67,12 @@ class K8sCharm(ops.CharmBase):
             args: Arguments passed to the CharmBase parent constructor.
         """
         super().__init__(*args)
+        self.is_worker = self.meta.name == "k8s-worker"
 
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
-        self.label_maker = LabelMaker(self, kubeconfig_path=KUBECONFIG, kubectl=KUBECTL_PATH)
+        self.label_maker = LabelMaker(
+            self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH
+        )
         self.api_manager = K8sdAPIManager(factory)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
