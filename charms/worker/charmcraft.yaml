@@ -60,6 +60,9 @@ parts:
       rm -rf $CRAFT_PRIME/lib
       mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
 
+provides:
+  cos-agent:
+    interface: cos_agent
 requires:
   cluster:
     interface: k8s-cluster
@@ -67,3 +70,5 @@ requires:
     # authentication token via a secret in order to cluster
     # this machine as a worker unit.
     #   juju integrate k8s:k8s-cluster k8s-worker:cluster
+  cos-tokens:
+    interface: cos-tokens

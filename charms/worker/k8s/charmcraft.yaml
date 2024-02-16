@@ -62,7 +62,13 @@ parts:
 peers:
   cluster:
     interface: cluster
+  cos-tokens:
+    interface: cos-tokens
 
 provides:
+  cos-agent:
+    interface: cos_agent
   k8s-cluster:
     interface: k8s-cluster
+  cos-worker-tokens:
+    interface: cos-tokens
