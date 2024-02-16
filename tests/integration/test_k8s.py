@@ -9,7 +9,7 @@ import json
 import logging
 
 import pytest
-from juju import application, model
+from juju import model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
@@ -53,22 +53,25 @@ async def ready_nodes(k8s, expected_count):
 async def test_nodes_ready(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
-<<<<<<< HEAD
     worker = kubernetes_cluster.applications["k8s-worker"]
     expected_nodes = len(k8s.units) + len(worker.units)
     await ready_nodes(k8s.units[0], expected_nodes)
-=======
-    await ready_nodes(k8s.units[0], 3)
 
 
 @pytest.mark.abort_on_fail
 async def test_remove_units(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
-    k8s: application.Application = kubernetes_cluster.applications["k8s"]
-    await ready_nodes(k8s.units[0], 3)
+    k8s = kubernetes_cluster.applications["k8s"]
+    worker = kubernetes_cluster.applications["k8s-worker"]
+    expected_nodes = len(k8s.units) + len(worker.units)
+    await ready_nodes(k8s.units[0], expected_nodes)
 
-    kubernetes_cluster.destroy_unit(k8s.units[1])
-    await ready_nodes(k8s.units[0], 2)
-    k8s.destroy_relation("k8s", "k8s-worker:cluster")
-    await ready_nodes(k8s.units[0], 1)
->>>>>>> 5e2fa06 (use set and add integration test)
+    # Remove a control-plane
+    await k8s.units[2].destroy()
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await ready_nodes(k8s.units[0], expected_nodes - 1)
+
+    # Remove the worker
+    await k8s.destroy_relation("k8s", "k8s-worker:cluster")
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await ready_nodes(k8s.units[0], expected_nodes - 2)

@@ -50,6 +50,19 @@ ETC_KUBERNETES = Path("/etc/kubernetes")
 K8SD_PORT = 6400
 
 
+def _unit_from_cluster_key(key: str) -> str:
+    """Strip cluster-* suffixes off a key.
+
+    Args:
+        key: str to strip down
+
+    Returns:
+        string with suffixes removed
+    """
+    key = key.removesuffix("-cluster-hostname")
+    return key.removesuffix("-cluster-secret")
+
+
 class K8sCharm(ops.CharmBase):
     """A charm for managing a K8s cluster via the k8s snap.
 

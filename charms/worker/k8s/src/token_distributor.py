@@ -4,10 +4,30 @@
 """Token Distributor module."""
 
 import contextlib
+import logging
 from enum import Enum, auto
 
+import charms.contextual_status as status
 import ops
 from charms.k8s.v0.k8sd_api_manager import K8sdAPIManager
+
+log = logging.getLogger(__name__)
+
+SECRET_ID = "{0}-secret-id"
+
+
+def _unit_from_cluster_key(key: str) -> str:
+    """Strip cluster-* suffixes off a key.
+
+    Args:
+        key: str to strip down
+
+    Returns:
+        string with suffixes removed
+    """
+    key = key.removesuffix("-token-hostname")
+    key = key.removesuffix("-cos-secret")
+    return key.removesuffix("-cluster-secret")
 
 
 class TokenStrategy(Enum):
@@ -83,7 +103,7 @@ class TokenCollector:
         self.request(relation)
 
         # Read the secret-id from the relation
-        secret_key = f"{self.charm.unit.name}-secret-id"
+        secret_key = SECRET_ID.format(self.charm.unit.name)
         secret_ids = {
             secret_id
             for unit in relation.units | {self.charm.unit}
@@ -120,6 +140,10 @@ class TokenDistributor:
             TokenStrategy.CLUSTER: self._create_cluster_token,
             TokenStrategy.COS: self._create_cos_token,
         }
+        self.token_repeaing_strategies = {
+            TokenStrategy.CLUSTER: self._reap_cluster_token,
+            TokenStrategy.COS: self._reap_cos_token,
+        }
 
     def _create_cluster_token(self, name: str, token_type: ClusterTokenType):
         """Create a cluster token.
@@ -147,6 +171,24 @@ class TokenDistributor:
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
+    def _reap_cluster_token(self, name: str, token_type: ClusterTokenType):
+        """Remove a cluster token.
+
+        Args:
+            name (str): The name of the node.
+            token_type (ClusterTokenType): type of cluster token
+        """
+        if token_type == ClusterTokenType.CONTROL_PLANE:
+            self.api_manager.remove_node(name)
+
+    def _reap_cos_token(self, name: str, _):
+        """Remove a COS token.
+
+        Args:
+            name (str): The name of the node.
+        """
+        # TODO: implement removing cos token
+
     def distribute_tokens(
         self,
         relation: ops.Relation,
@@ -168,27 +210,50 @@ class TokenDistributor:
             ValueError: If an invalid token_strategy is provided.
         """
         units = relation.units | {self.charm.unit}
-        app = relation.app
-        assert app, f"Remote application doesn't exist on {relation.name}"  # nosec
+        app_databag = relation.data[self.charm.app]
 
+        assert relation.app, f"Remote application doesn't exist on {relation.name}"  # nosec
+
+        # Select the appropriate token creation strategy
+        token_strat = self.token_creation_strategies.get(token_strategy)
+        if not token_strat:
+            raise ValueError(f"Invalid token_strategy: {token_strategy}")
+
+        status.add(ops.MaintenanceStatus("Allocating tokens"))
         for unit in units:
-            secret_id = f"{unit.name}-secret-id"
+            secret_id = SECRET_ID.format(unit.name)
             if not (name := relation.data[unit].get("node-name")):
                 continue  # wait for the joining unit to provide its node-name
             if relation.data[unit].get("joined") == name:
+                # when a unit state it's joined, it's accepted it took
+                # ownership of a token.  We need to revoke this token
+                # if the unit leaves. Let's create a cache in the
+                # our app's session of this data
+                app_databag[unit.name] = {"node-name": name}
                 if invalidate_on_join:
                     relation.data[self.charm.unit].pop(secret_id, None)
                 continue  # unit reports its joined already
             if relation.data[self.charm.unit].get(secret_id):
                 continue  # unit already assigned a token
 
-            # Select the appropriate token creation strategy
-            token_creator = self.token_creation_strategies.get(token_strategy)
-            if not token_creator:
-                raise ValueError(f"Invalid token_strategy: {token_strategy}")
-
-            token = token_creator(name, token_type)
+            log.info("Creating token for %s unit=%s hostname=%s", token_type, unit.name, name)
+            token = token_strat(name, token_type)
             content = {"token": token}
-            secret = app.add_secret(content)
+            secret = relation.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.charm.unit][secret_id] = secret.id or ""
+
+        units_to_remove = app_databag.keys() - {u.name for u in relation.units}
+        if units_to_remove:
+            return
+
+        token_strat = self.token_repeaing_strategies.get(token_strategy)
+        if not token_strat:
+            raise ValueError(f"Invalid token_strategy: {token_strategy}")
+
+        status.add(ops.MaintenanceStatus("Revoking tokens"))
+        for unit in units_to_remove:
+            name = app_databag[unit]
+            log.info("Revoking token for %s unit=%s hostname=%s", token_type, unit, name)
+            token_strat(name, token_type)
+            del app_databag[unit]
