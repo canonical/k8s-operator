@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 import ops
+from ops.charm import CharmBase
 
 log = logging.getLogger(__name__)
 
@@ -46,9 +47,7 @@ class COSIntegration(ops.Object):
         charm (CharmBase): Reference to the base charm instance.
     """
 
-    _stored = ops.StoredState()
-
-    def __init__(self, charm) -> None:
+    def __init__(self, charm: CharmBase) -> None:
         """Initialize a COSIntegration instance.
 
         Args:
@@ -56,15 +55,6 @@ class COSIntegration(ops.Object):
         """
         super().__init__(charm, "cos-integration")
         self.charm = charm
-        self._stored.set_default(token="")
-
-    def save_token(self, token: str):
-        """Save the token in the StoredState.
-
-        Args:
-            token (str): A token to save in the StoredState instance.
-        """
-        self._stored.token = token
 
     def _create_scrape_job(self, config: JobConfig, node_name: str, token: str) -> dict:
         """Create a scrape job configuration.
@@ -92,17 +82,21 @@ class COSIntegration(ops.Object):
             "relabel_configs": config.relabel_configs,
         }
 
-    def get_metrics_endpoints(self) -> list:
-        """Return the metrics endpoints for K8s components.
+    def get_metrics_endpoints(
+        self, node_name: str, token: str, control_plane: bool = False
+    ) -> List[Dict]:
+        """Retrieve Prometheus scrape job configurations for Kubernetes components.
+
+        Args:
+            node_name (str): The name of the node.
+            token (str): The authentication token.
+            control_plane (bool, optional): If True, include control plane components.
+                Defaults to False.
 
         Returns:
-            list: A list of Prometheus scrape job configurations.
+            List[Dict]: A list of Prometheus scrape job configurations.
         """
         log.info("Building Prometheus scraping jobs.")
-
-        if not self._stored.token:
-            log.info("COS token not yet available")
-            return []
 
         control_plane_jobs = [
             JobConfig(
@@ -183,10 +177,7 @@ class COSIntegration(ops.Object):
         )
 
         jobs = shared_jobs + kubelet_jobs
-        if self.charm.is_control_plane:
+        if control_plane:
             jobs += control_plane_jobs + kube_state_metrics
 
-        return [
-            self._create_scrape_job(job, self.charm.get_node_name(), self._stored.token)
-            for job in jobs
-        ]
+        return [self._create_scrape_job(job, node_name, token) for job in jobs]

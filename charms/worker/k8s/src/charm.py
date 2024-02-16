@@ -71,7 +71,7 @@ class K8sCharm(ops.CharmBase):
 
         self.cos_agent = COSAgentProvider(
             self,
-            scrape_configs=self.cos.get_metrics_endpoints,
+            scrape_configs=self._get_scrape_jobs,
             refresh_events=[
                 self.on.cluster_relation_joined,
                 self.on.cluster_relation_changed,
@@ -109,7 +109,7 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is not a worker."""
         return not self.is_worker
 
-    def get_node_name(self) -> str:
+    def _get_node_name(self) -> str:
         """Return the lowercase hostname.
 
         Returns:
@@ -145,7 +145,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
             binding = self.model.get_binding("juju-info")
             address = binding and binding.network.ingress_address
-            node_name = self.get_node_name()
+            node_name = self._get_node_name()
             # TODO: Make port (and address) configurable.
             self.api_manager.bootstrap_k8s_snap(node_name, f"{str(address)}:{K8SD_PORT}")
 
@@ -160,14 +160,9 @@ class K8sCharm(ops.CharmBase):
             return
 
         status.add(ops.MaintenanceStatus("Configuring COS integration"))
-        if self.is_control_plane and self.unit.is_leader():
-            return
 
         if relation := self.model.get_relation("cos-tokens"):
             self._request_token(relation)
-            token = self._recover_token(relation, "cos-secret")
-            assert token, "COS token not valid"
-            self.cos.save_token(token)
 
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
@@ -194,14 +189,10 @@ class K8sCharm(ops.CharmBase):
         if not self.model.get_relation("cos-agent"):
             return
 
-        token = self.api_manager.request_auth_token(
-            f"system:cos:{self.get_node_name()}", ["system:cos"]
-        )
-
-        self.cos.save_token(token)
-
         if peer := self.model.get_relation("cos-tokens"):
-            self.distributor.distribute_tokens(relation=peer, token_strategy=TokenStrategy.COS)
+            self.distributor.distribute_tokens(
+                relation=peer, token_strategy=TokenStrategy.COS, all_units=True
+            )
 
         if worker := self.model.get_relation("cos-worker-tokens"):
             self.distributor.distribute_tokens(relation=worker, token_strategy=TokenStrategy.COS)
@@ -215,6 +206,24 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.enable_component("dns", True)
         status.add(ops.MaintenanceStatus("Enabling Network"))
         self.api_manager.enable_component("network", True)
+
+    def _get_scrape_jobs(self):
+        """Retrieve the Prometheus Scrape Jobs.
+
+        Returns:
+            List[Dict]: A list of metrics endpoints available for scraping.
+            Returns an empty list if the token cannot be retrieved or if the
+            "cos-tokens" relation does not exist.
+        """
+        if relation := self.model.get_relation("cos-tokens"):
+            try:
+                token = self._recover_token(relation, "cos-secret")
+                return self.cos.get_metrics_endpoints(
+                    self._get_node_name(), token, self.is_control_plane
+                )
+            except AssertionError:
+                log.exception("Failed to get COS token.")
+        return []
 
     def _get_snap_version(self) -> Optional[str]:
         """Retrieve the version of the installed Kubernetes snap package.
@@ -249,7 +258,7 @@ class K8sCharm(ops.CharmBase):
         Args:
             relation (ops.Relation): The relation object to set the node name in its data.
         """
-        relation.data[self.unit]["node-name"] = self.get_node_name()
+        relation.data[self.unit]["node-name"] = self._get_node_name()
 
     def _recover_token(self, relation: ops.Relation, secret_key_suffix):
         """Recover token from the specified secret and return it.
@@ -266,12 +275,12 @@ class K8sCharm(ops.CharmBase):
             if sec_key in potential:
                 sec_databags.append(potential)
                 break
-        assert len(sec_databags) == 1, f"Failed to find 1 {sec_key}"
+        assert len(sec_databags) == 1, f"Failed to find 1 {sec_key}"  # nosec
         secret_id = sec_databags[0][sec_key]
-        assert secret_id, f"{secret_key_suffix}:secret-id is not set"
+        assert secret_id, f"{secret_key_suffix}:secret-id is not set"  # nosec
         secret = self.model.get_secret(id=secret_id)
         content = secret.get_content(refresh=True)
-        assert content["token"], f"{secret_key_suffix}: token not valid"
+        assert content["token"], f"{secret_key_suffix}: token not valid"  # nosec
         return content["token"]
 
     @on_error(
@@ -289,10 +298,9 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation("cluster"):
             self._request_token(relation)
             token = self._recover_token(relation, "cluster-secret")
-            assert token, "Cluster token not valid"
             binding = self.model.get_binding("juju-info")
             address = binding and binding.network.ingress_address
-            name = self.get_node_name()
+            name = self._get_node_name()
             self.api_manager.join_cluster(name, f"{str(address)}:{K8SD_PORT}", token)
 
     def _reconcile(self, _):

@@ -81,6 +81,7 @@ class TokenDistributor:
         relation: ops.Relation,
         token_strategy: TokenStrategy,
         token_type: ClusterTokenType = ClusterTokenType.NONE,
+        all_units: bool = False,
     ):
         """Distribute tokens to units in a relation.
 
@@ -89,11 +90,16 @@ class TokenDistributor:
             token_strategy (TokenStrategy): The strategy of token creation.
             token_type (ClusterTokenType, optional): The type of cluster token.
                 Defaults to ClusterTokenType.NONE.
+            all_units (bool, optional): Whether to include all units in the relation.
+                Defaults to False.
 
         Raises:
             ValueError: If an invalid token_strategy is provided.
         """
-        units = {u for u in relation.units if u.name != self.charm.unit.name}
+        units = relation.units
+        if all_units:
+            units.add(self.charm.unit)
+
         app_databag: ops.RelationDataContent | dict[str, str] = relation.data.get(
             self.charm.model.app, {}
         )
