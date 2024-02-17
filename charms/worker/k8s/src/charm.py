@@ -20,6 +20,7 @@ import re
 import shlex
 import socket
 import subprocess
+from pathlib import Path
 from typing import Optional
 
 import charms.contextual_status as status
@@ -43,6 +44,8 @@ log = logging.getLogger(__name__)
 
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
+KUBECONFIG = Path.home() / ".kube/config"
+ETC_KUBERNETES = Path("/etc/kubernetes")
 K8SD_PORT = 6400
 
 
@@ -116,6 +119,15 @@ class K8sCharm(ops.CharmBase):
             the hostname of the machine.
         """
         return socket.gethostname().lower()
+
+    @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
+    def _install_k8s_snap(self):
+        """Install the k8s snap package."""
+        status.add(ops.MaintenanceStatus("Installing k8s snap"))
+        k8s_snap = self.snap_cache["k8s"]
+        if not k8s_snap.present:
+            channel = self.config["channel"]
+            k8s_snap.ensure(SnapState.Latest, channel=channel)
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -240,18 +252,6 @@ class K8sCharm(ops.CharmBase):
         if match:
             return match.group()
 
-        log.info("Snap k8s not found or no version available.")
-        return None
-
-    @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
-    def _install_k8s_snap(self):
-        """Install the k8s snap package."""
-        status.add(ops.MaintenanceStatus("Installing k8s snap"))
-        k8s_snap = self.snap_cache["k8s"]
-        if not k8s_snap.present:
-            channel = self.config["channel"]
-            k8s_snap.ensure(SnapState.Latest, channel=channel)
-
     def _request_token(self, relation):
         """Request a token by setting the node name in the relation data.
 
@@ -307,6 +307,7 @@ class K8sCharm(ops.CharmBase):
         """Reconcile state change events."""
         self._install_k8s_snap()
         self._apply_snap_requirements()
+        self._check_k8sd_ready()
         if self.unit.is_leader() and self.is_control_plane:
             self._bootstrap_k8s_snap()
             self._enable_components()
@@ -316,6 +317,8 @@ class K8sCharm(ops.CharmBase):
         self._join_cluster()
         self._configure_cos_integration()
         self._update_status()
+        if self.is_control_plane:
+            self._generate_kubeconfig()
 
     @on_error(
         ops.WaitingStatus("Cluster not yet ready"),
@@ -329,15 +332,18 @@ class K8sCharm(ops.CharmBase):
         if self.is_worker:
             relation = self.model.get_relation("cluster")
             assert relation, "Missing cluster relation with k8s"  # nosec
-            # TODO: replace with code to confirm that the worker
-            # is part of the joined cluster
-            # Note: Currently, there is no way in the k8s-snap to do this.
-            return
-        if self.api_manager.is_cluster_ready():
-            if version := self._get_snap_version():
-                self.unit.set_workload_version(version)
         else:
-            status.add(ops.WaitingStatus("Waiting for k8s to be ready."))
+            assert self.api_manager.is_cluster_ready(), "control-plane not yet ready"  # nosec
+        if version := self._get_snap_version():
+            self.unit.set_workload_version(version)
+
+    @on_error(ops.WaitingStatus(""))
+    def _generate_kubeconfig(self):
+        """Generate kubeconfig."""
+        status.add(ops.MaintenanceStatus("Generating KubeConfig"))
+        KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
+        src = ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
+        KUBECONFIG.write_bytes(src.read_bytes())
 
     def _on_update_status(self, _event: ops.UpdateStatusEvent):
         """Handle update-status event."""
