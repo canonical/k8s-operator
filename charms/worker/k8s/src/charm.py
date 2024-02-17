@@ -252,6 +252,9 @@ class K8sCharm(ops.CharmBase):
         if match:
             return match.group()
 
+        log.info("Snap k8s not found or no version available.")
+        return None
+
     def _request_token(self, relation):
         """Request a token by setting the node name in the relation data.
 
