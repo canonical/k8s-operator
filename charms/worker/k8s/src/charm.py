@@ -32,6 +32,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdConnectionError,
     UnixSocketConnectionFactory,
 )
+from charms.interface_kube_dns import KubeDnsRequires
 from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
 from charms.reconciler import Reconciler
 
@@ -61,11 +62,14 @@ class K8sCharm(ops.CharmBase):
         """
         super().__init__(*args)
 
-        factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
+        factory = UnixSocketConnectionFactory(
+            unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.api_manager = K8sdAPIManager(factory)
         self.snap_cache = SnapCache()
 
         self.reconciler = Reconciler(self, self._reconcile)
+
+        self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
 
         self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
@@ -136,7 +140,8 @@ class K8sCharm(ops.CharmBase):
             address = binding and binding.network.ingress_address
             node_name = self._get_node_name()
             # TODO: Make port (and address) configurable.
-            self.api_manager.bootstrap_k8s_snap(node_name, f"{str(address)}:{K8SD_PORT}")
+            self.api_manager.bootstrap_k8s_snap(
+                node_name, f"{str(address)}:{K8SD_PORT}")
 
     def _distribute_cluster_tokens(self, relation: ops.Relation, token_type: str):
         """Distribute role based tokens as secrets on a relation.
@@ -167,7 +172,8 @@ class K8sCharm(ops.CharmBase):
             relation.data[self.app][sec_key] = secret.id or ""
 
     @on_error(
-        WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
+        WaitingStatus(
+            "Waiting for enable components"), InvalidResponseError, K8sdConnectionError
     )
     def _enable_components(self):
         """Enable necessary components for the Kubernetes cluster."""
@@ -176,16 +182,36 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Enabling Network"))
         self.api_manager.enable_component("network", True)
 
+    def _on_kube_dns_relation_joined(self, event: KubeDnsRequires.RelationJoinedEvent):
+        # """Handle the kube-dns relation joined event."""
+        # event.relation.data[self.unit].update(
+        #     {"node-name": self._get_node_name()})
+        # do the provider part here
+
+        # disable the built in dns component
+        self.api_manager.disable_component("dns", True)
+
+    def get_dns_address(self):
+        return self.kube_dns.address or self.cdk_addons.get_dns_address()
+
+    def get_dns_domain(self):
+        return self.kube_dns.domain or self.model.config["dns_domain"]
+
+    def get_dns_port(self):
+        return self.kube_dns.port or 53
+
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         if not self.unit.is_leader() or not self.is_control_plane:
             return
 
         if peer := self.model.get_relation("cluster"):
-            self._distribute_cluster_tokens(peer, token_type="control-plane")  # nosec
+            self._distribute_cluster_tokens(
+                peer, token_type="control-plane")  # nosec
 
         if workers := self.model.get_relation("k8s-cluster"):
-            self._distribute_cluster_tokens(workers, token_type="worker")  # nosec
+            self._distribute_cluster_tokens(
+                workers, token_type="worker")  # nosec
 
     @on_error(
         WaitingStatus("Waiting for Cluster token"),
@@ -222,7 +248,8 @@ class K8sCharm(ops.CharmBase):
                 if sec_key in potential:
                     sec_databags.append(potential)
                     break
-            assert len(sec_databags) == 1, "Failed to find 1 cluster-secret"  # nosec
+            assert len(
+                sec_databags) == 1, "Failed to find 1 cluster-secret"  # nosec
 
             secret_id = sec_databags[0][sec_key]
             assert secret_id, "cluster:secret-id is not set"  # nosec
@@ -237,7 +264,8 @@ class K8sCharm(ops.CharmBase):
             binding = self.model.get_binding("juju-info")
             address = binding and binding.network.ingress_address
             name = self._get_node_name()
-            self.api_manager.join_cluster(name, f"{str(address)}:{K8SD_PORT}", token)
+            self.api_manager.join_cluster(
+                name, f"{str(address)}:{K8SD_PORT}", token)
 
     def _get_snap_version(self) -> Optional[str]:
         """Retrieve the version of the installed Kubernetes snap package.
@@ -279,7 +307,8 @@ class K8sCharm(ops.CharmBase):
         """Generate kubeconfig."""
         status.add(ops.MaintenanceStatus("Generating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        src = ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
+        src = ETC_KUBERNETES / \
+            ("admin.conf" if self.is_control_plane else "kubelet.conf")
         KUBECONFIG.write_bytes(src.read_bytes())
 
     def _on_update_status(self, _event: ops.UpdateStatusEvent):

@@ -2,3 +2,4 @@ ops >= 2.2.0
 pydantic == 1.*
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
+charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns
