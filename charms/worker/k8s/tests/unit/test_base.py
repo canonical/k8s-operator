@@ -31,7 +31,7 @@ def mock_reconciler_handlers(harness):
     """Mock out reconciler handlers.
 
     Args:
-        harness: the harness under stest
+        harness: the harness under test
 
     Yields:
         Mapping of handler_names to their mock methods.
@@ -41,6 +41,7 @@ def mock_reconciler_handlers(harness):
         "_apply_snap_requirements",
         "_check_k8sd_ready",
         "_join_cluster",
+        "_configure_cos_integration",
         "_update_status",
         "_apply_node_labels",
     }
@@ -49,6 +50,8 @@ def mock_reconciler_handlers(harness):
             "_bootstrap_k8s_snap",
             "_enable_components",
             "_create_cluster_tokens",
+            "_create_cos_tokens",
+            "_apply_cos_requirements",
             "_generate_kubeconfig",
         }
 
