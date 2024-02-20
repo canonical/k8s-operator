@@ -70,3 +70,4 @@ provides:
 requires:
   dns-provider:
     interface: kube-dns
+    limit: 1
