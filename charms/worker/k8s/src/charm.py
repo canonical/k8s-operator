@@ -73,7 +73,6 @@ class K8sCharm(ops.CharmBase):
 
         self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
-        self.framework.observe(self.on.update_status, self._on_coredns_enabled)
         self._on_coredns_enabled()
 
     @property
