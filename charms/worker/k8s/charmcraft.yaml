@@ -66,3 +66,7 @@ peers:
 provides:
   k8s-cluster:
     interface: k8s-cluster
+
+requires:
+  dns-provider:
+    interface: kube-dns

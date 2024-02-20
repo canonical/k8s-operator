@@ -73,6 +73,8 @@ class K8sCharm(ops.CharmBase):
 
         self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
+        self.framework.observe(self.on.update_status, self._on_coredns_enabled)
+        self._on_coredns_enabled
 
     @property
     def is_control_plane(self) -> bool:
@@ -182,14 +184,21 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Enabling Network"))
         self.api_manager.enable_component("network", True)
 
-    def _on_kube_dns_relation_joined(self, event: KubeDnsRequires.RelationJoinedEvent):
-        # """Handle the kube-dns relation joined event."""
-        # event.relation.data[self.unit].update(
-        #     {"node-name": self._get_node_name()})
-        # do the provider part here
-
+    def _on_coredns_enabled(self):
         # disable the built in dns component
-        self.api_manager.disable_component("dns", True)
+        print("Coredns enabled")
+
+        relation = self.model.get_relation("kube-dns")
+
+        units = {u for u in relation.units if u.name != self.unit.name}
+        app_databag: ops.RelationDataContent | dict[str, str] = relation.data.get(
+            self.model.app, {}
+        )
+        print(app_databag)
+        for unit in units:
+            print(unit)
+
+        # self.api_manager.enable_component("dns", False)
 
     def get_dns_address(self):
         return self.kube_dns.address or self.cdk_addons.get_dns_address()
