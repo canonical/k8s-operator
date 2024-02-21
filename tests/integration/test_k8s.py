@@ -15,6 +15,14 @@ log = logging.getLogger(__name__)
 
 
 async def get_nodes(k8s):
+    """Return Node list
+
+    Args:
+        k8s: any k8s unit
+
+    Returns:
+        list of nodes
+    """
     action = await k8s.run("k8s kubectl get nodes -o json")
     result = await action.wait()
     assert result.results["return-code"] == 0, "Failed to get nodes with kubectl"
@@ -31,9 +39,6 @@ async def ready_nodes(k8s, expected_count):
     Args:
         k8s: k8s unit
         expected_count: number of expected nodes
-
-    Returns:
-        list of nodes
     """
     log.info("Finding all nodes...")
     nodes = await get_nodes(k8s)
@@ -62,6 +67,7 @@ async def test_nodes_ready(kubernetes_cluster):
 
 
 async def test_nodes_labelled(kubernetes_cluster):
+    """Test the charms label the nodes appropriately."""
     k8s = kubernetes_cluster.applications["k8s"]
     worker = kubernetes_cluster.applications["k8s-worker"]
     nodes = await get_nodes(k8s.units[0])
