@@ -1,3 +1,6 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 diff --git a/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
 index 5a01ef2..b582e63 100644
 --- a/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
