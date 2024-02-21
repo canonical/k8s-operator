@@ -306,7 +306,9 @@ class K8sCharm(ops.CharmBase):
             address = binding and binding.network.ingress_address
             node_name = self._get_node_name()
             cluster_addr = f"{address}:{K8SD_PORT}"
+            log.info("Joining %s to %s...", node_name, cluster_addr)
             self.api_manager.join_cluster(node_name, cluster_addr, token)
+            log.info("Success")
 
     def _reconcile(self, _):
         """Reconcile state change events."""

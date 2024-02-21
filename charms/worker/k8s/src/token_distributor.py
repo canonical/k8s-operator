@@ -215,7 +215,7 @@ class TokenDistributor:
                 # ownership of a token.  We need to revoke this token
                 # if the unit leaves. Let's create a cache in the
                 # our app's session of this data
-                app_databag[unit.name] = {"node-name": name}
+                app_databag[unit.name] = name
                 if invalidate_on_join:
                     relation.data[self.charm.unit].pop(secret_id, None)
                 continue  # unit reports its joined already
@@ -255,10 +255,10 @@ class TokenDistributor:
         if not token_strat:
             raise ValueError(f"Invalid token_strategy: {token_strategy}")
 
-        status.add(ops.MaintenanceStatus(f"Revoking {token_type} tokens"))
+        status.add(ops.MaintenanceStatus(f"Revoking {token_type.value} tokens"))
         for unit in units_to_remove:
             name = app_databag[unit]
-            log.info("Revoking token for %s unit=%s hostname=%s", token_type, unit, name)
+            log.info("Revoking token for %s unit=%s hostname=%s", token_type.value, unit, name)
             token_strat(name, token_type)
             del app_databag[unit]
 
