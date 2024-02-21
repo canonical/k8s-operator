@@ -35,7 +35,8 @@ from charms.k8s.v0.k8sd_api_manager import (
     UnixSocketConnectionFactory,
 )
 from charms.node_base import LabelMaker
-from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
+from charms.operator_libs_linux.v2.snap import SnapError, SnapState
+from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
 from charms.reconciler import Reconciler
 
 from cos_integration import COSIntegration
@@ -73,7 +74,6 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
-        self.snap_cache = SnapCache()
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -145,10 +145,7 @@ class K8sCharm(ops.CharmBase):
     def _install_k8s_snap(self):
         """Install the k8s snap package."""
         status.add(ops.MaintenanceStatus("Installing k8s snap"))
-        k8s_snap = self.snap_cache["k8s"]
-        if not k8s_snap.present:
-            channel = self.config["channel"]
-            k8s_snap.ensure(SnapState.Latest, channel=channel)
+        snap_ensure("k8s", SnapState.Latest.value, self.config["channel"])
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
