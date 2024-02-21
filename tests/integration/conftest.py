@@ -194,7 +194,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
             application_name=charm.app_name,
             resources=charm.resources,
             series="jammy",
-            num_units=1 if charm.app_name == "k8s-worker" else 2,
+            num_units=2 if charm.app_name == "k8s-worker" else 3,
         )
         for path, charm in zip(charm_files, charms)
     ]
