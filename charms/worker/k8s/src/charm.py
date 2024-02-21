@@ -68,9 +68,6 @@ class K8sCharm(ops.CharmBase):
         """
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
-        self.label_maker = LabelMaker(
-            self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH
-        )
         self.api_manager = K8sdAPIManager(factory)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
@@ -355,13 +352,14 @@ class K8sCharm(ops.CharmBase):
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
         KUBECONFIG.write_bytes(self._source_kubeconfig.read_bytes())
 
-    @status.on_error(ops.WaitingStatus("Waiting to apply node labels"), LabelMaker.NodeLabelError)
+    @status.on_error(ops.BlockedStatus("Cannot apply node-labels"), LabelMaker.NodeLabelError)
     def _apply_node_labels(self):
         """Apply labels to the node."""
         status.add(ops.MaintenanceStatus("Apply Node Labels"))
         node = self.get_node_name()
-        if self.label_maker.active_labels() is not None:
-            self.label_maker.apply_node_labels()
+        labeler = LabelMaker(self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH)
+        if labeler.active_labels() is not None:
+            labeler.apply_node_labels()
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)
