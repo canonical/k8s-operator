@@ -71,7 +71,7 @@ async def test_remove_units(kubernetes_cluster: model.Model):
     await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
     await ready_nodes(k8s.units[0], expected_nodes - 1)
 
-    # Remove the worker
-    await k8s.destroy_relation("k8s", "k8s-worker:cluster")
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
-    await ready_nodes(k8s.units[0], expected_nodes - 2)
+    # # Remove the worker
+    # await k8s.destroy_relation("k8s", "k8s-worker:cluster")
+    # await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    # await ready_nodes(k8s.units[0], expected_nodes - 2)

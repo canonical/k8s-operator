@@ -16,20 +16,6 @@ log = logging.getLogger(__name__)
 SECRET_ID = "{0}-secret-id"
 
 
-def _unit_from_cluster_key(key: str) -> str:
-    """Strip cluster-* suffixes off a key.
-
-    Args:
-        key: str to strip down
-
-    Returns:
-        string with suffixes removed
-    """
-    key = key.removesuffix("-token-hostname")
-    key = key.removesuffix("-cos-secret")
-    return key.removesuffix("-cluster-secret")
-
-
 class TokenStrategy(Enum):
     """Enumeration defining strategy for token creation.
 
@@ -141,8 +127,8 @@ class TokenDistributor:
             TokenStrategy.COS: self._create_cos_token,
         }
         self.token_repeaing_strategies = {
-            TokenStrategy.CLUSTER: self._reap_cluster_token,
-            TokenStrategy.COS: self._reap_cos_token,
+            TokenStrategy.CLUSTER: self._revoke_cluster_token,
+            TokenStrategy.COS: self._revoke_cos_token,
         }
 
     def _create_cluster_token(self, name: str, token_type: ClusterTokenType):
@@ -171,7 +157,7 @@ class TokenDistributor:
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
-    def _reap_cluster_token(self, name: str, token_type: ClusterTokenType):
+    def _revoke_cluster_token(self, name: str, token_type: ClusterTokenType):
         """Remove a cluster token.
 
         Args:
@@ -181,7 +167,7 @@ class TokenDistributor:
         if token_type == ClusterTokenType.CONTROL_PLANE:
             self.api_manager.remove_node(name)
 
-    def _reap_cos_token(self, name: str, _):
+    def _revoke_cos_token(self, name: str, _):
         """Remove a COS token.
 
         Args:
@@ -189,14 +175,14 @@ class TokenDistributor:
         """
         # TODO: implement removing cos token
 
-    def distribute_tokens(
+    def _allocate_tokens(
         self,
         relation: ops.Relation,
         token_strategy: TokenStrategy,
         token_type: ClusterTokenType = ClusterTokenType.NONE,
         invalidate_on_join: bool = False,
     ):
-        """Distribute tokens to units in a relation.
+        """Allocate tokens to units in a relation.
 
         Args:
             relation (ops.Relation): The relation object.
@@ -243,6 +229,24 @@ class TokenDistributor:
             secret.grant(relation, unit=unit)
             relation.data[self.charm.unit][secret_id] = secret.id or ""
 
+    def _revoke_tokens(
+        self,
+        relation: ops.Relation,
+        token_strategy: TokenStrategy,
+        token_type: ClusterTokenType = ClusterTokenType.NONE,
+    ):
+        """Revoke tokens from units in a relation.
+
+        Args:
+            relation (ops.Relation): The relation object.
+            token_strategy (TokenStrategy): The strategy of token creation.
+            token_type (ClusterTokenType, optional): The type of cluster token.
+                Defaults to ClusterTokenType.NONE.
+
+        Raises:
+            ValueError: If an invalid token_strategy is provided.
+        """
+        app_databag: ops.RelationDataContent = relation.data[self.charm.app]
         units_to_remove = app_databag.keys() - {u.name for u in relation.units}
         if units_to_remove:
             return
@@ -251,9 +255,29 @@ class TokenDistributor:
         if not token_strat:
             raise ValueError(f"Invalid token_strategy: {token_strategy}")
 
-        status.add(ops.MaintenanceStatus("Revoking tokens"))
+        status.add(ops.MaintenanceStatus(f"Revoking {token_type} tokens"))
         for unit in units_to_remove:
             name = app_databag[unit]
             log.info("Revoking token for %s unit=%s hostname=%s", token_type, unit, name)
             token_strat(name, token_type)
             del app_databag[unit]
+
+    def distribute_tokens(
+        self,
+        relation: ops.Relation,
+        token_strategy: TokenStrategy,
+        token_type: ClusterTokenType = ClusterTokenType.NONE,
+        invalidate_on_join: bool = False,
+    ):
+        """Distribute tokens to units in a relation.
+
+        Args:
+            relation (ops.Relation): The relation object.
+            token_strategy (TokenStrategy): The strategy of token creation.
+            token_type (ClusterTokenType, optional): The type of cluster token.
+                Defaults to ClusterTokenType.NONE.
+            invalidate_on_join (bool, optional): Whether to pop the token once remote is joined
+                Defaults to False.
+        """
+        self._allocate_tokens(relation, token_strategy, token_type, invalidate_on_join)
+        self._revoke_tokens(relation, token_strategy, token_type)
