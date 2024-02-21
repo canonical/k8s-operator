@@ -20,6 +20,7 @@ import re
 import shlex
 import socket
 import subprocess
+from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
@@ -37,7 +38,7 @@ from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
 from charms.reconciler import Reconciler
 
 from cos_integration import COSIntegration
-from token_distributor import ClusterTokenType, TokenDistributor, TokenStrategy
+from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -69,7 +70,8 @@ class K8sCharm(ops.CharmBase):
         self.api_manager = K8sdAPIManager(factory)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
-        self.distributor = TokenDistributor(self.api_manager, self)
+        self.distributor = TokenDistributor(self, self.api_manager)
+        self.collector = TokenCollector(self, self._get_node_name())
         self.snap_cache = SnapCache()
 
         self.cos_agent = COSAgentProvider(
@@ -85,7 +87,6 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
-        self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
 
     @status.on_error(
@@ -109,8 +110,13 @@ class K8sCharm(ops.CharmBase):
 
     @property
     def is_control_plane(self) -> bool:
-        """Returns true if the unit is not a worker."""
+        """Returns true if the unit is a control-plane."""
         return not self.is_worker
+
+    @cached_property
+    def is_worker(self) -> bool:
+        """Returns true if the unit is a worker."""
+        return self.meta.name == "k8s-worker"
 
     def _get_node_name(self) -> str:
         """Return the lowercase hostname.
@@ -174,15 +180,20 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Configuring COS integration"))
 
         if relation := self.model.get_relation("cos-tokens"):
-            self._request_token(relation)
+            self.collector.request(relation)
 
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         if peer := self.model.get_relation("cluster"):
+            node_name = self._get_node_name()
+            peer.data[self.unit]["node-name"] = node_name
+            peer.data[self.unit]["joined"] = node_name
+
             self.distributor.distribute_tokens(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.CONTROL_PLANE,
+                invalidate_on_join=True,
             )
 
         if workers := self.model.get_relation("k8s-cluster"):
@@ -190,6 +201,7 @@ class K8sCharm(ops.CharmBase):
                 relation=workers,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.WORKER,
+                invalidate_on_join=True,
             )
 
     def _create_cos_tokens(self):
@@ -201,13 +213,11 @@ class K8sCharm(ops.CharmBase):
         if not self.model.get_relation("cos-agent"):
             return
 
-        if peer := self.model.get_relation("cos-tokens"):
-            self.distributor.distribute_tokens(
-                relation=peer, token_strategy=TokenStrategy.COS, all_units=True
-            )
+        if rel := self.model.get_relation("cos-tokens"):
+            self.distributor.distribute_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
-        if worker := self.model.get_relation("cos-worker-tokens"):
-            self.distributor.distribute_tokens(relation=worker, token_strategy=TokenStrategy.COS)
+        if rel := self.model.get_relation("cos-worker-tokens"):
+            self.distributor.distribute_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
@@ -227,14 +237,18 @@ class K8sCharm(ops.CharmBase):
             Returns an empty list if the token cannot be retrieved or if the
             "cos-tokens" relation does not exist.
         """
-        if relation := self.model.get_relation("cos-tokens"):
-            try:
-                token = self._recover_token(relation, "cos-secret")
+        relation = self.model.get_relation("cos-tokens")
+        if not relation:
+            log.warning("No cos-tokens available")
+            return []
+
+        try:
+            with self.collector.recover_token(relation) as token:
                 return self.cos.get_metrics_endpoints(
                     self._get_node_name(), token, self.is_control_plane
                 )
-            except AssertionError:
-                log.exception("Failed to get COS token.")
+        except AssertionError:
+            log.exception("Failed to get COS token.")
         return []
 
     def _get_snap_version(self) -> Optional[str]:
@@ -255,37 +269,6 @@ class K8sCharm(ops.CharmBase):
         log.info("Snap k8s not found or no version available.")
         return None
 
-    def _request_token(self, relation):
-        """Request a token by setting the node name in the relation data.
-
-        Args:
-            relation (ops.Relation): The relation object to set the node name in its data.
-        """
-        relation.data[self.unit]["node-name"] = self._get_node_name()
-
-    def _recover_token(self, relation: ops.Relation, secret_key_suffix):
-        """Recover token from the specified secret and return it.
-
-        Args:
-            relation (ops.Relation): The relation object who owns the secret.
-            secret_key_suffix (str): The suffix used to identify the secret key.
-
-        Returns:
-            str: The recovered token.
-        """
-        sec_databags, sec_key = [], f"{self.unit.name}-{secret_key_suffix}"
-        for potential in relation.data.values():
-            if sec_key in potential:
-                sec_databags.append(potential)
-                break
-        assert len(sec_databags) == 1, f"Failed to find 1 {sec_key}"  # nosec
-        secret_id = sec_databags[0][sec_key]
-        assert secret_id, f"{secret_key_suffix}:secret-id is not set"  # nosec
-        secret = self.model.get_secret(id=secret_id)
-        content = secret.get_content(refresh=True)
-        assert content["token"], f"{secret_key_suffix}: token not valid"  # nosec
-        return content["token"]
-
     @on_error(
         WaitingStatus("Waiting for Cluster token"),
         AssertionError,
@@ -297,14 +280,20 @@ class K8sCharm(ops.CharmBase):
         if self.api_manager.is_cluster_bootstrapped():
             return
 
+        relation = self.model.get_relation("cluster")
+        if not relation:
+            return
+
+        if self.collector.joined(relation):
+            return
+
         status.add(ops.MaintenanceStatus("Joining cluster"))
-        if relation := self.model.get_relation("cluster"):
-            self._request_token(relation)
-            token = self._recover_token(relation, "cluster-secret")
-            binding = self.model.get_binding("juju-info")
+        with self.collector.recover_token(relation) as token:
+            binding = self.model.get_binding(relation.name)
             address = binding and binding.network.ingress_address
-            name = self._get_node_name()
-            self.api_manager.join_cluster(name, f"{str(address)}:{K8SD_PORT}", token)
+            node_name = self._get_node_name()
+            cluster_addr = f"{address}:{K8SD_PORT}"
+            self.api_manager.join_cluster(node_name, cluster_addr, token)
 
     def _reconcile(self, _):
         """Reconcile state change events."""
