@@ -86,7 +86,7 @@ class TokenCollector:
         secret_key = f"{self.charm.unit.name}-secret-id"
         secret_ids = {
             secret_id
-            for unit in relation.units
+            for unit in relation.units | {self.charm.unit}
             if (secret_id := relation.data[unit].get(secret_key))
         }
 
