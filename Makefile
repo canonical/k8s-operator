@@ -6,20 +6,20 @@ K8S_MODEL_NAME = dns-model
 .PHONY: setup shell deploy clean refresh deploy_k8s_charm remove_k8s_charm create_k8s_cloud delete_k8s_cloud debug
 
 # Setup the VM (here multipass) and install juju, lxd, charmcraft, add a model, get git repo
-setup:
+vm:
 	multipass launch --name $(VM_NAME) -c 4 -d 40G -m 9G 22.04 
-	multipass shell $(VM_NAME) -- sudo apt install make
-	multipass shell $(VM_NAME) -- sudo apt upgrade -y
-	multipass shell $(VM_NAME) -- sudo apt update
-	multipass shell $(VM_NAME) -- sudo apt install -y snapd
-	multipass shell $(VM_NAME) -- sudo snap install juju --classic
-	multipass shell $(VM_NAME) -- sudo snap install charmcraft --classic
-	multipass shell $(VM_NAME) -- git clone https://github.com/canonical/k8s-operator.git	
-	multipass shell $(VM_NAME) -- sudo lxd init --auto
-	multipass shell $(VM_NAME) -- sudo adduser ubuntu lxd
-	multipass shell $(VM_NAME) -- sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
-	multipass shell $(VM_NAME) -- sudo -u ubuntu juju bootstrap localhost $(CONTROLLER_NAME)
-	multipass shell $(VM_NAME) -- juju add-model $(MODEL_NAME) --config logging-config="<root>=WARNING; unit=DEBUG"
+	multipass exec $(VM_NAME) -- sudo apt upgrade -y
+	multipass exec $(VM_NAME) -- sudo apt update
+	multipass exec $(VM_NAME) -- sudo apt install make	
+	multipass exec $(VM_NAME) -- sudo apt install -y snapd
+	multipass exec $(VM_NAME) -- sudo snap install juju --classic
+	multipass exec $(VM_NAME) -- sudo snap install charmcraft --classic
+	multipass exec $(VM_NAME) -- git clone https://github.com/canonical/k8s-operator.git	
+	multipass exec $(VM_NAME) -- sudo lxd init --auto
+	multipass exec $(VM_NAME) -- sudo adduser ubuntu lxd
+	multipass exec $(VM_NAME) -- sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
+	multipass exec $(VM_NAME) -- sudo -u ubuntu juju bootstrap localhost $(CONTROLLER_NAME)
+	multipass exec $(VM_NAME) -- juju add-model $(MODEL_NAME) --config logging-config="<root>=WARNING; unit=DEBUG"
 
 # Shell into the VM
 shell:
