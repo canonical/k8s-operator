@@ -6,14 +6,15 @@
 import contextlib
 import logging
 from enum import Enum, auto
+from typing import Set
 
 import charms.contextual_status as status
 import ops
-from charms.k8s.v0.k8sd_api_manager import K8sdAPIManager
+from charms.k8s.v0.k8sd_api_manager import K8sdAPIManager, K8sdConnectionError
 
 log = logging.getLogger(__name__)
 
-SECRET_ID = "{0}-secret-id"
+SECRET_ID = "{0}-secret-id"  # nosec
 
 
 class TokenStrategy(Enum):
@@ -113,14 +114,16 @@ class TokenCollector:
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
-    def __init__(self, charm: ops.CharmBase, api_manager: K8sdAPIManager):
+    def __init__(self, charm: ops.CharmBase, node_name: str, api_manager: K8sdAPIManager):
         """Initialize a TokenDistributor instance.
 
         Args:
             charm (CharmBase): A charm object representing the current charm.
+            node_name (str): current node's name
             api_manager: An K8sdAPIManager object for interacting with k8sd API.
         """
         self.charm = charm
+        self.node_name = node_name
         self.api_manager = api_manager
         self.token_creation_strategies = {
             TokenStrategy.CLUSTER: self._create_cluster_token,
@@ -157,15 +160,25 @@ class TokenDistributor:
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
-    def _revoke_cluster_token(self, name: str, token_type: ClusterTokenType):
+    def _revoke_cluster_token(self, name: str, _):
         """Remove a cluster token.
 
         Args:
             name (str): The name of the node.
-            token_type (ClusterTokenType): type of cluster token
+
+        Raises:
+            K8sdConnectionError: reraises cluster token revoke failures
         """
-        if token_type == ClusterTokenType.CONTROL_PLANE:
+        try:
             self.api_manager.remove_node(name)
+        except K8sdConnectionError:
+            if name == self.node_name:
+                # I'm unclustering myself
+                # Let's just ignore the error
+                # "Remote end closed connection without response"
+                log.exception("Unclustering onesself can expect an error")
+            else:
+                raise
 
     def _revoke_cos_token(self, name: str, _):
         """Remove a COS token.
@@ -175,46 +188,58 @@ class TokenDistributor:
         """
         # TODO: implement removing cos token
 
-    def _allocate_tokens(
+    def allocate_tokens(
         self,
         relation: ops.Relation,
         token_strategy: TokenStrategy,
         token_type: ClusterTokenType = ClusterTokenType.NONE,
-        invalidate_on_join: bool = False,
     ):
         """Allocate tokens to units in a relation.
 
         Args:
             relation (ops.Relation): The relation object.
             token_strategy (TokenStrategy): The strategy of token creation.
-            token_type (ClusterTokenType, optional): The type of cluster token.
+            token_type (ClusterTokenType): The type of cluster token.
                 Defaults to ClusterTokenType.NONE.
-            invalidate_on_join (bool, optional): Whether to pop the token once remote is joined
-                Defaults to False.
 
         Raises:
             ValueError: If an invalid token_strategy is provided.
         """
-        units = relation.units | {self.charm.unit}
-        app_databag = relation.data[self.charm.app]
-
+        invalidate_on_join = token_strategy == TokenStrategy.CLUSTER
+        units = relation.units
+        if self.charm.app == relation.app:
+            # include self in peer relations
+            units |= {self.charm.unit}
         assert relation.app, f"Remote application doesn't exist on {relation.name}"  # nosec
+        app_databag = relation.data[self.charm.app]
 
         # Select the appropriate token creation strategy
         token_strat = self.token_creation_strategies.get(token_strategy)
         if not token_strat:
             raise ValueError(f"Invalid token_strategy: {token_strategy}")
 
-        status.add(ops.MaintenanceStatus("Allocating tokens"))
+        status.add(ops.MaintenanceStatus(f"Allocating {token_type.value} tokens"))
         for unit in units:
             secret_id = SECRET_ID.format(unit.name)
             if not (name := relation.data[unit].get("node-name")):
+                log.info(
+                    "Wait for node-name of %s unit=%s:%s",
+                    token_type.value,
+                    relation.name,
+                    unit.name,
+                )
                 continue  # wait for the joining unit to provide its node-name
             if relation.data[unit].get("joined") == name:
                 # when a unit state it's joined, it's accepted it took
                 # ownership of a token.  We need to revoke this token
                 # if the unit leaves. Let's create a cache in the
                 # our app's session of this data
+                log.info(
+                    "Completed token allocation of %s unit=%s:%s",
+                    token_type.value,
+                    relation.name,
+                    unit.name,
+                )
                 app_databag[unit.name] = name
                 if invalidate_on_join:
                     relation.data[self.charm.unit].pop(secret_id, None)
@@ -222,18 +247,21 @@ class TokenDistributor:
             if relation.data[self.charm.unit].get(secret_id):
                 continue  # unit already assigned a token
 
-            log.info("Creating token for %s unit=%s hostname=%s", token_type, unit.name, name)
+            log.info(
+                "Creating token for %s unit=%s hostname=%s", token_type.value, unit.name, name
+            )
             token = token_strat(name, token_type)
             content = {"token": token}
             secret = relation.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.charm.unit][secret_id] = secret.id or ""
 
-    def _revoke_tokens(
+    def revoke_tokens(
         self,
         relation: ops.Relation,
         token_strategy: TokenStrategy,
-        token_type: ClusterTokenType = ClusterTokenType.NONE,
+        token_type: ClusterTokenType,
+        to_remove: Set[ops.Unit] | None = None,
     ):
         """Revoke tokens from units in a relation.
 
@@ -242,42 +270,43 @@ class TokenDistributor:
             token_strategy (TokenStrategy): The strategy of token creation.
             token_type (ClusterTokenType, optional): The type of cluster token.
                 Defaults to ClusterTokenType.NONE.
+            to_remove (Set[ops.Unit], optional): Specific units to ensure its token is revoked
 
         Raises:
             ValueError: If an invalid token_strategy is provided.
         """
-        app_databag: ops.RelationDataContent = relation.data[self.charm.app]
-        units_to_remove = app_databag.keys() - {u.name for u in relation.units}
-        if units_to_remove:
+        app_databag = relation.data[self.charm.app]
+        joined = {self.charm.model.get_unit(str(u)) for u in app_databag}
+        if to_remove is not None:
+            remaining = joined - to_remove
+        else:
+            remaining = joined & (relation.units | {self.charm.unit})
+        remove = joined - remaining
+
+        if not remove:
             return
+
+        log.info(
+            "Revoke report for %s \n\tjoined=%s\n\tremoving=%s\n\tremaining=%s",
+            relation.name,
+            ",".join(sorted(u.name for u in joined)),
+            ",".join(sorted(u.name for u in remove)),
+            ",".join(sorted(u.name for u in remaining)),
+        )
 
         token_strat = self.token_repeaing_strategies.get(token_strategy)
         if not token_strat:
             raise ValueError(f"Invalid token_strategy: {token_strategy}")
 
         status.add(ops.MaintenanceStatus(f"Revoking {token_type.value} tokens"))
-        for unit in units_to_remove:
-            name = app_databag[unit]
-            log.info("Revoking token for %s unit=%s hostname=%s", token_type.value, unit, name)
-            token_strat(name, token_type)
-            del app_databag[unit]
-
-    def distribute_tokens(
-        self,
-        relation: ops.Relation,
-        token_strategy: TokenStrategy,
-        token_type: ClusterTokenType = ClusterTokenType.NONE,
-        invalidate_on_join: bool = False,
-    ):
-        """Distribute tokens to units in a relation.
-
-        Args:
-            relation (ops.Relation): The relation object.
-            token_strategy (TokenStrategy): The strategy of token creation.
-            token_type (ClusterTokenType, optional): The type of cluster token.
-                Defaults to ClusterTokenType.NONE.
-            invalidate_on_join (bool, optional): Whether to pop the token once remote is joined
-                Defaults to False.
-        """
-        self._allocate_tokens(relation, token_strategy, token_type, invalidate_on_join)
-        self._revoke_tokens(relation, token_strategy, token_type)
+        for unit in remove:
+            if hostname := app_databag.get(unit.name):
+                log.info(
+                    "Revoking token for %s unit=%s:%s hostname=%s",
+                    token_type.value,
+                    relation.name,
+                    unit.name,
+                    hostname,
+                )
+                token_strat(hostname, token_type)
+                del app_databag[unit.name]

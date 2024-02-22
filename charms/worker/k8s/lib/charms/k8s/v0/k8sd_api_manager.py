@@ -400,18 +400,18 @@ class K8sdAPIManager:
         """
         endpoint = "/1.0/k8sd/cluster/join"
         body = {"name": name, "address": address, "token": token}
-
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
-    def remove_node(self, name):
+    def remove_node(self, name: str, force: bool = True):
         """Remove a node from the cluster.
 
         Args:
             name (str): Name of the node that should be removed.
+            force (bool): Forcibly remove the node
         """
-        endpoint = f"/1.0/k8sd/cluster/{name}"
-
-        self._send_request(endpoint, "DELETE", EmptyResponse, None)
+        endpoint = "/1.0/k8sd/cluster/remove"
+        body = {"name": name, "force": force}
+        self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def enable_component(self, name: str, enable: bool):
         """Enable or disable a k8s component.
