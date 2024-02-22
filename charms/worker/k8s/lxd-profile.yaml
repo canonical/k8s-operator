@@ -11,3 +11,8 @@ config:
   security.nesting: "true"
   security.privileged: "true"
 
+devices:
+  aadisable2:
+    path: /dev/kmsg
+    source: /dev/kmsg
+    type: unix-char

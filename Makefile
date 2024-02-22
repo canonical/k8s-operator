@@ -19,35 +19,50 @@ vm:
 	multipass exec $(VM_NAME) -- sudo adduser ubuntu lxd
 	multipass exec $(VM_NAME) -- sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
 	multipass exec $(VM_NAME) -- sudo -u ubuntu juju bootstrap localhost $(CONTROLLER_NAME)
-	multipass exec $(VM_NAME) -- juju add-model $(MODEL_NAME) --config logging-config="<root>=WARNING; unit=DEBUG"
+	multipass exec $(VM_NAME) -- juju add-model $(MODEL_NAME)
 
 # Shell into the VM
 shell:
 	multipass shell $(VM_NAME)
 
 # ALL the following commands should be executed in the k8s-operator dir of the VM
-deploy: deploy_k8s_charm create_k8s_cloud
+deploy: add_model deploy_k8s_charm create_k8s_cloud
 
-clean: delete_k8s_cloud remove_k8s_charm
+clean: delete_k8s_cloud remove_k8s_charm remove_model
 
 refresh: clean deploy 
 
+add_model:
+	juju add-model $(MODEL_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
+remove_model:
+	juju destroy-model $(MODEL_NAME) --destroy-storage
+
 # K8s charm
 deploy_k8s_charm:
+	juju switch $(MODEL_NAME)
 	charmcraft clean -p ./charms/worker/k8s
 	charmcraft pack -p ./charms/worker/k8s
 	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
 
+deploy_k8s_charm2:
+	juju switch $(MODEL_NAME)
+	cd ./charms/worker/k8s
+	charmcraft clean 
+	charmcraft pack 
+	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
+	cd ../../..
+
 remove_k8s_charm: 
-	juju remove-application k8s
+	juju switch $(MODEL_NAME)
+	juju remove-application k8s	--force
 
 # K8s cloud
 create_k8s_cloud:
 	juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client
-	juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL_NAME) $(K8S_CLOUD_NAME)
+	juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL_NAME) $(K8S_CLOUD_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
 
 delete_k8s_cloud: 
-	juju destroy-model $(K8S_MODEL_NAME) --controller $(CONTROLLER_NAME) --destroy-storage
+	juju destroy-model $(K8S_MODEL_NAME) --destroy-storage
 	juju remove-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME)
 
 # Debug

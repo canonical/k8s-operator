@@ -10,3 +10,8 @@ config:
     lxc.cap.drop=
   security.nesting: "true"
   security.privileged: "true"
+  aadisable2:
+    path: /dev/kmsg
+    source: /dev/kmsg
+    type: unix-char
+    
