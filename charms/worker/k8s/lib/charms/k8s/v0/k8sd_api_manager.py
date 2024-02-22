@@ -112,7 +112,8 @@ class BaseRequestModel(BaseModel):
         """
         if v != 0:
             error_message = values.get("error", "Unknown error")
-            raise ValueError(f"Error code must be 0, received {v}. Error message: {error_message}")
+            raise ValueError(
+                f"Error code must be 0, received {v}. Error message: {error_message}")
         return v
 
 
@@ -242,7 +243,8 @@ class UnixSocketHTTPConnection(HTTPConnection):
             self.sock.settimeout(self.timeout)
             self.sock.connect(self.unix_socket)
         except socket.error as e:
-            raise K8sdConnectionError(f"Error connecting to socket: {e}") from e
+            raise K8sdConnectionError(
+                f"Error connecting to socket: {e}") from e
 
 
 class ConnectionFactory:
@@ -254,7 +256,8 @@ class ConnectionFactory:
         Raises:
             NotImplementedError: If create_connection is not implemented by the subclass.
         """
-        raise NotImplementedError("create_connection must be implemented by subclasses")
+        raise NotImplementedError(
+            "create_connection must be implemented by subclasses")
 
 
 class UnixSocketConnectionFactory(ConnectionFactory):
@@ -349,7 +352,8 @@ class K8sdAPIManager:
         try:
             with self.factory.create_connection() as connection:
                 body_data = json.dumps(body) if body is not None else None
-                headers = {"Content-Type": "application/json"} if body_data is not None else {}
+                headers = {
+                    "Content-Type": "application/json"} if body_data is not None else {}
 
                 connection.request(
                     method,
@@ -387,7 +391,8 @@ class K8sdAPIManager:
             "name": name,
             "worker": worker,
         }
-        join_response = self._send_request(endpoint, "POST", CreateJoinTokenResponse, body)
+        join_response = self._send_request(
+            endpoint, "POST", CreateJoinTokenResponse, body)
         return join_response.metadata.token
 
     def join_cluster(self, name: str, address: str, token: str):
@@ -403,7 +408,7 @@ class K8sdAPIManager:
 
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
-    def enable_component(self, name: str, enable: bool):
+    def configure_component(self, name: str, enable: bool):
         """Enable or disable a k8s component.
 
         Args:
@@ -422,10 +427,12 @@ class K8sdAPIManager:
         """
         try:
             endpoint = "/1.0/k8sd/cluster"
-            cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
+            cluster_status = self._send_request(
+                endpoint, "GET", GetClusterStatusResponse)
             return cluster_status.error_code == 0
         except InvalidResponseError as e:
-            logger.error("Invalid response while checking if cluster is bootstrapped: %s", e)
+            logger.error(
+                "Invalid response while checking if cluster is bootstrapped: %s", e)
         return False
 
     def is_cluster_ready(self):
@@ -437,7 +444,8 @@ class K8sdAPIManager:
             bool: True if the cluster is ready, False otherwise.
         """
         endpoint = "/1.0/k8sd/cluster"
-        cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
+        cluster_status = self._send_request(
+            endpoint, "GET", GetClusterStatusResponse)
         if cluster_status.metadata:
             return cluster_status.metadata.status.Ready
         return False
@@ -472,5 +480,6 @@ class K8sdAPIManager:
         """
         endpoint = "/1.0/kubernetes/auth/tokens"
         body = {"username": username, "groups": groups}
-        auth_response = self._send_request(endpoint, "POST", AuthTokenResponse, body)
+        auth_response = self._send_request(
+            endpoint, "POST", AuthTokenResponse, body)
         return auth_response.metadata.token

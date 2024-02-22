@@ -37,7 +37,8 @@ class TestBaseRequestModel(unittest.TestCase):
         model = BaseRequestModel(**valid_data)
         for key, value in valid_data.items():
             self.assertEqual(
-                getattr(model, key), value, f"Model attribute {key} did not match expected value"
+                getattr(
+                    model, key), value, f"Model attribute {key} did not match expected value"
             )
 
     def test_invalid_status_code(self):
@@ -91,7 +92,8 @@ class TestUnixSocketHTTPConnection(unittest.TestCase):
 
         mock_socket_instance = MagicMock()
         mock_socket.return_value = mock_socket_instance
-        mock_socket_instance.connect.side_effect = OSError("Mocked socket error")
+        mock_socket_instance.connect.side_effect = OSError(
+            "Mocked socket error")
 
         with self.assertRaises(K8sdConnectionError) as context:
             conn.connect()
@@ -134,7 +136,8 @@ class TestK8sdAPIManager(unittest.TestCase):
             self.api_manager.create_join_token("test-node")
 
     def test_create_join_token_connection_error(self):
-        self.mock_factory.create_connection.side_effect = socket.error("Connection failed")
+        self.mock_factory.create_connection.side_effect = socket.error(
+            "Connection failed")
 
         with self.assertRaises(K8sdConnectionError):
             self.api_manager.create_join_token("test-node")
@@ -188,9 +191,11 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_join_cluster(self, mock_send_request):
-        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+        mock_send_request.return_value = EmptyResponse(
+            status_code=200, type="test", error_code=0)
 
-        self.api_manager.join_cluster("test-node", "127.0.0.1:6400", "test-token")
+        self.api_manager.join_cluster(
+            "test-node", "127.0.0.1:6400", "test-token")
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster/join",
             "POST",
@@ -199,10 +204,11 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_enable_component__enable(self, mock_send_request):
-        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+    def test_configure_component__enable(self, mock_send_request):
+        mock_send_request.return_value = EmptyResponse(
+            status_code=200, type="test", error_code=0)
 
-        self.api_manager.enable_component("foo", True)
+        self.api_manager.configure_component("foo", True)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/components/foo",
             "PUT",
@@ -211,12 +217,14 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_enable_component__disable(self, mock_send_request):
-        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+    def test_configure_component__disable(self, mock_send_request):
+        mock_send_request.return_value = EmptyResponse(
+            status_code=200, type="test", error_code=0)
 
-        self.api_manager.enable_component("foo", False)
+        self.api_manager.configure_component("foo", False)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", EmptyResponse, {"status": "disabled"}
+            "/1.0/k8sd/components/foo", "PUT", EmptyResponse, {
+                "status": "disabled"}
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")

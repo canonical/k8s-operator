@@ -32,6 +32,12 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdConnectionError,
     UnixSocketConnectionFactory,
 )
+from ops.charm import (
+    RelationBrokenEvent,
+    RelationChangedEvent,
+    RelationDepartedEvent,
+    RelationJoinedEvent,
+)
 from charms.interface_kube_dns import KubeDnsRequires
 from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
 from charms.reconciler import Reconciler
@@ -86,7 +92,7 @@ class K8sCharm(ops.CharmBase):
         self._check_k8sd_ready()
         if self.unit.is_leader() and self.is_control_plane:
             self._bootstrap_k8s_snap()
-            self._enable_components()
+            self._configure_components()
             self._create_cluster_tokens()
         self._join_cluster()
         self._update_status()
@@ -175,12 +181,12 @@ class K8sCharm(ops.CharmBase):
         WaitingStatus(
             "Waiting for enable components"), InvalidResponseError, K8sdConnectionError
     )
-    def _enable_components(self):
+    def _configure_components(self):
         """Enable necessary components for the Kubernetes cluster."""
         status.add(ops.MaintenanceStatus("Enabling DNS"))
-        self.api_manager.enable_component("dns", True)
+        self.api_manager.configure_component("dns", True)
         status.add(ops.MaintenanceStatus("Enabling Network"))
-        self.api_manager.enable_component("network", True)
+        self.api_manager.configure_component("network", True)
 
     def get_dns_address(self):
         return self.kube_dns.address or self.cdk_addons.get_dns_address()
@@ -190,6 +196,9 @@ class K8sCharm(ops.CharmBase):
 
     def get_dns_port(self):
         return self.kube_dns.port or 53
+
+    def disable_builtin_dns(self):
+        self.api_manager.configure_component("dns", False)
 
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
