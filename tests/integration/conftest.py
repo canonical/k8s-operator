@@ -183,6 +183,12 @@ async def deploy_model(
 async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
     model = "main"
+    if request.config.option.model:
+        # reuse existing model
+        with ops_test.model_context(model) as the_model:
+            yield the_model
+            return
+
     charm_path = ("worker/k8s", "worker")
     charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
