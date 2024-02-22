@@ -12,8 +12,9 @@ import json
 import logging
 import os
 import shutil
-from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.request import urlopen
+
 import yaml
 
 logging.basicConfig(level=logging.INFO)
@@ -83,7 +84,7 @@ def save_dashboard_to_file(name, data):
 
 
 def main():
-    """Main function to fetch, process, and save Grafana dashboards."""
+    """Fetch, process, and save Grafana dashboards."""
     if os.path.exists(TARGET_DIR):
         shutil.rmtree(TARGET_DIR)
     os.makedirs(TARGET_DIR, exist_ok=True)
