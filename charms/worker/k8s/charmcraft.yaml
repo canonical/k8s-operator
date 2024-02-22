@@ -55,6 +55,12 @@ config:
       default: edge
       type: string
       description: Snap channel of the k8s snap
+    labels:
+      default: "node-role.kubernetes.io/control-plane="
+      type: string
+      description: |
+        Labels can be used to organize and to select subsets of nodes in the
+        cluster. Declare node labels in key=value format, separated by spaces.      
 parts:
   charm:
     build-packages: [git]
