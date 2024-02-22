@@ -189,10 +189,10 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.configure_component("network", True)
 
     def get_dns_address(self):
-        return self.kube_dns.address or self.cdk_addons.get_dns_address()
+        return self.kube_dns.address
 
     def get_dns_domain(self):
-        return self.kube_dns.domain or self.model.config["dns_domain"]
+        return self.kube_dns.domain
 
     def get_dns_port(self):
         return self.kube_dns.port or 53

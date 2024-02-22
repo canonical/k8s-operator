@@ -3,7 +3,7 @@ CONTROLLER_NAME = lxd
 MODEL_NAME = canonical-k8s-model
 K8S_CLOUD_NAME = k8s-cloud
 K8S_MODEL_NAME = dns-model	
-.PHONY: setup shell deploy clean refresh deploy_k8s_charm remove_k8s_charm create_k8s_cloud delete_k8s_cloud debug
+.PHONY: setup shell deploy clean refresh deploy_k8s_charm remove_k8s_charm create_k8s_cloud delete_k8s_cloud view
 
 # Setup the VM (here multipass) and install juju, lxd, charmcraft, add a model, get git repo
 vm:
@@ -25,36 +25,34 @@ vm:
 shell:
 	multipass shell $(VM_NAME)
 
-# Deploy k8s charm and create k8s cloud and reverse, execute in k8s-operator dir
+# ALL the following commands should be executed in the k8s-operator dir of the VM
 deploy: deploy_k8s_charm create_k8s_cloud
 
 clean: delete_k8s_cloud remove_k8s_charm
 
-refresh: clean deploy # in VM, in k8s-operator directory
+refresh: clean deploy 
 
 # K8s charm
-deploy_k8s_charm: # in VM
+deploy_k8s_charm:
 	charmcraft clean -p ./charms/worker/k8s
 	charmcraft pack -p ./charms/worker/k8s
-	juju deploy ./charms/worker/k8s/k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
+	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
 
-remove_k8s_charm: # in VM
+remove_k8s_charm: 
 	juju remove-application k8s
 
 # K8s cloud
-create_k8s_cloud: # in VM
+create_k8s_cloud:
 	juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client
 	juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL_NAME) $(K8S_CLOUD_NAME)
 
-delete_k8s_cloud: # in VM
+delete_k8s_cloud: 
 	juju destroy-model $(K8S_MODEL_NAME) --controller $(CONTROLLER_NAME) --destroy-storage
 	juju remove-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME)
 
 # Debug
-debug: # in VM
+view: 
 	juju clouds
 	juju controllers
 	juju models
-	juju status
-	juju debug-log
 	juju status
