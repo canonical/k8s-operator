@@ -6,7 +6,7 @@
 import contextlib
 import logging
 from enum import Enum, auto
-from typing import Set
+from typing import Optional, Set
 
 import charms.contextual_status as status
 import ops
@@ -261,7 +261,7 @@ class TokenDistributor:
         relation: ops.Relation,
         token_strategy: TokenStrategy,
         token_type: ClusterTokenType,
-        to_remove: Set[ops.Unit] | None = None,
+        to_remove: Optional[Set[ops.Unit]] = None,
     ):
         """Revoke tokens from units in a relation.
 
