@@ -7,6 +7,9 @@
 """Unit tests."""
 
 
+import contextlib
+from unittest import mock
+
 import ops
 import ops.testing
 import pytest
@@ -23,6 +26,43 @@ def harness(request):
     harness.cleanup()
 
 
+@contextlib.contextmanager
+def mock_reconciler_handlers(harness):
+    """Mock out reconciler handlers.
+
+    Args:
+        harness: the harness under test
+
+    Yields:
+        Mapping of handler_names to their mock methods.
+    """
+    handler_names = {
+        "_evaluate_removal",
+        "_install_k8s_snap",
+        "_apply_snap_requirements",
+        "_check_k8sd_ready",
+        "_join_cluster",
+        "_configure_cos_integration",
+        "_update_status",
+        "_apply_node_labels",
+    }
+    if harness.charm.is_control_plane:
+        handler_names |= {
+            "_bootstrap_k8s_snap",
+            "_enable_components",
+            "_create_cluster_tokens",
+            "_create_cos_tokens",
+            "_apply_cos_requirements",
+            "_generate_kubeconfig",
+            "_revoke_cluster_tokens",
+        }
+
+    handlers = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
+    yield dict(zip(handler_names, (h.start() for h in handlers)))
+    for handler in handlers:
+        handler.stop()
+
+
 def test_config_changed_invalid(harness):
     # Trigger a config-changed event with an unknown-config option
     with pytest.raises(ValueError):
@@ -33,3 +73,13 @@ def test_update_status(harness):
     harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
     harness.charm.on.update_status.emit()
     assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
+
+
+def test_set_leader(harness):
+    harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
+    with mock_reconciler_handlers(harness) as handlers:
+        harness.set_leader(True)
+    assert harness.model.unit.status == ops.ActiveStatus("Ready")
+    assert harness.charm.reconciler.stored.reconciled
+    called = {name: h for name, h in handlers.items() if h.called}
+    assert len(called) == len(handlers)

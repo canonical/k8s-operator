@@ -46,6 +46,15 @@ config:
       default: edge
       type: string
       description: Snap channel of the k8s snap
+    labels:
+      default: ""
+      type: string
+      description: |
+        Labels can be used to organize and to select subsets of nodes in the
+        cluster. Declare node labels in key=value format, separated by spaces.
+        
+        Note: Due to NodeRestriction, workers are limited to how they can label themselves
+        https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#noderestriction
 parts:
   charm:
     build-packages: [git]

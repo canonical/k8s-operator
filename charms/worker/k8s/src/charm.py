@@ -35,7 +35,9 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdConnectionError,
     UnixSocketConnectionFactory,
 )
-from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
+from charms.node_base import LabelMaker
+from charms.operator_libs_linux.v2.snap import SnapError, SnapState
+from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
 from charms.reconciler import Reconciler
 
 from cos_integration import COSIntegration
@@ -48,6 +50,7 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 KUBECONFIG = Path.home() / ".kube/config"
 ETC_KUBERNETES = Path("/etc/kubernetes")
+KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
 
 
@@ -70,14 +73,12 @@ class K8sCharm(ops.CharmBase):
             args: Arguments passed to the CharmBase parent constructor.
         """
         super().__init__(*args)
-
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.api_manager = K8sdAPIManager(factory)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
-        self.distributor = TokenDistributor(self, self._get_node_name(), self.api_manager)
-        self.collector = TokenCollector(self, self._get_node_name())
-        self.snap_cache = SnapCache()
+        self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
+        self.collector = TokenCollector(self, self.get_node_name())
         self._stored.set_default(removing=False)
 
         self.cos_agent = COSAgentProvider(
@@ -134,7 +135,7 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is being removed."""
         return bool(self._stored.removing)
 
-    def _get_node_name(self) -> str:
+    def get_node_name(self) -> str:
         """Return the lowercase hostname.
 
         Returns:
@@ -142,14 +143,25 @@ class K8sCharm(ops.CharmBase):
         """
         return socket.gethostname().lower()
 
+    def get_cloud_name(self) -> str:
+        """Return the underlying cloud name.
+
+        Returns:
+            the cloud hosting the machine.
+        """
+        # TODO: adjust to detect the correct cloud
+        return ""
+
+    @property
+    def _source_kubeconfig(self) -> Path:
+        """Return the highest authority kube config for this unit."""
+        return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
+
     @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
     def _install_k8s_snap(self):
         """Install the k8s snap package."""
         status.add(ops.MaintenanceStatus("Installing k8s snap"))
-        k8s_snap = self.snap_cache["k8s"]
-        if not k8s_snap.present:
-            channel = self.config["channel"]
-            k8s_snap.ensure(SnapState.Latest, channel=channel)
+        snap_ensure("k8s", SnapState.Latest.value, self.config["channel"])
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -179,7 +191,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
             binding = self.model.get_binding("juju-info")
             address = binding and binding.network.ingress_address
-            node_name = self._get_node_name()
+            node_name = self.get_node_name()
             # TODO: Make port (and address) configurable.
             self.api_manager.bootstrap_k8s_snap(node_name, f"{str(address)}:{K8SD_PORT}")
 
@@ -224,7 +236,7 @@ class K8sCharm(ops.CharmBase):
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         if peer := self.model.get_relation("cluster"):
-            node_name = self._get_node_name()
+            node_name = self.get_node_name()
             peer.data[self.unit]["node-name"] = node_name
             peer.data[self.unit]["joined"] = node_name
 
@@ -282,7 +294,7 @@ class K8sCharm(ops.CharmBase):
         try:
             with self.collector.recover_token(relation) as token:
                 return self.cos.get_metrics_endpoints(
-                    self._get_node_name(), token, self.is_control_plane
+                    self.get_node_name(), token, self.is_control_plane
                 )
         except AssertionError:
             log.exception("Failed to get COS token.")
@@ -328,7 +340,7 @@ class K8sCharm(ops.CharmBase):
         with self.collector.recover_token(relation) as token:
             binding = self.model.get_binding(relation.name)
             address = binding and binding.network.ingress_address
-            node_name = self._get_node_name()
+            node_name = self.get_node_name()
             cluster_addr = f"{address}:{K8SD_PORT}"
             log.info("Joining %s to %s...", node_name, cluster_addr)
             self.api_manager.join_cluster(node_name, cluster_addr, token)
@@ -361,6 +373,7 @@ class K8sCharm(ops.CharmBase):
         self._join_cluster()
         self._configure_cos_integration()
         self._update_status()
+        self._apply_node_labels()
         if self.is_control_plane:
             self._generate_kubeconfig()
 
@@ -423,8 +436,19 @@ class K8sCharm(ops.CharmBase):
         """Generate kubeconfig."""
         status.add(ops.MaintenanceStatus("Generating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        src = ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
-        KUBECONFIG.write_bytes(src.read_bytes())
+        KUBECONFIG.write_bytes(self._source_kubeconfig.read_bytes())
+
+    @status.on_error(ops.BlockedStatus("Cannot apply node-labels"), LabelMaker.NodeLabelError)
+    def _apply_node_labels(self):
+        """Apply labels to the node."""
+        status.add(ops.MaintenanceStatus("Apply Node Labels"))
+        node = self.get_node_name()
+        labeler = LabelMaker(self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH)
+        if labeler.active_labels() is not None:
+            labeler.apply_node_labels()
+            log.info("Node %s labelled successfully", node)
+        else:
+            log.info("Node %s not yet labelled", node)
 
     def _on_update_status(self, _event: ops.UpdateStatusEvent):
         """Handle update-status event."""
