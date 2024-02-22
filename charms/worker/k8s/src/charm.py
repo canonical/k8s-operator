@@ -22,6 +22,7 @@ import socket
 import subprocess
 from functools import cached_property
 from pathlib import Path
+from time import sleep
 from typing import Optional
 
 import charms.contextual_status as status
@@ -333,21 +334,6 @@ class K8sCharm(ops.CharmBase):
             self.api_manager.join_cluster(node_name, cluster_addr, token)
             log.info("Success")
 
-    def _evaluate_removal(self, event: ops.EventBase):
-        """Determine if my unit is being removed.
-
-        Args:
-            event: ops.EventBase - event that triggered charm hook
-        """
-        if self.is_dying:
-            return
-        if isinstance(event, ops.RelationDepartedEvent):
-            # if a unit is departing, and it's me?
-            self._stored.removing = event.departing_unit == self.unit
-        elif isinstance(event, (ops.RemoveEvent, ops.StopEvent)):
-            # If I myself am dying, its me!
-            self._stored.removing = True
-
     def _reconcile(self, event):
         """Reconcile state change events.
 
@@ -359,6 +345,7 @@ class K8sCharm(ops.CharmBase):
             self._revoke_cluster_tokens()
         if self.is_dying:
             self._update_status()
+            self._last_gasp(event)
             return
 
         self._install_k8s_snap()
@@ -396,6 +383,40 @@ class K8sCharm(ops.CharmBase):
             assert self.api_manager.is_cluster_ready(), "control-plane not yet ready"  # nosec
         if version := self._get_snap_version():
             self.unit.set_workload_version(version)
+
+    def _evaluate_removal(self, event: ops.EventBase):
+        """Determine if my unit is being removed.
+
+        Args:
+            event: ops.EventBase - event that triggered charm hook
+        """
+        if self.is_dying:
+            return
+        if isinstance(event, ops.RelationDepartedEvent):
+            # if a unit is departing, and it's me?
+            self._stored.removing = event.departing_unit == self.unit
+        elif isinstance(event, (ops.RemoveEvent, ops.StopEvent)):
+            # If I myself am dying, its me!
+            self._stored.removing = True
+
+    def _last_gasp(self, event):
+        """Busy wait on stop event until the unit isn't clustered anymore.
+
+        Defer the event if 30 seconds passes, and the unit is still clustered.
+
+        Args:
+            event: ops.EventBase - event that triggered charm hook
+        """
+        if self.is_dying and isinstance(event, ops.StopEvent):
+            busy_wait = 30
+            status.add(ops.MaintenanceStatus("Awaiting cluster removal"))
+            while self.api_manager.is_cluster_bootstrapped():
+                log.info("Waiting for this unit to not be clustered")
+                sleep(1)
+                busy_wait -= 1
+                if not busy_wait:
+                    event.defer()
+                    return
 
     @on_error(ops.WaitingStatus(""))
     def _generate_kubeconfig(self):
