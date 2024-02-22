@@ -25,7 +25,7 @@ vm:
 shell:
 	multipass shell $(VM_NAME)
 
-# Deploy k8s charm and create k8s cloud and reverse
+# Deploy k8s charm and create k8s cloud and reverse, execute in k8s-operator dir
 deploy: deploy_k8s_charm create_k8s_cloud
 
 clean: delete_k8s_cloud remove_k8s_charm
@@ -34,8 +34,8 @@ refresh: clean deploy # in VM, in k8s-operator directory
 
 # K8s charm
 deploy_k8s_charm: # in VM
-	charmcraft clean
-	charmcraft pack
+	charmcraft clean -p ./charms/worker/k8s
+	charmcraft pack -p ./charms/worker/k8s
 	juju deploy ./charms/worker/k8s/k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
 
 remove_k8s_charm: # in VM
