@@ -36,6 +36,8 @@ charmcraft pack -p charms/worker
 charmcraft pack -p charms/worker/k8s
 ```
 
+## Tox Environments
+
 ### Formatting
 
 This repo uses `isort` and `black` to format according to rules setup in `./charms/worker/k8s/pyproject.yaml`.
