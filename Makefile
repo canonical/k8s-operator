@@ -1,8 +1,8 @@
 VM_NAME = canonical-k8s-charm-vm
 CONTROLLER_NAME = lxd
-MODEL_NAME = canonical-k8s-model
+CLUSTER_MODEL = canonical-k8s-model
 K8S_CLOUD_NAME = k8s-cloud
-K8S_MODEL_NAME = dns-model	
+K8S_MODEL = dns-model	
 
 .PHONY: setup shell deploy delete refresh deploy_k8s_charm remove_k8s_charm create_k8s_cloud delete_k8s_cloud view fix-profile remove_model add_model clean_vm
 
@@ -28,49 +28,72 @@ shell:
 	multipass shell $(VM_NAME)
 
 # ALL the following commands should be executed in the k8s-operator dir of the VM
-deploy: add_model deploy_k8s_charm fix-profile create_k8s_cloud
+deploy: add_model deploy_k8s_charm create_k8s_cloud
 
 delete: delete_k8s_cloud remove_k8s_charm remove_model
 
 refresh: delete deploy 
 
 add_model:
-	juju add-model $(MODEL_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
+	juju add-model $(CLUSTER_MODEL)  --config logging-config="<root>=WARNING; unit=DEBUG"
+
 remove_model:
-	juju destroy-model $(MODEL_NAME) --destroy-storage
+	juju destroy-model $(CLUSTER_MODEL) --destroy-storage
 
 # K8s charm
 deploy_k8s_charm:
-	juju switch $(MODEL_NAME)
+	juju switch $(CLUSTER_MODEL)
 	charmcraft clean -p ./charms/worker/k8s
 	charmcraft pack -p ./charms/worker/k8s
 	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm 
 
-# until the lxd profile is OK
-MACHINE_ID = 0 #from juju status
+# until the lxd profile is OK, run after deploy_k8s_charm
+MACHINE_ID = 0
+#from juju status
 fix-profile:
-	juju ssh $(MACHINE_ID) echo '--conntrack-max-per-core=0' | sudo tee -a /var/snap/k8s/common/args/kube-proxy
-	juju ssh $(MACHINE_ID) sudo snap restart k8s.kube-proxy
-	juju ssh $(MACHINE_ID) sudo k8s enable network
-	juju ssh $(MACHINE_ID) sudo k8s enable dns
-	juju ssh $(MACHINE_ID) sudo k8s enable storage
-	juju ssh $(MACHINE_ID) sudo k8s status
+	juju exec --unit k8s/$(MACHINE_ID) echo '--conntrack-max-per-core=0' | sudo tee -a /var/snap/k8s/common/args/kube-proxy
+	juju exec --unit k8s/$(MACHINE_ID) sudo snap restart k8s.kube-proxy
+	juju exec --unit k8s/$(MACHINE_ID) sudo k8s enable network
+	juju exec --unit k8s/$(MACHINE_ID) sudo k8s enable dns
+	juju exec --unit k8s/$(MACHINE_ID) sudo k8s enable storage
+	juju exec --unit k8s/$(MACHINE_ID) sudo k8s status
+	juju exec --unit k8s/$(MACHINE_ID) sudo reboot
+	juju exec --unit k8s/$(MACHINE_ID) sudo snap start k8s
 
 remove_k8s_charm: 
-	juju switch $(MODEL_NAME)
+	juju switch $(CLUSTER_MODEL)
 	juju remove-application k8s	--force
 	charmcraft clean -p ./charms/worker/k8s
 
 # K8s cloud
-#copy kubeconfig?
+#copy kubeconfig? sudo k8s config view --raw > kubeconfig, change the server to the IP of the k8s master
 create_k8s_cloud:
 	juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client --skip-storage
-	juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL_NAME) $(K8S_CLOUD_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
+	juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL) $(K8S_CLOUD_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
 
 delete_k8s_cloud: 
-	juju destroy-model $(K8S_MODEL_NAME) --destroy-storage
+	juju destroy-model $(K8S_MODEL) --destroy-storage
 	juju remove-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client
 
+deploy-core-dns:
+	juju switch $(K8S_MODEL)
+	juju deploy coredns --trust
+	juju offer coredns:dns-provider
+
+remove-core-dns:
+	juju switch $(K8S_MODEL)
+	juju remove-application coredns
+
+consume-core-dns:
+	juju consume -m $(CLUSTER_MODEL) $(K8S_MODEL).coredns
+	juju relate -m $(CLUSTER_MODEL) coredns k8s
+
+delete-dns-relation:
+	juju remove-relation -m $(CLUSTER_MODEL) coredns k8s
+
+test-dns:
+	juju switch $(CLUSTER_MODEL)
+	juju exec --unit k8s/0 -- k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com
 # Debug
 view: 
 	juju clouds

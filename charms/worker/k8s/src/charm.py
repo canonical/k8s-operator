@@ -21,7 +21,7 @@ import shlex
 import socket
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import charms.contextual_status as status
 import ops
@@ -38,6 +38,8 @@ from ops.charm import (
     RelationDepartedEvent,
     RelationJoinedEvent,
 )
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+
 from charms.interface_kube_dns import KubeDnsRequires
 from charms.operator_libs_linux.v2.snap import SnapCache, SnapError, SnapState
 from charms.reconciler import Reconciler
@@ -79,6 +81,20 @@ class K8sCharm(ops.CharmBase):
 
         self.is_worker = self.meta.name == "k8s-worker"
         self.framework.observe(self.on.update_status, self._on_update_status)
+
+        # coredns integration
+        self.framework.observe(
+            self.on.dns_provider_relation_joined, self.config_dns)
+        self.framework.observe(
+            self.on.dns_provider_relation_joined, self._reconcile)
+        self.framework.observe(
+            self.on.dns_provider_relation_changed, self.config_dns)
+        self.framework.observe(
+            self.on.dns_provider_relation_changed, self._reconcile)
+        self.framework.observe(
+            self.on.dns_provider_relation_departed, self._reconcile)
+        self.framework.observe(
+            self.on.dns_provider_relation_broken, self._reconcile)
 
     @property
     def is_control_plane(self) -> bool:
@@ -183,19 +199,56 @@ class K8sCharm(ops.CharmBase):
     )
     def _configure_components(self):
         """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Enabling DNS"))
-        self.api_manager.configure_component("dns", True)
+
+        if self.dns_charm_integrated():
+            status.add(ops.MaintenanceStatus("Disabling DNS"))
+            self.api_manager.configure_component("dns", False)
+        else:
+            status.add(ops.MaintenanceStatus("Enabling DNS"))
+            self.api_manager.configure_component("dns", True)
+
         status.add(ops.MaintenanceStatus("Enabling Network"))
         self.api_manager.configure_component("network", True)
 
-    def get_dns_address(self):
-        return self.kube_dns.address
+    def dns_charm_integrated(self) -> bool:
+        dns_relation = self.model.get_relation("dns-provider")
+        if not dns_relation:
+            return False
+        return True
 
-    def get_dns_domain(self):
-        return self.kube_dns.domain
+    def config_dns(self, _: Union[RelationJoinedEvent, RelationChangedEvent]):
+        if isinstance(self.unit.status, BlockedStatus):
+            return
 
-    def get_dns_port(self):
-        return self.kube_dns.port or 53
+        if not self._state.joined:
+            return
+
+        dns_relation = self.model.get_relation("dns-provider")
+        if not dns_relation:
+            return
+
+        dns_ip = self.kube_dns.address
+        dns_domain = self.kube_dns.domain
+        port = self.kube_dns.port or 53
+
+        if not dns_ip or not dns_domain:
+            return
+
+        self.unit.status = MaintenanceStatus("configuring DNS")
+        self.api_manager.configure_dns(dns_ip, dns_domain)
+
+    # What Microk8s does:
+    # def configure_dns(ip: str, domain: str):
+    #     """update kubelet dns configuration"""
+    #     LOG.info("Use DNS %s (domain %s)", ip, domain)
+    #     apply_launch_configuration(
+    #         {
+    #             "extraKubeletArgs": {
+    #                 "--cluster-dns": ip,
+    #                 "--cluster-domain": domain,
+    #             }
+    #         }
+    #     )
 
     def disable_builtin_dns(self):
         self.api_manager.configure_component("dns", False)
