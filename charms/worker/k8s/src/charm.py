@@ -326,11 +326,10 @@ class K8sCharm(ops.CharmBase):
     )
     def _join_cluster(self):
         """Retrieve the join token from secret databag and join the cluster."""
-        if self.api_manager.is_cluster_bootstrapped():
+        if self.is_control_plane and self.api_manager.is_cluster_bootstrapped():
             return
 
-        relation = self.model.get_relation("cluster")
-        if not relation:
+        if not (relation := self.model.get_relation("cluster")):
             return
 
         if self.collector.joined(relation):
