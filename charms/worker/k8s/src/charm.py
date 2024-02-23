@@ -235,20 +235,31 @@ class K8sCharm(ops.CharmBase):
             return
 
         self.unit.status = MaintenanceStatus("configuring DNS")
-        self.api_manager.configure_dns(dns_ip, dns_domain)
+        self.configure_dns(dns_ip, dns_domain)
 
-    # What Microk8s does:
-    # def configure_dns(ip: str, domain: str):
-    #     """update kubelet dns configuration"""
-    #     LOG.info("Use DNS %s (domain %s)", ip, domain)
-    #     apply_launch_configuration(
-    #         {
-    #             "extraKubeletArgs": {
-    #                 "--cluster-dns": ip,
-    #                 "--cluster-domain": domain,
-    #             }
-    #         }
-    #     )
+    def configure_dns(self, dns_domain, dns_ip):
+        """Configure the DNS for the k8s cluster.
+
+        Args:
+            dns_domain (str): The domain name for the DNS.
+            dns_ip (str): The IP address for the DNS.
+        """
+        # ops.interface_kube_control
+        endpoint = "?"
+        body = {"cluster-domain": dns_domain, "service-ip": dns_ip}
+        self._send_request(endpoint, "PUT", EmptyResponse, body)
+        # What Microk8s does:
+        # def configure_dns(ip: str, domain: str):
+        #     """update kubelet dns configuration"""
+        #     LOG.info("Use DNS %s (domain %s)", ip, domain)
+        #     apply_launch_configuration(
+        #         {
+        #             "extraKubeletArgs": {
+        #                 "--cluster-dns": ip,
+        #                 "--cluster-domain": domain,
+        #             }
+        #         }
+        #     )
 
     def disable_builtin_dns(self):
         self.api_manager.configure_component("dns", False)

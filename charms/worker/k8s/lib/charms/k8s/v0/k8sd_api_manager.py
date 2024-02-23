@@ -419,17 +419,6 @@ class K8sdAPIManager:
         body = {"status": "enabled" if enable else "disabled"}
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
-    def configure_dns(self, dns_domain, dns_ip):
-        """Configure the DNS for the k8s cluster.
-
-        Args:
-            dns_domain (str): The domain name for the DNS.
-            dns_ip (str): The IP address for the DNS.
-        """
-        endpoint = "?"
-        body = {"cluster-domain": dns_domain, "service-ip": dns_ip}
-        self._send_request(endpoint, "PUT", EmptyResponse, body)
-
     def is_cluster_bootstrapped(self) -> bool:
         """Check if K8sd has been bootstrapped.
 
