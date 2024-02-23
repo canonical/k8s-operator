@@ -5,10 +5,10 @@
 import asyncio
 import contextlib
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import Any, List, Mapping, Optional
+from typing import List, Mapping, Optional
 
 import pytest
 import pytest_asyncio
@@ -39,7 +39,6 @@ class Charm:
         path:      Path to the charm file
         metadata:  Charm's metadata
         app_name:  Preferred name of the juju application
-        resources: dict of possible charm resources
     """
 
     ops_test: OpsTest
@@ -94,10 +93,11 @@ class Bundle:
     """Represents test bundle.
 
     Attrs:
-        ops_test:  Instance of the pytest-operator plugin
-        path:      Path to the bundle file
-        content:   Loaded content from the path
-        render:    Path to a rendered bundle
+        ops_test:      Instance of the pytest-operator plugin
+        path:          Path to the bundle file
+        content:       Loaded content from the path
+        render:        Path to a rendered bundle
+        applications:  Mapping of applications in the bundle.
     """
 
     ops_test: OpsTest
@@ -105,24 +105,33 @@ class Bundle:
     _content: Mapping = field(default_factory=dict)
 
     @property
-    def content(self):
+    def content(self) -> Mapping:
+        """Yaml content of the bundle loaded into a dict"""
         if not self._content:
             self._content = yaml.safe_load(self.path.read_bytes())
         return self._content
 
     @property
-    def applications(self) -> Mapping[str, Any]:
+    def applications(self) -> Mapping[str, dict]:
+        """Mapping of all available application in the bundle."""
         return self.content["applications"]
 
     @property
     def render(self) -> Path:
+        """Path to written bundle config to be deployed."""
         target = self.ops_test.tmp_path / "bundles" / self.path.name
         target.parent.mkdir(exist_ok=True, parents=True)
-        yaml.safe_dump(self.content, target.open('w'))
+        yaml.safe_dump(self.content, target.open("w"))
         return target
 
-    def swap_application(self, app:str, path: Path):
-        app = self.applications[app]
+    def swap_application(self, name: str, path: Path):
+        """Replace existing application with a local charm path.
+
+        Args:
+            name (str):  Which application
+            path (Path): Path to local charm
+        """
+        app = self.applications[name]
         app["charm"] = str(path.resolve())
         app["channel"] = None
 
@@ -140,7 +149,7 @@ async def deploy_model(
         request:     handle to pytest requests from calling fixture
         ops_test:    Instance of the pytest-operator plugin
         model_name:  name of the model in which to deploy
-        deploy_args: list of charms to deploy and their arguments
+        bundle:      Bundle object to deploy or redeploy into the model
 
     Yields:
         model object
@@ -158,9 +167,11 @@ async def deploy_model(
         )
     with ops_test.model_context(model_name) as the_model:
         async with ops_test.fast_forward():
+            # if not all(a in the_model.applications for a in bundle.applications):
+            #     await the_model.deploy(bundle.render)
             await the_model.deploy(bundle.render)
             await the_model.wait_for_idle(
-                apps=list(bundle.applications.keys()),
+                apps=list(bundle.applications),
                 status="active",
                 raise_on_blocked=True,
                 timeout=15 * 60,
