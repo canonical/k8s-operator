@@ -124,8 +124,8 @@ class Bundle:
         yaml.safe_dump(self.content, target.open("w"))
         return target
 
-    def swap_application(self, name: str, path: Path):
-        """Replace existing application with a local charm path.
+    def switch(self, name: str, path: Path):
+        """Replace charmhub application with a local charm path.
 
         Args:
             name (str):  Which application
@@ -188,6 +188,6 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     )
     bundle = Bundle(ops_test, Path(__file__).parent / "test-bundle.yaml")
     for path, charm in zip(charm_files, charms):
-        bundle.swap_application(charm.app_name, path)
+        bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
         yield the_model
