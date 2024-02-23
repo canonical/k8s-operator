@@ -1,0 +1,15 @@
+name: integration-test
+description: |-
+  Used to deploy or refresh within an integration test model
+series: focal
+applications:
+  k8s:
+    charm: k8s
+    channel: latest/edge
+    num_units: 3
+  k8s-worker:
+    charm: k8s-worker
+    channel: latest/edge
+    num_units: 2
+relations:
+  - [k8s, k8s-worker:cluster]
