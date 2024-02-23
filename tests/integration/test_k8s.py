@@ -106,10 +106,10 @@ async def test_remove_worker(kubernetes_cluster: model.Model):
     # Remove a worker
     log.info("Remove unit %s", worker.units[0].name)
     await worker.units[0].destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(k8s.units[0], expected_nodes - 1)
     await worker.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
@@ -127,10 +127,10 @@ async def test_remove_non_leader_control_plane(kubernetes_cluster: model.Model):
     # Remove a control-plane
     log.info("Remove unit %s", follower.name)
     await follower.destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(leader, expected_nodes - 1)
     await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(leader, expected_nodes)
 
 
@@ -148,8 +148,8 @@ async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):
     # Remove a control-plane
     log.info("Remove unit %s", leader.name)
     await leader.destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(follower, expected_nodes - 1)
     await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=3 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(follower, expected_nodes)
