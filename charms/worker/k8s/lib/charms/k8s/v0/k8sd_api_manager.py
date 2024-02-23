@@ -441,7 +441,7 @@ class K8sdAPIManager:
             endpoint = "/1.0/k8sd/cluster"
             cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
             return cluster_status.error_code == 0
-        except InvalidResponseError as e:
+        except (K8sdConnectionError, InvalidResponseError) as e:
             logger.error("Invalid response while checking if cluster is bootstrapped: %s", e)
         return False
 

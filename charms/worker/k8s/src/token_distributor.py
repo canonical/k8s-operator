@@ -129,7 +129,7 @@ class TokenDistributor:
             TokenStrategy.CLUSTER: self._create_cluster_token,
             TokenStrategy.COS: self._create_cos_token,
         }
-        self.token_repeaing_strategies = {
+        self.token_revoking_strategies = {
             TokenStrategy.CLUSTER: self._revoke_cluster_token,
             TokenStrategy.COS: self._revoke_cos_token,
         }
@@ -294,7 +294,7 @@ class TokenDistributor:
             ",".join(sorted(u.name for u in remaining)),
         )
 
-        token_strat = self.token_repeaing_strategies.get(token_strategy)
+        token_strat = self.token_revoking_strategies.get(token_strategy)
         if not token_strat:
             raise ValueError(f"Invalid token_strategy: {token_strategy}")
 

@@ -414,21 +414,17 @@ class K8sCharm(ops.CharmBase):
     def _last_gasp(self, event):
         """Busy wait on stop event until the unit isn't clustered anymore.
 
-        Defer the event if 30 seconds passes, and the unit is still clustered.
-
         Args:
             event: ops.EventBase - event that triggered charm hook
         """
-        if self.is_dying and isinstance(event, ops.StopEvent):
-            busy_wait = 30
-            status.add(ops.MaintenanceStatus("Awaiting cluster removal"))
-            while self.api_manager.is_cluster_bootstrapped():
-                log.info("Waiting for this unit to not be clustered")
-                sleep(1)
-                busy_wait -= 1
-                if not busy_wait:
-                    event.defer()
-                    return
+        if not isinstance(event, ops.StopEvent):
+            return
+        busy_wait = 30
+        status.add(ops.MaintenanceStatus("Awaiting cluster removal"))
+        while busy_wait and self.api_manager.is_cluster_bootstrapped():
+            log.info("Waiting for this unit to uncluster")
+            sleep(1)
+            busy_wait -= 1
 
     @on_error(ops.WaitingStatus(""))
     def _generate_kubeconfig(self):
