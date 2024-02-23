@@ -47,10 +47,14 @@ deploy_k8s_charm:
 	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm 
 
 # until the lxd profile is OK
+MACHINE_ID = 0 #from juju status
 fix-profile:
-	echo '--conntrack-max-per-core=0' | sudo tee -a /var/snap/k8s/common/args/kube-proxy
-	sudo snap restart k8s.kube-proxy
-	sudo k8s enable network
+	juju ssh $(MACHINE_ID) echo '--conntrack-max-per-core=0' | sudo tee -a /var/snap/k8s/common/args/kube-proxy
+	juju ssh $(MACHINE_ID) sudo snap restart k8s.kube-proxy
+	juju ssh $(MACHINE_ID) sudo k8s enable network
+	juju ssh $(MACHINE_ID) sudo k8s enable dns
+	juju ssh $(MACHINE_ID) sudo k8s enable storage
+	juju ssh $(MACHINE_ID) sudo k8s status
 
 remove_k8s_charm: 
 	juju switch $(MODEL_NAME)
@@ -58,13 +62,14 @@ remove_k8s_charm:
 	charmcraft clean -p ./charms/worker/k8s
 
 # K8s cloud
+#copy kubeconfig?
 create_k8s_cloud:
-	juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client
+	juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client --skip-storage
 	juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL_NAME) $(K8S_CLOUD_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
 
 delete_k8s_cloud: 
 	juju destroy-model $(K8S_MODEL_NAME) --destroy-storage
-	juju remove-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME)
+	juju remove-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client
 
 # Debug
 view: 
