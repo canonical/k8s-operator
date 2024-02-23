@@ -3,7 +3,8 @@ CONTROLLER_NAME = lxd
 MODEL_NAME = canonical-k8s-model
 K8S_CLOUD_NAME = k8s-cloud
 K8S_MODEL_NAME = dns-model	
-.PHONY: setup shell deploy clean refresh deploy_k8s_charm remove_k8s_charm create_k8s_cloud delete_k8s_cloud view
+
+.PHONY: setup shell deploy delete refresh deploy_k8s_charm remove_k8s_charm create_k8s_cloud delete_k8s_cloud view fix-profile remove_model add_model clean_vm
 
 # Setup the VM (here multipass) and install juju, lxd, charmcraft, add a model, get git repo
 vm:
@@ -12,25 +13,26 @@ vm:
 	multipass exec $(VM_NAME) -- sudo apt update
 	multipass exec $(VM_NAME) -- sudo apt install make	
 	multipass exec $(VM_NAME) -- sudo apt install -y snapd
+	multipass exec $(VM_NAME) -- sudo snap refresh lxd --channel 5.19
 	multipass exec $(VM_NAME) -- sudo snap install juju --classic
 	multipass exec $(VM_NAME) -- sudo snap install charmcraft --classic
 	multipass exec $(VM_NAME) -- git clone https://github.com/canonical/k8s-operator.git	
 	multipass exec $(VM_NAME) -- sudo lxd init --auto
+	multipass exec $(VM_NAME) -- lxc network set lxdbr0 ipv6.address=none
 	multipass exec $(VM_NAME) -- sudo adduser ubuntu lxd
 	multipass exec $(VM_NAME) -- sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
 	multipass exec $(VM_NAME) -- sudo -u ubuntu juju bootstrap localhost $(CONTROLLER_NAME)
-	multipass exec $(VM_NAME) -- juju add-model $(MODEL_NAME)
 
 # Shell into the VM
 shell:
 	multipass shell $(VM_NAME)
 
 # ALL the following commands should be executed in the k8s-operator dir of the VM
-deploy: add_model deploy_k8s_charm create_k8s_cloud
+deploy: add_model deploy_k8s_charm fix-profile create_k8s_cloud
 
-clean: delete_k8s_cloud remove_k8s_charm remove_model
+delete: delete_k8s_cloud remove_k8s_charm remove_model
 
-refresh: clean deploy 
+refresh: delete deploy 
 
 add_model:
 	juju add-model $(MODEL_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
@@ -42,19 +44,18 @@ deploy_k8s_charm:
 	juju switch $(MODEL_NAME)
 	charmcraft clean -p ./charms/worker/k8s
 	charmcraft pack -p ./charms/worker/k8s
-	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
+	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm 
 
-deploy_k8s_charm2:
-	juju switch $(MODEL_NAME)
-	cd ./charms/worker/k8s
-	charmcraft clean 
-	charmcraft pack 
-	juju deploy ./k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm --trust
-	cd ../../..
+# until the lxd profile is OK
+fix-profile:
+	echo '--conntrack-max-per-core=0' | sudo tee -a /var/snap/k8s/common/args/kube-proxy
+	sudo snap restart k8s.kube-proxy
+	sudo k8s enable network
 
 remove_k8s_charm: 
 	juju switch $(MODEL_NAME)
 	juju remove-application k8s	--force
+	charmcraft clean -p ./charms/worker/k8s
 
 # K8s cloud
 create_k8s_cloud:
@@ -71,3 +72,8 @@ view:
 	juju controllers
 	juju models
 	juju status
+
+# Clean up the VM
+clean_vm:
+	multipass delete $(VM_NAME)
+	multipass purge
