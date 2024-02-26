@@ -50,6 +50,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     UserFacingDatastoreConfig,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
+from charms.interface_kube_dns import KubeDnsRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
@@ -105,6 +106,7 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
+        self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
         self.labeler = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
@@ -417,6 +419,43 @@ class K8sCharm(ops.CharmBase):
             )
 
         self.api_manager.update_cluster_config(update_request)
+
+    def _configure_components(self):
+        """Enable necessary components for the Kubernetes cluster."""
+        if self.dns_charm_integrated():
+            status.add(ops.MaintenanceStatus("Disabling DNS"))
+            self.api_manager.configure_component("dns", False)
+            self.configure_dns()
+        else:
+            status.add(ops.MaintenanceStatus("Enabling DNS"))
+            self.api_manager.configure_component("dns", True)
+
+    def dns_charm_integrated(self) -> bool:
+        dns_relation = self.model.get_relation("dns-provider")
+        if not dns_relation:
+            return False
+        return True
+
+    def configure_dns(self):
+        if isinstance(self.unit.status, ops.BlockedStatus):
+            return
+
+        if not self._state.joined:
+            return
+
+        dns_relation = self.model.get_relation("dns-provider")
+        if not dns_relation:
+            return
+
+        dns_ip = self.kube_dns.address
+        dns_domain = self.kube_dns.domain
+        port = self.kube_dns.port or 53
+
+        if not dns_ip or not dns_domain:
+            return
+
+        self.unit.status = ops.MaintenanceStatus("configuring DNS")
+        self.api_manager.configure_dns(dns_ip, dns_domain)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.

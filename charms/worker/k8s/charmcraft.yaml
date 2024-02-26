@@ -116,3 +116,6 @@ requires:
     interface: etcd
   external-cloud-provider:
     interface: external_cloud_provider
+  dns-provider:
+    interface: kube-dns
+    limit: 1
