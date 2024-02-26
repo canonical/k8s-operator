@@ -29,6 +29,8 @@ tox                      # runs 'lint', 'unit', 'static', and 'coverage-report' 
 
 ## Building the charms
 
+In this repository, you'll find two machine charms. 
+The k8s charm handles the deployment of the control plane node, and the k8s-worker charm takes care of deploying worker nodes.
 Build all the charms in this git repository using:
 
 ```shell
@@ -92,7 +94,7 @@ juju status -m controller
 
 You should see that there's a controller running on a cloud substrage like `aws` or `lxd` or some other cloud substrate that supports machines -- not a kubernetes substrate.
 
-`pytest-operator` will create a new juju model and deploy a cluster into each model for every test module (eg `test_something.py`). For now, only one module is define at `.tests/integration/test_k8s.py`. When the tests complete (successful or not), `pytest-operator` will clean up the models for you.
+`pytest-operator` will create a new juju model and deploy a cluster into each model for every test module (eg `test_something.py`). For now, only one module is defined at `.tests/integration/test_k8s.py`. When the tests complete (successful or not), `pytest-operator` will clean up the models for you.
 
 Running the integration tests are as easy as:
 ```shell
