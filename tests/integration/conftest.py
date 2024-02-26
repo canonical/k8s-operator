@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
 from typing import List, Mapping, Optional
-
+import juju.utils
+import shlex
 import pytest
 import pytest_asyncio
 import yaml
@@ -191,3 +192,116 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
         yield the_model
+
+@pytest.fixture(scope="module")
+async def k8s_cloud(ops_test: OpsTest):
+    """ juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client --skip-storage"""
+    cloud_name = "k8s-cloud"
+    controller = await ops_test.model.get_controller()
+    try:
+        current_clouds = await controller.clouds()
+        if cloud_name in current_clouds.clouds:
+            yield cloud_name
+            return
+    finally:
+        await controller.disconnect()
+
+    with ops_test.model_context("main"):
+        log.info(f"Adding cloud '{cloud_name}'...")
+        await ops_test.juju(
+            "add-k8s",
+            cloud_name,
+            f"--controller={ops_test.controller_name}",
+            "--client",
+            "--skip-storage",
+            check=True,
+            fail_msg=f"Failed to add-k8s {cloud_name}",
+        )
+    yield cloud_name
+
+    with ops_test.model_context("main"):
+        log.info(f"Removing cloud '{cloud_name}'...")
+        await ops_test.juju(
+            "remove-cloud",
+            cloud_name,
+            "--controller",
+            ops_test.controller_name,
+            "--client",
+            check=True,
+        )
+
+@pytest.fixture(scope="module")
+async def coredns_model(k8s_cloud, ops_test: OpsTest):
+    # Add k8s-model: k8s-model
+    # juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL) $(K8S_CLOUD_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
+    model_alias = "coredns-model"
+    log.info("Creating Coredns model ...")
+
+    model_name = "coredns-system"
+    await ops_test.juju(
+        "add-model",
+        f"--controller={ops_test.controller_name}",
+        model_name,
+        k8s_cloud,
+        "--no-switch",
+    )
+
+    model = await ops_test.track_model(
+        model_alias,
+        model_name=model_name,
+        cloud_name=k8s_cloud,
+        # credential_name=k8s_cloud,
+        keep=False,
+    )
+    model_uuid = model.info.uuid
+
+    yield model, model_alias
+
+    timeout = 5 * 60
+    await ops_test.forget_model(model_alias, timeout=timeout, allow_failure=False)
+
+    async def model_removed():
+        _, stdout, stderr = await ops_test.juju("models", "--format", "yaml")
+        if _ != 0:
+            return False
+        model_list = yaml.safe_load(stdout)["models"]
+        which = [m for m in model_list if m["model-uuid"] == model_uuid]
+        return len(which) == 0
+
+    log.info("Removing Coredns model")
+    await juju.utils.block_until_with_coroutine(model_removed, timeout=timeout)
+    # Update client's model cache
+    await ops_test.juju("models")
+    log.info("Coredns model removed ...")
+
+@pytest.fixture(scope="module")
+async def coredns_installed(ops_test: OpsTest, coredns_model):
+    log.info(f"Deploying Coredns ")
+
+    k8s_alias = coredns_model
+    with ops_test.model_context(k8s_alias) as model:
+        await asyncio.gather(
+            model.deploy(entity_url="coredns", trust=True, channel="edge", ),
+        )
+
+        await model.block_until(
+            lambda: all("coredns" in model.applications),
+            timeout=60,
+        )
+        await model.wait_for_idle(status="active", timeout=5 * 60)
+
+        coredns_app = model.applications["coredns"]
+
+        await ops_test.model.wait_for_idle(status="active", timeout=5 * 60)
+
+    yield
+
+    with ops_test.model_context(k8s_alias) as m:
+        log.info("Removing Coredns charm...")
+
+        log.info(f"Removing coredns ...")
+        cmd = "remove-application coredns --destroy-storage --force"
+        rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
+        log.info(f"{(stdout or stderr)})")
+        assert rc == 0
+        await m.block_until(lambda: "coredns" not in m.applications, timeout=60 * 10)
