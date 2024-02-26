@@ -416,12 +416,12 @@ class K8sdAPIManager:
 
     def configure_dns(self, dns_domain: str, dns_ip: str):
         """Configure the DNS for the k8s cluster.
+
         Args:
             dns_domain (str): The domain name for the DNS.
             dns_ip (str): The IP address for the DNS.
         """
         # TODO: Implement the DNS configuration.
-        pass
 
     def is_cluster_bootstrapped(self) -> bool:
         """Check if K8sd has been bootstrapped.
