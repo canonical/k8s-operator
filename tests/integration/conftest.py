@@ -5,10 +5,10 @@
 import asyncio
 import contextlib
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Mapping, Optional
 
 import pytest
 import pytest_asyncio
@@ -31,25 +31,6 @@ def pytest_addoption(parser: pytest.Parser):
 
 
 @dataclass
-class CharmDeploymentArgs:
-    """Represents juju deploy arguments
-
-    Attrs:
-        entity_url:        url to charm deployment
-        application_name:  name of juju application
-        resources:         all resources for this charm
-        series:            os series for the machine
-        num_units:         unit instances of the charm
-    """
-
-    entity_url: str
-    application_name: str
-    resources: dict
-    series: str
-    num_units: int
-
-
-@dataclass
 class Charm:
     """Represents source charms.
 
@@ -58,7 +39,6 @@ class Charm:
         path:      Path to the charm file
         metadata:  Charm's metadata
         app_name:  Preferred name of the juju application
-        resources: dict of possible charm resources
     """
 
     ops_test: OpsTest
@@ -74,29 +54,6 @@ class Charm:
     def app_name(self) -> str:
         """Suggested charm name."""
         return self.metadata["name"]
-
-    @property
-    def resources(self) -> dict:
-        """Charm resources."""
-        resources = self.metadata.get("resources") or {}
-
-        return {name: self._craft_resource(name, resource) for name, resource in resources.items()}
-
-    def _craft_resource(self, _name: str, resource: dict) -> Optional[str]:
-        """Build resource from metadata item.
-
-        Args:
-            _name:    name of the resource
-            resource: value for the resource during deployment
-
-        Return:
-            upstream-source for the resource if oci-image
-            path to file if resource is a filepath
-            None otherwise
-        """
-        if oci_image := resource.get("upstream-source"):
-            return oci_image
-        return None
 
     async def resolve(self, charm_files: List[str]) -> Path:
         """Build or find the charm with ops_test.
@@ -131,12 +88,60 @@ class Charm:
         return self._charmfile.resolve()
 
 
+@dataclass
+class Bundle:
+    """Represents test bundle.
+
+    Attrs:
+        ops_test:      Instance of the pytest-operator plugin
+        path:          Path to the bundle file
+        content:       Loaded content from the path
+        render:        Path to a rendered bundle
+        applications:  Mapping of applications in the bundle.
+    """
+
+    ops_test: OpsTest
+    path: Path
+    _content: Mapping = field(default_factory=dict)
+
+    @property
+    def content(self) -> Mapping:
+        """Yaml content of the bundle loaded into a dict"""
+        if not self._content:
+            self._content = yaml.safe_load(self.path.read_bytes())
+        return self._content
+
+    @property
+    def applications(self) -> Mapping[str, dict]:
+        """Mapping of all available application in the bundle."""
+        return self.content["applications"]
+
+    @property
+    def render(self) -> Path:
+        """Path to written bundle config to be deployed."""
+        target = self.ops_test.tmp_path / "bundles" / self.path.name
+        target.parent.mkdir(exist_ok=True, parents=True)
+        yaml.safe_dump(self.content, target.open("w"))
+        return target
+
+    def switch(self, name: str, path: Path):
+        """Replace charmhub application with a local charm path.
+
+        Args:
+            name (str):  Which application
+            path (Path): Path to local charm
+        """
+        app = self.applications[name]
+        app["charm"] = str(path.resolve())
+        app["channel"] = None
+
+
 @contextlib.asynccontextmanager
 async def deploy_model(
     request: pytest.FixtureRequest,
     ops_test: OpsTest,
     model_name: str,
-    *deploy_args: CharmDeploymentArgs,
+    bundle: Bundle,
 ):
     """Add a juju model, deploy apps into it, wait for them to be active.
 
@@ -144,7 +149,7 @@ async def deploy_model(
         request:     handle to pytest requests from calling fixture
         ops_test:    Instance of the pytest-operator plugin
         model_name:  name of the model in which to deploy
-        deploy_args: list of charms to deploy and their arguments
+        bundle:      Bundle object to deploy or redeploy into the model
 
     Yields:
         model object
@@ -162,16 +167,9 @@ async def deploy_model(
         )
     with ops_test.model_context(model_name) as the_model:
         async with ops_test.fast_forward():
-            await asyncio.gather(
-                *(
-                    the_model.deploy(**asdict(charm))
-                    for charm in deploy_args
-                    if charm.application_name not in the_model.applications
-                )
-            )
-            await the_model.integrate("k8s", "k8s-worker:cluster")
+            await the_model.deploy(bundle.render)
             await the_model.wait_for_idle(
-                apps=[n.application_name for n in deploy_args],
+                apps=list(bundle.applications),
                 status="active",
                 raise_on_blocked=True,
                 timeout=15 * 60,
@@ -188,15 +186,8 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
-    deployments = [
-        CharmDeploymentArgs(
-            entity_url=str(path),
-            application_name=charm.app_name,
-            resources=charm.resources,
-            series="focal",
-            num_units=2 if charm.app_name == "k8s-worker" else 3,
-        )
-        for path, charm in zip(charm_files, charms)
-    ]
-    async with deploy_model(request, ops_test, model, *deployments) as the_model:
+    bundle = Bundle(ops_test, Path(__file__).parent / "test-bundle.yaml")
+    for path, charm in zip(charm_files, charms):
+        bundle.switch(charm.app_name, path)
+    async with deploy_model(request, ops_test, model, bundle) as the_model:
         yield the_model
