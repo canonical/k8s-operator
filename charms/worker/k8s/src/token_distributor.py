@@ -237,8 +237,8 @@ class TokenDistributor:
             if relation.data[unit].get("joined") == name:
                 # when a unit state it's joined, it's accepted it took
                 # ownership of a token.  We need to revoke this token
-                # if the unit leaves. Let's create a cache in the
-                # our app's session of this data
+                # if the unit leaves. Let's create a cache in
+                # our app's session of this data.
                 log.info(
                     "Completed token allocation of %s unit=%s:%s",
                     token_type.value,
