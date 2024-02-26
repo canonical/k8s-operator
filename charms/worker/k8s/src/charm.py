@@ -22,6 +22,7 @@ import socket
 import subprocess
 from functools import cached_property
 from pathlib import Path
+from time import sleep
 from typing import Optional
 
 import charms.contextual_status as status
@@ -57,9 +58,13 @@ class K8sCharm(ops.CharmBase):
     """A charm for managing a K8s cluster via the k8s snap.
 
     Attrs:
-        is_worker: true if this is a worker charm unit
-        is_control_plane: true if this is a control-plane charm unit
+        is_worker: true if this is a worker unit
+        is_control_plane: true if this is a control-plane unit
+        lead_control_plane: true if this is a control-plane unit and its the leader
+        is_dying: true if the unit is being removed
     """
+
+    _stored = ops.StoredState()
 
     def __init__(self, *args):
         """Initialise the K8s charm.
@@ -72,8 +77,9 @@ class K8sCharm(ops.CharmBase):
         self.api_manager = K8sdAPIManager(factory)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
-        self.distributor = TokenDistributor(self, self.api_manager)
+        self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
+        self._stored.set_default(removing=False)
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -114,10 +120,20 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is a control-plane."""
         return not self.is_worker
 
+    @property
+    def lead_control_plane(self) -> bool:
+        """Returns true if the unit is the leader control-plane."""
+        return self.is_control_plane and self.unit.is_leader()
+
     @cached_property
     def is_worker(self) -> bool:
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
+
+    @property
+    def is_dying(self) -> bool:
+        """Returns true if the unit is being removed."""
+        return bool(self._stored.removing)
 
     def get_node_name(self) -> str:
         """Return the lowercase hostname.
@@ -194,6 +210,29 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
 
+    def _revoke_cluster_tokens(self):
+        """Revoke tokens for the units in the cluster and k8s-cluster relations.
+
+        if self is dying, only try to remove itself from the cluster
+        """
+        to_remove = {self.unit} if self.is_dying else None
+
+        if peer := self.model.get_relation("cluster"):
+            self.distributor.revoke_tokens(
+                relation=peer,
+                token_strategy=TokenStrategy.CLUSTER,
+                token_type=ClusterTokenType.CONTROL_PLANE,
+                to_remove=to_remove,
+            )
+
+        if workers := self.model.get_relation("k8s-cluster"):
+            self.distributor.revoke_tokens(
+                relation=workers,
+                token_strategy=TokenStrategy.CLUSTER,
+                token_type=ClusterTokenType.WORKER,
+                to_remove=to_remove,
+            )
+
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         if peer := self.model.get_relation("cluster"):
@@ -201,19 +240,17 @@ class K8sCharm(ops.CharmBase):
             peer.data[self.unit]["node-name"] = node_name
             peer.data[self.unit]["joined"] = node_name
 
-            self.distributor.distribute_tokens(
+            self.distributor.allocate_tokens(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.CONTROL_PLANE,
-                invalidate_on_join=True,
             )
 
         if workers := self.model.get_relation("k8s-cluster"):
-            self.distributor.distribute_tokens(
+            self.distributor.allocate_tokens(
                 relation=workers,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.WORKER,
-                invalidate_on_join=True,
             )
 
     def _create_cos_tokens(self):
@@ -226,10 +263,10 @@ class K8sCharm(ops.CharmBase):
             return
 
         if rel := self.model.get_relation("cos-tokens"):
-            self.distributor.distribute_tokens(relation=rel, token_strategy=TokenStrategy.COS)
+            self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
         if rel := self.model.get_relation("cos-worker-tokens"):
-            self.distributor.distribute_tokens(relation=rel, token_strategy=TokenStrategy.COS)
+            self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
@@ -289,11 +326,10 @@ class K8sCharm(ops.CharmBase):
     )
     def _join_cluster(self):
         """Retrieve the join token from secret databag and join the cluster."""
-        if self.api_manager.is_cluster_bootstrapped():
+        if self.is_control_plane and self.api_manager.is_cluster_bootstrapped():
             return
 
-        relation = self.model.get_relation("cluster")
-        if not relation:
+        if not (relation := self.model.get_relation("cluster")):
             return
 
         if self.collector.joined(relation):
@@ -305,19 +341,34 @@ class K8sCharm(ops.CharmBase):
             address = binding and binding.network.ingress_address
             node_name = self.get_node_name()
             cluster_addr = f"{address}:{K8SD_PORT}"
+            log.info("Joining %s to %s...", node_name, cluster_addr)
             self.api_manager.join_cluster(node_name, cluster_addr, token)
+            log.info("Success")
 
-    def _reconcile(self, _):
-        """Reconcile state change events."""
+    def _reconcile(self, event):
+        """Reconcile state change events.
+
+        Args:
+            event: ops.EventBase - event that triggered the reconciliation
+        """
+        self._evaluate_removal(event)
+        if self.is_dying and self.lead_control_plane:
+            self._revoke_cluster_tokens()
+        if self.is_dying:
+            self._update_status()
+            self._last_gasp(event)
+            return
+
         self._install_k8s_snap()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
-        if self.unit.is_leader() and self.is_control_plane:
+        if self.lead_control_plane:
             self._bootstrap_k8s_snap()
             self._enable_components()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
+            self._revoke_cluster_tokens()
         self._join_cluster()
         self._configure_cos_integration()
         self._update_status()
@@ -334,6 +385,9 @@ class K8sCharm(ops.CharmBase):
     )
     def _update_status(self):
         """Check k8s snap status."""
+        if self.is_dying:
+            status.add(ops.WaitingStatus("Preparing to leave cluster"))
+            return
         if self.is_worker:
             relation = self.model.get_relation("cluster")
             assert relation, "Missing cluster relation with k8s"  # nosec
@@ -341,6 +395,36 @@ class K8sCharm(ops.CharmBase):
             assert self.api_manager.is_cluster_ready(), "control-plane not yet ready"  # nosec
         if version := self._get_snap_version():
             self.unit.set_workload_version(version)
+
+    def _evaluate_removal(self, event: ops.EventBase):
+        """Determine if my unit is being removed.
+
+        Args:
+            event: ops.EventBase - event that triggered charm hook
+        """
+        if self.is_dying:
+            return
+        if isinstance(event, ops.RelationDepartedEvent):
+            # if a unit is departing, and it's me?
+            self._stored.removing = event.departing_unit == self.unit
+        elif isinstance(event, (ops.RemoveEvent, ops.StopEvent)):
+            # If I myself am dying, its me!
+            self._stored.removing = True
+
+    def _last_gasp(self, event):
+        """Busy wait on stop event until the unit isn't clustered anymore.
+
+        Args:
+            event: ops.EventBase - event that triggered charm hook
+        """
+        if not isinstance(event, ops.StopEvent):
+            return
+        busy_wait = 30
+        status.add(ops.MaintenanceStatus("Awaiting cluster removal"))
+        while busy_wait and self.api_manager.is_cluster_bootstrapped():
+            log.info("Waiting for this unit to uncluster")
+            sleep(1)
+            busy_wait -= 1
 
     @on_error(ops.WaitingStatus(""))
     def _generate_kubeconfig(self):

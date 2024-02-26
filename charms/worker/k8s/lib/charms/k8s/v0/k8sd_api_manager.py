@@ -31,7 +31,7 @@ import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import List, Optional, Type, TypeVar
+from typing import Generator, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field, validator
 
@@ -242,13 +242,14 @@ class UnixSocketHTTPConnection(HTTPConnection):
             self.sock.settimeout(self.timeout)
             self.sock.connect(self.unix_socket)
         except socket.error as e:
-            raise K8sdConnectionError(f"Error connecting to socket: {e}") from e
+            raise K8sdConnectionError(f"Error connecting to socket: {self.unix_socket}") from e
 
 
 class ConnectionFactory:
     """Abstract factory for creating connection objects."""
 
-    def create_connection(self):
+    @contextmanager
+    def create_connection(self) -> Generator[HTTPConnection, None, None]:
         """Create a new connection instance.
 
         Raises:
@@ -358,19 +359,25 @@ class K8sdAPIManager:
                     headers=headers,
                 )
                 response = connection.getresponse()
-
+                data = response.read().decode()
                 if not 200 <= response.status < 300:
                     raise InvalidResponseError(
-                        f"Request failed with status {response.status}: {response.reason}"
+                        f"Error status {response.status}\n"
+                        f"\tmethod={method}\n"
+                        f"\tendpoint={endpoint}\n"
+                        f"\treason={response.reason}\n"
+                        f"\tbody={data}"
                     )
-
-                data = response.read().decode()
             return response_cls.parse_raw(data)
 
         except ValueError as e:
-            raise InvalidResponseError(f"Request failed: {e}") from e
+            raise InvalidResponseError(
+                f"Request failed:\n" f"\tmethod={method}\n" f"\tendpoint={endpoint}"
+            ) from e
         except (socket.error, HTTPException) as e:
-            raise K8sdConnectionError(f"HTTP or Socket error: {e}") from e
+            raise K8sdConnectionError(
+                f"HTTP or Socket error" f"\tmethod={method}\n" f"\tendpoint={endpoint}"
+            ) from e
 
     def create_join_token(self, name: str, worker: bool = False):
         """Create a join token.
@@ -400,7 +407,17 @@ class K8sdAPIManager:
         """
         endpoint = "/1.0/k8sd/cluster/join"
         body = {"name": name, "address": address, "token": token}
+        self._send_request(endpoint, "POST", EmptyResponse, body)
 
+    def remove_node(self, name: str, force: bool = True):
+        """Remove a node from the cluster.
+
+        Args:
+            name (str): Name of the node that should be removed.
+            force (bool): Forcibly remove the node
+        """
+        endpoint = "/1.0/k8sd/cluster/remove"
+        body = {"name": name, "force": force}
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def enable_component(self, name: str, enable: bool):
@@ -424,7 +441,7 @@ class K8sdAPIManager:
             endpoint = "/1.0/k8sd/cluster"
             cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
             return cluster_status.error_code == 0
-        except InvalidResponseError as e:
+        except (K8sdConnectionError, InvalidResponseError) as e:
             logger.error("Invalid response while checking if cluster is bootstrapped: %s", e)
         return False
 
