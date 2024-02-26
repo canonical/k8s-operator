@@ -714,7 +714,7 @@ class K8sdAPIManager:
         endpoint = "/1.0/k8sd/cluster/config"
         body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
-    
+
     def configure_dns(self, dns_domain: str, dns_ip: str):
         """Configure the DNS for the k8s cluster.
         Args:
