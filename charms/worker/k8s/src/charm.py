@@ -423,25 +423,28 @@ class K8sCharm(ops.CharmBase):
 
     def _configure_components(self):
         """Enable necessary components for the Kubernetes cluster."""
-        if self.dns_charm_integrated():
+        if self._dns_charm_integrated():
             status.add(ops.MaintenanceStatus("Disabling DNS"))
             self.api_manager.configure_component("dns", False)
-            self.configure_dns()
+            self._configure_dns()
         else:
             status.add(ops.MaintenanceStatus("Enabling DNS"))
             self.api_manager.configure_component("dns", True)
 
     def dns_charm_integrated(self) -> bool:
+        """Check if the DNS charm is integrated.
+
+        Returns:
+            bool: True if the DNS charm is integrated, False otherwise.
+        """
         dns_relation = self.model.get_relation("dns-provider")
         if not dns_relation:
             return False
         return True
 
     def configure_dns(self):
+        """Configure DNS with dns config from the dns-provider relation."""
         if isinstance(self.unit.status, ops.BlockedStatus):
-            return
-
-        if not self._state.joined:
             return
 
         dns_relation = self.model.get_relation("dns-provider")
@@ -450,13 +453,13 @@ class K8sCharm(ops.CharmBase):
 
         dns_ip = self.kube_dns.address
         dns_domain = self.kube_dns.domain
-        port = self.kube_dns.port or 53
+        # port = self.kube_dns.port or 53
 
         if not dns_ip or not dns_domain:
             return
 
         self.unit.status = ops.MaintenanceStatus("configuring DNS")
-        self.api_manager.configure_dns(dns_ip, dns_domain)
+        self.api_manager.configure_dns(dns_domain, dns_ip)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
