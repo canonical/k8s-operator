@@ -28,18 +28,18 @@ import charms.contextual_status as status
 import ops
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
+from charms.interface_kube_dns import KubeDnsRequires
 from charms.k8s.v0.k8sd_api_manager import (
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
     UnixSocketConnectionFactory,
 )
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
-from charms.interface_kube_dns import KubeDnsRequires
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
 from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
 from charms.reconciler import Reconciler
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 
 from cos_integration import COSIntegration
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy

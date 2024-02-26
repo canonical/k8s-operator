@@ -413,7 +413,7 @@ class K8sdAPIManager:
         endpoint = f"/1.0/k8sd/components/{name}"
         body = {"status": "enabled" if enable else "disabled"}
         self._send_request(endpoint, "PUT", EmptyResponse, body)
-    
+
     def configure_dns(self, dns_domain: str, dns_ip: str):
         """Configure the DNS for the k8s cluster.
         Args:
