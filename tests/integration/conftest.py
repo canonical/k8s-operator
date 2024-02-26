@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
 from typing import List, Mapping, Optional
-
+import juju.utils
+import shlex
 import pytest
 import pytest_asyncio
 import yaml
