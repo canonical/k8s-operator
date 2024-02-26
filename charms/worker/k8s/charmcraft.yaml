@@ -78,3 +78,8 @@ provides:
     interface: k8s-cluster
   cos-worker-tokens:
     interface: cos-tokens
+
+requires:
+  dns-provider:
+    interface: kube-dns
+    limit: 1

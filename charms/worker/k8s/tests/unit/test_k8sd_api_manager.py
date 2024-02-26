@@ -199,10 +199,10 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_enable_component__enable(self, mock_send_request):
+    def test_configure_component__enable(self, mock_send_request):
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
-        self.api_manager.enable_component("foo", True)
+        self.api_manager.configure_component("foo", True)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/components/foo",
             "PUT",
@@ -211,10 +211,10 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_enable_component__disable(self, mock_send_request):
+    def test_configure_component__disable(self, mock_send_request):
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
-        self.api_manager.enable_component("foo", False)
+        self.api_manager.configure_component("foo", False)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/components/foo", "PUT", EmptyResponse, {"status": "disabled"}
         )

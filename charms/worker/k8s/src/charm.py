@@ -34,6 +34,8 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdConnectionError,
     UnixSocketConnectionFactory,
 )
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+from charms.interface_kube_dns import KubeDnsRequires
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
 from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
@@ -74,6 +76,7 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
+        self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -234,12 +237,46 @@ class K8sCharm(ops.CharmBase):
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
     )
-    def _enable_components(self):
+    def _configure_components(self):
         """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Enabling DNS"))
-        self.api_manager.enable_component("dns", True)
+        if self.dns_charm_integrated():
+            status.add(ops.MaintenanceStatus("Disabling DNS"))
+            self.api_manager.configure_component("dns", False)
+            self.configure_dns()
+        else:
+            status.add(ops.MaintenanceStatus("Enabling DNS"))
+            self.api_manager.configure_component("dns", True)
+
         status.add(ops.MaintenanceStatus("Enabling Network"))
-        self.api_manager.enable_component("network", True)
+        self.api_manager.configure_component("network", True)
+
+    def dns_charm_integrated(self) -> bool:
+        dns_relation = self.model.get_relation("dns-provider")
+        if not dns_relation:
+            return False
+        return True
+
+    def configure_dns(self):
+        if isinstance(self.unit.status, BlockedStatus):
+            return
+
+        if not self._state.joined:
+            return
+
+        dns_relation = self.model.get_relation("dns-provider")
+        if not dns_relation:
+            return
+
+        dns_ip = self.kube_dns.address
+        dns_domain = self.kube_dns.domain
+        port = self.kube_dns.port or 53
+
+        if not dns_ip or not dns_domain:
+            return
+
+        self.unit.status = MaintenanceStatus("configuring DNS")
+        self.api_manager.configure_dns(dns_ip, dns_domain)
+        status.add(ops.ActiveStatus("Running"))
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
@@ -314,7 +351,7 @@ class K8sCharm(ops.CharmBase):
         self._check_k8sd_ready()
         if self.unit.is_leader() and self.is_control_plane:
             self._bootstrap_k8s_snap()
-            self._enable_components()
+            self._configure_components()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
