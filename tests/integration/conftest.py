@@ -187,43 +187,56 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
+
     bundle = Bundle(ops_test, Path(__file__).parent / "test-bundle.yaml")
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
+
     async with deploy_model(request, ops_test, model, bundle) as the_model:
         yield the_model
+    
+    # Creating Kubernetes cloud
+    await configure_k8s_cloud(ops_test)
+
+    # Creating Coredns model
+    coredns_model_result = await coredns_model(ops_test)
+
+    # Deploying Coredns charm
+    await manage_coredns_lifecycle(ops_test, coredns_model_result)
 
 @pytest.fixture(scope="module")
-async def k8s_cloud(ops_test: OpsTest):
-    """ juju add-k8s $(K8S_CLOUD_NAME) --controller $(CONTROLLER_NAME) --client --skip-storage"""
-    cloud_name = "k8s-cloud"
+async def configure_k8s_cloud(ops_test: OpsTest, k8s_cloud_name: str = "k8s-cloud"):
+    """
+    This fixture manages the Kubernetes (k8s) cloud for testing purposes.
+    It adds the k8s cloud and later removes it.
+    """
     controller = await ops_test.model.get_controller()
     try:
         current_clouds = await controller.clouds()
-        if cloud_name in current_clouds.clouds:
-            yield cloud_name
+        if k8s_cloud_name in current_clouds.clouds:
+            yield k8s_cloud_name
             return
     finally:
         await controller.disconnect()
 
     with ops_test.model_context("main"):
-        log.info(f"Adding cloud '{cloud_name}'...")
+        log.info(f"Adding cloud '{k8s_cloud_name}'...")
         await ops_test.juju(
             "add-k8s",
-            cloud_name,
+            k8s_cloud_name,
             f"--controller={ops_test.controller_name}",
             "--client",
             "--skip-storage",
             check=True,
-            fail_msg=f"Failed to add-k8s {cloud_name}",
+            fail_msg=f"Failed to add-k8s {k8s_cloud_name}",
         )
-    yield cloud_name
+    yield k8s_cloud_name
 
     with ops_test.model_context("main"):
-        log.info(f"Removing cloud '{cloud_name}'...")
+        log.info(f"Removing cloud '{k8s_cloud_name}'...")
         await ops_test.juju(
             "remove-cloud",
-            cloud_name,
+            k8s_cloud_name,
             "--controller",
             ops_test.controller_name,
             "--client",
@@ -232,8 +245,10 @@ async def k8s_cloud(ops_test: OpsTest):
 
 @pytest.fixture(scope="module")
 async def coredns_model(k8s_cloud, ops_test: OpsTest):
-    # Add k8s-model: k8s-model
-    # juju add-model --controller $(CONTROLLER_NAME) $(K8S_MODEL) $(K8S_CLOUD_NAME)  --config logging-config="<root>=WARNING; unit=DEBUG"
+    """
+    This fixture sets up a Coredns model on the specified Kubernetes (k8s) cloud for testing purposes.
+    It adds the k8s model, performs necessary operations, and removes the model after the test.
+    """
     model_alias = "coredns-model"
     log.info("Creating Coredns model ...")
 
@@ -243,14 +258,14 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
         f"--controller={ops_test.controller_name}",
         model_name,
         k8s_cloud,
-        "--no-switch",
+        "--no-switch", #TODO: does not switch to the new model, does that bite me in the next call to juju?
     )
 
     model = await ops_test.track_model(
         model_alias,
         model_name=model_name,
         cloud_name=k8s_cloud,
-        # credential_name=k8s_cloud,
+        # credential_name=k8s_cloud, #TODO: is this necessary?
         keep=False,
     )
     model_uuid = model.info.uuid
@@ -275,10 +290,15 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
     log.info("Coredns model removed ...")
 
 @pytest.fixture(scope="module")
-async def coredns_installed(ops_test: OpsTest, coredns_model):
+async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
+    """
+    This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
+    It waits for the deployment to complete and ensures that the Coredns application is active.
+    """
     log.info(f"Deploying Coredns ")
 
-    k8s_alias = coredns_model
+    #TODO: check what k8s_alias is and what it should be
+    k8s_alias = coredns_model 
     with ops_test.model_context(k8s_alias) as model:
         await asyncio.gather(
             model.deploy(entity_url="coredns", trust=True, channel="edge", ),
@@ -291,6 +311,9 @@ async def coredns_installed(ops_test: OpsTest, coredns_model):
         await model.wait_for_idle(status="active", timeout=5 * 60)
 
         coredns_app = model.applications["coredns"]
+
+        # Consume and relate Coredns
+        await consume_core_dns(ops_test, cluster_model="your_cluster_model_name", k8s_model="k8s-model")
 
         await ops_test.model.wait_for_idle(status="active", timeout=5 * 60)
 
@@ -305,3 +328,24 @@ async def coredns_installed(ops_test: OpsTest, coredns_model):
         log.info(f"{(stdout or stderr)})")
         assert rc == 0
         await m.block_until(lambda: "coredns" not in m.applications, timeout=60 * 10)
+
+async def consume_core_dns(ops_test: OpsTest, cluster_model: str, k8s_model: str = "k8s-model"):
+    """
+    This function consumes and relates Coredns in the specified Kubernetes (k8s) model with a cluster model.
+    """
+    log.info("Consuming Coredns...")
+    # TODO: find out if ops test has something that does this?
+    
+    # Juju consume command
+    consume_cmd = f"juju consume -m {cluster_model} {k8s_model}.coredns"
+    rc, stdout, stderr = await ops_test.juju(*shlex.split(consume_cmd))
+    log.info(f"{(stdout or stderr)}")
+    assert rc == 0, "Failed to consume Coredns in the cluster model."
+    # TODO: or wait for the relation to be established?
+    await ops_test.model.wait_for_idle(status="active", timeout=5 * 60) 
+
+    # Juju relate command
+    relate_cmd = f"juju relate -m {cluster_model} coredns k8s"
+    rc, stdout, stderr = await ops_test.juju(*shlex.split(relate_cmd))
+    log.info(f"{(stdout or stderr)}")
+    assert rc == 0, "Failed to relate Coredns in the cluster model with k8s"
