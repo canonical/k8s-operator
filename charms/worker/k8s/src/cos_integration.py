@@ -5,7 +5,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import ops
 from ops.charm import CharmBase
@@ -30,13 +30,15 @@ class JobConfig:
                       Format is 'hostname:port' (e.g., 'localhost:6443').
         relabel_configs (List[Dict[str, str | List[str]]]): Additional
                       configurations for relabeling.
+        static_configs (Optional[List[Any]]): Static config to override the default ones.
     """
 
     name: str
     metrics_path: str
     scheme: str
     target: str
-    relabel_configs: List[Dict[str, Union[str, List[str]]]]
+    relabel_configs: List[Dict[str, Union[str, Sequence[str]]]]
+    static_configs: Optional[List[Any]] = None
 
 
 class COSIntegration(ops.Object):
@@ -76,7 +78,8 @@ class COSIntegration(ops.Object):
             "job_name": config.name,
             "metrics_path": config.metrics_path,
             "scheme": config.scheme,
-            "static_configs": [
+            "static_configs": config.static_configs
+            or [
                 {
                     "targets": [config.target],
                     "labels": {"node": node_name, "cluster": self.charm.model.name},
@@ -101,6 +104,12 @@ class COSIntegration(ops.Object):
         """
         log.info("Building Prometheus scraping jobs.")
 
+        instance_relabel = {
+            "source_labels": ["instance"],
+            "target_label": "instance",
+            "replacement": node_name,
+        }
+
         control_plane_jobs = [
             JobConfig(
                 "apiserver",
@@ -112,7 +121,8 @@ class COSIntegration(ops.Object):
                         "source_labels": ["job"],
                         "target_label": "job",
                         "replacement": "apiserver",
-                    }
+                    },
+                    instance_relabel,
                 ],
             ),
             JobConfig(
@@ -120,14 +130,17 @@ class COSIntegration(ops.Object):
                 "/metrics",
                 "https",
                 "localhost:10259",
-                [{"target_label": "job", "replacement": "kube-scheduler"}],
+                [{"target_label": "job", "replacement": "kube-scheduler"}, instance_relabel],
             ),
             JobConfig(
                 "kube-controller-manager",
                 "/metrics",
                 "https",
                 "localhost:10257",
-                [{"target_label": "job", "replacement": "kube-controller-manager"}],
+                [
+                    {"target_label": "job", "replacement": "kube-controller-manager"},
+                    instance_relabel,
+                ],
             ),
         ]
 
@@ -137,7 +150,7 @@ class COSIntegration(ops.Object):
                 "/metrics",
                 "http",
                 "localhost:10249",
-                [{"target_label": "job", "replacement": "kube-proxy"}],
+                [{"target_label": "job", "replacement": "kube-proxy"}, instance_relabel],
             ),
         ]
 
@@ -157,6 +170,7 @@ class COSIntegration(ops.Object):
                 [
                     {"target_label": "metrics_path", "replacement": path},
                     {"target_label": "job", "replacement": "kubelet"},
+                    instance_relabel,
                 ],
             )
             for path in kubelet_metrics_paths
@@ -172,6 +186,12 @@ class COSIntegration(ops.Object):
                     "localhost:6443",
                     [
                         {"target_label": "job", "replacement": "kube-state-metrics"},
+                    ],
+                    [
+                        {
+                            "targets": ["localhost:6443"],
+                            "labels": {"cluster": self.charm.model.name},
+                        }
                     ],
                 )
             ]
