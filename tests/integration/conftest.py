@@ -387,6 +387,21 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: str = "coredns-mod
     log.info(f"{(stdout or stderr)}")
     assert rc == 0, "Failed to relate Coredns in the cluster model with k8s"
 
+    status = await model_2.get_status()
+    if 'coredns' not in status.remote_applications:
+        raise Exception("Expected coredns")
+    log.info("Coredns consumed...")
+
+    log.info("Relating Coredns...")
+    await model_2.relate("coredns:dns-provider admin/{}.coredns".format(coredns_model))
+    if 'coredns' not in status.remote_applications:
+        raise Exception("Expected coredns")
+    log.info("Coredns related...")
+    
+    # TODO cleanup
+    # await model.remove_offer("admin/{}.ubuntu".format(model.name), force=True) #TODO: when do we remove the offer?
+
+
 @pytest_asyncio.fixture(scope="module")
 async def cos_model(
     ops_test: OpsTest, kubernetes_cluster, _grafana_agent  # pylint: disable=W0613
