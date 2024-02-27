@@ -423,43 +423,26 @@ class K8sCharm(ops.CharmBase):
 
     def _configure_components(self):
         """Enable necessary components for the Kubernetes cluster."""
-        if self._dns_charm_integrated():
-            status.add(ops.MaintenanceStatus("Disabling DNS"))
+        dns_settings = self._dns_charm_integrated()
+        status.add(ops.MaintenanceStatus(f"Configuring DNS"))
+
+        if dns_settings:
             self.api_manager.configure_component("dns", False)
-            self._configure_dns()
+            self.api_manager.configure_dns(dns_settings.get("dns_domain"), dns_settings.get("dns_ip"))
         else:
-            status.add(ops.MaintenanceStatus("Enabling DNS"))
             self.api_manager.configure_component("dns", True)
 
-    def dns_charm_integrated(self) -> bool:
+    def _dns_charm_integrated(self) -> dict:
         """Check if the DNS charm is integrated.
 
         Returns:
-            bool: True if the DNS charm is integrated, False otherwise.
+            dict[str, str]: The DNS settings if the DNS charm is integrated.
+            None: If the DNS charm is not integrated it returns None.
         """
-        dns_relation = self.model.get_relation("dns-provider")
-        if not dns_relation:
-            return False
-        return True
-
-    def configure_dns(self):
-        """Configure DNS with dns config from the dns-provider relation."""
-        if isinstance(self.unit.status, ops.BlockedStatus):
-            return
-
-        dns_relation = self.model.get_relation("dns-provider")
-        if not dns_relation:
-            return
-
-        dns_ip = self.kube_dns.address
-        dns_domain = self.kube_dns.domain
-        # port = self.kube_dns.port or 53
-
-        if not dns_ip or not dns_domain:
-            return
-
-        self.unit.status = ops.MaintenanceStatus("configuring DNS")
-        self.api_manager.configure_dns(dns_domain, dns_ip)
+        dns_settings = {"dns_domain": self.kube_dns.domain, "dns_ip": self.kube_dns.address}
+        if all(p is not None for p in dns_settings.values()):  # check for any `None`
+            return dns_settings
+        return None
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
