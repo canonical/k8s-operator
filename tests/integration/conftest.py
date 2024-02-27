@@ -352,6 +352,7 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: str = "coredns-mod
         await model_2.relate("coredns:dns-provider admin/{}.coredns".format(coredns_model))
         if 'coredns' not in status.remote_applications:
             raise Exception("Expected coredns")
+        log.info("Coredns related...")
     
     # TODO cleanup
     # await model.remove_offer("admin/{}.ubuntu".format(model.name), force=True) #TODO: when do we remove the offer?
