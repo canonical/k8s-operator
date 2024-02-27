@@ -37,6 +37,7 @@ def mock_reconciler_handlers(harness):
         Mapping of handler_names to their mock methods.
     """
     handler_names = {
+        "_evaluate_removal",
         "_install_k8s_snap",
         "_apply_snap_requirements",
         "_check_k8sd_ready",
@@ -53,6 +54,7 @@ def mock_reconciler_handlers(harness):
             "_create_cos_tokens",
             "_apply_cos_requirements",
             "_generate_kubeconfig",
+            "_revoke_cluster_tokens",
         }
 
     handlers = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]

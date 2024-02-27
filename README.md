@@ -1,7 +1,6 @@
 # k8s charms
 
 [![Tests K8s](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s.yaml)
-[![Tests K8s Worker](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s-worker.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/tests-k8s-worker.yaml)
 [![Integration Tests](https://github.com/canonical/k8s-operator/actions/workflows/integration_test.yaml/badge.svg)](https://github.com/canonical/k8s-operator/actions/workflows/integration_test.yaml)
 <!-- Remove this comment when the charms are published on CharmHub
 

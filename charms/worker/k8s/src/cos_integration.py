@@ -5,7 +5,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import ops
 from ops.charm import CharmBase
@@ -36,7 +36,7 @@ class JobConfig:
     metrics_path: str
     scheme: str
     target: str
-    relabel_configs: List[Dict[str, str | List[str]]]
+    relabel_configs: List[Dict[str, Union[str, List[str]]]]
 
 
 class COSIntegration(ops.Object):

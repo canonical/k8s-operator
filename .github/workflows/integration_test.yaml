@@ -20,6 +20,7 @@ jobs:
     with:
       provider: lxd
       juju-channel: 3.3/stable
+      extra-arguments: --crash-dump=on-failure
       load-test-enabled: false
       zap-enabled: false
       trivy-fs-enabled: true
