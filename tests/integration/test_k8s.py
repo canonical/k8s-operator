@@ -175,3 +175,34 @@ async def test_prometheus(traefik_address: str, cos_model: model.Model):
     ]
     for query in queries:
         await prometheus.check_metrics(query)
+async def test_coredns_integration(kubernetes_cluster):
+    """Test the coredns integration."""
+    k8s = kubernetes_cluster.applications["k8s"]
+
+    dns_relation = k8s.model.get_relation("dns-provider")
+
+    #TODO make sure this works
+    # Check if the DNS relation is set, and the domain is set to cluster.local
+    assert dns_relation, "No DNS relation found"
+    assert dns_relation.data["domain"] == "cluster.local", "Domain not set to cluster.local"
+
+
+async def test_dns(kubernetes_cluster):
+    """
+    This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
+    The test is performed by running a pod in the k8s unit and 
+    checking if it can resolve the domain name (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
+    """
+    log.info("Running DNS test...")
+    k8s = kubernetes_cluster.applications["k8s"]
+    k8s_unit = k8s.units[0]
+    # Do we need to switch models?
+    exec_cmd = f"juju exec --unit {k8s_unit} -- k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
+    action = await k8s.units[0].run(exec_cmd)
+    result = await action.wait()
+    assert result.results["return-code"] == 0, "DNS Test failed"
+
+    output = json.loads(result.results["stdout"])
+
+    #TODO test this output, https://charmhub.io/microk8s/docs/how-to-advanced-dns
+    log.info("DNS test passed.")

@@ -262,6 +262,15 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle, raise_on_blocked) as the_model:
         yield the_model
+    
+    # Creating Kubernetes cloud
+    await configure_k8s_cloud(ops_test)
+
+    # Creating Coredns model
+    coredns_model_result = await coredns_model(ops_test)
+
+    # Deploying Coredns charm
+    await manage_coredns_lifecycle(ops_test, coredns_model_result)
 
 
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
@@ -276,6 +285,63 @@ async def grafana_agent(kubernetes_cluster: Model):
 
     await kubernetes_cluster.remove_application("grafana-agent")
 
+
+@pytest.fixture(scope="module")
+async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
+    """
+    This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
+    It waits for the deployment to complete and ensures that the Coredns application is active.
+    """
+    log.info(f"Deploying Coredns ")
+
+    #TODO: check what k8s_alias is and what it should be
+    k8s_alias = coredns_model 
+    with ops_test.model_context(k8s_alias) as model:
+        await asyncio.gather(
+            model.deploy(entity_url="coredns", trust=True, channel="edge", ),
+        )
+
+        await model.block_until(
+            lambda: all("coredns" in model.applications),
+            timeout=60,
+        )
+        await model.wait_for_idle(status="active", timeout=5 * 60)
+
+        coredns_app = model.applications["coredns"]
+
+        # Consume and relate Coredns
+        await consume_core_dns(ops_test, cluster_model="your_cluster_model_name", k8s_model="k8s-model")
+
+        await ops_test.model.wait_for_idle(status="active", timeout=5 * 60)
+
+        log.info(f"Removing coredns ...")
+        cmd = "remove-application coredns --destroy-storage --force"
+        rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
+        log.info(f"{(stdout or stderr)})")
+        assert rc == 0
+        await m.block_until(lambda: "coredns" not in m.applications, timeout=60 * 10)
+
+
+async def consume_core_dns(ops_test: OpsTest, cluster_model: str, k8s_model: str = "k8s-model"):
+    """
+    This function consumes and relates Coredns in the specified Kubernetes (k8s) model with a cluster model.
+    """
+    log.info("Consuming Coredns...")
+    # TODO: find out if ops test has something that does this?
+    
+    # Juju consume command
+    consume_cmd = f"juju consume -m {cluster_model} {k8s_model}.coredns"
+    rc, stdout, stderr = await ops_test.juju(*shlex.split(consume_cmd))
+    log.info(f"{(stdout or stderr)}")
+    assert rc == 0, "Failed to consume Coredns in the cluster model."
+    # TODO: or wait for the relation to be established?
+    await ops_test.model.wait_for_idle(status="active", timeout=5 * 60) 
+
+    # Juju relate command
+    relate_cmd = f"juju relate -m {cluster_model} coredns k8s"
+    rc, stdout, stderr = await ops_test.juju(*shlex.split(relate_cmd))
+    log.info(f"{(stdout or stderr)}")
+    assert rc == 0, "Failed to relate Coredns in the cluster model with k8s"
 
 @pytest_asyncio.fixture(scope="module")
 async def cos_model(
