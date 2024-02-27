@@ -181,7 +181,7 @@ async def deploy_model(
 @pytest_asyncio.fixture(scope="module")
 async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
-    model = "main"
+    cluster_model = "main"
     charm_path = ("worker/k8s", "worker")
     charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
@@ -192,7 +192,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
 
-    async with deploy_model(request, ops_test, model, bundle) as the_model:
+    async with deploy_model(request, ops_test, cluster_model, bundle) as the_model:
         yield the_model
     
     # Creating Kubernetes cloud
@@ -202,7 +202,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     coredns_model_result = await coredns_model(ops_test)
 
     # Deploying Coredns charm
-    await manage_coredns_lifecycle(ops_test, coredns_model_result)
+    await manage_coredns_lifecycle(ops_test, coredns_model_result, cluster_model)
 
 @pytest.fixture(scope="module")
 async def configure_k8s_cloud(ops_test: OpsTest, k8s_cloud_name: str = "k8s-cloud"):
@@ -249,10 +249,9 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
     This fixture sets up a Coredns model on the specified Kubernetes (k8s) cloud for testing purposes.
     It adds the k8s model, performs necessary operations, and removes the model after the test.
     """
-    model_alias = "coredns-model"
     log.info("Creating Coredns model ...")
 
-    model_name = "coredns-system"
+    model_name = "coredns-model"
     await ops_test.juju(
         "add-model",
         f"--controller={ops_test.controller_name}",
@@ -262,7 +261,7 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
     )
 
     model = await ops_test.track_model(
-        model_alias,
+        model_name,
         model_name=model_name,
         cloud_name=k8s_cloud,
         # credential_name=k8s_cloud, #TODO: is this necessary?
@@ -270,10 +269,10 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
     )
     model_uuid = model.info.uuid
 
-    yield model, model_alias
+    yield model, model_name
 
     timeout = 5 * 60
-    await ops_test.forget_model(model_alias, timeout=timeout, allow_failure=False)
+    await ops_test.forget_model(model_name, timeout=timeout, allow_failure=False)
 
     async def model_removed():
         _, stdout, stderr = await ops_test.juju("models", "--format", "yaml")
@@ -290,7 +289,7 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
     log.info("Coredns model removed ...")
 
 @pytest.fixture(scope="module")
-async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
+async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model: str, cluster_model: str):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
     It waits for the deployment to complete and ensures that the Coredns application is active.
@@ -312,9 +311,8 @@ async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
         coredns_app = model.applications["coredns"]
 
         # Consume and relate Coredns
-        await consume_core_dns(ops_test, cluster_model="your_cluster_model_name", k8s_model="k8s-model")
-
-        await ops_test.model.wait_for_idle(status="active", timeout=5 * 60)
+        # TODO: Should this be moved out into kubernetes cluster function?
+        await integrate_coredns(ops_test, coredns_model=coredns_model, cluster_model=cluster_model)
 
     yield
 
@@ -328,23 +326,32 @@ async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
         assert rc == 0
         await m.block_until(lambda: "coredns" not in m.applications, timeout=60 * 10)
 
-async def consume_core_dns(ops_test: OpsTest, cluster_model: str, k8s_model: str = "k8s-model"):
+async def integrate_coredns(ops_test: OpsTest, coredns_model: str = "coredns-model", cluster_model: str = "main"):
     """
-    This function consumes and relates Coredns in the specified Kubernetes (k8s) model with a cluster model.
+    This function offers Coredns in the specified Kubernetes (k8s) model.
     """
-    log.info("Consuming Coredns...")
-    # TODO: find out if ops test has something that does this?
-    
-    # Juju consume command
-    consume_cmd = f"juju consume -m {cluster_model} {k8s_model}.coredns"
-    rc, stdout, stderr = await ops_test.juju(*shlex.split(consume_cmd))
-    log.info(f"{(stdout or stderr)}")
-    assert rc == 0, "Failed to consume Coredns in the cluster model."
-    # TODO: or wait for the relation to be established?
-    await ops_test.model.wait_for_idle(status="active", timeout=5 * 60) 
+    log.info("Offering Coredns...")
+    with ops_test.model_context(coredns_model) as model:
+        await model.offer("coredns:dns-provider")
+        offers = await model.list_offers()
+        await model.block_until(
+            lambda: all(offer.application_name == 'coredns' #TODO check if this name is correct
+                        for offer in offers.results))
+        log.info("Coredns offered...")
 
-    # Juju relate command
-    relate_cmd = f"juju relate -m {cluster_model} coredns k8s"
-    rc, stdout, stderr = await ops_test.juju(*shlex.split(relate_cmd))
-    log.info(f"{(stdout or stderr)}")
-    assert rc == 0, "Failed to relate Coredns in the cluster model with k8s"
+    log.info("Consuming Coredns...")
+    with ops_test.model_context(cluster_model) as model_2:
+        await model.consume("admin/{}.coredns".format(cluster_model))
+
+        status = await model_2.get_status()
+        if 'coredns' not in status.remote_applications:
+            raise Exception("Expected coredns")
+        log.info("Coredns consumed...")
+    
+        log.info("Relating Coredns...")
+        await model_2.relate("coredns:dns-provider admin/{}.coredns".format(coredns_model))
+        if 'coredns' not in status.remote_applications:
+            raise Exception("Expected coredns")
+    
+    # TODO cleanup
+    # await model.remove_offer("admin/{}.ubuntu".format(model.name), force=True) #TODO: when do we remove the offer?
