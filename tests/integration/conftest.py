@@ -298,14 +298,13 @@ async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
     log.info(f"Deploying Coredns ")
 
     #TODO: check what k8s_alias is and what it should be
-    k8s_alias = coredns_model 
-    with ops_test.model_context(k8s_alias) as model:
+    with ops_test.model_context(coredns_model ) as model:
         await asyncio.gather(
             model.deploy(entity_url="coredns", trust=True, channel="edge", ),
         )
 
         await model.block_until(
-            lambda: all("coredns" in model.applications),
+            lambda: "coredns" in model.applications,
             timeout=60,
         )
         await model.wait_for_idle(status="active", timeout=5 * 60)
@@ -319,7 +318,7 @@ async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model):
 
     yield
 
-    with ops_test.model_context(k8s_alias) as m:
+    with ops_test.model_context(coredns_model) as m:
         log.info("Removing Coredns charm...")
 
         log.info(f"Removing coredns ...")
