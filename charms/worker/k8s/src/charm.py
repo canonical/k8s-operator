@@ -289,7 +289,7 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Enabling Network"))
         self.api_manager.configure_component("network", True)
 
-    def _dns_charm_integrated(self) -> dict:
+    def _dns_charm_integrated(self) -> Optional[dict]:
         """Check if the DNS charm is integrated.
 
         Returns:
