@@ -43,7 +43,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 logger = logging.getLogger(__name__)
 
@@ -154,18 +154,16 @@ class ClusterMember(BaseModel):
     """Represents a member in the k8sd cluster.
 
     Attributes:
-        Name (str): Name of the cluster member.
-        Address (str): Address of the cluster member.
-        Role (str): Role of the member in the cluster.
-        Fingerprint (str): Fingerprint for the member.
-        Status (str): Current status of the member.
+        name (str): Name of the cluster member.
+        address (str): Address of the cluster member.
+        cluster_role (str): Cluster Role of the node in the cluster.
+        datastore_role (str): Role of the member in the cluster.
     """
 
-    Name: str
-    Address: str
-    Role: str
-    Fingerprint: str
-    Status: str
+    name: str
+    address: str
+    cluster_role: str = Field(..., alias="cluster-role")
+    datastore_role: str = Field(..., alias="datastore-role")
 
 
 class ClusterComponent(BaseModel):
@@ -184,14 +182,14 @@ class ClusterStatus(BaseModel):
     """Represents the overall status of the k8sd cluster.
 
     Attributes:
-        Ready (bool): Indicates if the cluster is ready.
-        Members (List[ClusterMember]): List of members in the cluster.
-        Components (List[ClusterComponent]): List of components in the cluster.
+        ready (bool): Indicates if the cluster is ready.
+        members (List[ClusterMember]): List of members in the cluster.
+        components (List[ClusterComponent]): List of components in the cluster.
     """
 
-    Ready: bool
-    Members: Optional[List[ClusterMember]]
-    Components: Optional[List[ClusterComponent]]
+    ready: bool
+    members: Optional[List[ClusterMember]]
+    components: Optional[List[ClusterComponent]]
 
 
 class ClusterMetadata(BaseModel):
@@ -456,7 +454,7 @@ class K8sdAPIManager:
         endpoint = "/1.0/k8sd/cluster"
         cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
         if cluster_status.metadata:
-            return cluster_status.metadata.status.Ready
+            return cluster_status.metadata.status.ready
         return False
 
     def check_k8sd_ready(self):
