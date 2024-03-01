@@ -154,10 +154,10 @@ class ClusterMember(BaseModel):
     """Represents a member in the k8sd cluster.
 
     Attributes:
-        Name (str): Name of the cluster member.
-        Address (str): Address of the cluster member.
-        Role (str): Role of the member in the cluster.
-        Fingerprint (str): Fingerprint for the member.
+        name (str): Name of the cluster member.
+        address (str): Address of the cluster member.
+        cluster_role (str): Cluster Role of the node in the cluster.
+        datastore_role (str): Role of the member in the cluster.
     """
 
     name: str
@@ -182,9 +182,9 @@ class ClusterStatus(BaseModel):
     """Represents the overall status of the k8sd cluster.
 
     Attributes:
-        Ready (bool): Indicates if the cluster is ready.
-        Members (List[ClusterMember]): List of members in the cluster.
-        Components (List[ClusterComponent]): List of components in the cluster.
+        ready (bool): Indicates if the cluster is ready.
+        members (List[ClusterMember]): List of members in the cluster.
+        components (List[ClusterComponent]): List of components in the cluster.
     """
 
     ready: bool
