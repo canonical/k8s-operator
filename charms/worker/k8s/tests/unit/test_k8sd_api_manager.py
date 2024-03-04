@@ -13,12 +13,15 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
     CreateJoinTokenResponse,
+    DNSConfig,
     EmptyResponse,
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
     TokenMetadata,
     UnixSocketHTTPConnection,
+    UpdateClusterConfigRequest,
+    UserFacingClusterConfig,
 )
 
 
@@ -208,24 +211,18 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_enable_component__enable(self, mock_send_request):
+    def test_update_cluster_config(self, mock_send_request):
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
-        self.api_manager.enable_component("foo", True)
+        dns_config = DNSConfig(enabled=True)
+        user_config = UserFacingClusterConfig(dns=dns_config)
+        request = UpdateClusterConfigRequest(config=user_config)
+        self.api_manager.update_cluster_config(request)
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo",
+            "/1.0/k8sd/cluster/config",
             "PUT",
             EmptyResponse,
-            {"status": "enabled"},
-        )
-
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_enable_component__disable(self, mock_send_request):
-        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
-
-        self.api_manager.enable_component("foo", False)
-        mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/components/foo", "PUT", EmptyResponse, {"status": "disabled"}
+            {"config": {"dns": {"enabled": True}}},
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
