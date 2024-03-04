@@ -13,6 +13,9 @@ import pytest
 from juju import application, model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from .grafana import Grafana
+from .prometheus import Prometheus
+
 log = logging.getLogger(__name__)
 
 
@@ -81,6 +84,48 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
     worker = kubernetes_cluster.applications["k8s-worker"]
     expected_nodes = len(k8s.units) + len(worker.units)
     await ready_nodes(k8s.units[0], expected_nodes)
+
+
+@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
+async def test_grafana(
+    traefik_address: str,
+    grafana_password: str,
+    expected_dashboard_titles: set,
+    cos_model: model.Model,
+):
+    """Test integration with Grafana."""
+    grafana = Grafana(model_name=cos_model.name, host=traefik_address, password=grafana_password)
+    while not await grafana.is_ready():
+        log.info("Waiting for Grafana to be ready.")
+        await asyncio.sleep(5)
+    dashboards = await grafana.dashboards_all()
+    actual_dashboard_titles = set()
+
+    for dashboard in dashboards:
+        actual_dashboard_titles.add(dashboard.get("title"))
+
+    assert expected_dashboard_titles.issubset(actual_dashboard_titles)
+
+
+@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
+async def test_prometheus(traefik_address: str, cos_model: model.Model, related_prometheus):
+    """Test integration with Prometheus."""
+    prometheus = Prometheus(model_name=cos_model.name, host=traefik_address)
+    while not await prometheus.is_ready():
+        log.info("Waiting for Prometheus to be ready.")
+        await asyncio.sleep(5)
+    queries = [
+        'up{job="kubelet", metrics_path="/metrics"} > 0',
+        'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
+        'up{job="kubelet", metrics_path="/metrics/probes"} > 0',
+        'up{job="apiserver"} > 0',
+        'up{job="kube-controller-manager"} > 0',
+        'up{job="kube-scheduler"} > 0',
+        'up{job="kube-proxy"} > 0',
+        'up{job="kube-state-metrics"} > 0',
+    ]
+    for query in queries:
+        await prometheus.check_metrics(query)
 
 
 async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
