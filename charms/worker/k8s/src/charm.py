@@ -79,6 +79,9 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
+        self.labeler = LabelMaker(
+            self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH
+        )
         self._stored.set_default(removing=False)
 
         self.cos_agent = COSAgentProvider(
@@ -438,9 +441,8 @@ class K8sCharm(ops.CharmBase):
         """Apply labels to the node."""
         status.add(ops.MaintenanceStatus("Apply Node Labels"))
         node = self.get_node_name()
-        labeler = LabelMaker(self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH)
-        if labeler.active_labels() is not None:
-            labeler.apply_node_labels()
+        if self.labeler.active_labels() is not None:
+            self.labeler.apply_node_labels()
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)

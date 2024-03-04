@@ -10,7 +10,7 @@ import json
 import logging
 
 import pytest
-from juju import model
+from juju import application, model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
@@ -83,16 +83,35 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
-async def test_nodes_labelled(kubernetes_cluster):
+async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     """Test the charms label the nodes appropriately."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    worker = kubernetes_cluster.applications["k8s-worker"]
+    testname: str = request.node.name
+    k8s: application.Application = kubernetes_cluster.applications["k8s"]
+    worker: application.Application = kubernetes_cluster.applications["k8s-worker"]
+    label_config = {"labels": f"{testname}="}
+    await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+
+    try:
+        nodes = await get_nodes(k8s.units[0])
+        labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
+        juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
+        assert len(k8s.units + worker.units) == len(
+            labelled
+        ), "Not all nodes labeled with custom-label"
+        assert len(k8s.units + worker.units) == len(
+            juju_nodes
+        ), "Not all nodes labeled as juju-charms"
+    finally:
+        await asyncio.gather(
+            k8s.reset_config(list(label_config)), worker.reset_config(list(label_config))
+        )
+
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     nodes = await get_nodes(k8s.units[0])
-    control_plane_label = "node-role.kubernetes.io/control-plane"
-    control_plane = [n for n in nodes if control_plane_label in n["metadata"]["labels"]]
-    assert len(k8s.units) == len(control_plane), "Not all control-plane nodes labeled"
+    labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
-    assert len(k8s.units + worker.units) == len(juju_nodes), "Not all nodes labeled as juju-charms"
+    assert 0 == len(labelled), "Not all nodes labeled with custom-label"
 
 
 @pytest.mark.abort_on_fail

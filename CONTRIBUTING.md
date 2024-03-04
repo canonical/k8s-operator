@@ -86,7 +86,7 @@ Since the same charm code is executed on the worker and control-plane, in some u
 
 This repo uses `pytest` and `pytest-operator` to execute functional/integration tests against the charm files. The integration tests are defined in `./tests/integration`. Because this repo consists of two charms, the integration tests will build two charm files automatically without you doing anything. If you want to use specific charm files, just make sure the `.charm` files are in the top-level paths and the integration tests will find them if they are named appropriately (eg `./k8s-worker_*.charm` or `k8s_*.charm`). The charms are deployed according to the bundle defined in `./tests/integration/test-bundle.yaml`.
 
-It's required you have a bootstrapped [juju machine controller](https://juju.is/docs/juju/manage-controllers) available. Usually, one prefers to have a controller available from their development machine to a supported cloud like `lxd` or `aws`. You can test if the controller is available by runnning:
+It's required you have a bootstrapped [juju machine controller](https://juju.is/docs/juju/manage-controllers) available. Usually, one prefers to have a controller available from their development machine to a supported cloud like `lxd` or `aws`. You can test if the controller is available by running:
 
 ```shell
 juju status -m controller
@@ -117,6 +117,6 @@ tox run -e integration-tests -- --positional --arguments
 `-k regex-pattern`: run a specific set of matching tests names ignore other passing tests
 Remember that cloud costs could be incurred for every machine -- so be sure to clean up your models on clouds if you instruct pytest-operator to not clean up the models. 
 
-See [pytest-operator](https://github.com/charmed-kubernetes/pytest-operator/blob/main/docs/reference.md) and [pytest](https://docs.pytest.org/en/7.1.x/contents.html) for more documenation on `pytest` arguments
+See [pytest-operator](https://github.com/charmed-kubernetes/pytest-operator/blob/main/docs/reference.md) and [pytest](https://docs.pytest.org/en/7.1.x/contents.html) for more documentation on `pytest` arguments
 
 
