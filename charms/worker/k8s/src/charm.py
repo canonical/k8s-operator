@@ -436,16 +436,26 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.configure_component("network", True)
 
     def _dns_charm_integrated(self) -> Optional[dict]:
-        """Check if the DNS charm is integrated.
+        """Check if the DNS charm is integrated."""
+        status.add(ops.MaintenanceStatus("Configuring DNS and Network"))
+
+        dns_config = self._get_dns_config()
+        network_config = NetworkConfig(enabled=True)
+        
+        user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
+        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
+        self.api_manager.update_cluster_config(update_request)
+
+    def _get_dns_config(self) -> Optional[dict]:
+        """Get DNS config either for the enabled built-in dns or an integrated charm.
 
         Returns:
-            dict[str, str]: The DNS settings if the DNS charm is integrated.
-            None: If the DNS charm is not integrated it returns None.
+            DNSConfig: A DNSConfig object with the cluster domain, service IP and whether the default dns is enabled or not.
         """
-        dns_settings = {"dns_domain": self.kube_dns.domain, "dns_ip": self.kube_dns.address}
-        if all(p is not None for p in dns_settings.values()):  # check for any `None`
-            return dns_settings
-        return None
+        if self.kube_dns.domain is not None and self.kube_dns.address is not None:
+            return DNSConfig(enabled=False, cluster_domain=self.kube_dns.domain, service_ip=self.kube_dns.address)
+        
+        return DNSConfig(enabled=True)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
