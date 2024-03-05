@@ -195,164 +195,47 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     async with deploy_model(request, ops_test, cluster_model, bundle) as the_model:
         yield the_model
     
-    # Creating Kubernetes cloud
-    await configure_k8s_cloud(ops_test)
-
-    # Creating Coredns model
-    coredns_model_result = await coredns_model(ops_test)
-
-    # Deploying Coredns charm
-    await manage_coredns_lifecycle(ops_test, coredns_model_result, cluster_model)
+    ops_test.add_k8s(skip_storage=True)
 
 @pytest.fixture(scope="module")
-async def configure_k8s_cloud(ops_test: OpsTest, k8s_cloud_name: str = "k8s-cloud"):
-    """
-    This fixture manages the Kubernetes (k8s) cloud for testing purposes.
-    It adds the k8s cloud and later removes it.
-    """
-    controller = await ops_test.model.get_controller()
-    try:
-        current_clouds = await controller.clouds()
-        if k8s_cloud_name in current_clouds.clouds:
-            yield k8s_cloud_name
-            return
-    finally:
-        await controller.disconnect()
-
-    with ops_test.model_context("main"):
-        log.info(f"Adding cloud '{k8s_cloud_name}'...")
-        await ops_test.juju(
-            "add-k8s",
-            k8s_cloud_name,
-            f"--controller={ops_test.controller_name}",
-            "--client",
-            "--skip-storage",
-            check=True,
-            fail_msg=f"Failed to add-k8s {k8s_cloud_name}",
-        )
-    yield k8s_cloud_name
-
-    with ops_test.model_context("main"):
-        log.info(f"Removing cloud '{k8s_cloud_name}'...")
-        await ops_test.juju(
-            "remove-cloud",
-            k8s_cloud_name,
-            "--controller",
-            ops_test.controller_name,
-            "--client",
-            check=True,
-        )
-
-@pytest.fixture(scope="module")
-async def coredns_model(k8s_cloud, ops_test: OpsTest):
-    """
-    This fixture sets up a Coredns model on the specified Kubernetes (k8s) cloud for testing purposes.
-    It adds the k8s model, performs necessary operations, and removes the model after the test.
-    """
-    log.info("Creating Coredns model ...")
-
-    model_name = "coredns-model"
-    await ops_test.juju(
-        "add-model",
-        f"--controller={ops_test.controller_name}",
-        model_name,
-        k8s_cloud,
-        "--no-switch", #TODO: does not switch to the new model, does that bite me in the next call to juju?
-    )
-
-    model = await ops_test.track_model(
-        model_name,
-        model_name=model_name,
-        cloud_name=k8s_cloud,
-        # credential_name=k8s_cloud, #TODO: is this necessary?
-        keep=False,
-    )
-    model_uuid = model.info.uuid
-
-    yield model, model_name
-
-    timeout = 5 * 60
-    await ops_test.forget_model(model_name, timeout=timeout, allow_failure=False)
-
-    async def model_removed():
-        _, stdout, stderr = await ops_test.juju("models", "--format", "yaml")
-        if _ != 0:
-            return False
-        model_list = yaml.safe_load(stdout)["models"]
-        which = [m for m in model_list if m["model-uuid"] == model_uuid]
-        return len(which) == 0
-
-    log.info("Removing Coredns model")
-    await juju.utils.block_until_with_coroutine(model_removed, timeout=timeout)
-    # Update client's model cache
-    await ops_test.juju("models")
-    log.info("Coredns model removed ...")
-
-@pytest.fixture(scope="module")
-async def manage_coredns_lifecycle(ops_test: OpsTest, coredns_model: str, cluster_model: str):
+async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.Model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
     It waits for the deployment to complete and ensures that the Coredns application is active.
     """
     log.info(f"Deploying Coredns ")
 
-    #TODO: check what k8s_alias is and what it should be
-    with ops_test.model_context(coredns_model ) as model:
-        await asyncio.gather(
-            model.deploy(entity_url="coredns", trust=True, channel="edge", ),
-        )
+    coredns_alias = "coredns-model"
+    k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=<left for dev>)
+    k8s_model = await ops_test.track_model(
+        coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
+    )
+    await k8s_model.deploy("coredns", trust=True)
+    await k8s_model.wait_for_idle(apps=["coredns"], status="active")
+    yield k8s_model
+    await ops_test.forget_model(coredns_alias)
 
-        await model.block_until(
-            lambda: "coredns" in model.applications,
-            timeout=60,
-        )
-        await model.wait_for_idle(status="active", timeout=5 * 60)
-
-        coredns_app = model.applications["coredns"]
-
-        # Consume and relate Coredns
-        # TODO: Should this be moved out into kubernetes cluster function?
-        await integrate_coredns(ops_test, coredns_model=coredns_model, cluster_model=cluster_model)
-
-    yield
-
-    with ops_test.model_context(coredns_model) as m:
-        log.info("Removing Coredns charm...")
-
-        log.info(f"Removing coredns ...")
-        cmd = "remove-application coredns --destroy-storage --force"
-        rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
-        log.info(f"{(stdout or stderr)})")
-        assert rc == 0
-        await m.block_until(lambda: "coredns" not in m.applications, timeout=60 * 10)
-
-async def integrate_coredns(ops_test: OpsTest, coredns_model: str = "coredns-model", cluster_model: str = "main"):
+@pytest.fixture(scope="module")
+async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster):
     """
     This function offers Coredns in the specified Kubernetes (k8s) model.
     """
     log.info("Offering Coredns...")
-    with ops_test.model_context(coredns_model) as model:
-        await model.offer("coredns:dns-provider")
-        offers = await model.list_offers()
-        await model.block_until(
-            lambda: all(offer.application_name == 'coredns' #TODO check if this name is correct
-                        for offer in offers.results))
-        log.info("Coredns offered...")
+    await coredns_model.create_offer("coredns:dns-provider")
+    await coredns_model.block_until(lambda: 'coredns' in coredns_model.application_offers)
+    log.info("Coredns offered...")
 
     log.info("Consuming Coredns...")
-    with ops_test.model_context(cluster_model) as model_2:
-        await model.consume("admin/{}.coredns".format(cluster_model))
-
-        status = await model_2.get_status()
-        if 'coredns' not in status.remote_applications:
-            raise Exception("Expected coredns")
-        log.info("Coredns consumed...")
+    saas = await kubernetes_cluster.consume("{coredns_model.name}.coredns")
+    assert "coredns" in kubernetes_cluster.remote_applications
+    log.info("Coredns consumed...")
     
-        log.info("Relating Coredns...")
-        await model_2.relate("coredns:dns-provider admin/{}.coredns".format(coredns_model))
-        if 'coredns' not in status.remote_applications:
-            raise Exception("Expected coredns")
-        log.info("Coredns related...")
+    log.info("Relating Coredns...")
+    await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     
-    # TODO cleanup
-    # await model.remove_offer("admin/{}.ubuntu".format(model.name), force=True) #TODO: when do we remove the offer?
+    yield
+    
+    # Now let's clean up
+    await kubernetes_cluster.remove_relation("k8s:dns-provider", "coredns")
+    await kubernetes_cluster.remove_saas(saas)
+    await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
