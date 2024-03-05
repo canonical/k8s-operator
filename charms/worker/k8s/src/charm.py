@@ -31,10 +31,14 @@ from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_kube_dns import KubeDnsRequires
 from charms.k8s.v0.k8sd_api_manager import (
+    DNSConfig,
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
+    NetworkConfig,
     UnixSocketConnectionFactory,
+    UpdateClusterConfigRequest,
+    UserFacingClusterConfig,
 )
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
@@ -83,6 +87,9 @@ class K8sCharm(ops.CharmBase):
         self.collector = TokenCollector(self, self.get_node_name())
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
 
+        self.labeler = LabelMaker(
+            self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH
+        )
         self._stored.set_default(removing=False)
 
         self.cos_agent = COSAgentProvider(
@@ -275,19 +282,23 @@ class K8sCharm(ops.CharmBase):
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
     )
-    def _configure_components(self):
+    def _enable_functionalities(self):
         """Enable necessary components for the Kubernetes cluster."""
+        status.add(ops.MaintenanceStatus("Configuring DNS"))
         dns_settings = self._dns_charm_integrated()
-        status.add(ops.MaintenanceStatus(f"Configuring DNS"))
-
         if dns_settings:
-            self.api_manager.configure_component("dns", False)
-            self.api_manager.configure_dns(dns_settings.get("dns_domain"), dns_settings.get("dns_ip"))
+            user_cluster_config = UserFacingClusterConfig(dns=dns_settings)
         else:
-            self.api_manager.configure_component("dns", True)
+            dns_config = DNSConfig(enabled=True)
+            user_cluster_config = UserFacingClusterConfig(dns=dns_config)
+        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
+        self.api_manager.update_cluster_config(update_request)
 
-        status.add(ops.MaintenanceStatus("Enabling Network"))
-        self.api_manager.configure_component("network", True)
+        status.add(ops.MaintenanceStatus("Configuring Network"))
+        network_config = NetworkConfig(enabled=True)
+        user_cluster_config = UserFacingClusterConfig(network=network_config)
+        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
+        self.api_manager.update_cluster_config(update_request)
 
     def _dns_charm_integrated(self) -> Optional[dict]:
         """Check if the DNS charm is integrated.
@@ -298,6 +309,7 @@ class K8sCharm(ops.CharmBase):
         """
         dns_settings = {"dns_domain": self.kube_dns.domain, "dns_ip": self.kube_dns.address}
         if all(p is not None for p in dns_settings.values()):  # check for any `None`
+            // TODO:make this return the proper format
             return dns_settings
         return None
 
@@ -387,7 +399,7 @@ class K8sCharm(ops.CharmBase):
         self._check_k8sd_ready()
         if self.lead_control_plane:
             self._bootstrap_k8s_snap()
-            self._configure_components()
+            self._enable_functionalities()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
@@ -461,9 +473,8 @@ class K8sCharm(ops.CharmBase):
         """Apply labels to the node."""
         status.add(ops.MaintenanceStatus("Apply Node Labels"))
         node = self.get_node_name()
-        labeler = LabelMaker(self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH)
-        if labeler.active_labels() is not None:
-            labeler.apply_node_labels()
+        if self.labeler.active_labels() is not None:
+            self.labeler.apply_node_labels()
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)
