@@ -276,60 +276,20 @@ async def grafana_agent(kubernetes_cluster: Model):
 
     await kubernetes_cluster.remove_application("grafana-agent")
 
-@pytest.fixture(scope="module")
-async def coredns_model(k8s_cloud, ops_test: OpsTest):
-    """
-    This fixture sets up a Coredns model on the specified Kubernetes (k8s) cloud for testing purposes.
-    It adds the k8s model, performs necessary operations, and removes the model after the test.
-    """
-    log.info("Creating Coredns model ...")
-
-    model_name = "coredns-model"
-    await ops_test.juju(
-        "add-model",
-        f"--controller={ops_test.controller_name}",
-        model_name,
-        k8s_cloud,
-        "--no-switch", #TODO: does not switch to the new model, does that bite me in the next call to juju?
-    )
-
-    model = await ops_test.track_model(
-        model_name,
-        model_name=model_name,
-        cloud_name=k8s_cloud,
-        # credential_name=k8s_cloud, #TODO: is this necessary?
-        keep=False,
-    )
-    model_uuid = model.info.uuid
-
-    yield model, model_name
-
-    timeout = 5 * 60
-    await ops_test.forget_model(model_name, timeout=timeout, allow_failure=False)
-
-    async def model_removed():
-        _, stdout, stderr = await ops_test.juju("models", "--format", "yaml")
-        if _ != 0:
-            return False
-        model_list = yaml.safe_load(stdout)["models"]
-        which = [m for m in model_list if m["model-uuid"] == model_uuid]
-        return len(which) == 0
-
-    log.info("Removing Coredns model")
-    await juju.utils.block_until_with_coroutine(model_removed, timeout=timeout)
-    # Update client's model cache
-    await ops_test.juju("models")
-    log.info("Coredns model removed ...")
 
 @pytest.fixture(scope="module")
-async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.Model):
+async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
     """
     log.info(f"Deploying Coredns ")
 
     coredns_alias = "coredns-model"
-    # k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=<left for dev>)
+
+    k8s = kubernetes_cluster.applications["k8s"].units[0]
+    client_config = k8s.config.load_config()
+
+    k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=client_config)
     k8s_model = await ops_test.track_model(
         coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
     )
@@ -337,6 +297,7 @@ async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.Model):
     await k8s_model.wait_for_idle(apps=["coredns"], status="active")
     yield k8s_model
     await ops_test.forget_model(coredns_alias)
+
 
 @pytest.fixture(scope="module")
 async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster):
