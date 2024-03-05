@@ -95,7 +95,7 @@ class LXDSubstrate(COSSubstrate):
             container = self.client.instances.create(config, wait=True)
             log.info("Starting Container")
             container.start(wait=True)
-            time.sleep(10)
+            time.sleep(60)
             return container
 
         except Exception as e:
