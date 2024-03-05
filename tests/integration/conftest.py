@@ -194,18 +194,16 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
     async with deploy_model(request, ops_test, cluster_model, bundle) as the_model:
         yield the_model
-    
-    ops_test.add_k8s(skip_storage=True)
 
 @pytest.fixture(scope="module")
 async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.Model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
-    It waits for the deployment to complete and ensures that the Coredns application is active.
     """
     log.info(f"Deploying Coredns ")
 
     coredns_alias = "coredns-model"
+    
     k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=<left for dev>)
     k8s_model = await ops_test.track_model(
         coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
