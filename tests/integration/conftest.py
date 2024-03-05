@@ -262,8 +262,6 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle, raise_on_blocked) as the_model:
         yield the_model
-    
-    ops_test.add_k8s(skip_storage=True)
 
 
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
@@ -327,7 +325,6 @@ async def coredns_model(k8s_cloud, ops_test: OpsTest):
 async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.Model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
-    It waits for the deployment to complete and ensures that the Coredns application is active.
     """
     log.info(f"Deploying Coredns ")
 
