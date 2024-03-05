@@ -30,10 +30,14 @@ import ops
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.k8s.v0.k8sd_api_manager import (
+    DNSConfig,
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
+    NetworkConfig,
     UnixSocketConnectionFactory,
+    UpdateClusterConfigRequest,
+    UserFacingClusterConfig,
 )
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
@@ -274,12 +278,15 @@ class K8sCharm(ops.CharmBase):
     @on_error(
         WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
     )
-    def _enable_components(self):
+    def _enable_functionalities(self):
         """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Enabling DNS"))
-        self.api_manager.enable_component("dns", True)
-        status.add(ops.MaintenanceStatus("Enabling Network"))
-        self.api_manager.enable_component("network", True)
+        status.add(ops.MaintenanceStatus("Enabling DNS and Network"))
+        dns_config = DNSConfig(enabled=True)
+        network_config = NetworkConfig(enabled=True)
+        user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
+        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
+
+        self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
@@ -367,7 +374,7 @@ class K8sCharm(ops.CharmBase):
         self._check_k8sd_ready()
         if self.lead_control_plane:
             self._bootstrap_k8s_snap()
-            self._enable_components()
+            self._enable_functionalities()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()

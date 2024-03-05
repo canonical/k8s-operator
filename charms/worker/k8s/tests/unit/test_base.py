@@ -49,7 +49,7 @@ def mock_reconciler_handlers(harness):
     if harness.charm.is_control_plane:
         handler_names |= {
             "_bootstrap_k8s_snap",
-            "_enable_components",
+            "_enable_functionalities",
             "_create_cluster_tokens",
             "_create_cos_tokens",
             "_apply_cos_requirements",

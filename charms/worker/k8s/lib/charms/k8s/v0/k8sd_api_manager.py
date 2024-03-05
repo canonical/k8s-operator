@@ -162,20 +162,142 @@ class ClusterMember(BaseModel):
 
     name: str
     address: str
-    cluster_role: str = Field(..., alias="cluster-role")
-    datastore_role: str = Field(..., alias="datastore-role")
+    cluster_role: str = Field(None, alias="cluster-role")
+    datastore_role: str = Field(None, alias="datastore-role")
 
 
-class ClusterComponent(BaseModel):
-    """Represents a component in the k8sd cluster.
+class DNSConfig(BaseModel):
+    """Configuration for the DNS settings of the cluster.
 
     Attributes:
-        name (str): Name of the component.
-        status (str): Current status of the component.
+        enabled: Optional flag which.
+        cluster_domain: The domain name of the cluster.
+        service_ip: The IP address of the DNS service within the cluster.
+        upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    name: str
-    status: str
+    enabled: Optional[bool]
+    cluster_domain: Optional[str] = Field(None, alias="cluster-domain")
+    service_ip: Optional[str] = Field(None, alias="service-ip")
+    upstream_nameservers: Optional[List[str]] = Field(None, alias="upstream-nameservers")
+
+
+class IngressConfig(BaseModel):
+    """Configuration for the ingress settings of the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of Ingress.
+        default_tls_secret: The default TLS secret for ingress.
+        enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
+    """
+
+    enabled: Optional[bool]
+    default_tls_secret: Optional[str] = Field(None, alias="default-tls-secret")
+    enable_proxy_protocol: Optional[bool] = Field(None, alias="enable-proxy-protocol")
+
+
+class LoadBalancerConfig(BaseModel):
+    """Configuration for the load balancer settings of the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of LoadBalancer.
+        cidrs: List of CIDR blocks for the load balancer.
+        l2_enabled: Optional flag to enable or disable layer 2 functionality.
+        l2_interfaces: List of layer 2 interfaces for the load balancer.
+        bgp_enabled: Optional flag to enable or disable BGP.
+        bgp_local_asn: The local ASN for BGP configuration.
+        bgp_peer_address: The peer address for BGP configuration.
+        bgp_peer_asn: The peer ASN for BGP configuration.
+        bgp_peer_port: The port for BGP peering.
+    """
+
+    enabled: Optional[bool]
+    cidrs: Optional[List[str]] = Field(None, alias="cidrs")
+    l2_enabled: Optional[bool] = Field(None, alias="l2-enabled")
+    l2_interfaces: Optional[List[str]] = Field(None, alias="l2-interfaces")
+    bgp_enabled: Optional[bool] = Field(None, alias="bgp-enabled")
+    bgp_local_asn: Optional[int] = Field(None, alias="bgp-local-asn")
+    bgp_peer_address: Optional[str] = Field(None, alias="bgp-peer-address")
+    bgp_peer_asn: Optional[int] = Field(None, alias="bgp-peer-asn")
+    bgp_peer_port: Optional[int] = Field(None, alias="bgp-peer-port")
+
+
+class LocalStorageConfig(BaseModel):
+    """Configuration for the local storage settings of the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of Storage.
+        local_path: The local path for storage.
+        reclaim_policy: The policy for reclaiming local storage.
+        set_default: Optional flag to set this as the default storage option.
+    """
+
+    enabled: Optional[bool]
+    local_path: Optional[str] = Field(None, alias="local-path")
+    reclaim_policy: Optional[str] = Field(None, alias="reclaim-policy")
+    set_default: Optional[bool] = Field(None, alias="set-default")
+
+
+class NetworkConfig(BaseModel):
+    """Configuration for the network settings of the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of Network.
+    """
+
+    enabled: Optional[bool]
+
+
+class GatewayConfig(BaseModel):
+    """Configuration for the gateway settings of the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of Gateway.
+    """
+
+    enabled: Optional[bool]
+
+
+class MetricsServerConfig(BaseModel):
+    """Configuration for the metrics server settings of the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of MetricsServer.
+    """
+
+    enabled: Optional[bool]
+
+
+class UserFacingClusterConfig(BaseModel):
+    """Aggregated configuration model for the user-facing aspects of a cluster.
+
+    Attributes:
+        network: Network configuration for the cluster.
+        dns: DNS configuration for the cluster.
+        ingress: Ingress configuration for the cluster.
+        load_balancer: Load balancer configuration for the cluster.
+        local_storage: Local storage configuration for the cluster.
+        gateway: Gateway configuration for the cluster.
+        metrics_server: Metrics server configuration for the cluster.
+    """
+
+    network: Optional[NetworkConfig] = None
+    dns: Optional[DNSConfig] = None
+    ingress: Optional[IngressConfig] = None
+    load_balancer: Optional[LoadBalancerConfig] = Field(None, alias="load-balancer")
+    local_storage: Optional[LocalStorageConfig] = Field(None, alias="local-storage")
+    gateway: Optional[GatewayConfig]
+    metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
+
+
+class UpdateClusterConfigRequest(BaseModel):
+    """Request model for updating Cluster config.
+
+    Attributes:
+        config (Optional[UserFacingClusterConfig]): The cluster configuration.
+    """
+
+    config: UserFacingClusterConfig
 
 
 class ClusterStatus(BaseModel):
@@ -184,12 +306,12 @@ class ClusterStatus(BaseModel):
     Attributes:
         ready (bool): Indicates if the cluster is ready.
         members (List[ClusterMember]): List of members in the cluster.
-        components (List[ClusterComponent]): List of components in the cluster.
+        config (Optional[UserFacingClusterConfig]): information about the cluster configuration.
     """
 
-    ready: bool
+    ready: Optional[bool] = False
     members: Optional[List[ClusterMember]]
-    components: Optional[List[ClusterComponent]]
+    config: Optional[UserFacingClusterConfig]
 
 
 class ClusterMetadata(BaseModel):
@@ -418,15 +540,14 @@ class K8sdAPIManager:
         body = {"name": name, "force": force}
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
-    def enable_component(self, name: str, enable: bool):
+    def update_cluster_config(self, config: UpdateClusterConfigRequest):
         """Enable or disable a k8s component.
 
         Args:
-            name (str): Name of the component.
-            enable (bool): True to enable, False to disable the component.
+            config (UpdateClusterConfigRequest): The cluster configuration.
         """
-        endpoint = f"/1.0/k8sd/components/{name}"
-        body = {"status": "enabled" if enable else "disabled"}
+        endpoint = "/1.0/k8sd/cluster/config"
+        body = config.dict(exclude_none=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
     def is_cluster_bootstrapped(self) -> bool:
