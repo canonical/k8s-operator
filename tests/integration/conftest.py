@@ -6,6 +6,8 @@ import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass, field
+from kubernetes import config as k8s_config
+from kubernetes.client import Configuration
 from itertools import chain
 from pathlib import Path
 from typing import List, Mapping, Optional
@@ -196,8 +198,24 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     async with deploy_model(request, ops_test, cluster_model, bundle) as the_model:
         yield the_model
 
-@pytest.fixture(scope="module")
-async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model.Model):
+
+@pytest_asyncio.fixture(scope="module")
+async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: juju.model.Model):
+    """
+    Fixture to pull the kubeconfig out of the kubernetes cluster
+    """
+    k8s = kubernetes_cluster.applications["k8s"].units[0]
+    action = await k8s.run("k8s config")
+    result = await action.wait()
+    assert result.results["return-code"] == 0, "Failed to get kubeconfig with kubectl"
+
+    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
+    kubeconfig_path.write_text(result.results["stdout"])
+    yield kubeconfig_path
+
+
+@pytest_asyncio.fixture(scope="module")
+async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
     """
@@ -205,12 +223,11 @@ async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model.Model)
 
     coredns_alias = "coredns-model"
 
-    k8s = kubernetes_cluster.applications["k8s"].units[0]
-    client_config = await get_kubeconfig(k8s)
+    config = type.__call__(Configuration)
+    k8s_config.load_config(client_configuration=config, config_file=str(cluster_kubeconfig))
 
     log.info("Adding k8s cloud")
-    log.info("Kubeconfig: %s", client_config)
-    k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=client_config)
+    k8s_cloud = await ops_test.add_k8s(skip_storage=True, kubeconfig=config)
     k8s_model = await ops_test.track_model(
         coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
     )
@@ -219,22 +236,8 @@ async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model.Model)
     yield k8s_model
     await ops_test.forget_model(coredns_alias)
 
-async def get_kubeconfig(k8s):
-    """Return Node list
 
-    Args:
-        k8s: any k8s unit
-
-    Returns:
-        kubeconfig
-    """
-    action = await k8s.run("k8s kubectl config view --raw")
-    result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to get kubeconfig with kubectl"
-    log.info("Parsing node list...")
-    return result.results["stdout"]
-
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module")
 async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster):
     """
     This function offers Coredns in the specified Kubernetes (k8s) model.
