@@ -175,7 +175,7 @@ async def test_prometheus(traefik_address: str, cos_model: model.Model):
     ]
     for query in queries:
         await prometheus.check_metrics(query)
-async def test_coredns_integration(kubernetes_cluster, integrate_coredns):
+async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """Test the coredns integration."""
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
@@ -194,7 +194,7 @@ async def test_coredns_integration(kubernetes_cluster, integrate_coredns):
     assert dns_relation, "No DNS relation found"
     assert dns_relation.data["domain"] == "cluster.local", "Domain not set to cluster.local"
 
-async def test_dns(kubernetes_cluster, integrate_coredns):
+async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
     The test is performed by running a pod in the k8s unit and 

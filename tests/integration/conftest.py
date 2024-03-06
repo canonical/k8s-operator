@@ -289,6 +289,8 @@ async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
     k8s = kubernetes_cluster.applications["k8s"].units[0]
     client_config = await get_kubeconfig(k8s)
 
+    log.info("Adding k8s cloud")
+    log.info("Kubeconfig: %s", client_config)
     k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=client_config)
     k8s_model = await ops_test.track_model(
         coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
