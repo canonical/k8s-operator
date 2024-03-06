@@ -116,8 +116,10 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
 async def test_coredns_integration(kubernetes_cluster, integrate_coredns):
     """Test the coredns integration."""
     k8s = kubernetes_cluster.applications["k8s"]
+    k8s_unit = k8s.units[0]
 
-    dns_relation = k8s.model.get_relation("dns-provider")
+    dns_relation = k8s_unit.get_relation("dns-provider")
+    log.info("DNS relation: %s", dns_relation)
 
     #TODO make sure this works
     # Check if the DNS relation is set, and the domain is set to cluster.local
