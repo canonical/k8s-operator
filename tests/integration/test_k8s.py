@@ -187,7 +187,7 @@ async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_co
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
 
-    coredns = integrate_coredns.applications["coredns"]
+    coredns = coredns_model.applications["coredns"]
     coredns_unit = coredns.units[0]
     log.info("Coredns: %s", coredns)
     log.info("coredns offers %s", coredns.application_offers)
