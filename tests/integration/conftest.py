@@ -278,7 +278,7 @@ async def grafana_agent(kubernetes_cluster: Model):
 
 
 @pytest.fixture(scope="module")
-async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
+async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model.Model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
     """
@@ -335,7 +335,7 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     
-    yield coredns_model
+    yield
     
     # Now let's clean up
     await kubernetes_cluster.remove_relation("k8s:dns-provider", "coredns")
