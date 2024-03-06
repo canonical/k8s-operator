@@ -180,6 +180,12 @@ async def test_coredns_integration(kubernetes_cluster, integrate_coredns):
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
 
+    coredns = integrate_coredns.applications["coredns"]
+    coredns_unit = coredns.units[0]
+    log.info("Coredns: %s", coredns)
+    log.info("coredns offers %s", coredns.application_offers)
+    log.info("K8s: %s", k8s_unit)
+
     dns_relation = k8s_unit.get_relation("dns-provider")
     log.info("DNS relation: %s", dns_relation)
 
