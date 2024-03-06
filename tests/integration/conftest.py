@@ -287,7 +287,7 @@ async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
     coredns_alias = "coredns-model"
 
     k8s = kubernetes_cluster.applications["k8s"].units[0]
-    client_config = k8s.config.load_config()
+    client_config = await get_kubeconfig(k8s)
 
     k8s_cloud = await ops_test.add_k8s(skip_storage=False, kubeconfig=client_config)
     k8s_model = await ops_test.track_model(
@@ -297,6 +297,22 @@ async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
     await k8s_model.wait_for_idle(apps=["coredns"], status="active")
     yield k8s_model
     await ops_test.forget_model(coredns_alias)
+
+
+async def get_kubeconfig(k8s):
+    """Return Node list
+
+    Args:
+        k8s: any k8s unit
+
+    Returns:
+        kubeconfig
+    """
+    action = await k8s.run("k8s kubectl config view --raw")
+    result = await action.wait()
+    assert result.results["return-code"] == 0, "Failed to get kubeconfig with kubectl"
+    log.info("Parsing node list...")
+    return result.results["stdout"]
 
 
 @pytest.fixture(scope="module")
