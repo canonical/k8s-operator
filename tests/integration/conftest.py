@@ -195,7 +195,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     async with deploy_model(request, ops_test, cluster_model, bundle) as the_model:
         yield the_model
 
-@contextlib.asynccontextmanager
+@pytest_asyncio.fixture(scope="module")
 async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
@@ -234,7 +234,7 @@ async def get_kubeconfig(k8s):
     return result.results["stdout"]
 
 @pytest_asyncio.fixture(scope="module")
-async def integrate_coredns(request: pytest.FixtureRequest, ops_test: OpsTest, coredns_model, kubernetes_cluster):
+async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster):
     """
     This function offers Coredns in the specified Kubernetes (k8s) model.
     """
