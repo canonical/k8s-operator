@@ -116,12 +116,14 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
 async def test_fixtures(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """Test the coredns integration."""
     log.info("Testing coredns integration...")
-async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
+
+@pytest.mark.usefixtures("integrate_coredns")
+async def test_coredns_integration(kubernetes_cluster: model.Model, coredns_model: model.Model):
     """Test the coredns integration."""
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
 
-    coredns = integrate_coredns.applications["coredns"]
+    coredns = coredns_model.applications["coredns"]
     coredns_unit = coredns.units[0]
     log.info("Coredns: %s", coredns)
     log.info("coredns offers %s", coredns.application_offers)
