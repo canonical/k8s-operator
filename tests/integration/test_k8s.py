@@ -113,6 +113,9 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
     assert 0 == len(labelled), "Not all nodes labeled with custom-label"
 
+async def test_fixtures(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
+    """Test the coredns integration."""
+    log.info("Testing coredns integration...")
 async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """Test the coredns integration."""
     k8s = kubernetes_cluster.applications["k8s"]

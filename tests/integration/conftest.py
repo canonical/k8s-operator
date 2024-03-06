@@ -14,6 +14,7 @@ import shlex
 import pytest
 import pytest_asyncio
 import yaml
+import juju.model
 from pytest_operator.plugin import OpsTest
 
 log = logging.getLogger(__name__)
@@ -195,8 +196,8 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     async with deploy_model(request, ops_test, cluster_model, bundle) as the_model:
         yield the_model
 
-@pytest_asyncio.fixture(scope="module")
-async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model):
+@pytest.fixture(scope="module")
+async def coredns_model(ops_test: OpsTest, kubernetes_cluster: juju.model.Model):
     """
     This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
     """
@@ -233,7 +234,7 @@ async def get_kubeconfig(k8s):
     log.info("Parsing node list...")
     return result.results["stdout"]
 
-@pytest_asyncio.fixture(scope="module")
+@pytest.fixture(scope="module")
 async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster):
     """
     This function offers Coredns in the specified Kubernetes (k8s) model.
@@ -251,7 +252,7 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     
-    yield coredns_model
+    yield
     
     # Now let's clean up
     await kubernetes_cluster.remove_relation("k8s:dns-provider", "coredns")
