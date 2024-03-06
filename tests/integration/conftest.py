@@ -333,7 +333,7 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     
-    yield
+    yield coredns_model
     
     # Now let's clean up
     await kubernetes_cluster.remove_relation("k8s:dns-provider", "coredns")

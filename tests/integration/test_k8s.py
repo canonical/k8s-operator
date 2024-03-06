@@ -207,7 +207,8 @@ async def test_dns(kubernetes_cluster, integrate_coredns):
     exec_cmd = f"juju exec --unit {k8s_unit} -- k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
     action = await k8s.units[0].run(exec_cmd)
     result = await action.wait()
-    assert result.results["return-code"] == 0, "DNS Test failed"
+    log.info("DNS test result: %s", result)
+    assert result.results["return-code"] == 0, "DNS Test failed."
 
     output = json.loads(result.results["stdout"])
 
