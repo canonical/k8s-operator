@@ -175,6 +175,8 @@ async def test_prometheus(traefik_address: str, cos_model: model.Model):
     ]
     for query in queries:
         await prometheus.check_metrics(query)
+
+
 async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """Test the coredns integration."""
     k8s = kubernetes_cluster.applications["k8s"]
