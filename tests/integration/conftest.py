@@ -316,7 +316,7 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     yield k8s_model
 
     # the cluster is consuming this model: remove saas first
-    await ops_test.forget_model(coredns_alias)
+    await ops_test.forget_model(coredns_alias, timeout=40)
 
 
 @pytest_asyncio.fixture(scope="module")
@@ -347,10 +347,11 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, 
     yield
     
     # Now let's clean up
-    await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
-    await kubernetes_cluster.remove_application("coredns")
+    cluster = kubernetes_cluster
+    await kubernetes_cluster.applications["k8s"].destroy_relation("k8s:dns-provider", "coredns")
+    await kubernetes_cluster.wait_for_idle(status="active")  
     await kubernetes_cluster.remove_saas(saas)
-
+    await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
 
 
 @pytest_asyncio.fixture(scope="module")
