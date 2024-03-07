@@ -16,6 +16,7 @@ certificate storage.
 """
 
 import logging
+import os
 import re
 import shlex
 import socket
@@ -23,7 +24,7 @@ import subprocess
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Optional
+from typing import Dict, Optional
 
 import charms.contextual_status as status
 import ops
@@ -141,6 +142,17 @@ class K8sCharm(ops.CharmBase):
     def is_dying(self) -> bool:
         """Returns true if the unit is being removed."""
         return bool(self._stored.removing)
+
+    def _apply_proxy_environment(self):
+        """Apply the proxy settings from environment variables."""
+        proxy_settings = self._get_proxy_env()
+        if proxy_settings:
+            with open("/etc/environment", mode="r", encoding="utf-8") as file:
+                current_env = dict(line.strip().split("=", 1) for line in file if "=" in line)
+
+            current_env.update(proxy_settings)
+            with open("/etc/environment", mode="w", encoding="utf-8") as file:
+                file.write("\n".join([f"{k}={v}" for k, v in current_env.items()]))
 
     def get_node_name(self) -> str:
         """Return the lowercase hostname.
@@ -310,6 +322,27 @@ class K8sCharm(ops.CharmBase):
             log.exception("Failed to get COS token.")
         return []
 
+    def _get_proxy_env(self) -> Dict[str, str]:
+        """Retrieve the Juju model config proxy values.
+
+        Returns:
+            Dict: A dictionary containing the proxy settings,
+                or None if no values are configured.
+        """
+        proxy_env_keys = {
+            "JUJU_CHARM_HTTP_PROXY",
+            "JUJU_CHARM_HTTPS_PROXY",
+            "JUJU_CHARM_NO_PROXY",
+        }
+        proxy_settings = {}
+        for key in proxy_env_keys:
+            env_key = key.split("JUJU_CHARM_")[-1]
+            env_value = os.getenv(key)
+            if env_value:
+                proxy_settings[env_key] = env_value
+                proxy_settings[env_key.lower()] = env_value
+        return proxy_settings
+
     def _get_snap_version(self) -> Optional[str]:
         """Retrieve the version of the installed Kubernetes snap package.
 
@@ -369,6 +402,7 @@ class K8sCharm(ops.CharmBase):
             self._last_gasp(event)
             return
 
+        self._apply_proxy_environment()
         self._install_k8s_snap()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
