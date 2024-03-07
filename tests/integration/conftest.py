@@ -314,11 +314,14 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     await k8s_model.deploy("coredns", trust=True)
     await k8s_model.wait_for_idle(apps=["coredns"], status="active")
     yield k8s_model
+
+    # Now let's clean up
+    await k8s_model.remove_offer("coredns:dns-provider", force=True)
     await ops_test.forget_model(coredns_alias)
 
 
-@pytest.fixture(scope="module")
-async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster):
+@pytest_asyncio.fixture(scope="module")
+async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, kubernetes_cluster: juju.model.Model):
     """
     This function offers Coredns in the specified Kubernetes (k8s) model.
     """
@@ -328,12 +331,19 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model, kubernetes_cluster
     log.info("Coredns offered...")
 
     log.info("Consuming Coredns...")
-    saas = await kubernetes_cluster.consume("{coredns_model.name}.coredns")
-    assert "coredns" in kubernetes_cluster.remote_applications
+    model_owner = untag("user-", coredns_model.info.owner_tag)
+    
+    await coredns_model.wait_for_idle(status="active")
+    await kubernetes_cluster.wait_for_idle(status="active")    
+
+    offer_url = f"{model_owner}/{coredns_model.name}.coredns"
+    saas = await kubernetes_cluster.consume(offer_url)
+
     log.info("Coredns consumed...")
     
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
+    assert "coredns" in kubernetes_cluster.remote_applications
     
     yield
     
