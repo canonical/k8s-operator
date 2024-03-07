@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 description: "LXD profile for Canonical Kubernetes"
 config:
-  linux.kernel_modules: ip_vs,ip_vs_rr,ip_vs_wrr,ip_vs_sh,ip_tables,ip6_tables,iptable_raw,netlink_diag,nf_nat,overlay,br_netfilter,xt_socket
+  linux.kernel_modules: ip_vs,ip_vs_rr,ip_vs_wrr,ip_vs_sh,ip_tables,ip6_tables,netlink_diag,nf_nat,overlay,br_netfilter
   raw.lxc: |
     lxc.apparmor.profile=unconfined
     lxc.mount.auto=proc:rw sys:rw cgroup:rw
@@ -14,9 +14,4 @@ devices:
   aadisable:
     path: /dev/kmsg
     source: /dev/kmsg
-    type: unix-char
-  dev-loop-control:
-    major: "10"
-    minor: "237"
-    path: /dev/loop-control
     type: unix-char
