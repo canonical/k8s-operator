@@ -315,8 +315,7 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     await k8s_model.wait_for_idle(apps=["coredns"], status="active")
     yield k8s_model
 
-    # Now let's clean up
-    await k8s_model.remove_offer("coredns:dns-provider", force=True)
+    # the cluster is consuming this model: remove saas first
     await ops_test.forget_model(coredns_alias)
 
 
@@ -348,29 +347,10 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, 
     yield
     
     # Now let's clean up
-    await kubernetes_cluster.remove_relation("k8s:dns-provider", "coredns")
-    await kubernetes_cluster.remove_saas(saas)
     await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
+    await kubernetes_cluster.remove_application("coredns")
+    await kubernetes_cluster.remove_saas(saas)
 
-    # Juju relate command
-    relate_cmd = f"juju relate -m {cluster_model} coredns k8s"
-    rc, stdout, stderr = await ops_test.juju(*shlex.split(relate_cmd))
-    log.info(f"{(stdout or stderr)}")
-    assert rc == 0, "Failed to relate Coredns in the cluster model with k8s"
-
-    status = await model_2.get_status()
-    if 'coredns' not in status.remote_applications:
-        raise Exception("Expected coredns")
-    log.info("Coredns consumed...")
-
-    log.info("Relating Coredns...")
-    await model_2.relate("coredns:dns-provider admin/{}.coredns".format(coredns_model))
-    if 'coredns' not in status.remote_applications:
-        raise Exception("Expected coredns")
-    log.info("Coredns related...")
-    
-    # TODO cleanup
-    # await model.remove_offer("admin/{}.ubuntu".format(model.name), force=True) #TODO: when do we remove the offer?
 
 
 @pytest_asyncio.fixture(scope="module")
