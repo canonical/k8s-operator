@@ -236,8 +236,7 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     await k8s_model.wait_for_idle(apps=["coredns"], status="active")
     yield k8s_model
 
-    # Now let's clean up
-    await k8s_model.remove_offer("coredns:dns-provider", force=True)
+    # the cluster is consuming this model: remove saas first
     await ops_test.forget_model(coredns_alias)
 
 
@@ -269,6 +268,6 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, 
     yield
     
     # Now let's clean up
-    await kubernetes_cluster.remove_relation("k8s:dns-provider", "coredns")
-    await kubernetes_cluster.remove_saas(saas)
     await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
+    await kubernetes_cluster.remove_application("coredns")
+    await kubernetes_cluster.remove_saas(saas)
