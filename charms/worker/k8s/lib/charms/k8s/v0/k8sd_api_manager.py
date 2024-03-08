@@ -335,11 +335,11 @@ class GetClusterStatusResponse(BaseRequestModel):
     metadata: Optional[ClusterMetadata] = None
 
 
-class KubeConfigMetdata(BaseModel):
+class KubeConfigMetadata(BaseModel):
     """Metadata containing kubeconfig.
 
     Attributes:
-        kubeconfig (KubeConfigMetdata): The status of the k8sd cluster.
+        kubeconfig (KubeConfigMetadata): The status of the k8sd cluster.
     """
 
     kubeconfig: str
@@ -349,10 +349,10 @@ class GetKubeConfigResponse(BaseRequestModel):
     """Response model for getting the kubeconfig from the cluster.
 
     Attributes:
-        metadata (KubeconfigMetdata): Metadata containing the kubeconfig.
+        metadata (KubeconfigMetadata): Metadata containing the kubeconfig.
     """
 
-    metadata: KubeConfigMetdata
+    metadata: KubeConfigMetadata
 
 
 T = TypeVar("T", bound=BaseRequestModel)
