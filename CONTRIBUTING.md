@@ -111,6 +111,10 @@ Running the integration tests with extra arguments can be accomplished with
 tox run -e integration-tests -- --positional --arguments
 ```
 
+#### COS Integration
+
+The COS integration tests are optional as these are slow/heavy tests. Currently, this suite only runs on LXD. If you are modifying something related to the COS integration, you can validate your changes through integration testing using the flag `--cos`. Also, when submitting a Pull Request with changes related to COS, you must include the `[COS]` tag in your Pull Request description. This will instruct GitHub Actions to execute the respective validation tests against your changes.
+
 #### Useful arguments
 `--keep-models`: Doesn't delete the model once the integration tests are finished
 `--model`: Rerun the test with a given model name -- if it already exist, the integration tests will use it
