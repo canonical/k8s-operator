@@ -92,6 +92,8 @@ class BootstrapConfig(BaseModel):
     """
 
     components: List[str] = ["dns", "metrics-server", "network"]
+    control_plane_taints: List[str] = Field(alias="control-plane-taints", default_factory=list)
+    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
     cluster_cidr: str = Field("10.1.0.0/16", alias="cluster-cidr")
     service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
     rbac: bool = Field(True, alias="enable-rbac")
