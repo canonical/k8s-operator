@@ -7,7 +7,6 @@ import urllib.request
 from typing import Optional
 
 
-
 class Prometheus:
     """A class for managing interactions with a running instance of Prometheus."""
 

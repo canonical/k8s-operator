@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 
 class COSSubstrate(Protocol):
     """Interface for managing a COS substrate."""
+
     def create_substrate(self) -> str:
         """Create a COS substrate.
 
@@ -24,7 +25,7 @@ class COSSubstrate(Protocol):
         """
         ...
 
-    def teardown_substrate(self): 
+    def teardown_substrate(self):
         """Teardown the COS substrate."""
         ...
 
@@ -165,6 +166,18 @@ class LXDSubstrate(COSSubstrate):
         self.apply_profile()
         reserved_start, reserved_stop = self.create_network(self.network_name)
         container = self.create_container(self.container_name)
+        MAX_ATTEMPTS = 10
+        SLEEP_DURATION = 30
+        for _ in range(MAX_ATTEMPTS):
+            rc, _, _ = self.execute_command(
+                container, ["snap", "wait", "system", "seed.loaded"]
+            )
+            if rc == 0:
+                break
+            time.sleep(SLEEP_DURATION)
+        else:
+            raise RuntimeError("Failed to wait for system seed")
+
         self.install_k8s(container)
         self.enable_microk8s_addons(container, f"{reserved_start}-{reserved_stop}")
         return self.get_kubeconfig(container)
@@ -200,7 +213,11 @@ class LXDSubstrate(COSSubstrate):
         """
         addons = ["dns", "hostpath-storage", f"metallb:{ranges}"]
         for addon in addons:
-            self.execute_command(container, ["sudo", "microk8s", "enable", addon])
+            rc, stdout, stderr = self.execute_command(
+                container, ["sudo", "microk8s", "enable", addon]
+            )
+            if rc != 0:
+                log.error(f"Failed to enable {addon}: {stdout}, {stderr}")
 
     def execute_command(self, container, command):
         """Execute a command inside a container.
@@ -213,7 +230,7 @@ class LXDSubstrate(COSSubstrate):
         try:
             rc, stdout, stderr = container.execute(command)
             log.info(f"Command executed with return code {rc}. stdout: {stdout}, stderr: {stderr}")
-            return stdout
+            return rc, stdout, stderr
         except Exception as e:
             log.error(f"Failed to execute command: {e}")
 
@@ -226,7 +243,10 @@ class LXDSubstrate(COSSubstrate):
         Returns:
             str: The kubeconfig.
         """
-        return self.execute_command(container, ["microk8s", "config"])
+        rc, stdout, stderr = self.execute_command(container, ["microk8s", "config"])
+        if rc != 0:
+            log.error(f"Failed to get kubeconfig: {stdout}, {stderr}")
+        return stdout
 
     def install_k8s(self, container):
         """Install Kubernetes inside a container.

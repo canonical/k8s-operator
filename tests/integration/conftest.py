@@ -7,11 +7,10 @@ import contextlib
 import json
 import logging
 import shlex
-import tempfile
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import List, Mapping, Optional, Tuple
+from typing import List, Mapping, Optional
 
 import pytest
 import pytest_asyncio
@@ -20,7 +19,7 @@ from juju.model import Model
 from juju.tag import untag
 from kubernetes import config as k8s_config
 from kubernetes.client import Configuration
-from pytest_operator.plugin import OpsTest, ops_test
+from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
 from .helpers import get_address
@@ -38,6 +37,7 @@ def pytest_addoption(parser: pytest.Parser):
         parser: Pytest parser.
     """
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
+    parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
 
 
 @dataclass
@@ -206,21 +206,19 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 @pytest_asyncio.fixture(scope="module")
 async def grafana_agent(ops_test: OpsTest, kubernetes_cluster: Model):
     """Deploy Grafana Agent."""
-    with ops_test.model_context("main") as model:
-        await model.deploy("grafana-agent", channel="stable")
-        await model.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
-        await model.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
-        await model.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
+    await kubernetes_cluster.deploy("grafana-agent", channel="stable")
+    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
+    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
+    await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
 
-        yield
+    yield
 
-        await model.remove_application("grafana-agent")
+    await kubernetes_cluster.remove_application("grafana-agent")
 
 
 @pytest_asyncio.fixture(scope="module")
 async def cos_model(ops_test: OpsTest, kubernetes_cluster: Model, grafana_agent):
     """Create a COS substrate and a K8s model."""
-    log.info("Creating COS substrate...")
     container_name = "cos-substrate"
     network_name = "cos-network"
     manager = LXDSubstrate(container_name, network_name)
@@ -235,8 +233,7 @@ async def cos_model(ops_test: OpsTest, kubernetes_cluster: Model, grafana_agent)
     k8s_model = await ops_test.track_model(
         "cos", cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
     )
-    with ops_test.model_context("cos"):
-        yield k8s_model
+    yield k8s_model
 
     await ops_test.forget_model("cos", timeout=10 * 60, allow_failure=True)
 
@@ -267,7 +264,6 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
     await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
 
     yield
-
     log.info("Removing COS Lite charms...")
     for charm in cos_charms:
         log.info(f"Removing {charm}...")
@@ -279,9 +275,10 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def traefik_address(ops_test: OpsTest, cos_lite_installed):
+async def traefik_address(ops_test: OpsTest, cos_model: Model, cos_lite_installed):
     """Fixture to get Traefik address."""
-    address = await get_address(ops_test=ops_test, app_name="traefik")
+    with ops_test.model_context("cos"):
+        address = await get_address(ops_test=ops_test, app_name="traefik")
     yield address
 
 
