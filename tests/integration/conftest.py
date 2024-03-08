@@ -4,7 +4,9 @@
 """Fixtures for charm tests."""
 import asyncio
 import contextlib
+import json
 import logging
+import shlex
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
@@ -13,7 +15,14 @@ from typing import List, Mapping, Optional
 import pytest
 import pytest_asyncio
 import yaml
+from juju.model import Model
+from juju.tag import untag
+from kubernetes import config as k8s_config
+from kubernetes.client import Configuration
 from pytest_operator.plugin import OpsTest
+
+from .cos_substrate import LXDSubstrate
+from .helpers import get_address
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +37,19 @@ def pytest_addoption(parser: pytest.Parser):
         parser: Pytest parser.
     """
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
+    parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "cos: mark COS integration tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--cos"):
+        skip_cos = pytest.mark.skip(reason="need --cos option to run")
+        for item in items:
+            if item.get_closest_marker("cos"):
+                item.add_marker(skip_cos)
 
 
 @dataclass
@@ -191,3 +213,161 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
         yield the_model
+
+
+@pytest_asyncio.fixture(scope="module")
+async def grafana_agent(ops_test: OpsTest, kubernetes_cluster: Model):
+    """Deploy Grafana Agent."""
+    await kubernetes_cluster.deploy("grafana-agent", channel="stable")
+    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
+    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
+    await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
+
+    yield
+
+    await kubernetes_cluster.remove_application("grafana-agent")
+
+
+@pytest_asyncio.fixture(scope="module")
+async def cos_model(ops_test: OpsTest, kubernetes_cluster: Model, grafana_agent):
+    """Create a COS substrate and a K8s model."""
+    container_name = "cos-substrate"
+    network_name = "cos-network"
+    manager = LXDSubstrate(container_name, network_name)
+
+    config = manager.create_substrate()
+    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
+    kubeconfig_path.write_text(config)
+    config = type.__call__(Configuration)
+    k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
+
+    k8s_cloud = await ops_test.add_k8s(kubeconfig=config, skip_storage=False)
+    k8s_model = await ops_test.track_model(
+        "cos", cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
+    )
+    yield k8s_model
+
+    await ops_test.forget_model("cos", timeout=10 * 60, allow_failure=True)
+
+    manager.teardown_substrate()
+
+
+@pytest_asyncio.fixture(scope="module")
+async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
+    """Install COS Lite bundle."""
+    log.info("Deploying COS bundle ...")
+    cos_charms = ["alertmanager", "catalogue", "grafana", "loki", "prometheus", "traefik"]
+    overlays = [
+        ops_test.Bundle("cos-lite", "edge"),
+        Path("tests/integration/data/cos-offers-overlay.yaml"),
+    ]
+
+    bundle, *overlays = await ops_test.async_render_bundles(*overlays)
+    cmd = f"juju deploy -m {cos_model.name} {bundle} --trust " + " ".join(
+        f"--overlay={f}" for f in overlays
+    )
+    rc, stdout, stderr = await ops_test.run(*shlex.split(cmd))
+    assert rc == 0, f"COS Lite failed to deploy: {(stderr or stdout).strip()}"
+
+    await cos_model.block_until(
+        lambda: all(app in cos_model.applications for app in cos_charms),
+        timeout=60,
+    )
+    await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
+
+    yield
+    log.info("Removing COS Lite charms...")
+    with ops_test.model_context("cos"):
+        for charm in cos_charms:
+            log.info(f"Removing {charm}...")
+            cmd = f"remove-application {charm} --destroy-storage --force --no-prompt"
+            rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
+            log.info(f"{(stdout or stderr)})")
+            assert rc == 0
+            await cos_model.block_until(
+                lambda: charm not in cos_model.applications, timeout=60 * 10
+            )
+
+
+@pytest_asyncio.fixture(scope="module")
+async def traefik_address(ops_test: OpsTest, cos_model: Model, cos_lite_installed):
+    """Fixture to get Traefik address."""
+    with ops_test.model_context("cos"):
+        address = await get_address(ops_test=ops_test, app_name="traefik")
+    yield address
+
+
+@pytest_asyncio.fixture(scope="module")
+async def expected_dashboard_titles():
+    """Fixture to get expected Grafana dashboard titles."""
+    grafana_dir = Path("charms/worker/k8s/src/grafana_dashboards")
+    grafana_files = [p for p in grafana_dir.iterdir() if p.is_file() and p.name.endswith(".json")]
+    titles = []
+    for path in grafana_files:
+        dashboard = json.loads(path.read_text())
+        titles.append(dashboard["title"])
+    return set(titles)
+
+
+@pytest_asyncio.fixture(scope="module")
+async def related_grafana(ops_test: OpsTest, cos_model: Model, cos_lite_installed):
+    """Fixture to integrate with Grafana."""
+    model_owner = untag("user-", cos_model.info.owner_tag)
+    cos_model_name = cos_model.name
+
+    with ops_test.model_context("main") as model:
+        log.info("Integrating with Grafana")
+        await ops_test.model.integrate(
+            "grafana-agent",
+            f"{model_owner}/{cos_model_name}.grafana-dashboards",
+        )
+        with ops_test.model_context("cos") as k8s_model:
+            await k8s_model.wait_for_idle(status="active")
+        await ops_test.model.wait_for_idle(status="active")
+
+    yield
+
+    with ops_test.model_context("main") as model:
+        log.info("Removing Grafana SAAS ...")
+        await ops_test.model.remove_saas("grafana-dashboards")
+    with ops_test.model_context("cos") as model:
+        log.info("Removing Grafana Offer...")
+        await model.remove_offer(f"{model.name}.grafana-dashboards", force=True)
+
+
+@pytest_asyncio.fixture(scope="module")
+async def grafana_password(ops_test, cos_model: Model, related_grafana):
+    """Fixture to get Grafana password."""
+    with ops_test.model_context("cos"):
+        action = (
+            await ops_test.model.applications["grafana"].units[0].run_action("get-admin-password")
+        )
+        action = await action.wait()
+        yield action.results["admin-password"]
+
+
+@pytest_asyncio.fixture(scope="module")
+async def related_prometheus(ops_test: OpsTest, cos_model, cos_lite_installed):
+    """Fixture to integrate with Prometheus."""
+    model_owner = untag("user-", cos_model.info.owner_tag)
+    cos_model_name = cos_model.name
+
+    with ops_test.model_context("main") as model:
+        log.info("Integrating with Prometheus")
+        relation = await ops_test.model.integrate(
+            "grafana-agent",
+            f"{model_owner}/{cos_model_name}.prometheus-receive-remote-write",
+        )
+        await ops_test.model.wait_for_idle(status="active")
+        with ops_test.model_context("cos") as model:
+            await model.wait_for_idle(status="active")
+
+    yield
+
+    with ops_test.model_context("main") as model:
+        log.info("Removing Prometheus Remote Write SAAS ...")
+        await ops_test.model.remove_saas("prometheus-receive-remote-write")
+
+    with ops_test.model_context("cos") as model:
+        log.info("Removing Prometheus Offer...")
+        await model.remove_offer(f"{model.name}.prometheus-receive-remote-write", force=True)
