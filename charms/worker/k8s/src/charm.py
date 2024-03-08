@@ -507,12 +507,17 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(ops.WaitingStatus(""))
     def _copy_internal_kubeconfig(self):
-        """Generate kubeconfig."""
+        """Write internal kubeconfig to /root/.kube/config."""
         status.add(ops.MaintenanceStatus("Generating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
         KUBECONFIG.write_bytes(self._internal_kubeconfig.read_bytes())
 
     def _get_external_kubeconfig(self, event: ops.ActionEvent):
+        """Retrieve a public kubeconfig via a charm action.
+
+        Args:
+            event: ops.ActionEvent - event that triggered the action
+        """
         try:
             server = event.params.get("server")
             if not server:
@@ -524,7 +529,7 @@ class K8sCharm(ops.CharmBase):
             resp = self.api_manager.get_kubeconfig(server)
             event.set_results({"kubeconfig": resp})
         except (InvalidResponseError, K8sdConnectionError) as e:
-            event.fail("Failed to retrieve kubeconfig: {}".format(str(e)))
+            event.fail(f"Failed to retrieve kubeconfig: {e}")
 
 
 if __name__ == "__main__":  # pragma: nocover

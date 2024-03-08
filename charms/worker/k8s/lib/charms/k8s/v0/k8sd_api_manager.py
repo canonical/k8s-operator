@@ -349,11 +349,10 @@ class GetKubeConfigResponse(BaseRequestModel):
     """Response model for getting the kubeconfig from the cluster.
 
     Attributes:
-        metadata (Optional[KubeconfigMetdata]): Metadata containing the kubeconfig.
-                                                Can be None if the status is not available.
+        metadata (KubeconfigMetdata): Metadata containing the kubeconfig.
     """
 
-    metadata: Optional[KubeConfigMetdata] = None
+    metadata: KubeConfigMetdata
 
 
 T = TypeVar("T", bound=BaseRequestModel)
