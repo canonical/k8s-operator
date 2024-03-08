@@ -40,6 +40,18 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "cos: mark COS integration tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--cos"):
+        skip_cos = pytest.mark.skip(reason="need --cos option to run")
+        for item in items:
+            if item.get_closest_marker("cos"):
+                item.add_marker(skip_cos)
+
+
 @dataclass
 class Charm:
     """Represents source charms.
@@ -265,13 +277,16 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
     yield
     log.info("Removing COS Lite charms...")
-    for charm in cos_charms:
-        log.info(f"Removing {charm}...")
-        cmd = f"remove-application {charm} --destroy-storage --force --no-prompt"
-        rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
-        log.info(f"{(stdout or stderr)})")
-        assert rc == 0
-        await cos_model.block_until(lambda: charm not in cos_model.applications, timeout=60 * 10)
+    with ops_test.model_context("cos"):
+        for charm in cos_charms:
+            log.info(f"Removing {charm}...")
+            cmd = f"remove-application {charm} --destroy-storage --force --no-prompt"
+            rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
+            log.info(f"{(stdout or stderr)})")
+            assert rc == 0
+            await cos_model.block_until(
+                lambda: charm not in cos_model.applications, timeout=60 * 10
+            )
 
 
 @pytest_asyncio.fixture(scope="module")

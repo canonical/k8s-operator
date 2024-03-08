@@ -5,7 +5,7 @@ import ipaddress
 import logging
 import time
 from pathlib import Path
-from typing import Protocol
+from typing import List, Protocol
 
 import yaml
 from pylxd import Client
@@ -44,7 +44,9 @@ class LXDSubstrate(COSSubstrate):
         self.container_name = container_name
         self.network_name = network_name
 
-    def apply_profile(self, profile_name="microk8s.profile", target_profile_name="cos-profile"):
+    def apply_profile(
+        self, profile_name: str = "microk8s.profile", target_profile_name: str = "cos-profile"
+    ):
         """Apply LXD profile.
 
         Args:
@@ -104,7 +106,7 @@ class LXDSubstrate(COSSubstrate):
             return None
 
     def create_network(
-        self, network_name, subnet_cidr="10.10.0.0/24", reserved_addresses: int = 5
+        self, network_name: str, subnet_cidr: str = "10.10.0.0/24", reserved_addresses: int = 5
     ):
         """Create a network.
 
@@ -169,9 +171,7 @@ class LXDSubstrate(COSSubstrate):
         MAX_ATTEMPTS = 10
         SLEEP_DURATION = 30
         for _ in range(MAX_ATTEMPTS):
-            rc, _, _ = self.execute_command(
-                container, ["snap", "wait", "system", "seed.loaded"]
-            )
+            rc, _, _ = self.execute_command(container, ["snap", "wait", "system", "seed.loaded"])
             if rc == 0:
                 break
             time.sleep(SLEEP_DURATION)
@@ -204,7 +204,7 @@ class LXDSubstrate(COSSubstrate):
         network = self.client.networks.get(network_name)
         network.delete(wait=True)
 
-    def enable_microk8s_addons(self, container, ranges):
+    def enable_microk8s_addons(self, container, ranges: str):
         """Enable MicroK8s addons.
 
         Args:
@@ -219,7 +219,7 @@ class LXDSubstrate(COSSubstrate):
             if rc != 0:
                 log.error(f"Failed to enable {addon}: {stdout}, {stderr}")
 
-    def execute_command(self, container, command):
+    def execute_command(self, container, command: List[str]):
         """Execute a command inside a container.
 
         Args:
@@ -229,7 +229,11 @@ class LXDSubstrate(COSSubstrate):
         log.info("Running command")
         try:
             rc, stdout, stderr = container.execute(command)
-            log.info(f"Command executed with return code {rc}. stdout: {stdout}, stderr: {stderr}")
+            if rc != 0:
+                log.error(
+                    f"Failed to run {command} with return code {rc}. stdout: {stdout}, stderr: {stderr}"
+                )
+
             return rc, stdout, stderr
         except Exception as e:
             log.error(f"Failed to execute command: {e}")
@@ -260,7 +264,7 @@ class LXDSubstrate(COSSubstrate):
             ["sudo", "snap", "install", "microk8s", "--channel=1.28/stable", "--classic"],
         )
 
-    def remove_profile(self, profile_name="cos-profile"):
+    def remove_profile(self, profile_name: str = "cos-profile"):
         """Remove an LXD profile.
 
         Args:
