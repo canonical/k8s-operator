@@ -61,6 +61,15 @@ config:
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.      
+
+actions:
+  get-kubeconfig:
+    description: Retrieve Public Kubernetes cluster config, including credentials
+    params:
+      server:
+        description: Override the server endpoint with this field
+        type: string
+
 parts:
   charm:
     build-packages: [git]
