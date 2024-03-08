@@ -211,7 +211,7 @@ async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Mod
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
     # Do we need to switch models?
-    exec_cmd = f"juju exec --unit {k8s_unit} -- k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
+    exec_cmd = f"k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
     action = await k8s.units[0].run(exec_cmd)
     result = await action.wait()
     log.info("DNS test result: %s", result)
