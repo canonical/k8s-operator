@@ -86,48 +86,6 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
-@pytest.mark.cos
-@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_grafana(
-    traefik_address: str,
-    grafana_password: str,
-    expected_dashboard_titles: set,
-    cos_model: model.Model,
-):
-    """Test integration with Grafana."""
-    grafana = Grafana(model_name=cos_model.name, host=traefik_address, password=grafana_password)
-    await asyncio.wait_for(grafana.is_ready(), timeout=5 * 60)
-    dashboards = await grafana.dashboards_all()
-    actual_dashboard_titles = set()
-
-    for dashboard in dashboards:
-        actual_dashboard_titles.add(dashboard.get("title"))
-
-    assert expected_dashboard_titles.issubset(actual_dashboard_titles)
-
-
-@pytest.mark.cos
-@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_address: str, cos_model: model.Model, related_prometheus):
-    """Test integration with Prometheus."""
-    prometheus = Prometheus(model_name=cos_model.name, host=traefik_address)
-    while not await prometheus.is_ready():
-        log.info("Waiting for Prometheus to be ready.")
-        await asyncio.sleep(5)
-    queries = [
-        'up{job="kubelet", metrics_path="/metrics"} > 0',
-        'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
-        'up{job="kubelet", metrics_path="/metrics/probes"} > 0',
-        'up{job="apiserver"} > 0',
-        'up{job="kube-controller-manager"} > 0',
-        'up{job="kube-scheduler"} > 0',
-        'up{job="kube-proxy"} > 0',
-        'up{job="kube-state-metrics"} > 0',
-    ]
-    for query in queries:
-        await prometheus.check_metrics(query)
-
-
 async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     """Test the charms label the nodes appropriately."""
     testname: str = request.node.name
@@ -217,3 +175,45 @@ async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):
     await k8s.add_unit()
     await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(follower, expected_nodes)
+
+
+@pytest.mark.cos
+@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
+async def test_grafana(
+    traefik_address: str,
+    grafana_password: str,
+    expected_dashboard_titles: set,
+    cos_model: model.Model,
+):
+    """Test integration with Grafana."""
+    grafana = Grafana(model_name=cos_model.name, host=traefik_address, password=grafana_password)
+    await asyncio.wait_for(grafana.is_ready(), timeout=5 * 60)
+    dashboards = await grafana.dashboards_all()
+    actual_dashboard_titles = set()
+
+    for dashboard in dashboards:
+        actual_dashboard_titles.add(dashboard.get("title"))
+
+    assert expected_dashboard_titles.issubset(actual_dashboard_titles)
+
+
+@pytest.mark.cos
+@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
+async def test_prometheus(traefik_address: str, cos_model: model.Model, related_prometheus):
+    """Test integration with Prometheus."""
+    prometheus = Prometheus(model_name=cos_model.name, host=traefik_address)
+    while not await prometheus.is_ready():
+        log.info("Waiting for Prometheus to be ready.")
+        await asyncio.sleep(5)
+    queries = [
+        'up{job="kubelet", metrics_path="/metrics"} > 0',
+        'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
+        'up{job="kubelet", metrics_path="/metrics/probes"} > 0',
+        'up{job="apiserver"} > 0',
+        'up{job="kube-controller-manager"} > 0',
+        'up{job="kube-scheduler"} > 0',
+        'up{job="kube-proxy"} > 0',
+        'up{job="kube-state-metrics"} > 0',
+    ]
+    for query in queries:
+        await prometheus.check_metrics(query)
