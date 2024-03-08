@@ -295,6 +295,7 @@ class BootstrapConfig(BaseModel):
 
     Attributes:
         cluster_config (UserFacingClusterConfig): The cluster configuration settings.
+        control_plane_taints (List[str]): Register with the following control-plane taints
         pod_cidr (str): The IP address range for the cluster's pods.
         service_cidr (str): The IP address range for the cluster services.
         disable_rbac (bool): Flag to disable role-based access control
@@ -309,6 +310,7 @@ class BootstrapConfig(BaseModel):
     """
 
     cluster_config: UserFacingClusterConfig = Field(None, alias="cluster-config")
+    control_plane_taints: List[str] = Field(None, alias="control-plane-taints")
     pod_cidr: str = Field(None, alias="pod-cidr")
     service_cidr: str = Field(None, alias="service-cidr")
     disable_rbac: bool = Field(None, alias="disable-rbac")

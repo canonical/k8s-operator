@@ -221,6 +221,8 @@ class K8sCharm(ops.CharmBase):
 
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
+        bootstrap_config.service_cidr = self.config["service-cidr"]
+        bootstrap_config.control_plane_taints = self.config["register-with-taints"].split()
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
