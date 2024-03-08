@@ -335,6 +335,27 @@ class GetClusterStatusResponse(BaseRequestModel):
     metadata: Optional[ClusterMetadata] = None
 
 
+class KubeConfigMetdata(BaseModel):
+    """Metadata containing kubeconfig.
+
+    Attributes:
+        kubeconfig (KubeConfigMetdata): The status of the k8sd cluster.
+    """
+
+    kubeconfig: str
+
+
+class GetKubeConfigResponse(BaseRequestModel):
+    """Response model for getting the kubeconfig from the cluster.
+
+    Attributes:
+        metadata (Optional[KubeconfigMetdata]): Metadata containing the kubeconfig.
+                                                Can be None if the status is not available.
+    """
+
+    metadata: Optional[KubeConfigMetdata] = None
+
+
 T = TypeVar("T", bound=BaseRequestModel)
 
 
@@ -610,3 +631,17 @@ class K8sdAPIManager:
         body = {"username": username, "groups": groups}
         auth_response = self._send_request(endpoint, "POST", AuthTokenResponse, body)
         return auth_response.metadata.token
+
+    def get_kubeconfig(self, server: Optional[str]) -> str:
+        """Request a Kubernetes admin config.
+
+        Args:
+            server (str): Optional server to replace in the kubeconfig endpoint
+
+        Returns:
+            str: The authentication token.
+        """
+        endpoint = "/1.0/k8sd/kubeconfig"
+        body = {"server": server or ""}
+        response = self._send_request(endpoint, "GET", GetKubeConfigResponse, body)
+        return response.metadata.kubeconfig
