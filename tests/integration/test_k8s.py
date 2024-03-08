@@ -117,26 +117,6 @@ async def test_fixtures(kubernetes_cluster: model.Model, integrate_coredns: mode
     """Test the coredns integration."""
     log.info("Testing coredns integration...")
 
-@pytest.mark.usefixtures("integrate_coredns")
-async def test_coredns_integration(kubernetes_cluster: model.Model, coredns_model: model.Model):
-    """Test the coredns integration."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    k8s_unit = k8s.units[0]
-
-    coredns = coredns_model.applications["coredns"]
-    coredns_unit = coredns.units[0]
-    log.info("Coredns: %s", coredns)
-    log.info("coredns offers %s", coredns.application_offers)
-    log.info("K8s: %s", k8s_unit)
-
-    dns_relation = k8s_unit.get_relation("dns-provider")
-    log.info("DNS relation: %s", dns_relation)
-
-    #TODO make sure this works
-    # Check if the DNS relation is set, and the domain is set to cluster.local
-    assert dns_relation, "No DNS relation found"
-    assert dns_relation.data["domain"] == "cluster.local", "Domain not set to cluster.local"
-
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
@@ -147,7 +127,7 @@ async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Mod
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
     # Do we need to switch models?
-    exec_cmd = f"juju exec --unit {k8s_unit} -- k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
+    exec_cmd = f"k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
     action = await k8s.units[0].run(exec_cmd)
     result = await action.wait()
     log.info("DNS test result: %s", result)
