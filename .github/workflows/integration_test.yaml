@@ -8,14 +8,15 @@ jobs:
   extra-args:
     runs-on: ubuntu-latest
     outputs:
-      args: ${{ steps.set-flags.args }}
+      args: ${{ steps.flags.outputs.args }}
     steps:
       - name: Determine extra args
-        id: set-flags
+        id: flags
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
           EXTRA_ARGS="--crash-dump=on-failure"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          if [[ "$PR_TITLE" == *"[COS]"* ]]; then
+          if [[ "$TITLE" == *"[COS]"* ]]; then
             EXTRA_ARGS="$EXTRA_ARGS --cos"
           fi
           echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
@@ -38,7 +39,7 @@ jobs:
     with:
       provider: lxd
       juju-channel: 3.3/stable
-      extra-arguments: ${{ needs.extra-args.outputs.args }}
+      extra-arguments: ${{needs.extra-args.outputs.args}}
       load-test-enabled: false
       zap-enabled: false
       trivy-fs-enabled: true
