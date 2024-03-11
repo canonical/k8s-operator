@@ -53,7 +53,7 @@ def mock_reconciler_handlers(harness):
             "_create_cluster_tokens",
             "_create_cos_tokens",
             "_apply_cos_requirements",
-            "_generate_kubeconfig",
+            "_copy_internal_kubeconfig",
             "_revoke_cluster_tokens",
         }
 

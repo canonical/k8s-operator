@@ -1,10 +1,28 @@
+
 name: Integration tests
 
 on:
   pull_request:
 
 jobs:
+  extra-args:
+    runs-on: ubuntu-latest
+    outputs:
+      args: ${{ steps.flags.outputs.args }}
+    steps:
+      - name: Determine extra args
+        id: flags
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          EXTRA_ARGS="--crash-dump=on-failure"
+          if [[ "$TITLE" == *"[COS]"* ]]; then
+            EXTRA_ARGS="$EXTRA_ARGS --cos"
+          fi
+          echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
+
   build-all-charms:
+    needs: [extra-args]
     strategy:
       matrix:
         path:
@@ -13,14 +31,15 @@ jobs:
     uses: ./.github/workflows/build-charm.yaml
     with:
       working-directory:  ${{ matrix.path }}
+
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
-    needs: [build-all-charms]
+    needs: [build-all-charms, extra-args]
     secrets: inherit
     with:
       provider: lxd
       juju-channel: 3.3/stable
-      extra-arguments: --crash-dump=on-failure
+      extra-arguments: ${{needs.extra-args.outputs.args}}
       load-test-enabled: false
       zap-enabled: false
       trivy-fs-enabled: true
