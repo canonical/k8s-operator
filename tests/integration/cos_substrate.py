@@ -18,11 +18,7 @@ class COSSubstrate(Protocol):
     """Interface for managing a COS substrate."""
 
     def create_substrate(self) -> str:
-        """Create a COS substrate.
-
-        Returns:
-            str: The generated kubeconfig.
-        """
+        """Create a COS substrate."""
         ...
 
     def teardown_substrate(self):
@@ -51,7 +47,8 @@ class LXDSubstrate(COSSubstrate):
 
         Args:
             profile_name (Optional[str]): Name of the profile to apply.
-            target_profile_name (Optional[str]): Name of the target profile. Defaults to 'cos-profile'.
+            target_profile_name (Optional[str]): Name of the target profile.
+            Defaults to 'cos-profile'.
         """
         profile_path = Path("tests/integration/data") / profile_name
         with open(profile_path) as file:
@@ -114,6 +111,13 @@ class LXDSubstrate(COSSubstrate):
             network_name (str): Name of the network.
             subnet_cidr (Optional[str]): CIDR of the subnet. Defaults to '10.10.0.0/24'.
             reserved_addresses (Optional[int]): Number of reserved IP addresses. Defaults to 5.
+
+        Returns:
+            tuple: Start and stop of reserved addresses.
+
+        Raises:
+            ValueError: If reserved_addresses is greater than the
+            total number of usable addresses.
         """
         existing_networks = self.client.networks.all()
         if any(net.name == network_name for net in existing_networks):
@@ -164,17 +168,20 @@ class LXDSubstrate(COSSubstrate):
 
         Returns:
             str: The generated kubeconfig.
+
+        Raises:
+            RuntimeError: If the system seed is not loaded.
         """
         self.apply_profile()
         reserved_start, reserved_stop = self.create_network(self.network_name)
         container = self.create_container(self.container_name)
-        MAX_ATTEMPTS = 10
-        SLEEP_DURATION = 30
-        for _ in range(MAX_ATTEMPTS):
+        max_attempts = 10
+        sleep_duration = 30
+        for _ in range(max_attempts):
             rc, _, _ = self.execute_command(container, ["snap", "wait", "system", "seed.loaded"])
             if rc == 0:
                 break
-            time.sleep(SLEEP_DURATION)
+            time.sleep(sleep_duration)
         else:
             raise RuntimeError("Failed to wait for system seed")
 
@@ -225,13 +232,17 @@ class LXDSubstrate(COSSubstrate):
         Args:
             container: Container instance.
             command (list): Command to execute.
+
+        Returns:
+            tuple: Return code, stdout, and stderr.
         """
         log.info("Running command")
         try:
             rc, stdout, stderr = container.execute(command)
             if rc != 0:
                 log.error(
-                    f"Failed to run {command} with return code {rc}. stdout: {stdout}, stderr: {stderr}"
+                    f"Failed to run {command} with return code {rc}. \
+                        stdout: {stdout}, stderr: {stderr}"
                 )
 
             return rc, stdout, stderr
@@ -239,7 +250,8 @@ class LXDSubstrate(COSSubstrate):
             log.error(f"Failed to execute command: {e}")
 
     def get_kubeconfig(self, container) -> str:
-        """Get kubeconfig from a container.
+        """
+        Get kubeconfig from a container.
 
         Args:
             container: Container instance.
@@ -257,8 +269,10 @@ class LXDSubstrate(COSSubstrate):
 
         Args:
             container: Container instance.
-        """
 
+        Returns:
+            tuple: command.
+        """
         return self.execute_command(
             container,
             ["sudo", "snap", "install", "microk8s", "--channel=1.28/stable", "--classic"],

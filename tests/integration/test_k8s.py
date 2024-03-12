@@ -116,28 +116,31 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
     assert 0 == len(labelled), "Not all nodes labeled with custom-label"
 
+
 @pytest.mark.skip(reason="Test skipped until cluster configs are propagated properly")
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
-    The test is performed by running a pod in the k8s unit and 
-    checking if it can resolve the domain name (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
+    The test is performed by running a pod in the k8s unit and
+    checking if it can resolve the domain name
+    (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
     """
-    #TODO: Validate the DNS test works once cluster configs are propagated properly
+    # TODO: Validate the DNS test works once cluster configs are propagated properly
     log.info("Running DNS test...")
     k8s = kubernetes_cluster.applications["k8s"]
-    k8s_unit = k8s.units[0]
     # Do we need to switch models?
-    exec_cmd = f"k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
+    exec_cmd = "k8s kubectl run --rm -it --image alpine \
+        --restart=Never test-dns -- nslookup canonical.com"
     action = await k8s.units[0].run(exec_cmd)
     result = await action.wait()
     log.info("DNS test result: %s", result)
     assert result.results["return-code"] == 0, "DNS Test failed."
 
     output = json.loads(result.results["stdout"])
-
-    #TODO test this output, https://charmhub.io/microk8s/docs/how-to-advanced-dns
+    assert "canonical.com" in output, "Canonical.com not found in DNS result."
+    # TODO: test this output, https://charmhub.io/microk8s/docs/how-to-advanced-dns
     log.info("DNS test passed.")
+
 
 @pytest.mark.abort_on_fail
 async def test_remove_worker(kubernetes_cluster: model.Model):
@@ -155,6 +158,7 @@ async def test_remove_worker(kubernetes_cluster: model.Model):
     await worker.add_unit()
     await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(k8s.units[0], expected_nodes)
+
 
 @pytest.mark.abort_on_fail
 async def test_remove_non_leader_control_plane(kubernetes_cluster: model.Model):
@@ -175,6 +179,7 @@ async def test_remove_non_leader_control_plane(kubernetes_cluster: model.Model):
     await k8s.add_unit()
     await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
     await ready_nodes(leader, expected_nodes)
+
 
 @pytest.mark.abort_on_fail
 async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):

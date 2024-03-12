@@ -8,21 +8,17 @@ import json
 import logging
 import shlex
 from dataclasses import dataclass, field
-from kubernetes import config as k8s_config
-from kubernetes.client import Configuration
 from itertools import chain
 from pathlib import Path
 from typing import List, Mapping, Optional
-import juju.utils
-import shlex
+
 import pytest
 import pytest_asyncio
 import yaml
-import juju.model
+from juju.model import Model
 from juju.tag import untag
 from kubernetes import config as k8s_config
 from kubernetes.client import Configuration
-
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
@@ -45,10 +41,21 @@ def pytest_addoption(parser: pytest.Parser):
 
 
 def pytest_configure(config):
+    """Add markers to pytest.
+
+    Args:
+        config: Pytest config
+    """
     config.addinivalue_line("markers", "cos: mark COS integration tests")
 
 
 def pytest_collection_modifyitems(config, items):
+    """Skip COS tests if not enabled.
+
+    Args:
+        config: Pytest config
+        items: Pytest items
+    """
     if not config.getoption("--cos"):
         skip_cos = pytest.mark.skip(reason="need --cos option to run")
         for item in items:
@@ -223,9 +230,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
 @pytest_asyncio.fixture(scope="module")
 async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: Model):
-    """
-    Fixture to pull the kubeconfig out of the kubernetes cluster
-    """
+    """Fixture to pull the kubeconfig out of the kubernetes cluster"""
     k8s = kubernetes_cluster.applications["k8s"].units[0]
     action = await k8s.run("k8s config")
     result = await action.wait()
@@ -239,9 +244,10 @@ async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: Model):
 @pytest_asyncio.fixture(scope="module")
 async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     """
-    This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
+    This fixture deploys Coredns on the specified
+    Kubernetes (k8s) model for testing purposes.
     """
-    log.info(f"Deploying Coredns ")
+    log.info("Deploying Coredns ")
 
     coredns_alias = "coredns-model"
 
@@ -263,40 +269,44 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
 
 @pytest_asyncio.fixture(scope="module")
 async def integrate_coredns(ops_test: OpsTest, coredns_model: Model, kubernetes_cluster: Model):
-    """
-    This function offers Coredns in the specified Kubernetes (k8s) model.
-    """
+    """This function offers Coredns in the specified Kubernetes (k8s) model."""
     log.info("Offering Coredns...")
     await coredns_model.create_offer("coredns:dns-provider")
-    await coredns_model.block_until(lambda: 'coredns' in coredns_model.application_offers)
+    await coredns_model.block_until(lambda: "coredns" in coredns_model.application_offers)
     log.info("Coredns offered...")
 
     log.info("Consuming Coredns...")
     model_owner = untag("user-", coredns_model.info.owner_tag)
-    
+
     await coredns_model.wait_for_idle(status="active")
-    await kubernetes_cluster.wait_for_idle(status="active")    
+    await kubernetes_cluster.wait_for_idle(status="active")
 
     offer_url = f"{model_owner}/{coredns_model.name}.coredns"
     saas = await kubernetes_cluster.consume(offer_url)
 
     log.info("Coredns consumed...")
-    
+
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     assert "coredns" in kubernetes_cluster.remote_applications
-    
+
     yield
-    
+
     # Now let's clean up
-    cluster = kubernetes_cluster
     await kubernetes_cluster.applications["k8s"].destroy_relation("k8s:dns-provider", "coredns")
-    await kubernetes_cluster.wait_for_idle(status="active")  
+    await kubernetes_cluster.wait_for_idle(status="active")
     await kubernetes_cluster.remove_saas(saas)
     await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
-    
+
+
 async def grafana_agent(ops_test: OpsTest, kubernetes_cluster: Model):
-    """Deploy Grafana Agent."""
+    """
+    Deploy Grafana Agent.
+
+    Args:
+        ops_test: Instance of the pytest-operator plugin
+        kubernetes_cluster: Model object
+    """
     await kubernetes_cluster.deploy("grafana-agent", channel="stable")
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
@@ -433,7 +443,7 @@ async def related_prometheus(ops_test: OpsTest, cos_model, cos_lite_installed):
 
     with ops_test.model_context("main") as model:
         log.info("Integrating with Prometheus")
-        relation = await ops_test.model.integrate(
+        await ops_test.model.integrate(
             "grafana-agent",
             f"{model_owner}/{cos_model_name}.prometheus-receive-remote-write",
         )
