@@ -45,7 +45,6 @@ from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
 from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
 from charms.reconciler import Reconciler
-from ops.model import BlockedStatus, MaintenanceStatus
 
 from cos_integration import COSIntegration
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
@@ -318,7 +317,8 @@ class K8sCharm(ops.CharmBase):
         """Get DNS config either for the enabled built-in dns or an integrated charm.
 
         Returns:
-            DNSConfig: A DNSConfig object with the cluster domain, service IP and whether the default dns is enabled or not.
+            DNSConfig: A DNSConfig object with the cluster domain,
+            service IP and whether the default dns is enabled or not.
         """
         if self.kube_dns.domain is not None and self.kube_dns.address is not None:
             return DNSConfig(
