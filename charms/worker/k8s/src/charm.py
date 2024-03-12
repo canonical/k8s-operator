@@ -450,7 +450,8 @@ class K8sCharm(ops.CharmBase):
         """Get DNS config either for the enabled built-in dns or an integrated charm.
 
         Returns:
-            DNSConfig: A DNSConfig object with the cluster domain, service IP and whether the default dns is enabled or not.
+            DNSConfig: A DNSConfig object with the cluster domain,
+            service IP and whether the default dns is enabled or not.
         """
         if self.kube_dns.domain is not None and self.kube_dns.address is not None:
             return DNSConfig(
