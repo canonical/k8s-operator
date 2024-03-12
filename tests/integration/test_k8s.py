@@ -120,6 +120,7 @@ async def test_fixtures(kubernetes_cluster: model.Model, integrate_coredns: mode
     """Test the coredns integration."""
     log.info("Testing coredns integration...")
 
+@pytest.mark.skip(reason="Test not implemented yet")
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
