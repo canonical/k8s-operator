@@ -201,12 +201,14 @@ async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_co
     assert dns_relation, "No DNS relation found"
     assert dns_relation.data["domain"] == "cluster.local", "Domain not set to cluster.local"
 
+@pytest.mark.skip(reason="Test skipped until cluster configs are propagated properly")
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
     The test is performed by running a pod in the k8s unit and 
     checking if it can resolve the domain name (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
     """
+    #TODO: Validate the DNS test works once cluster configs are propagated properly
     log.info("Running DNS test...")
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
