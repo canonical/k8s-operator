@@ -116,17 +116,14 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
     assert 0 == len(labelled), "Not all nodes labeled with custom-label"
 
-async def test_fixtures(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
-    """Test the coredns integration."""
-    log.info("Testing coredns integration...")
-
-@pytest.mark.skip(reason="Test not implemented yet")
+@pytest.mark.skip(reason="Test skipped until cluster configs are propagated properly")
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
     The test is performed by running a pod in the k8s unit and 
     checking if it can resolve the domain name (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
     """
+    #TODO: Validate the DNS test works once cluster configs are propagated properly
     log.info("Running DNS test...")
     k8s = kubernetes_cluster.applications["k8s"]
     k8s_unit = k8s.units[0]
