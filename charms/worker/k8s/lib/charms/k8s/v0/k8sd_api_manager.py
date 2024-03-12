@@ -723,10 +723,7 @@ class K8sdAPIManager:
             dns_ip (str): The IP address for the DNS.
         """
         endpoint = "/1.0/k8sd/cluster/config"
-        body = {
-            "dns.dns-ip": dns_ip, 
-            "dns.cluster-domain": dns_domain, 
-            "dns.enabled": False}
+        body = {"dns.dns-ip": dns_ip, "dns.cluster-domain": dns_domain, "dns.enabled": False}
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:

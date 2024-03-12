@@ -8,13 +8,10 @@ import json
 import logging
 import shlex
 from dataclasses import dataclass, field
-from kubernetes import config as k8s_config
-from kubernetes.client import Configuration
 from itertools import chain
 from pathlib import Path
 from typing import List, Mapping, Optional
-import juju.utils
-import shlex
+
 import pytest
 import pytest_asyncio
 import yaml
@@ -297,9 +294,10 @@ async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: juju.model.M
 @pytest_asyncio.fixture(scope="module")
 async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     """
-    This fixture deploys Coredns on the specified Kubernetes (k8s) model for testing purposes.
+    This fixture deploys Coredns on the specified
+    Kubernetes (k8s) model for testing purposes.
     """
-    log.info(f"Deploying Coredns ")
+    log.info("Deploying Coredns ")
 
     coredns_alias = "coredns-model"
 
@@ -326,30 +324,29 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, 
     """
     log.info("Offering Coredns...")
     await coredns_model.create_offer("coredns:dns-provider")
-    await coredns_model.block_until(lambda: 'coredns' in coredns_model.application_offers)
+    await coredns_model.block_until(lambda: "coredns" in coredns_model.application_offers)
     log.info("Coredns offered...")
 
     log.info("Consuming Coredns...")
     model_owner = untag("user-", coredns_model.info.owner_tag)
-    
+
     await coredns_model.wait_for_idle(status="active")
-    await kubernetes_cluster.wait_for_idle(status="active")    
+    await kubernetes_cluster.wait_for_idle(status="active")
 
     offer_url = f"{model_owner}/{coredns_model.name}.coredns"
     saas = await kubernetes_cluster.consume(offer_url)
 
     log.info("Coredns consumed...")
-    
+
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     assert "coredns" in kubernetes_cluster.remote_applications
-    
+
     yield
-    
+
     # Now let's clean up
-    cluster = kubernetes_cluster
     await kubernetes_cluster.applications["k8s"].destroy_relation("k8s:dns-provider", "coredns")
-    await kubernetes_cluster.wait_for_idle(status="active")  
+    await kubernetes_cluster.wait_for_idle(status="active")
     await kubernetes_cluster.remove_saas(saas)
     await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
 

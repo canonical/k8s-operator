@@ -205,21 +205,22 @@ async def test_coredns_integration(kubernetes_cluster: model.Model, integrate_co
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """
     This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
-    The test is performed by running a pod in the k8s unit and 
-    checking if it can resolve the domain name (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
+    The test is performed by running a pod in the k8s unit and
+    checking if it can resolve the domain name
+    (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
     """
-    #TODO: Validate the DNS test works once cluster configs are propagated properly
+    # TODO: Validate the DNS test works once cluster configs are propagated properly
     log.info("Running DNS test...")
     k8s = kubernetes_cluster.applications["k8s"]
-    k8s_unit = k8s.units[0]
     # Do we need to switch models?
-    exec_cmd = f"k8s kubectl run --rm -it --image alpine --restart=Never test-dns -- nslookup canonical.com"
+    exec_cmd = "k8s kubectl run --rm -it --image alpine \
+        --restart=Never test-dns -- nslookup canonical.com"
     action = await k8s.units[0].run(exec_cmd)
     result = await action.wait()
     log.info("DNS test result: %s", result)
     assert result.results["return-code"] == 0, "DNS Test failed."
 
     output = json.loads(result.results["stdout"])
-
-    #TODO test this output, https://charmhub.io/microk8s/docs/how-to-advanced-dns
+    assert "canonical.com" in output, "Canonical.com not found in DNS result."
+    # TODO: test this output, https://charmhub.io/microk8s/docs/how-to-advanced-dns
     log.info("DNS test passed.")

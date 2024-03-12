@@ -28,6 +28,7 @@ class Prometheus:
 
     def _get_url(self, url):
         """Send GET request to the provided URL.
+        Raises AssertionError: If the response status code is not 200.
 
         Args:
             url (str): The URL to send the request to.
@@ -66,6 +67,7 @@ class Prometheus:
 
     async def check_metrics(self, query: str):
         """Query Prometheus for metrics.
+        Raises AssertionError: If the query fails or if data is not yet available.
 
         Args:
             query (str): The Prometheus query to execute.

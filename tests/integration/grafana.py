@@ -35,6 +35,7 @@ class Grafana:
 
     def _get_with_auth(self, url: str) -> str:
         """Send GET request with basic authentication.
+        Raises AssertionError: If the response status code is not 200.
 
         Args:
             url (str): The URL to send the request to.
