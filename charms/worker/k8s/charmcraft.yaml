@@ -87,3 +87,7 @@ provides:
     interface: k8s-cluster
   cos-worker-tokens:
     interface: cos-tokens
+
+requires:
+  etcd:
+    interface: etcd

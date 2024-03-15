@@ -31,7 +31,7 @@ import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import Generator, List, Optional, Type, TypeVar
+from typing import Dict, Generator, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field, validator
 
@@ -298,6 +298,61 @@ class UpdateClusterConfigRequest(BaseModel):
     """
 
     config: UserFacingClusterConfig
+
+
+class BootstrapConfig(BaseModel):
+    """Configuration model for bootstrapping a Canonical K8s cluster.
+
+    Attributes:
+        components (List[str]): A list of default components to be installed
+            during the bootstrap process. Defaults to ["dns", "metrics-server",
+            "network"].
+        cluster_cidr (str): The IP address range for the cluster's pods. Defaults
+            to "10.1.0.0/16".
+        service_cidr (str): The IP address range for the cluster services. Defaults
+            to "10.152.183.0/24".
+        rbac (bool): Flag to enable or disable role-based access control
+            (RBAC). Defaults to True.
+        k8s_dqlite_port (int): The port used by Dqlite. Defaults to 9000.
+        datastore (str): The type of datastore used by the cluster.
+            Defaults to "k8s-dqlite".
+        datastore_url (str): The URL of the datastore. Optional; defaults to None.
+        datastore_ca_cert (str): The CA certificate for the datastore.
+            Optional; defaults to None.
+        datastore_client_cert (str): The client certificate for accessing the
+            datastore. Optional; defaults to None.
+        datastore_client_key (str): The client key for accessing the datastore.
+            Optional; defaults to None.
+    """
+
+    components: List[str] = ["dns", "metrics-server", "network"]
+    cluster_cidr: str = Field("10.1.0.0/16", alias="cluster-cidr")
+    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
+    rbac: bool = Field(True, alias="enable-rbac")
+    k8s_dqlite_port: int = Field(9000, alias="k8s-dqlite-port")
+    datastore: str = "k8s-dqlite"
+    datastore_url: str = Field(None, alias="datastore-url")
+    datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
+    datastore_client_cert: str = Field(None, alias="datastore-client-crt")
+    datastore_client_key: str = Field(None, alias="datastore-client-key")
+
+
+class CreateClusterRequest(BaseModel):
+    """Request model for creating a new Canonical Kubernetes cluster.
+
+    Attributes:
+        bootstrap (bool): Flag to enable or disable the bootstrap process for
+            the cluster. Defaults to True.
+        name (str): The name of the cluster to be created.
+        address (str): The address where the cluster is hosted.
+        config (Dict[str, str]): A dictionary of additional configuration
+            parameters for the cluster.
+    """
+
+    bootstrap: bool = True
+    name: str
+    address: str
+    config: Dict[str, str]
 
 
 class ClusterStatus(BaseModel):
@@ -603,17 +658,16 @@ class K8sdAPIManager:
         endpoint = "/cluster/1.0/ready"
         self._send_request(endpoint, "GET", EmptyResponse)
 
-    def bootstrap_k8s_snap(self, name: str, address: str) -> None:
+    def bootstrap_k8s_snap(self, request: CreateClusterRequest) -> None:
         """Bootstrap the k8s cluster.
 
         Args:
-            name (str): name of the node
-            address (str): address to which k8sd should be bound
+            request (CreateClusterRequest): The bootstrap cluster request.
 
         TODO: Add bootstrap config support
         """
         endpoint = "/cluster/control"
-        body = {"bootstrap": True, "name": name, "address": address}
+        body = request.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def request_auth_token(self, username: str, groups: List[str]) -> str:
