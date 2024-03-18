@@ -47,6 +47,7 @@ def pytest_configure(config):
         config: Pytest config.
     """
     config.addinivalue_line("markers", "cos: mark COS integration tests")
+    config.addinivalue_line("markers", "bundle_file(name): specify a YAML bundle file for a test")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -232,13 +233,20 @@ async def deploy_model(
 @pytest_asyncio.fixture(scope="module")
 async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
+    bundle_file = "test-bundle.yaml"
+    bundle_marker = request.node.get_closest_marker("bundle_file")
+    if bundle_marker:
+        bundle_file = bundle_marker.args[0]
+
+    log.info(f"Deploying cluster using {bundle_file} bundle.")
+
     model = "main"
     charm_path = ("worker/k8s", "worker")
     charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
-    bundle = Bundle(ops_test, Path(__file__).parent / "test-bundle.yaml")
+    bundle = Bundle(ops_test, Path(__file__).parent / bundle_file)
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
