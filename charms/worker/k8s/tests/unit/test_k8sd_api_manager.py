@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
+    CreateClusterRequest,
     CreateJoinTokenResponse,
     DNSConfig,
     EmptyResponse,
@@ -113,16 +114,23 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_bootstrap_k8s_snap(self, mock_send_request):
-        mock_send_request.return_value = EmptyResponse(
-            status_code=200, type="test", error_code=0, metadata="foo"
-        )
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
-        self.api_manager.bootstrap_k8s_snap("test-node", "127.0.0.1:6400")
+        self.api_manager.bootstrap_k8s_snap(
+            CreateClusterRequest(
+                name="test-node", address="127.0.0.1:6400", config={"bootstrapConfig": "foobar"}
+            )
+        )
         mock_send_request.assert_called_once_with(
             "/cluster/control",
             "POST",
             EmptyResponse,
-            {"bootstrap": True, "name": "test-node", "address": "127.0.0.1:6400"},
+            {
+                "bootstrap": True,
+                "name": "test-node",
+                "address": "127.0.0.1:6400",
+                "config": {"bootstrapConfig": "foobar"},
+            },
         )
 
     def test_create_join_token_invalid_response(self):

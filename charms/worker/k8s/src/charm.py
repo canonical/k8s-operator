@@ -106,10 +106,9 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
-        self.etcd = EtcdReactiveRequires(self)
-
         self.framework.observe(self.on.update_status, self._on_update_status)
         if self.is_control_plane:
+            self.etcd = EtcdReactiveRequires(self)
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
     @status.on_error(
@@ -265,7 +264,6 @@ class K8sCharm(ops.CharmBase):
         assert self.etcd.is_ready, "etcd is not ready"
         log.info("Integrating with etcd")
 
-        config.datastore
         config.datastore = "external"
         etcd_config = self.etcd.get_client_credentials()
         config.datastore_ca_cert = etcd_config.get("client_ca", "")
