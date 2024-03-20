@@ -25,12 +25,16 @@ from pathlib import Path
 from time import sleep
 from typing import Optional
 
+import yaml
+
 import charms.contextual_status as status
 import ops
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.k8s.v0.k8sd_api_manager import (
     DNSConfig,
+    CreateClusterRequest,
+    BootstrapConfig,
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
@@ -192,15 +196,29 @@ class K8sCharm(ops.CharmBase):
         InvalidResponseError,
         K8sdConnectionError,
     )
+
     def _bootstrap_k8s_snap(self):
-        """Bootstrap k8s if it's not already bootstrapped."""
-        if not self.api_manager.is_cluster_bootstrapped():
-            status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
-            binding = self.model.get_binding("juju-info")
-            address = binding and binding.network.ingress_address
-            node_name = self.get_node_name()
-            # TODO: Make port (and address) configurable.
-            self.api_manager.bootstrap_k8s_snap(node_name, f"{str(address)}:{K8SD_PORT}")
+        if self.api_manager.is_cluster_bootstrapped():
+            log.info("K8s cluster already bootstrapped")
+            return
+
+        bootstrap_config = BootstrapConfig()
+
+        status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
+
+        binding = self.model.get_binding("juju-info")
+        address = binding and binding.network.ingress_address
+        node_name = self.get_node_name()
+        config_str = {
+            "bootstrapConfig": yaml.dump(bootstrap_config.dict(by_alias=True, exclude_none=True))
+        }
+
+        payload = CreateClusterRequest(
+            name=node_name, address=f"{address}:{K8SD_PORT}", config=config_str
+        )
+
+        # TODO: Make port (and address) configurable.
+        self.api_manager.bootstrap_k8s_snap(payload)
 
     @status.on_error(
         ops.WaitingStatus("Configuring COS Integration"),
