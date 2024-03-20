@@ -125,7 +125,12 @@ class TestK8sdAPIManager(unittest.TestCase):
             "/cluster/control",
             "POST",
             EmptyResponse,
-            {"bootstrap": True, "name": "test-node", "address": "127.0.0.1:6400"},
+            {
+                "bootstrap": True,
+                "name": "test-node",
+                "address": "127.0.0.1:6400",
+                "config": {"bootstrapConfig": "foobar"},
+            },
         )
 
     def test_create_join_token_invalid_response(self):
