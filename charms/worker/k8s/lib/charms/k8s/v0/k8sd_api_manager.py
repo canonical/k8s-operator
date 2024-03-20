@@ -31,7 +31,7 @@ import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import Generator, List, Optional, Type, TypeVar, Dict
+from typing import Dict, Generator, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field, validator
 
@@ -63,6 +63,7 @@ class CreateClusterRequest(BaseModel):
     name: str
     address: str
     config: Dict[str, str]
+
 
 class BootstrapConfig(BaseModel):
     """Configuration model for bootstrapping a Canonical K8s cluster.

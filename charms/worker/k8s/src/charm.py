@@ -26,16 +26,15 @@ from pathlib import Path
 from time import sleep
 from typing import Dict, Optional
 
-import yaml
-
 import charms.contextual_status as status
 import ops
+import yaml
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.k8s.v0.k8sd_api_manager import (
-    DNSConfig,
-    CreateClusterRequest,
     BootstrapConfig,
+    CreateClusterRequest,
+    DNSConfig,
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
@@ -210,7 +209,6 @@ class K8sCharm(ops.CharmBase):
         InvalidResponseError,
         K8sdConnectionError,
     )
-
     def _bootstrap_k8s_snap(self):
         if self.api_manager.is_cluster_bootstrapped():
             log.info("K8s cluster already bootstrapped")
