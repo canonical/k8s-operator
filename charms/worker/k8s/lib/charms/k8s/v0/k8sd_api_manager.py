@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 class CreateClusterRequest(BaseModel):
     """Request model for creating a new Canonical Kubernetes cluster.
+
     Attributes:
         bootstrap (bool): Flag to enable or disable the bootstrap process for
             the cluster. Defaults to True.

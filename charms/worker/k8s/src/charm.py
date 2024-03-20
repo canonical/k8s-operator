@@ -209,7 +209,6 @@ class K8sCharm(ops.CharmBase):
         InvalidResponseError,
         K8sdConnectionError,
     )
-
     def _bootstrap_k8s_snap(self):
         """Bootstrap the k8s snap package."""
         if self.api_manager.is_cluster_bootstrapped():
