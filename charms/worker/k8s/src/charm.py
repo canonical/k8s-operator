@@ -16,6 +16,7 @@ certificate storage.
 """
 
 import logging
+import os
 import re
 import shlex
 import socket
@@ -23,7 +24,7 @@ import subprocess
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Optional
+from typing import Dict, Optional
 
 import yaml
 
@@ -88,7 +89,7 @@ class K8sCharm(ops.CharmBase):
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeler = LabelMaker(
-            self, kubeconfig_path=self._source_kubeconfig, kubectl=KUBECTL_PATH
+            self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
         self._stored.set_default(removing=False)
 
@@ -106,6 +107,8 @@ class K8sCharm(ops.CharmBase):
         )
 
         self.framework.observe(self.on.update_status, self._on_update_status)
+        if self.is_control_plane:
+            self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
     @status.on_error(
         ops.WaitingStatus("Installing COS requirements"),
@@ -122,6 +125,7 @@ class K8sCharm(ops.CharmBase):
         if not self.model.get_relation("cos-agent"):
             return
 
+        log.info("Apply COS Integrations")
         status.add(ops.MaintenanceStatus("Configuring COS Integration"))
         subprocess.check_call(shlex.split("k8s kubectl apply -f templates/cos_roles.yaml"))
         subprocess.check_call(shlex.split("k8s kubectl apply -f templates/ksm.yaml"))
@@ -146,6 +150,18 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is being removed."""
         return bool(self._stored.removing)
 
+    def _apply_proxy_environment(self):
+        """Apply the proxy settings from environment variables."""
+        proxy_settings = self._get_proxy_env()
+        if proxy_settings:
+            log.info("Applying Proxied Environment Settings")
+            with open("/etc/environment", mode="r", encoding="utf-8") as file:
+                current_env = dict(line.strip().split("=", 1) for line in file if "=" in line)
+
+            current_env.update(proxy_settings)
+            with open("/etc/environment", mode="w", encoding="utf-8") as file:
+                file.write("\n".join([f"{k}={v}" for k, v in current_env.items()]))
+
     def get_node_name(self) -> str:
         """Return the lowercase hostname.
 
@@ -163,15 +179,11 @@ class K8sCharm(ops.CharmBase):
         # TODO: adjust to detect the correct cloud
         return ""
 
-    @property
-    def _source_kubeconfig(self) -> Path:
-        """Return the highest authority kube config for this unit."""
-        return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
-
     @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
     def _install_k8s_snap(self):
         """Install the k8s snap package."""
         status.add(ops.MaintenanceStatus("Installing k8s snap"))
+        log.info("Ensuring k8s snap version")
         snap_ensure("k8s", SnapState.Latest.value, self.config["channel"])
 
     @on_error(WaitingStatus("Failed to apply snap requirements"), subprocess.CalledProcessError)
@@ -182,12 +194,14 @@ class K8sCharm(ops.CharmBase):
         meets the network and interface requirements.
         """
         status.add(ops.MaintenanceStatus("Applying K8s requirements"))
+        log.info("Applying K8s requirements")
         init_sh = "/snap/k8s/current/k8s/hack/init.sh"
         subprocess.check_call(shlex.split(init_sh))
 
     @on_error(WaitingStatus("Waiting for k8sd"), InvalidResponseError, K8sdConnectionError)
     def _check_k8sd_ready(self):
         """Check if k8sd is ready to accept requests."""
+        log.info("Check if k8ds is ready")
         status.add(ops.MaintenanceStatus("Check k8sd ready"))
         self.api_manager.check_k8sd_ready()
 
@@ -231,7 +245,7 @@ class K8sCharm(ops.CharmBase):
             return
 
         status.add(ops.MaintenanceStatus("Configuring COS integration"))
-
+        log.info("Configuring COS integration")
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
 
@@ -240,6 +254,7 @@ class K8sCharm(ops.CharmBase):
 
         if self is dying, only try to remove itself from the cluster
         """
+        log.info("Garbage collect cluster tokens")
         to_remove = {self.unit} if self.is_dying else None
 
         if peer := self.model.get_relation("cluster"):
@@ -260,6 +275,7 @@ class K8sCharm(ops.CharmBase):
 
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
+        log.info("Prepare clustering")
         if peer := self.model.get_relation("cluster"):
             node_name = self.get_node_name()
             peer.data[self.unit]["node-name"] = node_name
@@ -287,6 +303,7 @@ class K8sCharm(ops.CharmBase):
         if not self.model.get_relation("cos-agent"):
             return
 
+        log.info("Prepare cos tokens")
         if rel := self.model.get_relation("cos-tokens"):
             self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
@@ -294,11 +311,14 @@ class K8sCharm(ops.CharmBase):
             self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
     @on_error(
-        WaitingStatus("Waiting for enable components"), InvalidResponseError, K8sdConnectionError
+        WaitingStatus("Waiting for enable functionalities"),
+        InvalidResponseError,
+        K8sdConnectionError,
     )
     def _enable_functionalities(self):
         """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Enabling DNS and Network"))
+        status.add(ops.MaintenanceStatus("Enabling Functionalities"))
+        log.info("Enabling Functionalities")
         dns_config = DNSConfig(enabled=True)
         network_config = NetworkConfig(enabled=True)
         user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
@@ -327,6 +347,27 @@ class K8sCharm(ops.CharmBase):
         except AssertionError:
             log.exception("Failed to get COS token.")
         return []
+
+    def _get_proxy_env(self) -> Dict[str, str]:
+        """Retrieve the Juju model config proxy values.
+
+        Returns:
+            Dict: A dictionary containing the proxy settings,
+                or None if no values are configured.
+        """
+        proxy_env_keys = {
+            "JUJU_CHARM_HTTP_PROXY",
+            "JUJU_CHARM_HTTPS_PROXY",
+            "JUJU_CHARM_NO_PROXY",
+        }
+        proxy_settings = {}
+        for key in proxy_env_keys:
+            env_key = key.split("JUJU_CHARM_")[-1]
+            env_value = os.getenv(key)
+            if env_value:
+                proxy_settings[env_key] = env_value
+                proxy_settings[env_key.lower()] = env_value
+        return proxy_settings
 
     def _get_snap_version(self) -> Optional[str]:
         """Retrieve the version of the installed Kubernetes snap package.
@@ -387,6 +428,7 @@ class K8sCharm(ops.CharmBase):
             self._last_gasp(event)
             return
 
+        self._apply_proxy_environment()
         self._install_k8s_snap()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
@@ -402,7 +444,7 @@ class K8sCharm(ops.CharmBase):
         self._update_status()
         self._apply_node_labels()
         if self.is_control_plane:
-            self._generate_kubeconfig()
+            self._copy_internal_kubeconfig()
 
     @on_error(
         ops.WaitingStatus("Cluster not yet ready"),
@@ -454,13 +496,6 @@ class K8sCharm(ops.CharmBase):
             sleep(1)
             busy_wait -= 1
 
-    @on_error(ops.WaitingStatus(""))
-    def _generate_kubeconfig(self):
-        """Generate kubeconfig."""
-        status.add(ops.MaintenanceStatus("Generating KubeConfig"))
-        KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        KUBECONFIG.write_bytes(self._source_kubeconfig.read_bytes())
-
     @status.on_error(ops.BlockedStatus("Cannot apply node-labels"), LabelMaker.NodeLabelError)
     def _apply_node_labels(self):
         """Apply labels to the node."""
@@ -481,6 +516,37 @@ class K8sCharm(ops.CharmBase):
                 self._update_status()
         except status.ReconcilerError:
             log.exception("Can't to update_status")
+
+    @property
+    def _internal_kubeconfig(self) -> Path:
+        """Return the highest authority kube config for this unit."""
+        return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
+
+    @on_error(ops.WaitingStatus(""))
+    def _copy_internal_kubeconfig(self):
+        """Write internal kubeconfig to /root/.kube/config."""
+        status.add(ops.MaintenanceStatus("Generating KubeConfig"))
+        KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
+        KUBECONFIG.write_bytes(self._internal_kubeconfig.read_bytes())
+
+    def _get_external_kubeconfig(self, event: ops.ActionEvent):
+        """Retrieve a public kubeconfig via a charm action.
+
+        Args:
+            event: ops.ActionEvent - event that triggered the action
+        """
+        try:
+            server = event.params.get("server")
+            if not server:
+                log.info("No server requested, use public-address")
+                cmd = ["unit-get", "public-address"]
+                addr = subprocess.check_output(cmd).decode("UTF-8").strip()
+                server = f"{addr}:6443"
+            log.info("Requesting kubeconfig for server=%s", server)
+            resp = self.api_manager.get_kubeconfig(server)
+            event.set_results({"kubeconfig": resp})
+        except (InvalidResponseError, K8sdConnectionError) as e:
+            event.fail(f"Failed to retrieve kubeconfig: {e}")
 
 
 if __name__ == "__main__":  # pragma: nocover
