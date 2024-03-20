@@ -661,8 +661,7 @@ class K8sdAPIManager:
         """Bootstrap the k8s cluster.
 
         Args:
-            name (str): name of the node
-            address (str): address to which k8sd should be bound
+            request (CreateClusterRequest): The request model to bootstrap the cluster.
 
         TODO: Add bootstrap config support
         """
