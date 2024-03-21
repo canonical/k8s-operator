@@ -274,8 +274,8 @@ class K8sCharm(ops.CharmBase):
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation("etcd")
 
-            assert etcd_relation, "Missing etcd relation"
-            assert self.etcd.is_ready, "etcd is not ready"
+            assert etcd_relation, "Missing etcd relation"  # nosec
+            assert self.etcd.is_ready, "etcd is not ready"  # nosec
 
             config.datastore = "external"
             etcd_config = self.etcd.get_client_credentials()
