@@ -214,10 +214,11 @@ class K8sCharm(ops.CharmBase):
         K8sdConnectionError,
     )
     def _bootstrap_k8s_snap(self):
-        """Bootstrap k8s if it's not already bootstrapped."""
+        """Bootstrap the k8s snap package."""
         if self.api_manager.is_cluster_bootstrapped():
             log.info("K8s cluster already bootstrapped")
             return
+
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
 
@@ -229,6 +230,7 @@ class K8sCharm(ops.CharmBase):
         config_str = {
             "bootstrapConfig": yaml.dump(bootstrap_config.dict(by_alias=True, exclude_none=True))
         }
+
         payload = CreateClusterRequest(
             name=node_name, address=f"{address}:{K8SD_PORT}", config=config_str
         )

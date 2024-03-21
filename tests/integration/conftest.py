@@ -193,7 +193,7 @@ async def deploy_model(
             config=config,
         )
     with ops_test.model_context(model_name) as the_model:
-        async with ops_test.fast_forward():
+        async with ops_test.fast_forward("60s"):
             await the_model.deploy(bundle.render)
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
