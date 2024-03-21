@@ -18,6 +18,8 @@ applications:
     charm: k8s
     channel: latest/edge
     num_units: 3
+    options:
+      datastore: etcd
   k8s-worker:
     charm: k8s-worker
     channel: latest/edge
