@@ -61,6 +61,7 @@ KUBECONFIG = Path.home() / ".kube/config"
 ETC_KUBERNETES = Path("/etc/kubernetes")
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
+SUPPORTED_DATASTORES = ["dqlite", "etcd"]
 
 
 class K8sCharm(ops.CharmBase):
@@ -218,7 +219,7 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
         bootstrap_config = BootstrapConfig()
-        self._configure_etcd(bootstrap_config)
+        self._configure_datastore(bootstrap_config)
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
@@ -250,26 +251,38 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
 
-    def _configure_etcd(self, config: BootstrapConfig):
-        """Configure etcd as the datastore for the Kubernetes cluster.
+    def _configure_datastore(self, config: BootstrapConfig):
+        """Configure the datastore for the Kubernetes cluster.
 
         Args:
             config (BootstrapConfig): The bootstrap configuration object for
                 the Kubernetes cluster that is being configured. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        etcd_relation = self.model.get_relation("etcd")
-        if not etcd_relation:
-            return
-        assert self.etcd.is_ready, "etcd is not ready"
-        log.info("Integrating with etcd")
+        datastore = self.config.get("datastore")
 
-        config.datastore = "external"
-        etcd_config = self.etcd.get_client_credentials()
-        config.datastore_ca_cert = etcd_config.get("client_ca", "")
-        config.datastore_client_cert = etcd_config.get("client_cert", "")
-        config.datastore_client_key = etcd_config.get("client_key", "")
-        config.datastore_url = self.etcd.get_connection_string()
+        if datastore not in SUPPORTED_DATASTORES:
+            log.error(
+                "Invalid datastore: %s. Supported values: %s",
+                datastore,
+                ", ".join(SUPPORTED_DATASTORES),
+            )
+
+        if datastore == "etcd":
+            log.info("Using etcd as external datastore")
+            etcd_relation = self.model.get_relation("etcd")
+
+            assert etcd_relation, "Missing etcd relation"
+            assert self.etcd.is_ready, "etcd is not ready"
+
+            config.datastore = "external"
+            etcd_config = self.etcd.get_client_credentials()
+            config.datastore_ca_cert = etcd_config.get("client_ca", "")
+            config.datastore_client_cert = etcd_config.get("client_cert", "")
+            config.datastore_client_key = etcd_config.get("client_key", "")
+            config.datastore_url = self.etcd.get_connection_string()
+        elif datastore == "dqlite":
+            log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
