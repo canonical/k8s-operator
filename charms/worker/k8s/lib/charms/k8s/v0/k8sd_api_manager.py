@@ -73,6 +73,8 @@ class BootstrapConfig(BaseModel):
         components (List[str]): A list of default components to be installed
             during the bootstrap process. Defaults to ["dns", "metrics-server",
             "network"].
+        control_plane_taints (List[str]): A list of control-plane taints to apply
+            to this node at registration time.
         cluster_cidr (str): The IP address range for the cluster's pods. Defaults
             to "10.1.0.0/16".
         service_cidr (str): The IP address range for the cluster services. Defaults
@@ -93,7 +95,6 @@ class BootstrapConfig(BaseModel):
 
     components: List[str] = ["dns", "metrics-server", "network"]
     control_plane_taints: List[str] = Field(alias="control-plane-taints", default_factory=list)
-    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
     cluster_cidr: str = Field("10.1.0.0/16", alias="cluster-cidr")
     service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
     rbac: bool = Field(True, alias="enable-rbac")
