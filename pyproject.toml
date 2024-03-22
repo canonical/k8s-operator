@@ -44,9 +44,13 @@ namespace_packages = true
 [tool.pylint]
 # Ignore too-few-public-methods due to pydantic models
 # Ignore no-self-argument due to pydantic validators
-disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument,fixme"
+disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument,fixme,parse-error"
 # Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
 extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
+
+[tool.pylint.typecheck]
+# Ignore typechecking on pylxd manager classes
+ignored-classes = "ProfileManager,InstanceManager,NetworkManager"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
