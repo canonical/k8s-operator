@@ -4,7 +4,7 @@
 name: integration-test-etcd
 description: |-
   Used to deploy or refresh within an integration test model
-series: jammy
+series: focal
 applications:
   easyrsa:
     charm: easyrsa
