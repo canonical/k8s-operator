@@ -268,6 +268,7 @@ class K8sCharm(ops.CharmBase):
                 datastore,
                 ", ".join(SUPPORTED_DATASTORES),
             )
+            status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
 
         if datastore == "etcd":
             log.info("Using etcd as external datastore")
