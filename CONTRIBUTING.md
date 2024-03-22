@@ -11,7 +11,7 @@ source venv/bin/activate
 
 The development setup ships with tox3, you might want to install tox4:
 ```shell
-pip install 'tox<5'
+pip install 'tox>=4,<5'
 ```
 
 ## Testing
