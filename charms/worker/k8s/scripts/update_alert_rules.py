@@ -87,6 +87,7 @@ def process_rule_file(contents, destination_file: Path, source_url: str):
         file.write("\n".join(data))
     logging.info(f"Processed and saved to {destination_file}")
 
+
 def move_processed_files(temp_dir):
     """Move the processed rule files from the temporary directory.
 
