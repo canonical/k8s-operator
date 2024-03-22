@@ -54,7 +54,8 @@ class LXDSubstrate(COSSubstrate):
             target_profile_name (Optional[str]): Name of the target profile. Defaults to 'cos-profile'.
         """
         profile_path = Path("tests/integration/data") / profile_name
-        with open(profile_path) as file:
+
+        with profile_path.open() as file:
             try:
                 raw_profile = yaml.safe_load(file)
                 config = raw_profile.get("config", {})
@@ -62,7 +63,7 @@ class LXDSubstrate(COSSubstrate):
                 self.client.profiles.create(target_profile_name, config=config, devices=devices)
                 log.info(f"Profile {target_profile_name} applied successfully.")
             except (yaml.YAMLError, Exception) as e:
-                log.error(f"Failed to read or apply LXD profile: {e}")
+                log.exception(f"Failed to read or apply LXD profile: {e}")
 
     def create_container(self, name: str):
         """Create a container.

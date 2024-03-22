@@ -158,6 +158,17 @@ class Bundle:
         app["channel"] = None
 
 
+async def cloud_profile(ops_test: OpsTest):
+    """Apply lxd-profile to the model if the juju cloud is lxd."""
+    controller = await ops_test.model.get_controller()
+    cloud = await controller.cloud()
+    if cloud.cloud.type_ == "lxd":
+        lxd = LXDSubstrate(None, None)
+        profile_name = f"juju-{ops_test.model.name}"
+        lxd.remove_profile(profile_name)
+        lxd.apply_profile("k8s.profile", profile_name)
+
+
 @contextlib.asynccontextmanager
 async def deploy_model(
     request: pytest.FixtureRequest,
@@ -188,6 +199,7 @@ async def deploy_model(
             config=config,
         )
     with ops_test.model_context(model_name) as the_model:
+        await cloud_profile(ops_test)
         async with ops_test.fast_forward("60s"):
             await the_model.deploy(bundle.render)
             await the_model.wait_for_idle(
