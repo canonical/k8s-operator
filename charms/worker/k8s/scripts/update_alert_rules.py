@@ -44,13 +44,16 @@ def download_and_process_rule_files(temp_dir: Path):
 
     This includes filtering out specified records from HACK_DROP_RECORDS and writing the
     processed rules to files in the ALERT_RULES_DIR directory.
+
+    Args:
+        temp_dir (Path): temporary directory
     """
     for file in RULE_FILES:
         source_url = f"{SOURCE}/{file}"
         temp_file = temp_dir / file
         try:
             logging.info(f"Downloading {source_url}")
-            with urlopen(source_url) as response:
+            with urlopen(source_url) as response:  # nosec
                 process_rule_file(response, temp_file, source_url)
         except URLError as e:
             logging.error(f"Error fetching dashboard data: {e}")
@@ -103,7 +106,7 @@ def apply_patches():
     """Apply patches to the downloaded and processed rule files."""
     for patch_file in PATCHES_DIR.glob("*"):
         logging.info(f"Applying patch {patch_file}")
-        subprocess.check_call(["git", "apply", str(patch_file)])
+        subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
 
 
 def main():

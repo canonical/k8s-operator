@@ -19,6 +19,11 @@ from charm import K8sCharm
 
 @pytest.fixture(params=["worker", "control-plane"])
 def harness(request):
+    """Craft a ops test harness.
+
+    Args:
+        request: pytest request object
+    """
     harness = ops.testing.Harness(K8sCharm)
     harness.begin()
     harness.charm.is_worker = request.param == "worker"
@@ -64,18 +69,32 @@ def mock_reconciler_handlers(harness):
 
 
 def test_config_changed_invalid(harness):
-    # Trigger a config-changed event with an unknown-config option
+    """Trigger a config-changed event with an unknown-config option.
+
+    Args:
+        harness: the harness under test
+    """
     with pytest.raises(ValueError):
         harness.update_config({"unknown-config": "foobar"})
 
 
 def test_update_status(harness):
+    """Test emitting the update_status hook while reconciled.
+
+    Args:
+        harness: the harness under test
+    """
     harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
     harness.charm.on.update_status.emit()
     assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
 
 
 def test_set_leader(harness):
+    """Test emitting the set_leader hook while not reconciled.
+
+    Args:
+        harness: the harness under test
+    """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
     with mock_reconciler_handlers(harness) as handlers:
         harness.set_leader(True)

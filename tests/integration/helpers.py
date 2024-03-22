@@ -1,5 +1,6 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""Additions to tools missing from juju library."""
 
 import logging
 from typing import Optional
@@ -20,6 +21,7 @@ async def get_address(ops_test: OpsTest, app_name: str, unit_num: Optional[int] 
     Returns:
         unit address as a string
     """
+    assert ops_test.model, "Model is not defined"
     status = await ops_test.model.get_status()
     app = status["applications"][app_name]
     return (
