@@ -117,6 +117,11 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     assert 0 == len(labelled), "Not all nodes labeled with custom-label"
 
 
+async def test_dns_fixtures(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
+    # TODO: remove this test after test_dns is integrated
+    pass
+
+
 @pytest.mark.skip(reason="Test skipped until cluster configs are propagated properly")
 async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
     """

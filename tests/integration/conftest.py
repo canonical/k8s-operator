@@ -244,12 +244,11 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: Model):
     """Fixture to pull the kubeconfig out of the kubernetes cluster"""
     k8s = kubernetes_cluster.applications["k8s"].units[0]
-    action = await k8s.run("k8s config")
+    action = await k8s.run_action("get-kubeconfig")
     result = await action.wait()
     assert result.results["return-code"] == 0, "Failed to get kubeconfig with kubectl"
-
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_text(result.results["stdout"])
+    kubeconfig_path.write_text(result.results["kubeconfig"])
     yield kubeconfig_path
 
 
