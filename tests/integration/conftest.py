@@ -245,7 +245,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         yield the_model
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture(name="_grafana_agent", scope="module")
 async def grafana_agent(kubernetes_cluster: Model):
     """Deploy Grafana Agent."""
     await kubernetes_cluster.deploy("grafana-agent", channel="stable")
@@ -259,8 +259,9 @@ async def grafana_agent(kubernetes_cluster: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-@pytest.mark.usefixtures("kubernetes_cluster", "grafana_agent")
-async def cos_model(ops_test: OpsTest):
+async def cos_model(
+    ops_test: OpsTest, kubernetes_cluster, _grafana_agent  # pylint: disable=W0613
+):
     """Create a COS substrate and a K8s model."""
     container_name = "cos-substrate"
     network_name = "cos-network"
@@ -283,7 +284,7 @@ async def cos_model(ops_test: OpsTest):
     manager.teardown_substrate()
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture(name="_cos_lite_installed", scope="module")
 async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
     """Install COS Lite bundle."""
     log.info("Deploying COS bundle ...")
@@ -321,12 +322,9 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-@pytest.mark.usefixtures("cos_model", "cos_lite_installed")
-async def traefik_address(ops_test: OpsTest):
+async def traefik_address(cos_model: Model, _cos_lite_installed):
     """Fixture to get Traefik address."""
-    with ops_test.model_context("cos"):
-        address = await get_address(ops_test=ops_test, app_name="traefik")
-    yield address
+    yield await get_address(model=cos_model, app_name="traefik")
 
 
 @pytest_asyncio.fixture(scope="module")
@@ -341,9 +339,8 @@ async def expected_dashboard_titles():
     return set(titles)
 
 
-@pytest_asyncio.fixture(scope="module")
-@pytest.mark.usefixtures("cos_lite_installed")
-async def related_grafana(ops_test: OpsTest, cos_model: Model):
+@pytest_asyncio.fixture(name="_related_grafana", scope="module")
+async def related_grafana(ops_test: OpsTest, cos_model: Model, _cos_lite_installed):
     """Fixture to integrate with Grafana."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
@@ -369,8 +366,7 @@ async def related_grafana(ops_test: OpsTest, cos_model: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-@pytest.mark.usefixtures("related_grafana")
-async def grafana_password(cos_model):
+async def grafana_password(cos_model, _related_grafana):
     """Fixture to get Grafana password."""
     action = await cos_model.applications["grafana"].units[0].run_action("get-admin-password")
     action = await action.wait()
@@ -378,8 +374,7 @@ async def grafana_password(cos_model):
 
 
 @pytest_asyncio.fixture(scope="module")
-@pytest.mark.usefixtures("cos_lite_installed")
-async def related_prometheus(ops_test: OpsTest, cos_model):
+async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
     """Fixture to integrate with Prometheus."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
