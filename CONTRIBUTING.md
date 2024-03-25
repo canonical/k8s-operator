@@ -113,7 +113,7 @@ Sometimes you will want to debug certain situations, and having the models torn 
 
 Running the integration tests with extra arguments can be accomplished with
 ```shell
-tox run -e integration-tests -- --positional --arguments
+tox run -e integration -- --positional --arguments
 ```
 
 #### COS Integration
