@@ -55,6 +55,7 @@ def mock_reconciler_handlers(harness):
             "_apply_cos_requirements",
             "_copy_internal_kubeconfig",
             "_revoke_cluster_tokens",
+            "_expose_ports",
         }
 
     handlers = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
