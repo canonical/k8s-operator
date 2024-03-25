@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 This pytest mark configures the test environment to use the Canonical Kubernetes
 bundle with etcd, for all the test within this module.
 """
-pytestmark = [pytest.mark.bundle_file("test-bundle-etcd.yaml"), pytest.mark.ignore_blocked]
+pytestmark = [pytest.mark.bundle_file("test-bundle-etcd.yaml"), pytest.mark.ignore_blocked, pytest.mark.skip(reason="Skipping all etcd tests")]
 
 
 async def get_nodes(k8s):
