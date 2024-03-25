@@ -6,6 +6,7 @@ on:
 
 jobs:
   extra-args:
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     outputs:
       args: ${{ steps.flags.outputs.args }}
@@ -33,7 +34,6 @@ jobs:
       working-directory:  ${{ matrix.path }}
 
   integration-tests:
-    timeout-minutes: 120
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     needs: [build-all-charms, extra-args]
     secrets: inherit
