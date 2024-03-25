@@ -117,6 +117,36 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     assert 0 == len(labelled), "Not all nodes labeled with custom-label"
 
 
+async def test_dns_fixtures(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
+    # TODO: remove this test after test_dns is integrated
+    pass
+
+
+@pytest.mark.skip(reason="Test skipped until cluster configs are propagated properly")
+async def test_dns(kubernetes_cluster: model.Model, integrate_coredns: model.Model):
+    """
+    This function performs a DNS test on the specified Kubernetes (k8s) unit in the cluster model.
+    The test is performed by running a pod in the k8s unit and
+    checking if it can resolve the domain name
+    (See: https://charmhub.io/microk8s/docs/how-to-advanced-dns).
+    """
+    # TODO: Validate the DNS test works once cluster configs are propagated properly
+    log.info("Running DNS test...")
+    k8s = kubernetes_cluster.applications["k8s"]
+    # Do we need to switch models?
+    exec_cmd = "k8s kubectl run --rm -it --image alpine \
+        --restart=Never test-dns -- nslookup canonical.com"
+    action = await k8s.units[0].run(exec_cmd)
+    result = await action.wait()
+    log.info("DNS test result: %s", result)
+    assert result.results["return-code"] == 0, "DNS Test failed."
+
+    output = json.loads(result.results["stdout"])
+    assert "canonical.com" in output, "Canonical.com not found in DNS result."
+    # TODO: test this output, https://charmhub.io/microk8s/docs/how-to-advanced-dns
+    log.info("DNS test passed.")
+
+
 @pytest.mark.abort_on_fail
 async def test_remove_worker(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
