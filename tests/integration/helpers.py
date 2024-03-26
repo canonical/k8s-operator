@@ -1,26 +1,27 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""Additions to tools missing from juju library."""
 
 import logging
 from typing import Optional
 
-from pytest_operator.plugin import OpsTest
+from juju.model import Model
 
 logger = logging.getLogger(__name__)
 
 
-async def get_address(ops_test: OpsTest, app_name: str, unit_num: Optional[int] = None) -> str:
+async def get_address(model: Model, app_name: str, unit_num: Optional[int] = None) -> str:
     """Find unit address for any application.
 
     Args:
-        ops_test: pytest-operator plugin
+        model: juju model
         app_name: string name of application
         unit_num: integer number of a juju unit
 
     Returns:
         unit address as a string
     """
-    status = await ops_test.model.get_status()
+    status = await model.get_status()
     app = status["applications"][app_name]
     return (
         app.public_address

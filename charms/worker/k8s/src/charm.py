@@ -25,6 +25,7 @@ from functools import cached_property
 from pathlib import Path
 from time import sleep
 from typing import Dict, Optional
+from urllib.parse import urlparse
 
 import charms.contextual_status as status
 import ops
@@ -443,6 +444,7 @@ class K8sCharm(ops.CharmBase):
         self._apply_node_labels()
         if self.is_control_plane:
             self._copy_internal_kubeconfig()
+            self._expose_ports()
 
     @on_error(
         ops.WaitingStatus("Cluster not yet ready"),
@@ -526,6 +528,13 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Generating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
         KUBECONFIG.write_bytes(self._internal_kubeconfig.read_bytes())
+
+    def _expose_ports(self):
+        """Expose ports for public clouds to access api endpoints."""
+        log.info("Exposing api ports")
+        content = yaml.safe_load(KUBECONFIG.read_text())
+        endpoint = urlparse(content["clusters"][0]["cluster"]["server"])
+        self.unit.open_port("tcp", endpoint.port)
 
     def _get_external_kubeconfig(self, event: ops.ActionEvent):
         """Retrieve a public kubeconfig via a charm action.

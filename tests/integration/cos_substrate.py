@@ -1,33 +1,31 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""Aids in testing COS substrate on LXD."""
 
 import ipaddress
 import logging
 import time
 from pathlib import Path
-from typing import List, Protocol
+from typing import Any, Dict, List, Protocol, Tuple, Union
 
 import yaml
 from pylxd import Client
+from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
 
 
 class COSSubstrate(Protocol):
     """Interface for managing a COS substrate."""
 
     def create_substrate(self) -> str:
-        """Create a COS substrate.
-
-        Returns:
-            str: The generated kubeconfig.
-        """
-        ...
+        """Create a COS substrate."""
 
     def teardown_substrate(self):
         """Teardown the COS substrate."""
-        ...
 
 
 class LXDSubstrate(COSSubstrate):
@@ -51,7 +49,8 @@ class LXDSubstrate(COSSubstrate):
 
         Args:
             profile_name (Optional[str]): Name of the profile to apply.
-            target_profile_name (Optional[str]): Name of the target profile. Defaults to 'cos-profile'.
+            target_profile_name (Optional[str]): Name of the target profile.
+                Defaults to 'cos-profile'.
         """
         profile_path = Path("tests/integration/data") / profile_name
 
@@ -61,9 +60,9 @@ class LXDSubstrate(COSSubstrate):
                 config = raw_profile.get("config", {})
                 devices = raw_profile.get("devices", {})
                 self.client.profiles.create(target_profile_name, config=config, devices=devices)
-                log.info(f"Profile {target_profile_name} applied successfully.")
-            except (yaml.YAMLError, Exception) as e:
-                log.exception(f"Failed to read or apply LXD profile: {e}")
+                log.info("Profile %s applied successfully.", target_profile_name)
+            except (yaml.YAMLError, *LXDExceptions):
+                log.exception("Failed to read or apply LXD profile")
 
     def create_container(self, name: str):
         """Create a container.
@@ -75,7 +74,7 @@ class LXDSubstrate(COSSubstrate):
             container: The created container instance, or None if creation fails.
         """
         log.info("Creating container")
-        config = {
+        config: Dict[str, Any] = {
             "name": name,
             "source": {
                 "type": "image",
@@ -102,24 +101,30 @@ class LXDSubstrate(COSSubstrate):
             time.sleep(60)
             return container
 
-        except Exception as e:
-            log.error(f"Failed to create or start container: {e}")
+        except LXDExceptions:
+            log.exception("Failed to create or start container")
             return None
 
     def create_network(
         self, network_name: str, subnet_cidr: str = "10.10.0.0/24", reserved_addresses: int = 5
-    ):
+    ) -> Tuple[IPAddress, IPAddress]:
         """Create a network.
 
         Args:
             network_name (str): Name of the network.
             subnet_cidr (Optional[str]): CIDR of the subnet. Defaults to '10.10.0.0/24'.
             reserved_addresses (Optional[int]): Number of reserved IP addresses. Defaults to 5.
+
+        Raises:
+            ValueError: when total_address is less than reserved_addresses
+
+        Returns:
+            Tuple[IPAddress, IPAddress]
         """
         existing_networks = self.client.networks.all()
-        if any(net.name == network_name for net in existing_networks):
-            log.info("Network already exists. Skipping creation.")
-            return
+        for net in existing_networks:
+            if net.name == network_name:
+                raise ValueError("Network already exists. Skipping creation.")
 
         subnet = ipaddress.ip_network(subnet_cidr)
         total_addresses = subnet.num_addresses - 2
@@ -151,31 +156,36 @@ class LXDSubstrate(COSSubstrate):
 
         try:
             log.info(
-                f"Creating network '{network_name}' with {reserved_addresses} reserved addresses."
+                "Creating network '%s' with %s reserved addresses.",
+                network_name,
+                reserved_addresses,
             )
             self.client.networks.create(**network_config)
             log.info("Network created successfully.")
             reserved_start = dhcp_range_stop + 1
-            return (reserved_start, reserved_stop)
-        except Exception as e:
-            log.error(f"Failed to create network: {e}")
+            return reserved_start, reserved_stop
+        except LXDExceptions:
+            log.exception("Failed to create network")
+            raise
 
     def create_substrate(self) -> str:
         """Create a COS substrate.
 
         Returns:
             str: The generated kubeconfig.
+
+        Raises:
+            RuntimeError: when the container's snapd fails to load seed
         """
         self.apply_profile()
         reserved_start, reserved_stop = self.create_network(self.network_name)
         container = self.create_container(self.container_name)
-        MAX_ATTEMPTS = 10
-        SLEEP_DURATION = 30
-        for _ in range(MAX_ATTEMPTS):
+        max_attempts, sleep_duration = 10, 30
+        for _ in range(max_attempts):
             rc, _, _ = self.execute_command(container, ["snap", "wait", "system", "seed.loaded"])
             if rc == 0:
                 break
-            time.sleep(SLEEP_DURATION)
+            time.sleep(sleep_duration)
         else:
             raise RuntimeError("Failed to wait for system seed")
 
@@ -193,8 +203,8 @@ class LXDSubstrate(COSSubstrate):
             container.stop(wait=True)
             container.delete(wait=True)
             log.info("Container deleted successfully.")
-        except Exception as e:
-            log.error(f"Failed to delete container: {e}")
+        except LXDExceptions:
+            log.error("Failed to delete container")
 
     def delete_network(self, network_name: str):
         """Delete a network.
@@ -214,11 +224,7 @@ class LXDSubstrate(COSSubstrate):
         """
         addons = ["dns", "hostpath-storage", f"metallb:{ranges}"]
         for addon in addons:
-            rc, stdout, stderr = self.execute_command(
-                container, ["sudo", "microk8s", "enable", addon]
-            )
-            if rc != 0:
-                log.error(f"Failed to enable {addon}: {stdout}, {stderr}")
+            self.execute_command(container, ["sudo", "microk8s", "enable", addon])
 
     def execute_command(self, container, command: List[str]):
         """Execute a command inside a container.
@@ -226,18 +232,26 @@ class LXDSubstrate(COSSubstrate):
         Args:
             container: Container instance.
             command (list): Command to execute.
+
+        Returns:
+            Tuple[int, bytes, bytes]: rc, stdout, and stderr
         """
         log.info("Running command")
         try:
             rc, stdout, stderr = container.execute(command)
             if rc != 0:
                 log.error(
-                    f"Failed to run {command} with return code {rc}. stdout: {stdout}, stderr: {stderr}"
+                    "Failed to run %s with return code %s. stdout: %s, stderr: %s",
+                    command,
+                    rc,
+                    stdout,
+                    stderr,
                 )
 
             return rc, stdout, stderr
-        except Exception as e:
-            log.error(f"Failed to execute command: {e}")
+        except LXDExceptions:
+            log.exception("Failed to execute command")
+            return None
 
     def get_kubeconfig(self, container) -> str:
         """Get kubeconfig from a container.
@@ -250,7 +264,7 @@ class LXDSubstrate(COSSubstrate):
         """
         rc, stdout, stderr = self.execute_command(container, ["microk8s", "config"])
         if rc != 0:
-            log.error(f"Failed to get kubeconfig: {stdout}, {stderr}")
+            log.error("Failed to get kubeconfig: %s, %s", stdout, stderr)
         return stdout
 
     def install_k8s(self, container):
@@ -258,8 +272,10 @@ class LXDSubstrate(COSSubstrate):
 
         Args:
             container: Container instance.
-        """
 
+        Returns:
+            Tuple[str, bytes, bytes]: rc, stdout, stderr
+        """
         return self.execute_command(
             container,
             ["sudo", "snap", "install", "microk8s", "--channel=1.28/stable", "--classic"],
@@ -274,9 +290,9 @@ class LXDSubstrate(COSSubstrate):
         try:
             profile = self.client.profiles.get(profile_name)
             profile.delete()
-            log.info(f"Profile {profile_name} removed successfully.")
-        except Exception as e:
-            log.error(f"Failed to remove profile {profile_name}: {e}")
+            log.info("Profile %s removed successfully.", profile_name)
+        except LXDExceptions:
+            log.exception("Failed to remove profile %s", profile_name)
 
     def teardown_substrate(self):
         """Teardown the COS substrate."""
