@@ -48,7 +48,6 @@ from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
 from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
 from charms.reconciler import Reconciler
-
 from cos_integration import COSIntegration
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 
