@@ -44,6 +44,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
 )
+from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v2.snap import SnapError, SnapState
 from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
@@ -60,6 +61,7 @@ KUBECONFIG = Path.home() / ".kube/config"
 ETC_KUBERNETES = Path("/etc/kubernetes")
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
+SUPPORTED_DATASTORES = ["dqlite", "etcd"]
 
 
 class K8sCharm(ops.CharmBase):
@@ -107,6 +109,7 @@ class K8sCharm(ops.CharmBase):
 
         self.framework.observe(self.on.update_status, self._on_update_status)
         if self.is_control_plane:
+            self.etcd = EtcdReactiveRequires(self)
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
     @status.on_error(
@@ -205,17 +208,19 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.check_k8sd_ready()
 
     @on_error(
-        ops.WaitingStatus("Failed to bootstrap k8s snap"),
+        ops.WaitingStatus("Waiting to bootstrap k8s snap"),
+        AssertionError,
         InvalidResponseError,
         K8sdConnectionError,
     )
     def _bootstrap_k8s_snap(self):
-        """Bootstrap the k8s snap package."""
+        """Bootstrap k8s if it's not already bootstrapped."""
         if self.api_manager.is_cluster_bootstrapped():
             log.info("K8s cluster already bootstrapped")
             return
 
         bootstrap_config = BootstrapConfig()
+        self._configure_datastore(bootstrap_config)
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
@@ -225,7 +230,6 @@ class K8sCharm(ops.CharmBase):
         config_str = {
             "bootstrapConfig": yaml.dump(bootstrap_config.dict(by_alias=True, exclude_none=True))
         }
-
         payload = CreateClusterRequest(
             name=node_name, address=f"{address}:{K8SD_PORT}", config=config_str
         )
@@ -247,6 +251,41 @@ class K8sCharm(ops.CharmBase):
         log.info("Configuring COS integration")
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
+
+    def _configure_datastore(self, config: BootstrapConfig):
+        """Configure the datastore for the Kubernetes cluster.
+
+        Args:
+            config (BootstrapConfig): The bootstrap configuration object for
+                the Kubernetes cluster that is being configured. This object
+                will be modified in-place to include etcd's configuration details.
+        """
+        datastore = self.config.get("datastore")
+
+        if datastore not in SUPPORTED_DATASTORES:
+            log.error(
+                "Invalid datastore: %s. Supported values: %s",
+                datastore,
+                ", ".join(SUPPORTED_DATASTORES),
+            )
+            status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
+        assert datastore in SUPPORTED_DATASTORES  # nosec
+
+        if datastore == "etcd":
+            log.info("Using etcd as external datastore")
+            etcd_relation = self.model.get_relation("etcd")
+
+            assert etcd_relation, "Missing etcd relation"  # nosec
+            assert self.etcd.is_ready, "etcd is not ready"  # nosec
+
+            config.datastore = "external"
+            etcd_config = self.etcd.get_client_credentials()
+            config.datastore_ca_cert = etcd_config.get("client_ca", "")
+            config.datastore_client_cert = etcd_config.get("client_cert", "")
+            config.datastore_client_key = etcd_config.get("client_key", "")
+            config.datastore_url = self.etcd.get_connection_string()
+        elif datastore == "dqlite":
+            log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
