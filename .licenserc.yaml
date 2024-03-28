@@ -16,8 +16,9 @@ header:
         See LICENSE file for licensing details.
     paths:
       - '**'
+      - 'charms/worker/k8s/lib/charms/k8s/**'
     paths-ignore:
-      - '**/lib/charms/operator_libs_linux/**'
+      - 'charms/worker/k8s/lib/charms/**'
       - '.github/**'
       - '**/.gitkeep'
       - '**/*.cfg'
