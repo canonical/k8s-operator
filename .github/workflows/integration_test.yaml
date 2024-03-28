@@ -45,3 +45,4 @@ jobs:
       trivy-fs-enabled: true
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
+      test-timeout: 120
