@@ -1,5 +1,5 @@
 ops >= 2.2.0
-cosl == 0.0.8
+cosl ==0.0.10
 pydantic == 1.*
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@main
