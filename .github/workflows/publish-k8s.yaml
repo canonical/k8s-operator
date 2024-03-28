@@ -21,10 +21,10 @@ jobs:
           # look for a branch matching the re \^release-1.\d+$\
           if [[ "${BRANCH}" =~ "^release-1\.[0-9]+$" ]]; then
             echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
-            echo "risk=beta"
+            echo "risk=beta" >> "$GITHUB_OUTPUT"
           else
             echo "track=latest" >> "$GITHUB_OUTPUT"
-            echo "risk=edge"
+            echo "risk=edge" >> "$GITHUB_OUTPUT"
           fi
   publish-to-edge:
     needs: [configure-track]
