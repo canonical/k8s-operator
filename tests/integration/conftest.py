@@ -202,10 +202,11 @@ async def deploy_model(
     """Add a juju model, deploy apps into it, wait for them to be active.
 
     Args:
-        request:     handle to pytest requests from calling fixture
-        ops_test:    Instance of the pytest-operator plugin
-        model_name:  name of the model in which to deploy
-        bundle:      Bundle object to deploy or redeploy into the model
+        request:           handle to pytest requests from calling fixture
+        ops_test:          Instance of the pytest-operator plugin
+        model_name:        name of the model in which to deploy
+        bundle:            Bundle object to deploy or redeploy into the model
+        raise_on_blocked:  Raise if any unit in the model is blocked
 
     Yields:
         model object
@@ -247,7 +248,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     if ignore_blocked:
         raise_on_blocked = False
 
-    log.info(f"Deploying cluster using {bundle_file} bundle.")
+    log.info("Deploying cluster using %s bundle.", bundle_file)
 
     model = "main"
     charm_path = ("worker/k8s", "worker")
