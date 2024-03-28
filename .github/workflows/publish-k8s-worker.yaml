@@ -5,12 +5,32 @@ on:
   push:
     branches:
       - main
+      - release-*
 
 jobs:
+  configure-track:
+    runs-on: ubuntu-latest
+    outputs:
+      track: ${{ steps.flags.outputs.track }}
+      risk: ${{ steps.flags.outputs.risk }}      
+    steps:
+      - name: Determine Track
+        env:
+          BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          # look for a branch matching the re \^release-1.\d+$\
+          if [[ "${BRANCH}" =~ "^release-1\.[0-9]+$" ]]; then
+            echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
+            echo "risk=beta"
+          else
+            echo "track=latest" >> "$GITHUB_OUTPUT"
+            echo "risk=edge"
+          fi
   publish-to-edge:
+    needs: [configure-track]
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
     secrets: inherit
     with:
-      channel: latest/edge
+      channel: ${{needs.configure-track.outputs.track}}/${{needs.configure-track.outputs.risk}}
       working-directory:  ./charms/worker/
       tag-prefix: k8s-worker
