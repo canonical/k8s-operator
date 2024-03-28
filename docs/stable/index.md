@@ -4,7 +4,7 @@ This document outlines the process for publishing a Canonical Kubernetes stable 
 ## Background
 
 ### Repository layout
-This repositories used by Canonical Kuberentes has a branch scheme to provide a
+This repositories used by Canonical Kubernetes has a branch scheme to provide a
 consistent release experience. Any external or shared repositories are forked
 into the `charmed-kubernetes` github organization and have the following branches:
 
