@@ -1,5 +1,6 @@
 [tool.bandit]
-exclude_dirs = ["/venv/"]
+exclude_dirs = ["/venv/", "tests"]
+skips = ["B404","B603"]
 [tool.bandit.assert_used]
 skips = ["*/*test.py", "*/test_*.py", "*tests/*.py"]
 
@@ -24,7 +25,9 @@ exclude = [".git", "__pycache__", ".tox", "build", "dist", "*.egg_info", "venv"]
 select = ["E", "W", "F", "C", "N", "R", "D", "H"]
 # Ignore W503, E501 because using black creates errors with this
 # Ignore D107 Missing docstring in __init__
-ignore = ["W503", "E501", "D107"]
+# Ignore N805 first argument should be named self. Pydantic validators do not comply.
+ignore = ["W503", "E501", "D107", "N805"]
+
 # D100, D101, D102, D103: Ignore missing docstrings in tests
 per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,D205,D212,D415"]
 docstring-convention = "google"
@@ -39,7 +42,15 @@ explicit_package_bases = true
 namespace_packages = true
 
 [tool.pylint]
-disable = "wrong-import-order,redefined-outer-name"
+# Ignore too-few-public-methods due to pydantic models
+# Ignore no-self-argument due to pydantic validators
+disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument,fixme,parse-error"
+# Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
+extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
+
+[tool.pylint.typecheck]
+# Ignore typechecking on pylxd manager classes
+ignored-classes = "ProfileManager,InstanceManager,NetworkManager"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -71,3 +82,5 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+[tool.pyright]
+extraPaths = ["./charms/worker/k8s/lib"]
