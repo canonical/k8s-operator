@@ -1,0 +1,6 @@
+juju
+pylxd
+pytest
+pytest-asyncio
+pytest-operator @ git+https://github.com/charmed-kubernetes/pytest-operator@akd/add-k8s-alpha
+tenacity

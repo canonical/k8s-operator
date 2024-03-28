@@ -1,4 +1,5 @@
-name: Tests K8s
+name: Charm Analysis
+# Unit testing, Style Linting, Type Linting, Static Analysis, and Spelling
 
 on:
   pull_request:
@@ -9,4 +10,3 @@ jobs:
     secrets: inherit
     with:
       self-hosted-runner:  false
-      working-directory:  ./charms/worker/k8s/

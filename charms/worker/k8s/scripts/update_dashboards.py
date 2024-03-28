@@ -20,7 +20,10 @@ import yaml
 logging.basicConfig(level=logging.INFO)
 
 VERSION = "v0.13.0"
-SOURCE_URL = f"https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
+SOURCE_URL = (
+    "https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/"
+    f"{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
+)
 DASHBOARDS = {
     "apiserver.json",
     "cluster-total.json",
@@ -44,10 +47,17 @@ DASHBOARDS = {
 TARGET_DIR = "src/grafana_dashboards"
 
 
-def fetch_dashboards(source_url):
-    """Fetch and load dashboard definitions from the specified URL."""
+def fetch_dashboards(source_url: str):
+    """Fetch and load dashboard definitions from the specified URL.
+
+    Args:
+        source_url (str): URL to dashboards
+
+    Returns:
+        Parsed yaml dashboard content
+    """
     try:
-        with urlopen(source_url) as response:
+        with urlopen(source_url) as response:  # nosec
             return yaml.safe_load(response.read())
     except URLError as e:
         logging.error(f"Error fetching dashboard data: {e}")
@@ -55,7 +65,14 @@ def fetch_dashboards(source_url):
 
 
 def dashboards_data(data):
-    """Yield dashboard data for dashboards specified in DASHBOARDS."""
+    """Yield dashboard data for dashboards specified in DASHBOARDS.
+
+    Args:
+        data (dict): data containing dashboard data.
+
+    Yields:
+        Tuple[str, Any]: key and values from the dashboard data
+    """
     if not data:
         return
 
@@ -66,7 +83,16 @@ def dashboards_data(data):
 
 
 def prepare_dashboard(json_value):
-    """Prepare dashboard data for COS integration by removing the built-in Prometheus datasource."""
+    """Prepare dashboard data for COS integration.
+
+    removes the built-in Prometheus datasource
+
+    Args:
+        json_value (dict): updated templating dashboard data
+
+    Returns:
+        string formatted dashboard
+    """
     json_value["templating"]["list"] = [
         item
         for item in json_value.get("templating", {}).get("list", [])
@@ -76,7 +102,12 @@ def prepare_dashboard(json_value):
 
 
 def save_dashboard_to_file(name, data):
-    """Save the prepared dashboard JSON to a file."""
+    """Save the prepared dashboard JSON to a file.
+
+    Args:
+        name (str): name of the dashboard file
+        data (str): file content to write
+    """
     filepath = os.path.join(TARGET_DIR, name)
     with open(filepath, "w") as f:
         f.write(data)

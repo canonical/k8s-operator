@@ -1,5 +1,6 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""Aid for connecting to grafana instance."""
 
 import base64
 import json
@@ -40,20 +41,16 @@ class Grafana:
 
         Returns:
             str: The response data.
-
-        Raises:
-            AssertionError: If the response status code is not 200.
         """
-        log.info(f"Query: {url}")
+        log.info("Query: %s", url)
         credentials = f"{self.username}:{self.password}"
         encoded_creds = base64.b64encode(credentials.encode("ascii"))
         request = urllib.request.Request(url)
         request.add_header("Authorization", f"Basic {encoded_creds.decode('ascii')}")
 
-        response = urllib.request.urlopen(request)
-
-        assert response.code == 200, f"Failed to get endpoint {url}"
-        data = response.read().decode()
+        with urllib.request.urlopen(request) as response:
+            assert response.code == 200, f"Failed to get endpoint {url}"
+            data = response.read().decode()
         return data
 
     async def is_ready(self) -> bool:
@@ -71,8 +68,7 @@ class Grafana:
         Returns:
             dict: A dictionary containing basic API health information.
         """
-        api_path = "api/health"
-        uri = "{}/{}".format(self.base_uri, api_path)
+        uri = f"{self.base_uri}/api/health"
 
         data = self._get_with_auth(uri)
 
@@ -84,8 +80,7 @@ class Grafana:
         Returns:
             list: Found dashboards, if any.
         """
-        api_path = "api/search"
-        uri = "{}/{}?starred=false".format(self.base_uri, api_path)
+        uri = f"{self.base_uri}/api/search?starred=false"
 
         data = self._get_with_auth(uri)
 

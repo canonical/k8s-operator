@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 # Ignore Pylint requiring docstring for each test function.
 # pylint: disable=C0116
-"""Unit tests for K8sdAPIManager"""
+"""Unit tests for K8sdAPIManager."""
 
 import socket
 import unittest
@@ -27,9 +27,10 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
 
 
 class TestBaseRequestModel(unittest.TestCase):
-    """Test BaseRequestModel"""
+    """Test BaseRequestModel."""
 
     def test_successful_instantiation(self):
+        """Test successfully instantiating a K8sApiManager."""
         valid_data = {
             "type": "test_type",
             "status": "test_status",
@@ -45,6 +46,7 @@ class TestBaseRequestModel(unittest.TestCase):
             )
 
     def test_invalid_status_code(self):
+        """Test handling invalid status code."""
         invalid_data = {
             "type": "test_type",
             "status": "test_status",
@@ -58,6 +60,7 @@ class TestBaseRequestModel(unittest.TestCase):
         self.assertIn("Status code must be 200", str(context.exception))
 
     def test_invalid_error_code(self):
+        """Test handling invalid error code."""
         invalid_data = {
             "type": "test_type",
             "status": "test_status",
@@ -72,10 +75,11 @@ class TestBaseRequestModel(unittest.TestCase):
 
 
 class TestUnixSocketHTTPConnection(unittest.TestCase):
-    """Test UnixSocketHTTPConnection"""
+    """Test UnixSocketHTTPConnection."""
 
     @patch("socket.socket")
     def test_connection_success(self, mock_socket: MagicMock):
+        """Test successful connection."""
         socket_path = "/path/to/socket"
         conn = UnixSocketHTTPConnection(socket_path)
 
@@ -90,6 +94,7 @@ class TestUnixSocketHTTPConnection(unittest.TestCase):
 
     @patch("socket.socket")
     def test_connection_failure(self, mock_socket):
+        """Test connection failure."""
         socket_path = "/path/to/socket"
         conn = UnixSocketHTTPConnection(socket_path)
 
@@ -105,7 +110,7 @@ class TestUnixSocketHTTPConnection(unittest.TestCase):
 
 
 class TestK8sdAPIManager(unittest.TestCase):
-    """Test K8sdAPIManager"""
+    """Test K8sdAPIManager."""
 
     def setUp(self):
         """Setup environment."""
@@ -114,6 +119,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_bootstrap_k8s_snap(self, mock_send_request):
+        """Test bootstrap."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         self.api_manager.bootstrap_k8s_snap(
@@ -134,6 +140,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     def test_create_join_token_invalid_response(self):
+        """Test invalid request for join token."""
         mock_connection = MagicMock()
         self.mock_factory.create_connection.return_value.__enter__.return_value = mock_connection
         mock_connection.getresponse.return_value.status = 500
@@ -145,12 +152,14 @@ class TestK8sdAPIManager(unittest.TestCase):
             self.api_manager.create_join_token("test-node")
 
     def test_create_join_token_connection_error(self):
+        """Test errored request for join token."""
         self.mock_factory.create_connection.side_effect = socket.error("Connection failed")
 
         with self.assertRaises(K8sdConnectionError):
             self.api_manager.create_join_token("test-node")
 
     def test_create_join_token_success(self):
+        """Test successful request for join token."""
         mock_connection = MagicMock()
         self.mock_factory.create_connection.return_value.__enter__.return_value = mock_connection
         mock_connection.getresponse.return_value.status = 200
@@ -171,6 +180,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_create_join_token(self, mock_send_request):
+        """Test successful request for join token."""
         mock_send_request.return_value = CreateJoinTokenResponse(
             status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="test-token")
         )
@@ -185,6 +195,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_create_join_token_worker(self, mock_send_request):
+        """Test successful request for join token for a worker."""
         mock_send_request.return_value = CreateJoinTokenResponse(
             status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="test-token")
         )
@@ -199,6 +210,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_join_cluster(self, mock_send_request):
+        """Test successfully joining a cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         self.api_manager.join_cluster("test-node", "127.0.0.1:6400", "test-token")
@@ -211,6 +223,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_remove_node(self, mock_send_request):
+        """Test successfully removing a node from the cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         self.api_manager.remove_node("test-node")
@@ -220,6 +233,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_update_cluster_config(self, mock_send_request):
+        """Test successfully updating cluster config."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         dns_config = DNSConfig(enabled=True)
@@ -235,6 +249,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_request_auth_token(self, mock_send_request):
+        """Test successfully requesting auth-token."""
         test_token = "foo:mytoken"
         mock_send_request.return_value = AuthTokenResponse(
             status_code=200, type="test", error_code=0, metadata=TokenMetadata(token=test_token)

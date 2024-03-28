@@ -198,8 +198,9 @@ async def test_grafana(
 
 
 @pytest.mark.cos
+@pytest.mark.usefixtures("related_prometheus")
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_address: str, cos_model: model.Model, related_prometheus):
+async def test_prometheus(traefik_address: str, cos_model: model.Model):
     """Test integration with Prometheus."""
     prometheus = Prometheus(model_name=cos_model.name, host=traefik_address)
     while not await prometheus.is_ready():
