@@ -181,12 +181,7 @@ And opened this upstream PR:
 **Job**: https://github.com/canonical/k8s-operator/actions/workflows/promote_charm.yaml
 
 Run the workflow from a branch, select `release_1.xx`, 
-* Choose `Charm` - `k8s`
-* Choose `Origin Channel`- `beta`
-* Choose `Destination Channel` - `stable`
-
-Run the workflow again from a branch, select `release_1.xx`, 
-* Choose `Charm` - `k8s-worker`
+* Choose `Charm` - `all`
 * Choose `Origin Channel`- `beta`
 * Choose `Destination Channel` - `stable`
 
