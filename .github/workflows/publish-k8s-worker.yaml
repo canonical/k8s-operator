@@ -11,10 +11,11 @@ jobs:
   configure-track:
     runs-on: ubuntu-latest
     outputs:
-      track: ${{ steps.flags.outputs.track }}
-      risk: ${{ steps.flags.outputs.risk }}      
+      track: ${{ steps.channel.outputs.track }}
+      risk: ${{ steps.channel.outputs.risk }}
     steps:
-      - name: Determine Track
+      - name: Determine Channel
+        id: channel
         env:
           BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |

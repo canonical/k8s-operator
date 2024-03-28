@@ -7,6 +7,7 @@ on:
         type: choice
         description: 'Charm'
         options:
+        - all
         - k8s
         - k8s-worker
       origin-risk:
@@ -29,9 +30,10 @@ jobs:
   configure-track:
     runs-on: ubuntu-latest
     outputs:
-      track: ${{ steps.flags.outputs.track }}
+      track: ${{ steps.channel.outputs.track }}
     steps:
-      - name: Determine Track
+      - name: Determine Channel
+        id: channel
         env:
           BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
@@ -42,12 +44,33 @@ jobs:
             echo "track=latest" >> "$GITHUB_OUTPUT"
           fi
           echo "Promote from $track/${{github.event.inputs.origin-risk}} to $track/${{github.event.inputs.destination-risk}}"
+  select-charms:
+    runs-on: ubuntu-latest
+    outputs:
+      track: ${{ steps.charms.outputs.charms }}
+    steps:
+      - name: Determine Charms
+        id: charms
+        env:
+          CHOICE: ${{ github.event.inputs.charm }}
+        run: |
+          echo "Determines which charms were chosen from $CHOICE"
+          if [[ "${CHOICE}" == "all" ]]; then
+            echo "charms=[\"charms/worker\", \"charms/worker/k8s\"]" >> "$GITHUB_OUTPUT"
+          elif [[ "${CHOICE}" == "k8s" ]]; then
+            echo "charms=[\"charms/worker/k8s\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo "charms=[\"charms/worker\"]" >> "$GITHUB_OUTPUT"
+          fi
   promote-charm:
-    needs: [configure-track]
+    needs: [configure-track, select-charms]
+    strategy:
+      matrix:
+        charm-directory: ${{ fromJson(needs.select-charms.outputs.charms) }}
     uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@main
     with:
       origin-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.origin-risk }}
       destination-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.destination-risk }}
       docs-working-directory: ./charms
-      working-directory:  ./charms/${{ github.event.inputs.charm == 'k8s-worker' && 'worker' || 'worker/k8s' }}
+      working-directory:  ${{ matrix.charm-directory }}
     secrets: inherit
