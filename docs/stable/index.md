@@ -180,9 +180,15 @@ And opened this upstream PR:
 ### Promote charms to stable
 **Job**: https://github.com/canonical/k8s-operator/actions/workflows/promote_charm.yaml
 
-This job runs the workflow from a branch, select `release_1.xx`, 
-* Choose `Origin Channel`- `1.xx/beta`
-* Choose `Destination Channel` - `1.xx/stable`
+Run the workflow from a branch, select `release_1.xx`, 
+* Choose `Charm` - `k8s`
+* Choose `Origin Channel`- `beta`
+* Choose `Destination Channel` - `stable`
+
+Run the workflow again from a branch, select `release_1.xx`, 
+* Choose `Charm` - `k8s-worker`
+* Choose `Origin Channel`- `beta`
+* Choose `Destination Channel` - `stable`
 
 ![promote charm options](promote-charm.png)
 
