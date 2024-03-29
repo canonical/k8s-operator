@@ -3,7 +3,7 @@ This document outlines the process for publishing a Canonical Kubernetes stable 
 
 ## Background
 
-### Repository layout
+### Repository Branching
 This repositories used by Canonical Kubernetes has a branch scheme to provide a
 consistent release experience. Any external or shared repositories are forked
 into the `charmed-kubernetes` github organization and have the following branches:
@@ -126,7 +126,6 @@ pip freeze > charms/worker/k8s/requirements.txt
 Raising a PR, passing the integration tests, and merging into the release
 branch should publish the charm to the upstream `1.xx/beta` channel
 
-
 ## Internal verification
 
 ### Run **validate-k8s-release-upgrade** job
@@ -135,7 +134,10 @@ branch should publish the charm to the upstream `1.xx/beta` channel
 
 This validates the deployment using charms from the `$prev/stable` channel,
 then performing an upgrade to `1.xx/beta`. The tests are parameterized to
-run on multiple series.
+run on 
+* multiple series
+* multiple architectures
+* multiple clouds (aws/azure/gcp/vsphere)
 
 ### Notify Solutions QA
 
@@ -146,25 +148,20 @@ with a new `1.xx` tag and informing SQA of that tag. They will then have the
 remaining week to test and file bugs so engineering can work towards getting
 them resolved prior to GA.
 
-Please note the [Conflict Resolution Section](#conflict-resolution) for making
-any changes as a result of SQA testing.
-
 ### CNCF Conformance
 
-**Job**: https://jenkins.canonical.com/k8s-ps5/job/conformance-cncf-ck/
+**Job**: https://jenkins.canonical.com/k8s-ps5/job/conformance-cncf-k8s/
 
-Sync `charmed-kubernetes/k8s-conformance` main from upstream
+Sync `canonical/k8s-conformance` main from upstream
 
-- https://github.com/charmed-kubernetes/k8s-conformance
+- https://github.com/canonical/k8s-conformance
 
 Confirm passing results, then create a PR against the upstream `k8s-conformance`
-repo. For example, we used the following branch for CK 1.29:
+repo.
 
-- https://github.com/charmed-kubernetes/k8s-conformance/tree/1.29-ck
+And opened an upstream PR:
 
-And opened this upstream PR:
-
-- https://github.com/cncf/k8s-conformance/pull/3043
+- https://github.com/cncf/k8s-conformance/pull/XXXXX
 
 > **Note**: CNCF requires a sign-off. After confirming results, issue a
 `git commit --amend --signoff` on the branch prior to submitting the PR.

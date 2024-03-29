@@ -22,9 +22,6 @@ on:
         description: 'Destination Channel'
         options:
         - stable
-    secrets:
-      CHARMHUB_TOKEN:
-        required: true
 
 jobs:
   configure-track:
@@ -35,10 +32,10 @@ jobs:
       - name: Determine Channel
         id: channel
         env:
-          BRANCH: ${{ github.event.pull_request.base.ref }}
+          BRANCH: ${{ github.ref }}
         run: |
           # look for a branch matching the re \^release-1.\d+$\
-          if [[ "${BRANCH}" =~ "^release-1\.[0-9]+$" ]]; then
+          if [[ "${BRANCH}" =~ "^refs/head/release-1\.[0-9]+$" ]]; then
             echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
           else
             echo "track=latest" >> "$GITHUB_OUTPUT"

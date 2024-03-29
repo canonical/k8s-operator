@@ -17,10 +17,10 @@ jobs:
       - name: Determine Channel
         id: channel
         env:
-          BRANCH: ${{ github.event.pull_request.base.ref }}
+          BRANCH: ${{ github.ref }}
         run: |
           # look for a branch matching the re \^release-1.\d+$\
-          if [[ "${BRANCH}" =~ "^release-1\.[0-9]+$" ]]; then
+          if [[ "${BRANCH}" =~ "^refs/head/release-1\.[0-9]+$" ]]; then
             echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
             echo "risk=beta" >> "$GITHUB_OUTPUT"
           else
@@ -28,13 +28,13 @@ jobs:
             echo "risk=edge" >> "$GITHUB_OUTPUT"
           fi
   publish-to-edge:
-    needs: [configure-track]
+    needs: [configure-channel]
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
     strategy:
       matrix:
         charm-directory: ["./charms/worker/", "./charms/worker/k8s/"]
     secrets: inherit
     with:
-      channel: ${{needs.configure-track.outputs.track}}/${{needs.configure-track.outputs.risk}}
+      channel: ${{needs.configure-channel.outputs.track}}/${{needs.configure-channel.outputs.risk}}
       working-directory: ${{ matrix.charm-directory }}
       tag-prefix: k8s
