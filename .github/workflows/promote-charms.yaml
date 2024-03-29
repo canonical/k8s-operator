@@ -1,4 +1,4 @@
-name: Promote charm
+name: Promote charms
 
 on:
   workflow_dispatch:
@@ -47,7 +47,7 @@ jobs:
   select-charms:
     runs-on: ubuntu-latest
     outputs:
-      track: ${{ steps.charms.outputs.charms }}
+      charms: ${{ steps.charms.outputs.charms }}
     steps:
       - name: Determine Charms
         id: charms

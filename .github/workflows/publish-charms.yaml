@@ -1,4 +1,4 @@
-name: Publish K8s-worker to edge
+name: Publish Charms to 1.xx/edge
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
       - release-*
 
 jobs:
-  configure-track:
+  configure-channel:
     runs-on: ubuntu-latest
     outputs:
       track: ${{ steps.channel.outputs.track }}
@@ -30,8 +30,11 @@ jobs:
   publish-to-edge:
     needs: [configure-track]
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
+    strategy:
+      matrix:
+        charm-directory: ["./charms/worker/", "./charms/worker/k8s/"]
     secrets: inherit
     with:
       channel: ${{needs.configure-track.outputs.track}}/${{needs.configure-track.outputs.risk}}
-      working-directory:  ./charms/worker/
-      tag-prefix: k8s-worker
+      working-directory: ${{ matrix.charm-directory }}
+      tag-prefix: k8s
