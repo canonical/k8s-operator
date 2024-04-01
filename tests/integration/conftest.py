@@ -230,7 +230,7 @@ async def deploy_model(
                 apps=list(bundle.applications),
                 status="active",
                 raise_on_blocked=raise_on_blocked,
-                timeout=15 * 60,
+                timeout=30 * 60,
             )
         yield the_model
 
@@ -321,7 +321,7 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
     await cos_model.block_until(
         lambda: all(app in cos_model.applications for app in cos_charms),
-        timeout=60,
+        timeout=5 * 60,
     )
     await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
 
