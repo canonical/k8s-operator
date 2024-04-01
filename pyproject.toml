@@ -54,7 +54,6 @@ ignored-classes = "ProfileManager,InstanceManager,NetworkManager"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-log_cli_level = "INFO"
 
 # Linting tools configuration
 [tool.ruff]
