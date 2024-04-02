@@ -35,11 +35,14 @@ jobs:
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     needs: [build-all-charms, extra-args]
+    strategy:
+      matrix:
+        suite: ["-k test_etcd", "-k test_k8s"]
     secrets: inherit
     with:
       provider: lxd
       juju-channel: 3.3/stable
-      extra-arguments: ${{needs.extra-args.outputs.args}}
+      extra-arguments: ${{needs.extra-args.outputs.args}} ${{ matrix.suite }}
       load-test-enabled: false
       zap-enabled: false
       trivy-fs-enabled: true
