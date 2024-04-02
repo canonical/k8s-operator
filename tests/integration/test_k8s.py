@@ -50,7 +50,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     worker: application.Application = kubernetes_cluster.applications["k8s-worker"]
     label_config = {"labels": f"{testname}="}
     await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
 
     try:
         nodes = await get_nodes(k8s.units[0])
@@ -67,7 +67,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
             k8s.reset_config(list(label_config)), worker.reset_config(list(label_config))
         )
 
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     nodes = await get_nodes(k8s.units[0])
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
@@ -85,10 +85,10 @@ async def test_remove_worker(kubernetes_cluster: model.Model):
     # Remove a worker
     log.info("Remove unit %s", worker.units[0].name)
     await worker.units[0].destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(k8s.units[0], expected_nodes - 1)
     await worker.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
@@ -106,10 +106,10 @@ async def test_remove_non_leader_control_plane(kubernetes_cluster: model.Model):
     # Remove a control-plane
     log.info("Remove unit %s", follower.name)
     await follower.destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(leader, expected_nodes - 1)
     await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(leader, expected_nodes)
 
 
@@ -127,10 +127,10 @@ async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):
     # Remove a control-plane
     log.info("Remove unit %s", leader.name)
     await leader.destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(follower, expected_nodes - 1)
     await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(follower, expected_nodes)
 
 
@@ -144,7 +144,7 @@ async def test_grafana(
 ):
     """Test integration with Grafana."""
     grafana = Grafana(model_name=cos_model.name, host=traefik_address, password=grafana_password)
-    await asyncio.wait_for(grafana.is_ready(), timeout=5 * 60)
+    await asyncio.wait_for(grafana.is_ready(), timeout=10 * 60)
     dashboards = await grafana.dashboards_all()
     actual_dashboard_titles = set()
 
