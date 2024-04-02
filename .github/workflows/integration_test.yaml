@@ -5,6 +5,7 @@ on:
   pull_request:
 
 jobs:
+
   extra-args:
     runs-on: ubuntu-latest
     outputs:
@@ -14,6 +15,8 @@ jobs:
         id: flags
         env:
           TITLE: ${{ github.event.pull_request.title }}
+          JOB: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
         run: |
           EXTRA_ARGS="--crash-dump=on-failure"
           if [[ "$TITLE" == *"[COS]"* ]]; then
@@ -37,15 +40,16 @@ jobs:
     needs: [build-all-charms, extra-args]
     strategy:
       matrix:
-        suite: ["-k test_etcd", "-k test_k8s"]
+        suite: ["k8s", "etcd"]
     secrets: inherit
     with:
       provider: lxd
       juju-channel: 3.3/stable
-      extra-arguments: ${{needs.extra-args.outputs.args}} ${{ matrix.suite }}
+      extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
       load-test-enabled: false
       zap-enabled: false
       trivy-fs-enabled: true
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
       test-timeout: 120
+      test-tox-env: integration-${{ matrix.suite }}
