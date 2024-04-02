@@ -93,22 +93,28 @@ async def test_remove_worker(kubernetes_cluster: model.Model):
 
 
 @pytest.mark.abort_on_fail
-async def test_remove_non_leader_control_plane(kubernetes_cluster: model.Model):
+async def test_remove_non_leader_control_planes(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
     worker = kubernetes_cluster.applications["k8s-worker"]
     expected_nodes = len(k8s.units) + len(worker.units)
     leader_idx = await get_leader(k8s)
     leader = k8s.units[leader_idx]
-    follower = k8s.units[(leader_idx + 1) % len(k8s.units)]
+    followers = [unit for idx, unit in enumerate(k8s.units) if idx != leader_idx]
     await ready_nodes(leader, expected_nodes)
 
-    # Remove a control-plane
-    log.info("Remove unit %s", follower.name)
-    await follower.destroy()
+    # Remove both non-leading control-planes (Replicate issue #277)
+    log.info("Remove unit %s", followers[0].name)
+    await followers[0].destroy()
     await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(leader, expected_nodes - 1)
-    await k8s.add_unit()
+
+    log.info("Remove unit %s", followers[1].name)
+    await followers[1].destroy()
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await ready_nodes(leader, expected_nodes - 2)
+
+    await k8s.add_unit(count=2)
     await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(leader, expected_nodes)
 
