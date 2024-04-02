@@ -146,7 +146,7 @@ release is passed over to Solutions QA (SQA) for sign-off. This is done by
 [publishing a CI release](https://github.com/charmed-kubernetes/jenkins/releases/new)
 with a new `1.xx` tag and informing SQA of that tag. They will then have the
 remaining week to test and file bugs so engineering can work towards getting
-them resolved prior to GA.
+them resolved prior to stable release.
 
 ### CNCF Conformance
 
