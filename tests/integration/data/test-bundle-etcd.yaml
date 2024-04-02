@@ -1,0 +1,30 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: integration-test-etcd
+description: |-
+  Used to deploy or refresh within an integration test model
+series: focal
+applications:
+  easyrsa:
+    charm: easyrsa
+    channel: stable
+    num_units: 1
+  etcd:
+    charm: etcd
+    channel: stable
+    num_units: 1
+  k8s:
+    charm: k8s
+    channel: latest/edge
+    num_units: 1
+    options:
+      datastore: etcd
+  k8s-worker:
+    charm: k8s-worker
+    channel: latest/edge
+    num_units: 1
+relations:
+  - [k8s, k8s-worker:cluster]
+  - [etcd, easyrsa:client]
+  - [etcd, k8s:etcd]

@@ -12,7 +12,6 @@ import yaml
 from pylxd import Client
 from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)

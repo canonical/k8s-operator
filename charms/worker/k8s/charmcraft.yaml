@@ -55,12 +55,19 @@ config:
       default: edge
       type: string
       description: Snap channel of the k8s snap
+    datastore:
+      default: dqlite
+      type: string
+      description: |
+        The datastore to use in Canonical Kubernetes. This cannot be changed
+        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
+        chosen, the charm should be integrated with the etcd charm.
     labels:
       default: ""
       type: string
       description: |
         Labels can be used to organize and to select subsets of nodes in the
-        cluster. Declare node labels in key=value format, separated by spaces.      
+        cluster. Declare node labels in key=value format, separated by spaces.
 
 actions:
   get-kubeconfig:
@@ -87,3 +94,7 @@ provides:
     interface: k8s-cluster
   cos-worker-tokens:
     interface: cos-tokens
+
+requires:
+  etcd:
+    interface: etcd
