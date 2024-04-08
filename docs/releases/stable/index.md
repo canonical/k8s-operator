@@ -9,7 +9,7 @@ consistent release experience. Any external or shared repositories are forked
 into the `charmed-kubernetes` github organization and have the following branches:
 
 * `main`: The primary development branch. Merges are made against this branch as they are approved.
-* `release_1.xx`: The release branch. New major releases are branched from `main`
+* `release_1.xx`: The release branch. New major releases are branched from `main`.
 * `release_1.xx`. Bugfix releases have specific commits PR'd to `release_1.xx` from a `bugfix_1.xx_<bugid>` branch.
 
 Tags are used to mark releases on the `release_1.xx` branch.
@@ -107,8 +107,8 @@ In the following example, building on focal yields packages for py38.
       architectures: [amd64]
 ```
 
-So create a py38 environment, and freeze those libraries
-Then create a PR to merge into the release branch
+Create a python 3.8 environment, and freeze the libraries.
+Then create a PR to merge into the release branch.
 
 Task:
 ```sh
@@ -124,7 +124,7 @@ pip freeze > charms/worker/k8s/requirements.txt
 ### Build charms from the release branches
 
 Raising a PR, passing the integration tests, and merging into the release
-branch should publish the charm to the upstream `1.xx/beta` channel
+branch should publish the charm to the upstream `1.xx/beta` channel.
 
 ## Internal verification
 
@@ -134,7 +134,7 @@ branch should publish the charm to the upstream `1.xx/beta` channel
 
 This validates the deployment using charms from the `$prev/stable` channel,
 then performing an upgrade to `1.xx/beta`. The tests are parameterized to
-run on 
+run on: 
 * multiple series
 * multiple architectures
 * multiple clouds (aws/azure/gcp/vsphere)
@@ -144,7 +144,7 @@ run on
 At the end of the first week and assuming all major blockers are resolved, the
 release is passed over to Solutions QA (SQA) for sign-off. This is done by
 [publishing a CI release](https://github.com/charmed-kubernetes/jenkins/releases/new)
-with a new `1.xx` tag and informing SQA of that tag. They will then have the
+with a new `1.xx` tag and informing SQA of that tag. The SQA team will have the
 remaining week to test and file bugs so engineering can work towards getting
 them resolved prior to stable release.
 
@@ -152,14 +152,14 @@ them resolved prior to stable release.
 
 **Job**: https://jenkins.canonical.com/k8s-ps5/job/conformance-cncf-k8s/
 
-Sync `canonical/k8s-conformance` main from upstream
+Sync `canonical/k8s-conformance` main from upstream.
 
 - https://github.com/canonical/k8s-conformance
 
 Confirm passing results, then create a PR against the upstream `k8s-conformance`
 repo.
 
-And opened an upstream PR:
+Next, open an upstream PR:
 
 - https://github.com/cncf/k8s-conformance/pull/XXXXX
 
