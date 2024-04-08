@@ -99,7 +99,7 @@ create python environments locally to help freeze the requirements.txt
 
 Choose the environment based build-on base in `charms/worker/k8s/charmcraft.yaml`
 
-In the following example, building on focal yields packages for py38.
+In the following example, building on focal yields packages for python 3.8.
 ```yaml
   - build-on:
     - name: ubuntu
