@@ -48,59 +48,7 @@ LIBPATCH = 2
 logger = logging.getLogger(__name__)
 
 
-class CreateClusterRequest(BaseModel):
-    """Request model for creating a new Canonical Kubernetes cluster.
 
-    Attributes:
-        bootstrap (bool): Flag to enable or disable the bootstrap process for
-            the cluster. Defaults to True.
-        name (str): The name of the cluster to be created.
-        address (str): The address where the cluster is hosted.
-        config (Dict[str, str]): A dictionary of additional configuration
-            parameters for the cluster.
-    """
-
-    bootstrap: bool = True
-    name: str
-    address: str
-    config: Dict[str, str]
-
-
-class BootstrapConfig(BaseModel):
-    """Configuration model for bootstrapping a Canonical K8s cluster.
-
-    Attributes:
-        components (List[str]): A list of default components to be installed
-            during the bootstrap process. Defaults to ["dns", "metrics-server",
-            "network"].
-        cluster_cidr (str): The IP address range for the cluster's pods. Defaults
-            to "10.1.0.0/16".
-        service_cidr (str): The IP address range for the cluster services. Defaults
-            to "10.152.183.0/24".
-        rbac (bool): Flag to enable or disable role-based access control
-            (RBAC). Defaults to True.
-        k8s_dqlite_port (int): The port used by Dqlite. Defaults to 9000.
-        datastore (str): The type of datastore used by the cluster.
-            Defaults to "k8s-dqlite".
-        datastore_url (str): The URL of the datastore. Optional; defaults to None.
-        datastore_ca_cert (str): The CA certificate for the datastore.
-            Optional; defaults to None.
-        datastore_client_cert (str): The client certificate for accessing the
-            datastore. Optional; defaults to None.
-        datastore_client_key (str): The client key for accessing the datastore.
-            Optional; defaults to None.
-    """
-
-    components: List[str] = ["dns", "metrics-server", "network"]
-    cluster_cidr: str = Field("10.1.0.0/16", alias="cluster-cidr")
-    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
-    rbac: bool = Field(True, alias="enable-rbac")
-    k8s_dqlite_port: int = Field(9000, alias="k8s-dqlite-port")
-    datastore: str = "k8s-dqlite"
-    datastore_url: str = Field(None, alias="datastore-url")
-    datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
-    datastore_client_cert: str = Field(None, alias="datastore-client-crt")
-    datastore_client_key: str = Field(None, alias="datastore-client-key")
 
 
 class K8sdAPIManagerError(Exception):
@@ -344,6 +292,60 @@ class UserFacingClusterConfig(BaseModel):
     gateway: Optional[GatewayConfig]
     metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
 
+class BootstrapConfig(BaseModel):
+    """Configuration model for bootstrapping a Canonical K8s cluster.
+
+    Attributes:
+        cluster_config (UserFacingClusterConfig): The cluster configuration settings.
+            Optional; Defaults to None.
+        pod_cidr (str): The IP address range for the cluster's pods. Defaults
+            to "10.1.0.0/16".
+        service_cidr (str): The IP address range for the cluster services. Defaults
+            to "10.152.183.0/24".
+        disable_rbac (bool): Flag to disable role-based access control
+            (RBAC). Defaults to False.
+        secure_port (int): The secure port used for Kubernetes. 
+            Optional; Defaults to None.
+        cloud_provider (str): The cloud provider used by the cluster. 
+            Optional; Defaults to None.
+        k8s_dqlite_port (int): The port used by Dqlite. Defaults to 9000.
+        datastore_type (str): The type of datastore used by the cluster.
+            Defaults to "k8s-dqlite".
+        datastore_servers (str): The servers used by the datastore. 
+            Optional; Defaults to None.
+        datastore_ca_cert (str): The CA certificate for the datastore.
+            Optional; Defaults to None.
+        datastore_client_cert (str): The client certificate for accessing the
+            datastore. Optional; Defaults to None.
+        datastore_client_key (str): The client key for accessing the datastore.
+            Optional; Defaults to None.
+    """
+
+    cluster_config: UserFacingClusterConfig = Field(None, alias="cluster-config")
+    pod_cidr: str = Field("10.1.0.0/16", alias="pod-cidr")
+    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
+    disable_rbac: bool = Field(False, alias="disable-rbac")
+    secure_port: int = Field(6443, alias="secure-port")
+    cloud_provider: str = Field(None, alias="cloud-provider")
+    k8s_dqlite_port: int = Field(9000, alias="k8s-dqlite-port")
+    datastore_type: str = Field("k8s-dqlite", alias="datastore-type")
+    datastore_servers: str = Field(None, alias="datastore-servers")
+    datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
+    datastore_client_cert: str = Field(None, alias="datastore-client-crt")
+    datastore_client_key: str = Field(None, alias="datastore-client-key")
+
+class CreateClusterRequest(BaseModel):
+    """Request model for creating a new Canonical Kubernetes cluster.
+
+    Attributes:
+        name (str): The name of the cluster to be created.
+        address (str): The address where the cluster is hosted.
+        config (BootstrapConfig): Additional configuration parameters for the cluster.
+    """
+
+    name: str
+    address: str
+    config: BootstrapConfig 
 
 class UpdateClusterConfigRequest(BaseModel):
     """Request model for updating Cluster config.
@@ -663,11 +665,11 @@ class K8sdAPIManager:
 
         Args:
             request (CreateClusterRequest): The request model to bootstrap the cluster.
-
-        TODO: Add bootstrap config support
         """
-        endpoint = "/cluster/control"
+        endpoint = "/1.0/k8sd/cluster"
         body = request.dict(exclude_none=True, by_alias=True)
+        logger.info("Sending json body")
+        logger.info(body)
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def request_auth_token(self, username: str, groups: List[str]) -> str:

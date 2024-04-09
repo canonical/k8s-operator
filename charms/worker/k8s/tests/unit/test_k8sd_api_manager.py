@@ -128,14 +128,20 @@ class TestK8sdAPIManager(unittest.TestCase):
             )
         )
         mock_send_request.assert_called_once_with(
-            "/cluster/control",
+            "/1.0/k8sd/cluster",
             "POST",
             EmptyResponse,
             {
-                "bootstrap": True,
                 "name": "test-node",
                 "address": "127.0.0.1:6400",
-                "config": {"bootstrapConfig": "foobar"},
+                "config": {
+                    "pod-cidr": "10.1.0.0/16",
+                    "service-cidr": "10.152.183.0/24",
+                    "disable-rbac": False,
+                    "secure-port": 6443,
+                    "k8s-dqlite-port": 9000,
+                    "datastore-type": "k8s-dqlite",
+                },
             },
         )
 
