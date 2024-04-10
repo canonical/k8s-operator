@@ -67,6 +67,6 @@ jobs:
     with:
       origin-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.origin-risk }}
       destination-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.destination-risk }}
-      docs-working-directory: ./charms
+      charm-directory: ./charms
       working-directory:  ${{ matrix.charm-directory }}
     secrets: inherit
