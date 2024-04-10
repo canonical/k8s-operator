@@ -1,0 +1,72 @@
+name: Promote charms
+
+on:
+  workflow_dispatch:
+    inputs:
+      charm:
+        type: choice
+        description: 'Charm'
+        options:
+        - all
+        - k8s
+        - k8s-worker
+      origin-risk:
+        type: choice
+        description: 'Origin Channel'
+        options:
+        - edge
+        - beta
+        - candidate
+      destination-risk:
+        type: choice
+        description: 'Destination Channel'
+        options:
+        - stable
+
+jobs:
+  configure-track:
+    runs-on: ubuntu-latest
+    outputs:
+      track: ${{ steps.channel.outputs.track }}
+    steps:
+      - name: Determine Channel
+        id: channel
+        env:
+          BRANCH: ${{ github.base_ref || github.ref }}
+        run: |
+          BRANCH=${BRANCH#refs/heads/}  # strip off refs/heads/ if it exists
+          if [[ "${BRANCH}" == "main" ]]; then
+            echo "track=latest" >> "$GITHUB_OUTPUT"
+          elif [[ "${BRANCH}" =~ "^release-[0-9]+\.[0-9]+$" ]]; then
+            echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
+          echo "Promote from $track/${{github.event.inputs.origin-risk}} to $track/${{github.event.inputs.destination-risk}}"
+  select-charms:
+    runs-on: ubuntu-latest
+    outputs:
+      charms: ${{ steps.charms.outputs.charms }}
+    steps:
+      - name: Determine Charms
+        id: charms
+        env:
+          CHOICE: ${{ github.event.inputs.charm }}
+        run: |
+          echo "Determines which charms were chosen from $CHOICE"
+          if [[ "${CHOICE}" == "all" ]]; then
+            echo "charms=[\"charms/worker\", \"charms/worker/k8s\"]" >> "$GITHUB_OUTPUT"
+          elif [[ "${CHOICE}" == "k8s" ]]; then
+            echo "charms=[\"charms/worker/k8s\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo "charms=[\"charms/worker\"]" >> "$GITHUB_OUTPUT"
+          fi
+  promote-charm:
+    needs: [configure-track, select-charms]
+    strategy:
+      matrix:
+        charm-directory: ${{ fromJson(needs.select-charms.outputs.charms) }}
+    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@main
+    with:
+      origin-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.origin-risk }}
+      destination-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.destination-risk }}
+      docs-working-directory: ./charms
+      working-directory:  ${{ matrix.charm-directory }}
+    secrets: inherit
