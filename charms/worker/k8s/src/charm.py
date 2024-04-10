@@ -277,6 +277,7 @@ class K8sCharm(ops.CharmBase):
 
             config.datastore_type = "external"
             etcd_config = self.etcd.get_client_credentials()
+            config.k8s_dqlite_port = 0
             config.datastore_ca_cert = etcd_config.get("client_ca", "")
             config.datastore_client_cert = etcd_config.get("client_cert", "")
             config.datastore_client_key = etcd_config.get("client_key", "")
