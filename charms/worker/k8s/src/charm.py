@@ -227,11 +227,8 @@ class K8sCharm(ops.CharmBase):
         binding = self.model.get_binding("juju-info")
         address = binding and binding.network.ingress_address
         node_name = self.get_node_name()
-        config_str = {
-            "bootstrapConfig": yaml.dump(bootstrap_config.dict(by_alias=True, exclude_none=True))
-        }
         payload = CreateClusterRequest(
-            name=node_name, address=f"{address}:{K8SD_PORT}", config=config_str
+            name=node_name, address=f"{address}:{K8SD_PORT}", config=bootstrap_config
         )
 
         # TODO: Make port (and address) configurable.
