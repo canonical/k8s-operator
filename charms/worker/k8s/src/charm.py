@@ -278,12 +278,12 @@ class K8sCharm(ops.CharmBase):
             assert etcd_relation, "Missing etcd relation"  # nosec
             assert self.etcd.is_ready, "etcd is not ready"  # nosec
 
-            config.datastore = "external"
+            config.datastore_type = "external"
             etcd_config = self.etcd.get_client_credentials()
             config.datastore_ca_cert = etcd_config.get("client_ca", "")
             config.datastore_client_cert = etcd_config.get("client_cert", "")
             config.datastore_client_key = etcd_config.get("client_key", "")
-            config.datastore_url = self.etcd.get_connection_string()
+            config.datastore_servers = self.etcd.get_connection_string().split(",")
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
 
