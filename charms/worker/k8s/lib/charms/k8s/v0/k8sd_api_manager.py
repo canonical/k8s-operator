@@ -311,7 +311,7 @@ class BootstrapConfig(BaseModel):
         k8s_dqlite_port (int): The port used by Dqlite. Defaults to 9000.
         datastore_type (str): The type of datastore used by the cluster.
             Defaults to "k8s-dqlite".
-        datastore_servers (str): The servers used by the datastore. 
+        datastore_servers (List[str]): The servers used by the datastore. 
             Optional; Defaults to None.
         datastore_ca_cert (str): The CA certificate for the datastore.
             Optional; Defaults to None.
@@ -329,7 +329,7 @@ class BootstrapConfig(BaseModel):
     cloud_provider: str = Field(None, alias="cloud-provider")
     k8s_dqlite_port: int = Field(9000, alias="k8s-dqlite-port")
     datastore_type: str = Field("k8s-dqlite", alias="datastore-type")
-    datastore_servers: str = Field(None, alias="datastore-servers")
+    datastore_servers: List[str] = Field(None, alias="datastore-servers")
     datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
     datastore_client_cert: str = Field(None, alias="datastore-client-crt")
     datastore_client_key: str = Field(None, alias="datastore-client-key")
