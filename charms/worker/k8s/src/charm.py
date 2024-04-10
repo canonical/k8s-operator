@@ -227,11 +227,8 @@ class K8sCharm(ops.CharmBase):
         binding = self.model.get_binding("juju-info")
         address = binding and binding.network.ingress_address
         node_name = self.get_node_name()
-        config_str = {
-            "bootstrapConfig": yaml.dump(bootstrap_config.dict(by_alias=True, exclude_none=True))
-        }
         payload = CreateClusterRequest(
-            name=node_name, address=f"{address}:{K8SD_PORT}", config=config_str
+            name=node_name, address=f"{address}:{K8SD_PORT}", config=bootstrap_config
         )
 
         # TODO: Make port (and address) configurable.
@@ -278,12 +275,12 @@ class K8sCharm(ops.CharmBase):
             assert etcd_relation, "Missing etcd relation"  # nosec
             assert self.etcd.is_ready, "etcd is not ready"  # nosec
 
-            config.datastore = "external"
+            config.datastore_type = "external"
             etcd_config = self.etcd.get_client_credentials()
             config.datastore_ca_cert = etcd_config.get("client_ca", "")
             config.datastore_client_cert = etcd_config.get("client_cert", "")
             config.datastore_client_key = etcd_config.get("client_key", "")
-            config.datastore_url = self.etcd.get_connection_string()
+            config.datastore_servers = self.etcd.get_connection_string().split(",")
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
 
