@@ -9,4 +9,5 @@ jobs:
     uses: canonical/operator-workflows/.github/workflows/test.yaml@main
     secrets: inherit
     with:
+      docs-working-directory: charms
       self-hosted-runner:  false
