@@ -668,8 +668,6 @@ class K8sdAPIManager:
         """
         endpoint = "/1.0/k8sd/cluster"
         body = request.dict(exclude_none=True, by_alias=True)
-        logger.info("Sending json body")
-        logger.info(body)
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def request_auth_token(self, username: str, groups: List[str]) -> str:
