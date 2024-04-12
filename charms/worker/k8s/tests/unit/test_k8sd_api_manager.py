@@ -76,6 +76,27 @@ class TestBaseRequestModel(unittest.TestCase):
         self.assertIn("Error code must be 0", str(context.exception))
 
 
+class TestBootstrapConfigTyping(unittest.TestCase):
+    """Test BootstrapConfig types."""
+
+    def test_json_representation_drops_unset_fields(self):
+        """Test a default BootstrapConfig is empty."""
+        config = BootstrapConfig()
+        assert config.json(exclude_none=True, by_alias=True) == "{}"
+
+    def test_json_representation_coerced_from_str(self):
+        """Test a field that should be an int, is parsed from a str."""
+        config = BootstrapConfig(**{"k8s-dqlite-port": "1"})
+        assert config.k8s_dqlite_port == 1
+        assert config.json(exclude_none=True, by_alias=True) == '{"k8s-dqlite-port": 1}'
+
+    def test_json_representation_coerced_from_int(self):
+        """Test a field that should be a str, is parsed from an int."""
+        config = BootstrapConfig(**{"datastore-type": 1})
+        assert config.datastore_type == "1"
+        assert config.json(exclude_none=True, by_alias=True) == '{"datastore-type": "1"}'
+
+
 class TestUnixSocketHTTPConnection(unittest.TestCase):
     """Test UnixSocketHTTPConnection."""
 
@@ -173,7 +194,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         token = self.api_manager.create_join_token("test-node")
 
-        self.assertEqual(token, "test-token")
+        self.assertEqual(token.get_secret_value(), "test-token")
         mock_connection.request.assert_called_once_with(
             "POST",
             "/1.0/k8sd/cluster/tokens",
@@ -261,7 +282,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         test_user = "test_user"
         test_groups = ["bar", "baz"]
         token = self.api_manager.request_auth_token(test_user, test_groups)
-        assert token == test_token
+        assert token.get_secret_value() == test_token
         mock_send_request.assert_called_once_with(
             "/1.0/kubernetes/auth/tokens",
             "POST",

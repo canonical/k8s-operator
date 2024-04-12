@@ -33,7 +33,7 @@ from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
 from typing import Generator, List, Optional, Type, TypeVar
 
-from pydantic import BaseModel, Field, validator
+from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
 
 # The unique Charmhub library identifier, never change it
 LIBID = "6a5f235306864667a50437c08ba7e83f"
@@ -124,10 +124,10 @@ class TokenMetadata(BaseModel):
     """Model representing metadata for a token.
 
     Attributes:
-        token (str): The actual token string.
+        token (SecretStr): The token string. (accessible via .get_secret_value() )
     """
 
-    token: str
+    token: SecretStr
 
 
 class AuthTokenResponse(BaseRequestModel):
@@ -302,7 +302,7 @@ class BootstrapConfig(BaseModel):
         cloud_provider (str): The cloud provider used by the cluster.
         k8s_dqlite_port (int): The port used by Dqlite.
         datastore_type (str): The type of datastore used by the cluster.
-        datastore_servers (List[str]): The servers used by the datastore.
+        datastore_servers (List[AnyHttpUrl]): The servers used by the datastore.
         datastore_ca_cert (str): The CA certificate for the datastore.
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
@@ -316,7 +316,7 @@ class BootstrapConfig(BaseModel):
     cloud_provider: str = Field(None, alias="cloud-provider")
     k8s_dqlite_port: int = Field(None, alias="k8s-dqlite-port")
     datastore_type: str = Field(None, alias="datastore-type")
-    datastore_servers: List[str] = Field(None, alias="datastore-servers")
+    datastore_servers: List[AnyHttpUrl] = Field(None, alias="datastore-servers")
     datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
     datastore_client_cert: str = Field(None, alias="datastore-client-crt")
     datastore_client_key: str = Field(None, alias="datastore-client-key")
@@ -579,7 +579,7 @@ class K8sdAPIManager:
                 f"HTTP or Socket error" f"\tmethod={method}\n" f"\tendpoint={endpoint}"
             ) from e
 
-    def create_join_token(self, name: str, worker: bool = False):
+    def create_join_token(self, name: str, worker: bool = False) -> SecretStr:
         """Create a join token.
 
         Args:
@@ -587,7 +587,7 @@ class K8sdAPIManager:
             worker (bool): Whether the node should join as control-plane or worker.
 
         Returns:
-            str: The generated join token if successful.
+            SecretStr: The generated join token if successful.
         """
         endpoint = "/1.0/k8sd/cluster/tokens"
         body = {
@@ -677,7 +677,7 @@ class K8sdAPIManager:
         body = request.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
-    def request_auth_token(self, username: str, groups: List[str]) -> str:
+    def request_auth_token(self, username: str, groups: List[str]) -> SecretStr:
         """Request a Kubernetes authentication token.
 
         Args:
@@ -685,7 +685,7 @@ class K8sdAPIManager:
             groups (List[str]): Groups associated with the user.
 
         Returns:
-            str: The authentication token.
+            SecretStr: The authentication token.
         """
         endpoint = "/1.0/kubernetes/auth/tokens"
         body = {"username": username, "groups": groups}
