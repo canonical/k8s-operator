@@ -31,7 +31,7 @@ import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import Dict, Generator, List, Optional, Type, TypeVar
+from typing import Generator, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field, validator
 
@@ -46,9 +46,6 @@ LIBAPI = 0
 LIBPATCH = 2
 
 logger = logging.getLogger(__name__)
-
-
-
 
 
 class K8sdAPIManagerError(Exception):
@@ -179,10 +176,10 @@ class DNSConfig(BaseModel):
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    enabled: Optional[bool]
-    cluster_domain: Optional[str] = Field(None, alias="cluster-domain")
-    service_ip: Optional[str] = Field(None, alias="service-ip")
-    upstream_nameservers: Optional[List[str]] = Field(None, alias="upstream-nameservers")
+    enabled: bool = Field(None)
+    cluster_domain: str = Field(None, alias="cluster-domain")
+    service_ip: str = Field(None, alias="service-ip")
+    upstream_nameservers: List[str] = Field(None, alias="upstream-nameservers")
 
 
 class IngressConfig(BaseModel):
@@ -194,9 +191,9 @@ class IngressConfig(BaseModel):
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
-    enabled: Optional[bool]
-    default_tls_secret: Optional[str] = Field(None, alias="default-tls-secret")
-    enable_proxy_protocol: Optional[bool] = Field(None, alias="enable-proxy-protocol")
+    enabled: bool = Field(None)
+    default_tls_secret: str = Field(None, alias="default-tls-secret")
+    enable_proxy_protocol: bool = Field(None, alias="enable-proxy-protocol")
 
 
 class LoadBalancerConfig(BaseModel):
@@ -214,15 +211,15 @@ class LoadBalancerConfig(BaseModel):
         bgp_peer_port: The port for BGP peering.
     """
 
-    enabled: Optional[bool]
-    cidrs: Optional[List[str]] = Field(None, alias="cidrs")
-    l2_enabled: Optional[bool] = Field(None, alias="l2-enabled")
-    l2_interfaces: Optional[List[str]] = Field(None, alias="l2-interfaces")
-    bgp_enabled: Optional[bool] = Field(None, alias="bgp-enabled")
-    bgp_local_asn: Optional[int] = Field(None, alias="bgp-local-asn")
-    bgp_peer_address: Optional[str] = Field(None, alias="bgp-peer-address")
-    bgp_peer_asn: Optional[int] = Field(None, alias="bgp-peer-asn")
-    bgp_peer_port: Optional[int] = Field(None, alias="bgp-peer-port")
+    enabled: bool = Field(None)
+    cidrs: List[str] = Field(None)
+    l2_enabled: bool = Field(None, alias="l2-enabled")
+    l2_interfaces: List[str] = Field(None, alias="l2-interfaces")
+    bgp_enabled: bool = Field(None, alias="bgp-enabled")
+    bgp_local_asn: int = Field(None, alias="bgp-local-asn")
+    bgp_peer_address: str = Field(None, alias="bgp-peer-address")
+    bgp_peer_asn: int = Field(None, alias="bgp-peer-asn")
+    bgp_peer_port: int = Field(None, alias="bgp-peer-port")
 
 
 class LocalStorageConfig(BaseModel):
@@ -235,10 +232,10 @@ class LocalStorageConfig(BaseModel):
         set_default: Optional flag to set this as the default storage option.
     """
 
-    enabled: Optional[bool]
-    local_path: Optional[str] = Field(None, alias="local-path")
-    reclaim_policy: Optional[str] = Field(None, alias="reclaim-policy")
-    set_default: Optional[bool] = Field(None, alias="set-default")
+    enabled: bool = Field(None)
+    local_path: str = Field(None, alias="local-path")
+    reclaim_policy: str = Field(None, alias="reclaim-policy")
+    set_default: bool = Field(None, alias="set-default")
 
 
 class NetworkConfig(BaseModel):
@@ -248,7 +245,7 @@ class NetworkConfig(BaseModel):
         enabled: Optional flag which represents the status of Network.
     """
 
-    enabled: Optional[bool]
+    enabled: bool = Field(None)
 
 
 class GatewayConfig(BaseModel):
@@ -258,7 +255,7 @@ class GatewayConfig(BaseModel):
         enabled: Optional flag which represents the status of Gateway.
     """
 
-    enabled: Optional[bool]
+    enabled: bool = Field(None)
 
 
 class MetricsServerConfig(BaseModel):
@@ -268,7 +265,7 @@ class MetricsServerConfig(BaseModel):
         enabled: Optional flag which represents the status of MetricsServer.
     """
 
-    enabled: Optional[bool]
+    enabled: bool = Field(None)
 
 
 class UserFacingClusterConfig(BaseModel):
@@ -284,55 +281,46 @@ class UserFacingClusterConfig(BaseModel):
         metrics_server: Metrics server configuration for the cluster.
     """
 
-    network: Optional[NetworkConfig] = None
-    dns: Optional[DNSConfig] = None
-    ingress: Optional[IngressConfig] = None
-    load_balancer: Optional[LoadBalancerConfig] = Field(None, alias="load-balancer")
-    local_storage: Optional[LocalStorageConfig] = Field(None, alias="local-storage")
-    gateway: Optional[GatewayConfig]
-    metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
+    network: NetworkConfig = Field(None)
+    dns: DNSConfig = Field(None)
+    ingress: IngressConfig = Field(None)
+    load_balancer: LoadBalancerConfig = Field(None, alias="load-balancer")
+    local_storage: LocalStorageConfig = Field(None, alias="local-storage")
+    gateway: GatewayConfig = Field(None)
+    metrics_server: MetricsServerConfig = Field(None, alias="metrics-server")
+
 
 class BootstrapConfig(BaseModel):
     """Configuration model for bootstrapping a Canonical K8s cluster.
 
     Attributes:
         cluster_config (UserFacingClusterConfig): The cluster configuration settings.
-            Optional; Defaults to None.
-        pod_cidr (str): The IP address range for the cluster's pods. Defaults
-            to "10.1.0.0/16".
-        service_cidr (str): The IP address range for the cluster services. Defaults
-            to "10.152.183.0/24".
+        pod_cidr (str): The IP address range for the cluster's pods.
+        service_cidr (str): The IP address range for the cluster services.
         disable_rbac (bool): Flag to disable role-based access control
-            (RBAC). Defaults to False.
-        secure_port (int): The secure port used for Kubernetes. 
-            Optional; Defaults to None.
-        cloud_provider (str): The cloud provider used by the cluster. 
-            Optional; Defaults to None.
-        k8s_dqlite_port (int): The port used by Dqlite. Defaults to 9000.
+        secure_port (int): The secure port used for Kubernetes.
+        cloud_provider (str): The cloud provider used by the cluster.
+        k8s_dqlite_port (int): The port used by Dqlite.
         datastore_type (str): The type of datastore used by the cluster.
-            Defaults to "k8s-dqlite".
-        datastore_servers (List[str]): The servers used by the datastore. 
-            Optional; Defaults to None.
+        datastore_servers (List[str]): The servers used by the datastore.
         datastore_ca_cert (str): The CA certificate for the datastore.
-            Optional; Defaults to None.
-        datastore_client_cert (str): The client certificate for accessing the
-            datastore. Optional; Defaults to None.
+        datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
-            Optional; Defaults to None.
     """
 
     cluster_config: UserFacingClusterConfig = Field(None, alias="cluster-config")
-    pod_cidr: str = Field("10.1.0.0/16", alias="pod-cidr")
-    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
-    disable_rbac: bool = Field(False, alias="disable-rbac")
-    secure_port: int = Field(6443, alias="secure-port")
+    pod_cidr: str = Field(None, alias="pod-cidr")
+    service_cidr: str = Field(None, alias="service-cidr")
+    disable_rbac: bool = Field(None, alias="disable-rbac")
+    secure_port: int = Field(None, alias="secure-port")
     cloud_provider: str = Field(None, alias="cloud-provider")
-    k8s_dqlite_port: int = Field(9000, alias="k8s-dqlite-port")
-    datastore_type: str = Field("k8s-dqlite", alias="datastore-type")
+    k8s_dqlite_port: int = Field(None, alias="k8s-dqlite-port")
+    datastore_type: str = Field(None, alias="datastore-type")
     datastore_servers: List[str] = Field(None, alias="datastore-servers")
     datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
     datastore_client_cert: str = Field(None, alias="datastore-client-crt")
     datastore_client_key: str = Field(None, alias="datastore-client-key")
+
 
 class CreateClusterRequest(BaseModel):
     """Request model for creating a new Canonical Kubernetes cluster.
@@ -345,7 +333,8 @@ class CreateClusterRequest(BaseModel):
 
     name: str
     address: str
-    config: BootstrapConfig 
+    config: BootstrapConfig
+
 
 class UpdateClusterConfigRequest(BaseModel):
     """Request model for updating Cluster config.
@@ -357,18 +346,32 @@ class UpdateClusterConfigRequest(BaseModel):
     config: UserFacingClusterConfig
 
 
+class DatastoreStatus(BaseModel):
+    """information regarding the active datastore.
+
+    Attributes:
+        datastore_type (str): external or k8s-dqlite datastore
+        external_url: (str): list of external_urls
+    """
+
+    datastore_type: str = Field(None, alias="type")
+    external_url: str = Field(None, alias="external-url")
+
+
 class ClusterStatus(BaseModel):
     """Represents the overall status of the k8sd cluster.
 
     Attributes:
         ready (bool): Indicates if the cluster is ready.
         members (List[ClusterMember]): List of members in the cluster.
-        config (Optional[UserFacingClusterConfig]): information about the cluster configuration.
+        config (UserFacingClusterConfig): information about the cluster configuration.
+        datastore (DatastoreStatus): information regarding the active datastore.
     """
 
-    ready: Optional[bool] = False
-    members: Optional[List[ClusterMember]]
-    config: Optional[UserFacingClusterConfig]
+    ready: bool = Field(False)
+    members: List[ClusterMember] = Field(None)
+    config: UserFacingClusterConfig = Field(None)
+    datastore: DatastoreStatus = Field(None)
 
 
 class ClusterMetadata(BaseModel):
@@ -385,11 +388,11 @@ class GetClusterStatusResponse(BaseRequestModel):
     """Response model for getting the status of the k8sd cluster.
 
     Attributes:
-        metadata (Optional[ClusterMetadata]): Metadata containing the cluster status.
-                                              Can be None if the status is not available.
+        metadata (ClusterMetadata): Metadata containing the cluster status.
+                                    Can be None if the status is not available.
     """
 
-    metadata: Optional[ClusterMetadata] = None
+    metadata: ClusterMetadata = Field(None)
 
 
 class KubeConfigMetadata(BaseModel):
@@ -627,6 +630,14 @@ class K8sdAPIManager:
         body = config.dict(exclude_none=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
+    def get_cluster_status(self) -> GetClusterStatusResponse:
+        """Retrieve cluster status.
+
+        Returns:
+            cluster_status: status of the cluster.
+        """
+        return self._send_request("/1.0/k8sd/cluster", "GET", GetClusterStatusResponse)
+
     def is_cluster_bootstrapped(self) -> bool:
         """Check if K8sd has been bootstrapped.
 
@@ -634,9 +645,8 @@ class K8sdAPIManager:
             bool: True if the cluster has been bootstrapped, False otherwise.
         """
         try:
-            endpoint = "/1.0/k8sd/cluster"
-            cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
-            return cluster_status.error_code == 0
+            status = self.get_cluster_status()
+            return status.error_code == 0
         except (K8sdConnectionError, InvalidResponseError) as e:
             logger.error("Invalid response while checking if cluster is bootstrapped: %s", e)
         return False
@@ -649,11 +659,8 @@ class K8sdAPIManager:
         Returns:
             bool: True if the cluster is ready, False otherwise.
         """
-        endpoint = "/1.0/k8sd/cluster"
-        cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
-        if cluster_status.metadata:
-            return cluster_status.metadata.status.ready
-        return False
+        status = self.get_cluster_status()
+        return status.metadata and status.metadata.status.ready
 
     def check_k8sd_ready(self):
         """Check if k8sd is ready."""

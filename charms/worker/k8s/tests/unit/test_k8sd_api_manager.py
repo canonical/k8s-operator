@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
+    BootstrapConfig,
     CreateClusterRequest,
     CreateJoinTokenResponse,
     DNSConfig,
@@ -19,6 +20,7 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
+    NetworkConfig,
     TokenMetadata,
     UnixSocketHTTPConnection,
     UpdateClusterConfigRequest,
@@ -122,10 +124,12 @@ class TestK8sdAPIManager(unittest.TestCase):
         """Test bootstrap."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
+        a = NetworkConfig(enabled=False)
+        b = UserFacingClusterConfig(network=a)
+        config = BootstrapConfig(**{"cluster-config": b})
+
         self.api_manager.bootstrap_k8s_snap(
-            CreateClusterRequest(
-                name="test-node", address="127.0.0.1:6400", config={"bootstrapConfig": "foobar"}
-            )
+            CreateClusterRequest(name="test-node", address="127.0.0.1:6400", config=config)
         )
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster",
@@ -134,14 +138,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             {
                 "name": "test-node",
                 "address": "127.0.0.1:6400",
-                "config": {
-                    "pod-cidr": "10.1.0.0/16",
-                    "service-cidr": "10.152.183.0/24",
-                    "disable-rbac": False,
-                    "secure-port": 6443,
-                    "k8s-dqlite-port": 9000,
-                    "datastore-type": "k8s-dqlite",
-                },
+                "config": {"cluster-config": {"network": {"enabled": False}}},
             },
         )
 
