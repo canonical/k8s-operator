@@ -9,20 +9,24 @@ applications:
   easyrsa:
     charm: easyrsa
     channel: stable
+    constraints: cores=1 mem=4G root-disk=16G
     num_units: 1
   etcd:
     charm: etcd
     channel: stable
+    constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
   k8s:
     charm: k8s
     channel: latest/edge
     num_units: 1
+    constraints: cores=2 mem=8G root-disk=16G
     options:
       datastore: etcd
   k8s-worker:
     charm: k8s-worker
     channel: latest/edge
+    constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
 relations:
   - [k8s, k8s-worker:cluster]

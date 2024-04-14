@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
+    BootstrapConfig,
     CreateClusterRequest,
     CreateJoinTokenResponse,
     DNSConfig,
@@ -19,6 +20,7 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
     InvalidResponseError,
     K8sdAPIManager,
     K8sdConnectionError,
+    NetworkConfig,
     TokenMetadata,
     UnixSocketHTTPConnection,
     UpdateClusterConfigRequest,
@@ -74,6 +76,27 @@ class TestBaseRequestModel(unittest.TestCase):
         self.assertIn("Error code must be 0", str(context.exception))
 
 
+class TestBootstrapConfigTyping(unittest.TestCase):
+    """Test BootstrapConfig types."""
+
+    def test_json_representation_drops_unset_fields(self):
+        """Test a default BootstrapConfig is empty."""
+        config = BootstrapConfig()
+        assert config.json(exclude_none=True, by_alias=True) == "{}"
+
+    def test_json_representation_coerced_from_str(self):
+        """Test a field that should be an int, is parsed from a str."""
+        config = BootstrapConfig(**{"k8s-dqlite-port": "1"})
+        assert config.k8s_dqlite_port == 1
+        assert config.json(exclude_none=True, by_alias=True) == '{"k8s-dqlite-port": 1}'
+
+    def test_json_representation_coerced_from_int(self):
+        """Test a field that should be a str, is parsed from an int."""
+        config = BootstrapConfig(**{"datastore-type": 1})
+        assert config.datastore_type == "1"
+        assert config.json(exclude_none=True, by_alias=True) == '{"datastore-type": "1"}'
+
+
 class TestUnixSocketHTTPConnection(unittest.TestCase):
     """Test UnixSocketHTTPConnection."""
 
@@ -122,10 +145,12 @@ class TestK8sdAPIManager(unittest.TestCase):
         """Test bootstrap."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
+        a = NetworkConfig(enabled=False)
+        b = UserFacingClusterConfig(network=a)
+        config = BootstrapConfig(**{"cluster-config": b})
+
         self.api_manager.bootstrap_k8s_snap(
-            CreateClusterRequest(
-                name="test-node", address="127.0.0.1:6400", config={"bootstrapConfig": "foobar"}
-            )
+            CreateClusterRequest(name="test-node", address="127.0.0.1:6400", config=config)
         )
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster",
@@ -134,14 +159,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             {
                 "name": "test-node",
                 "address": "127.0.0.1:6400",
-                "config": {
-                    "pod-cidr": "10.1.0.0/16",
-                    "service-cidr": "10.152.183.0/24",
-                    "disable-rbac": False,
-                    "secure-port": 6443,
-                    "k8s-dqlite-port": 9000,
-                    "datastore-type": "k8s-dqlite",
-                },
+                "config": {"cluster-config": {"network": {"enabled": False}}},
             },
         )
 
@@ -176,7 +194,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         token = self.api_manager.create_join_token("test-node")
 
-        self.assertEqual(token, "test-token")
+        self.assertEqual(token.get_secret_value(), "test-token")
         mock_connection.request.assert_called_once_with(
             "POST",
             "/1.0/k8sd/cluster/tokens",
@@ -264,7 +282,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         test_user = "test_user"
         test_groups = ["bar", "baz"]
         token = self.api_manager.request_auth_token(test_user, test_groups)
-        assert token == test_token
+        assert token.get_secret_value() == test_token
         mock_send_request.assert_called_once_with(
             "/1.0/kubernetes/auth/tokens",
             "POST",
