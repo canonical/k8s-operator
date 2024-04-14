@@ -5,8 +5,10 @@
 
 """Integration tests."""
 
+import json
+
 import pytest
-from juju import model
+from juju import model, unit
 
 from .helpers import ready_nodes
 
@@ -25,3 +27,17 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
     worker = kubernetes_cluster.applications["k8s-worker"]
     expected_nodes = len(k8s.units) + len(worker.units)
     await ready_nodes(k8s.units[0], expected_nodes)
+
+
+@pytest.mark.abort_on_fail
+async def test_etcd_datastore(kubernetes_cluster: model.Model):
+    """Test that etcd is the backend datastore."""
+    k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
+    etcd: unit.Unit = kubernetes_cluster.applications["etcd"].units[0]
+    etcd_port = etcd.safe_data["ports"][0]["number"]
+    event = await k8s.run("k8s status --output-format json")
+    result = await event.wait()
+    status = json.loads(result.results["stdout"])
+    assert status["ready"], "Cluster isn't ready"
+    assert status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
+    assert status["datastore"]["external-url"] == f"https://{etcd.public_address}:{etcd_port}"

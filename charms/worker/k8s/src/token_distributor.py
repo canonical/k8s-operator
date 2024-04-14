@@ -256,7 +256,7 @@ class TokenDistributor:
                 "Creating token for %s unit=%s hostname=%s", token_type.value, unit.name, name
             )
             token = token_strat(name, token_type)
-            content = {"token": token}
+            content = {"token": token.get_secret_value()}
             secret = relation.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.charm.unit][secret_id] = secret.id or ""
