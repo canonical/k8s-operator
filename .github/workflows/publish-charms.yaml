@@ -32,9 +32,12 @@ jobs:
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
     strategy:
       matrix:
-        charm-directory: ["./charms/worker/", "./charms/worker/k8s/"]
+        charm: [
+          {path: "./charms/worker/", tagPrefix: "k8s-worker"}, 
+          {path: "./charms/worker/k8s/", tagPrefix: "k8s"}
+        ]
     secrets: inherit
     with:
       channel: ${{needs.configure-channel.outputs.track}}/${{needs.configure-channel.outputs.risk}}
-      working-directory: ${{ matrix.charm-directory }}
-      tag-prefix: k8s
+      working-directory: ${{ matrix.charm.path }}
+      tag-prefix: ${{ matrix.charm.tagPrefix }}
