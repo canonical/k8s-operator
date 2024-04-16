@@ -4,3 +4,4 @@ pydantic == 1.*
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@main
 charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@main#subdirectory=ops
+charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@main

@@ -98,3 +98,5 @@ provides:
 requires:
   etcd:
     interface: etcd
+  external-cloud-provider:
+    interface: external_cloud_provider
