@@ -290,6 +290,24 @@ class UserFacingClusterConfig(BaseModel):
     metrics_server: MetricsServerConfig = Field(None, alias="metrics-server")
 
 
+class UserFacingDatastoreConfig(BaseModel):
+    """Aggregated configuration model for the user-facing datastore aspects of a cluster.
+
+    Attributes:
+        type: Type of the datastore. For runtime updates, this needs to be "external".
+        servers: Server addresses of the external datastore.
+        ca_crt: CA certificate of the external datastore cluster in PEM format.
+        client_crt: client certificate of the external datastore cluster in PEM format.
+        client_key: client key of the external datastore cluster in PEM format.
+    """
+
+    type: str = Field(None)
+    servers: List[str] = Field(None)
+    ca_crt: str = Field(None, alias="ca-crt")
+    client_crt: str = Field(None, alias="client-crt")
+    client_key: str = Field(None, alias="client-key")
+
+
 class BootstrapConfig(BaseModel):
     """Configuration model for bootstrapping a Canonical K8s cluster.
 
@@ -341,9 +359,11 @@ class UpdateClusterConfigRequest(BaseModel):
 
     Attributes:
         config (Optional[UserFacingClusterConfig]): The cluster configuration.
+        datastore (Optional[UserFacingDatastoreConfig]): The clusters datastore configuration.
     """
 
-    config: UserFacingClusterConfig
+    config: UserFacingClusterConfig = Field(None)
+    datastore: UserFacingDatastoreConfig = Field(None)
 
 
 class DatastoreStatus(BaseModel):
@@ -351,11 +371,11 @@ class DatastoreStatus(BaseModel):
 
     Attributes:
         datastore_type (str): external or k8s-dqlite datastore
-        external_url: (str): list of external_urls
+        servers: (List(str)): list of server addresses of the external datastore cluster.
     """
 
     datastore_type: str = Field(None, alias="type")
-    external_url: str = Field(None, alias="external-url")
+    servers: List[str] = Field(None, alias="servers")
 
 
 class ClusterStatus(BaseModel):

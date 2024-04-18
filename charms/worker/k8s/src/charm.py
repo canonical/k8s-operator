@@ -43,6 +43,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
+    UserFacingDatastoreConfig,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
@@ -361,6 +362,36 @@ class K8sCharm(ops.CharmBase):
 
         self.api_manager.update_cluster_config(update_request)
 
+    @on_error(
+        WaitingStatus("Ensure that the cluster configuration is up-to-date"),
+        InvalidResponseError,
+        K8sdConnectionError,
+    )
+    def _ensure_cluster_config(self):
+        """Ensure that the cluster configuration is up-to-date
+
+        The snap will detect any changes and only perform necessary steps.
+        There is no need to track changes in the charm.
+        """
+        status.add(ops.MaintenanceStatus("Ensure cluster config"))
+        log.info("Ensure cluster-config")
+
+        update_request = UpdateClusterConfigRequest()
+
+        # TODO: Ensure other configs here as well.
+
+        if self.config.get("datastore") == "etcd":
+            etcd_config = self.etcd.get_client_credentials()
+            update_request.datastore = UserFacingDatastoreConfig(
+                type="external",
+                servers=self.etcd.get_connection_string().split(","),
+                ca_crt=etcd_config.get("client_ca", ""),
+                client_crt=etcd_config.get("client_cert", ""),
+                client_key=etcd_config.get("client_key", ""),
+            )
+
+        self.api_manager.update_cluster_config(update_request)
+
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
 
@@ -474,6 +505,7 @@ class K8sCharm(ops.CharmBase):
             self._create_cos_tokens()
             self._apply_cos_requirements()
             self._revoke_cluster_tokens()
+            self._ensure_cluster_config()
         self._join_cluster()
         self._configure_cos_integration()
         self._update_status()

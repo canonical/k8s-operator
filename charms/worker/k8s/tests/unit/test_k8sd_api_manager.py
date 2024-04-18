@@ -25,6 +25,7 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
     UnixSocketHTTPConnection,
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
+    UserFacingDatastoreConfig,
 )
 
 
@@ -262,13 +263,29 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         dns_config = DNSConfig(enabled=True)
         user_config = UserFacingClusterConfig(dns=dns_config)
-        request = UpdateClusterConfigRequest(config=user_config)
+        datastore = UserFacingDatastoreConfig(
+            type="external",
+            servers=["localhost:123"],
+            ca_crt="ca-crt",
+            client_crt="client-crt",
+            client_key="client-key",
+        )
+        request = UpdateClusterConfigRequest(config=user_config, datastore=datastore)
         self.api_manager.update_cluster_config(request)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster/config",
             "PUT",
             EmptyResponse,
-            {"config": {"dns": {"enabled": True}}},
+            {
+                "config": {"dns": {"enabled": True}},
+                "datastore": {
+                    "type": "external",
+                    "servers": ["localhost:123"],
+                    "ca-crt": "ca-crt",
+                    "client-crt": "client-crt",
+                    "client-key": "client-key",
+                },
+            },
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
