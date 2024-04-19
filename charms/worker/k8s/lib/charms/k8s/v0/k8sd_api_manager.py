@@ -279,6 +279,7 @@ class UserFacingClusterConfig(BaseModel):
         local_storage: Local storage configuration for the cluster.
         gateway: Gateway configuration for the cluster.
         metrics_server: Metrics server configuration for the cluster.
+        cloud_provider: The cloud provider for the cluster.
     """
 
     network: NetworkConfig = Field(None)
@@ -288,6 +289,7 @@ class UserFacingClusterConfig(BaseModel):
     local_storage: LocalStorageConfig = Field(None, alias="local-storage")
     gateway: GatewayConfig = Field(None)
     metrics_server: MetricsServerConfig = Field(None, alias="metrics-server")
+    cloud_provider: str = Field(None, alias="cloud-provider")
 
 
 class BootstrapConfig(BaseModel):
@@ -299,7 +301,6 @@ class BootstrapConfig(BaseModel):
         service_cidr (str): The IP address range for the cluster services.
         disable_rbac (bool): Flag to disable role-based access control
         secure_port (int): The secure port used for Kubernetes.
-        cloud_provider (str): The cloud provider used by the cluster.
         k8s_dqlite_port (int): The port used by Dqlite.
         datastore_type (str): The type of datastore used by the cluster.
         datastore_servers (List[AnyHttpUrl]): The servers used by the datastore.
@@ -313,7 +314,6 @@ class BootstrapConfig(BaseModel):
     service_cidr: str = Field(None, alias="service-cidr")
     disable_rbac: bool = Field(None, alias="disable-rbac")
     secure_port: int = Field(None, alias="secure-port")
-    cloud_provider: str = Field(None, alias="cloud-provider")
     k8s_dqlite_port: int = Field(None, alias="k8s-dqlite-port")
     datastore_type: str = Field(None, alias="datastore-type")
     datastore_servers: List[AnyHttpUrl] = Field(None, alias="datastore-servers")
