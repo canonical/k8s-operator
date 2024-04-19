@@ -341,14 +341,14 @@ class K8sCharm(ops.CharmBase):
             self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
 
     @on_error(
-        WaitingStatus("Waiting to enable Functionalities"),
+        WaitingStatus("Waiting to enable features"),
         InvalidResponseError,
         K8sdConnectionError,
     )
     def _enable_functionalities(self):
         """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Updating K8s Functionalities"))
-        log.info("Enabling K8s Functionalities")
+        status.add(ops.MaintenanceStatus("Updating K8s features"))
+        log.info("Enabling K8s features")
         dns_config = DNSConfig(enabled=True)
         network_config = NetworkConfig(enabled=True)
         user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
