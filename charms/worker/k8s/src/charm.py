@@ -464,7 +464,7 @@ class K8sCharm(ops.CharmBase):
                 request.config = ControlPlaneNodeJoinConfig()
                 request.config.extra_sans = [_get_public_address()]
 
-            self.api_manager.join_cluster(node_name, cluster_addr, token)
+            self.api_manager.join_cluster(request)
             log.info("Success")
 
     def _reconcile(self, event):
