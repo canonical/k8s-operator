@@ -290,7 +290,7 @@ class UserFacingClusterConfig(BaseModel):
     metrics_server: MetricsServerConfig = Field(None, alias="metrics-server")
 
 
-class UserFacingDatastoreConfig(BaseModel):
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
     """Aggregated configuration model for the user-facing datastore aspects of a cluster.
 
     Attributes:
@@ -647,7 +647,7 @@ class K8sdAPIManager:
             config (UpdateClusterConfigRequest): The cluster configuration.
         """
         endpoint = "/1.0/k8sd/cluster/config"
-        body = config.dict(exclude_none=True)
+        body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:
