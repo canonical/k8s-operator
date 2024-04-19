@@ -290,7 +290,7 @@ class UserFacingClusterConfig(BaseModel):
     metrics_server: MetricsServerConfig = Field(None, alias="metrics-server")
 
 
-class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):  # type: ignore[call-arg]
     """Aggregated configuration model for the user-facing datastore aspects of a cluster.
 
     Attributes:

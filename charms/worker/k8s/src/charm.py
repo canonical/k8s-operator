@@ -368,7 +368,7 @@ class K8sCharm(ops.CharmBase):
         K8sdConnectionError,
     )
     def _ensure_cluster_config(self):
-        """Ensure that the cluster configuration is up-to-date
+        """Ensure that the cluster configuration is up-to-date.
 
         The snap will detect any changes and only perform necessary steps.
         There is no need to track changes in the charm.
