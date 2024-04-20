@@ -13,11 +13,13 @@ from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
     BootstrapConfig,
+    ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
     CreateJoinTokenResponse,
     DNSConfig,
     EmptyResponse,
     InvalidResponseError,
+    JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
     NetworkConfig,
@@ -234,11 +236,36 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_join_cluster(self, mock_send_request):
+    def test_join_cluster_control_plane(self, mock_send_request):
         """Test successfully joining a cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
-        self.api_manager.join_cluster("test-node", "127.0.0.1:6400", "test-token")
+        request = JoinClusterRequest(
+            name="test-node", address="127.0.0.1:6400", token="test-token"
+        )
+        request.config = ControlPlaneNodeJoinConfig(extra_sans=["127.0.0.1"])
+        self.api_manager.join_cluster(request)
+        mock_send_request.assert_called_once_with(
+            "/1.0/k8sd/cluster/join",
+            "POST",
+            EmptyResponse,
+            {
+                "name": "test-node",
+                "address": "127.0.0.1:6400",
+                "token": "test-token",
+                "config": "extra-sans:\n- 127.0.0.1\n",
+            },
+        )
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_join_cluster_worker(self, mock_send_request):
+        """Test successfully joining a cluster."""
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+
+        request = JoinClusterRequest(
+            name="test-node", address="127.0.0.1:6400", token="test-token"
+        )
+        self.api_manager.join_cluster(request)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster/join",
             "POST",

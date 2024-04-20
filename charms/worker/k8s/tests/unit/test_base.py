@@ -87,7 +87,10 @@ def test_update_status(harness):
     """
     harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
     harness.charm.on.update_status.emit()
-    assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
+    if harness.charm.is_worker:
+        assert harness.model.unit.status == ops.BlockedStatus("Missing cluster integration")
+    else:
+        assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
 
 
 def test_set_leader(harness):
