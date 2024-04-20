@@ -34,9 +34,11 @@ from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
+    ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
     DNSConfig,
     InvalidResponseError,
+    JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
     NetworkConfig,
@@ -62,6 +64,16 @@ ETC_KUBERNETES = Path("/etc/kubernetes")
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
+
+
+def _get_public_address() -> str:
+    """Get public address from juju.
+
+    Returns:
+        (str) public ip address of the unit
+    """
+    cmd = ["unit-get", "public-address"]
+    return subprocess.check_output(cmd).decode("UTF-8").strip()
 
 
 class K8sCharm(ops.CharmBase):
@@ -221,6 +233,7 @@ class K8sCharm(ops.CharmBase):
 
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
+        bootstrap_config.extra_sans = [_get_public_address()]
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
@@ -441,7 +454,12 @@ class K8sCharm(ops.CharmBase):
             node_name = self.get_node_name()
             cluster_addr = f"{address}:{K8SD_PORT}"
             log.info("Joining %s to %s...", node_name, cluster_addr)
-            self.api_manager.join_cluster(node_name, cluster_addr, token)
+            request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
+            if self.is_control_plane:
+                request.config = ControlPlaneNodeJoinConfig()
+                request.config.extra_sans = [_get_public_address()]
+
+            self.api_manager.join_cluster(request)
             log.info("Success")
 
     def _reconcile(self, event):
@@ -579,9 +597,7 @@ class K8sCharm(ops.CharmBase):
             server = event.params.get("server")
             if not server:
                 log.info("No server requested, use public-address")
-                cmd = ["unit-get", "public-address"]
-                addr = subprocess.check_output(cmd).decode("UTF-8").strip()
-                server = f"{addr}:6443"
+                server = f"{_get_public_address()}:6443"
             log.info("Requesting kubeconfig for server=%s", server)
             resp = self.api_manager.get_kubeconfig(server)
             event.set_results({"kubeconfig": resp})
