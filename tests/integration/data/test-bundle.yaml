@@ -4,7 +4,7 @@
 name: integration-test
 description: |-
   Used to deploy or refresh within an integration test model
-series: jammy
+series: focal
 applications:
   k8s:
     charm: k8s
