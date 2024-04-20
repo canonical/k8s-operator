@@ -31,8 +31,9 @@ import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import Generator, List, Optional, Type, TypeVar
+from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 
+import yaml
 from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
 
 # The unique Charmhub library identifier, never change it
@@ -162,8 +163,8 @@ class ClusterMember(BaseModel):
 
     name: str
     address: str
-    cluster_role: str = Field(None, alias="cluster-role")
-    datastore_role: str = Field(None, alias="datastore-role")
+    cluster_role: Optional[str] = Field(None, alias="cluster-role")
+    datastore_role: Optional[str] = Field(None, alias="datastore-role")
 
 
 class DNSConfig(BaseModel):
@@ -176,10 +177,10 @@ class DNSConfig(BaseModel):
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    enabled: bool = Field(None)
-    cluster_domain: str = Field(None, alias="cluster-domain")
-    service_ip: str = Field(None, alias="service-ip")
-    upstream_nameservers: List[str] = Field(None, alias="upstream-nameservers")
+    enabled: Optional[bool] = Field(None)
+    cluster_domain: Optional[str] = Field(None, alias="cluster-domain")
+    service_ip: Optional[str] = Field(None, alias="service-ip")
+    upstream_nameservers: Optional[List[str]] = Field(None, alias="upstream-nameservers")
 
 
 class IngressConfig(BaseModel):
@@ -191,9 +192,9 @@ class IngressConfig(BaseModel):
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
-    enabled: bool = Field(None)
-    default_tls_secret: str = Field(None, alias="default-tls-secret")
-    enable_proxy_protocol: bool = Field(None, alias="enable-proxy-protocol")
+    enabled: Optional[bool] = Field(None)
+    default_tls_secret: Optional[str] = Field(None, alias="default-tls-secret")
+    enable_proxy_protocol: Optional[bool] = Field(None, alias="enable-proxy-protocol")
 
 
 class LoadBalancerConfig(BaseModel):
@@ -211,15 +212,15 @@ class LoadBalancerConfig(BaseModel):
         bgp_peer_port: The port for BGP peering.
     """
 
-    enabled: bool = Field(None)
-    cidrs: List[str] = Field(None)
-    l2_enabled: bool = Field(None, alias="l2-enabled")
-    l2_interfaces: List[str] = Field(None, alias="l2-interfaces")
-    bgp_enabled: bool = Field(None, alias="bgp-enabled")
-    bgp_local_asn: int = Field(None, alias="bgp-local-asn")
-    bgp_peer_address: str = Field(None, alias="bgp-peer-address")
-    bgp_peer_asn: int = Field(None, alias="bgp-peer-asn")
-    bgp_peer_port: int = Field(None, alias="bgp-peer-port")
+    enabled: Optional[bool] = Field(None)
+    cidrs: Optional[List[str]] = Field(None)
+    l2_enabled: Optional[bool] = Field(None, alias="l2-enabled")
+    l2_interfaces: Optional[List[str]] = Field(None, alias="l2-interfaces")
+    bgp_enabled: Optional[bool] = Field(None, alias="bgp-enabled")
+    bgp_local_asn: Optional[int] = Field(None, alias="bgp-local-asn")
+    bgp_peer_address: Optional[str] = Field(None, alias="bgp-peer-address")
+    bgp_peer_asn: Optional[int] = Field(None, alias="bgp-peer-asn")
+    bgp_peer_port: Optional[int] = Field(None, alias="bgp-peer-port")
 
 
 class LocalStorageConfig(BaseModel):
@@ -232,10 +233,10 @@ class LocalStorageConfig(BaseModel):
         set_default: Optional flag to set this as the default storage option.
     """
 
-    enabled: bool = Field(None)
-    local_path: str = Field(None, alias="local-path")
-    reclaim_policy: str = Field(None, alias="reclaim-policy")
-    set_default: bool = Field(None, alias="set-default")
+    enabled: Optional[bool] = Field(None)
+    local_path: Optional[str] = Field(None, alias="local-path")
+    reclaim_policy: Optional[str] = Field(None, alias="reclaim-policy")
+    set_default: Optional[bool] = Field(None, alias="set-default")
 
 
 class NetworkConfig(BaseModel):
@@ -245,7 +246,7 @@ class NetworkConfig(BaseModel):
         enabled: Optional flag which represents the status of Network.
     """
 
-    enabled: bool = Field(None)
+    enabled: Optional[bool] = Field(None)
 
 
 class GatewayConfig(BaseModel):
@@ -255,7 +256,7 @@ class GatewayConfig(BaseModel):
         enabled: Optional flag which represents the status of Gateway.
     """
 
-    enabled: bool = Field(None)
+    enabled: Optional[bool] = Field(None)
 
 
 class MetricsServerConfig(BaseModel):
@@ -265,7 +266,7 @@ class MetricsServerConfig(BaseModel):
         enabled: Optional flag which represents the status of MetricsServer.
     """
 
-    enabled: bool = Field(None)
+    enabled: Optional[bool] = Field(None)
 
 
 class UserFacingClusterConfig(BaseModel):
@@ -282,14 +283,14 @@ class UserFacingClusterConfig(BaseModel):
         cloud_provider: The cloud provider for the cluster.
     """
 
-    network: NetworkConfig = Field(None)
-    dns: DNSConfig = Field(None)
-    ingress: IngressConfig = Field(None)
-    load_balancer: LoadBalancerConfig = Field(None, alias="load-balancer")
-    local_storage: LocalStorageConfig = Field(None, alias="local-storage")
-    gateway: GatewayConfig = Field(None)
-    metrics_server: MetricsServerConfig = Field(None, alias="metrics-server")
-    cloud_provider: str = Field(None, alias="cloud-provider")
+    network: Optional[NetworkConfig] = Field(None)
+    dns: Optional[DNSConfig] = Field(None)
+    ingress: Optional[IngressConfig] = Field(None)
+    load_balancer: Optional[LoadBalancerConfig] = Field(None, alias="load-balancer")
+    local_storage: Optional[LocalStorageConfig] = Field(None, alias="local-storage")
+    gateway: Optional[GatewayConfig] = Field(None)
+    metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
+    cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
 
 
 class BootstrapConfig(BaseModel):
@@ -307,19 +308,21 @@ class BootstrapConfig(BaseModel):
         datastore_ca_cert (str): The CA certificate for the datastore.
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
+        extra_sans (List[str]): List of extra sans for the self-signed certificates
     """
 
-    cluster_config: UserFacingClusterConfig = Field(None, alias="cluster-config")
-    pod_cidr: str = Field(None, alias="pod-cidr")
-    service_cidr: str = Field(None, alias="service-cidr")
-    disable_rbac: bool = Field(None, alias="disable-rbac")
-    secure_port: int = Field(None, alias="secure-port")
-    k8s_dqlite_port: int = Field(None, alias="k8s-dqlite-port")
-    datastore_type: str = Field(None, alias="datastore-type")
-    datastore_servers: List[AnyHttpUrl] = Field(None, alias="datastore-servers")
-    datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
-    datastore_client_cert: str = Field(None, alias="datastore-client-crt")
-    datastore_client_key: str = Field(None, alias="datastore-client-key")
+    cluster_config: Optional[UserFacingClusterConfig] = Field(None, alias="cluster-config")
+    pod_cidr: Optional[str] = Field(None, alias="pod-cidr")
+    service_cidr: Optional[str] = Field(None, alias="service-cidr")
+    disable_rbac: Optional[bool] = Field(None, alias="disable-rbac")
+    secure_port: Optional[int] = Field(None, alias="secure-port")
+    k8s_dqlite_port: Optional[int] = Field(None, alias="k8s-dqlite-port")
+    datastore_type: Optional[str] = Field(None, alias="datastore-type")
+    datastore_servers: Optional[List[AnyHttpUrl]] = Field(None, alias="datastore-servers")
+    datastore_ca_cert: Optional[str] = Field(None, alias="datastore-ca-crt")
+    datastore_client_cert: Optional[str] = Field(None, alias="datastore-client-crt")
+    datastore_client_key: Optional[str] = Field(None, alias="datastore-client-key")
+    extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
 
 
 class CreateClusterRequest(BaseModel):
@@ -346,6 +349,68 @@ class UpdateClusterConfigRequest(BaseModel):
     config: UserFacingClusterConfig
 
 
+class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
+    """Request model for the config on a node joining the cluster.
+
+    Attributes:
+        kubelet_crt (str): node's certificate
+        kubelet_key (str): node's certificate key
+    """
+
+    kubelet_crt: Optional[str] = Field(None, alias="kubelet-crt")
+    kubelet_key: Optional[str] = Field(None, alias="kubelet-key")
+
+
+class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
+    """Request model for the config on a control-plane node joining the cluster.
+
+    Attributes:
+        extra_sans (List[str]): List of extra sans for the self-signed certificates
+        apiserver_crt (str): apiserver certificate
+        apiserver_client_key (str): apiserver certificate key
+        front_proxy_client_crt (str): front-proxy certificate
+        front_proxy_client_key (str): front-proxy certificate key
+    """
+
+    extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
+
+    apiserver_crt: Optional[str] = Field(None, alias="apiserver-crt")
+    apiserver_client_key: Optional[str] = Field(None, alias="apiserver-key")
+    front_proxy_client_crt: Optional[str] = Field(None, alias="front-proxy-client-crt")
+    front_proxy_client_key: Optional[str] = Field(None, alias="front-proxy-client-key")
+
+
+class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
+    """Request model for a node joining the cluster.
+
+    Attributes:
+        name (str): node's certificate
+        address (str): node's certificate key
+        token (str): token
+        config (NodeJoinConfig): Node Config
+    """
+
+    name: str
+    address: str
+    token: SecretStr
+    config: Optional[NodeJoinConfig] = Field(None)
+
+    def dict(self, **kwds) -> Dict[Any, Any]:
+        """Render object into a dict.
+
+        Arguments:
+            kwds: keyword arguments
+
+        Returns:
+            dict mapping of the object
+        """
+        rendered = super().dict(**kwds)
+        rendered["token"] = self.token.get_secret_value()
+        if self.config:
+            rendered["config"] = yaml.safe_dump(self.config.dict(**kwds))
+        return rendered
+
+
 class DatastoreStatus(BaseModel):
     """information regarding the active datastore.
 
@@ -354,8 +419,8 @@ class DatastoreStatus(BaseModel):
         external_url: (str): list of external_urls
     """
 
-    datastore_type: str = Field(None, alias="type")
-    external_url: str = Field(None, alias="external-url")
+    datastore_type: Optional[str] = Field(None, alias="type")
+    external_url: Optional[str] = Field(None, alias="external-url")
 
 
 class ClusterStatus(BaseModel):
@@ -369,9 +434,9 @@ class ClusterStatus(BaseModel):
     """
 
     ready: bool = Field(False)
-    members: List[ClusterMember] = Field(None)
-    config: UserFacingClusterConfig = Field(None)
-    datastore: DatastoreStatus = Field(None)
+    members: Optional[List[ClusterMember]] = Field(None)
+    config: Optional[UserFacingClusterConfig] = Field(None)
+    datastore: Optional[DatastoreStatus] = Field(None)
 
 
 class ClusterMetadata(BaseModel):
@@ -392,7 +457,7 @@ class GetClusterStatusResponse(BaseRequestModel):
                                     Can be None if the status is not available.
     """
 
-    metadata: ClusterMetadata = Field(None)
+    metadata: Optional[ClusterMetadata] = Field(None)
 
 
 class KubeConfigMetadata(BaseModel):
@@ -597,17 +662,15 @@ class K8sdAPIManager:
         join_response = self._send_request(endpoint, "POST", CreateJoinTokenResponse, body)
         return join_response.metadata.token
 
-    def join_cluster(self, name: str, address: str, token: str):
+    def join_cluster(self, config: JoinClusterRequest):
         """Join a node to the k8s cluster.
 
         Args:
-            name (str): Name of the node.
-            address (str): address to which k8sd should be bound
-            token (str): The join token for this node.
+            config: JoinClusterRequest: config to join the cluster
         """
         endpoint = "/1.0/k8sd/cluster/join"
-        body = {"name": name, "address": address, "token": token}
-        self._send_request(endpoint, "POST", EmptyResponse, body)
+        request = config.dict(exclude_none=True, by_alias=True)
+        self._send_request(endpoint, "POST", EmptyResponse, request)
 
     def remove_node(self, name: str, force: bool = True):
         """Remove a node from the cluster.
