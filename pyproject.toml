@@ -40,6 +40,7 @@ profile = "black"
 ignore_missing_imports = true
 explicit_package_bases = true
 namespace_packages = true
+plugins = "pydantic.mypy"
 
 [tool.pylint]
 # Ignore too-few-public-methods due to pydantic models
