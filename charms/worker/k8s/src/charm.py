@@ -32,6 +32,7 @@ import ops
 import yaml
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
+from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
@@ -97,6 +98,8 @@ class K8sCharm(ops.CharmBase):
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.api_manager = K8sdAPIManager(factory)
+        xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
+        self.xcp = ExternalCloudProvider(self, xcp_relation)
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
@@ -182,6 +185,8 @@ class K8sCharm(ops.CharmBase):
         Returns:
             the hostname of the machine.
         """
+        if self.xcp.name == "aws":
+            return socket.getfqdn().lower()
         return socket.gethostname().lower()
 
     def get_cloud_name(self) -> str:
@@ -190,8 +195,7 @@ class K8sCharm(ops.CharmBase):
         Returns:
             the cloud hosting the machine.
         """
-        # TODO: adjust to detect the correct cloud
-        return ""
+        return self.xcp.name or ""
 
     @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
     def _install_k8s_snap(self):
@@ -233,6 +237,7 @@ class K8sCharm(ops.CharmBase):
 
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
+        self._configure_cloud_provider(bootstrap_config)
         bootstrap_config.service_cidr = self.config["service-cidr"]
         bootstrap_config.control_plane_taints = self.config["register-with-taints"].split()
         bootstrap_config.extra_sans = [_get_public_address()]
@@ -293,6 +298,18 @@ class K8sCharm(ops.CharmBase):
             config.datastore_servers = self.etcd.get_connection_string().split(",")
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
+
+    def _configure_cloud_provider(self, config: BootstrapConfig):
+        """Configure the cloud-provider for the Kubernetes cluster.
+
+        Args:
+            config (BootstrapConfig): The bootstrap configuration object for
+                the Kubernetes cluster that is being configured. This object
+                will be modified in-place.
+        """
+        if self.xcp.has_xcp:
+            log.info("Using external as cloud-provider")
+            config.cloud_provider = "external"
 
     def _revoke_cluster_tokens(self):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
