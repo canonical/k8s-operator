@@ -293,6 +293,24 @@ class UserFacingClusterConfig(BaseModel):
     cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
 
 
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):  # type: ignore[call-arg]
+    """Aggregated configuration model for the user-facing datastore aspects of a cluster.
+
+    Attributes:
+        type: Type of the datastore. For runtime updates, this needs to be "external".
+        servers: Server addresses of the external datastore.
+        ca_crt: CA certificate of the external datastore cluster in PEM format.
+        client_crt: client certificate of the external datastore cluster in PEM format.
+        client_key: client key of the external datastore cluster in PEM format.
+    """
+
+    type: Optional[str] = Field(None)
+    servers: Optional[List[str]] = Field(None)
+    ca_crt: Optional[str] = Field(None, alias="ca-crt")
+    client_crt: Optional[str] = Field(None, alias="client-crt")
+    client_key: Optional[str] = Field(None, alias="client-key")
+
+
 class BootstrapConfig(BaseModel):
     """Configuration model for bootstrapping a Canonical K8s cluster.
 
@@ -346,9 +364,11 @@ class UpdateClusterConfigRequest(BaseModel):
 
     Attributes:
         config (Optional[UserFacingClusterConfig]): The cluster configuration.
+        datastore (Optional[UserFacingDatastoreConfig]): The clusters datastore configuration.
     """
 
-    config: UserFacingClusterConfig
+    config: Optional[UserFacingClusterConfig] = Field(None)
+    datastore: Optional[UserFacingDatastoreConfig] = Field(None)
 
 
 class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
@@ -418,11 +438,11 @@ class DatastoreStatus(BaseModel):
 
     Attributes:
         datastore_type (str): external or k8s-dqlite datastore
-        external_url: (str): list of external_urls
+        servers: (List(str)): list of server addresses of the external datastore cluster.
     """
 
     datastore_type: Optional[str] = Field(None, alias="type")
-    external_url: Optional[str] = Field(None, alias="external-url")
+    servers: Optional[List[str]] = Field(None, alias="servers")
 
 
 class ClusterStatus(BaseModel):
@@ -692,7 +712,7 @@ class K8sdAPIManager:
             config (UpdateClusterConfigRequest): The cluster configuration.
         """
         endpoint = "/1.0/k8sd/cluster/config"
-        body = config.dict(exclude_none=True)
+        body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:

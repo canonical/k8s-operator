@@ -59,6 +59,7 @@ def mock_reconciler_handlers(harness):
             "_apply_cos_requirements",
             "_copy_internal_kubeconfig",
             "_revoke_cluster_tokens",
+            "_ensure_cluster_config",
             "_expose_ports",
         }
 

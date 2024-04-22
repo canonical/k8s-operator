@@ -41,3 +41,26 @@ async def test_etcd_datastore(kubernetes_cluster: model.Model):
     assert status["ready"], "Cluster isn't ready"
     assert status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
     assert status["datastore"]["servers"] == [f"https://{etcd.public_address}:{etcd_port}"]
+
+
+@pytest.mark.abort_on_fail
+async def test_update_etcd_cluster(kubernetes_cluster: model.Model):
+    """Test that adding etcd clusters are propagated to the k8s cluster."""
+    k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
+    etcd = kubernetes_cluster.applications["etcd"]
+    count = 3 - len(etcd.units)
+    if count > 0:
+        await etcd.add_unit(count=count)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=20 * 60)
+
+    expected_servers = []
+    for u in etcd.units:
+        etcd_port = u.safe_data["ports"][0]["number"]
+        expected_servers.append(f"https://{u.public_address}:{etcd_port}")
+
+    event = await k8s.run("k8s status --output-format json")
+    result = await event.wait()
+    status = json.loads(result.results["stdout"])
+    assert status["ready"], "Cluster isn't ready"
+    assert status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
+    assert set(status["datastore"]["servers"]) == set(expected_servers)
