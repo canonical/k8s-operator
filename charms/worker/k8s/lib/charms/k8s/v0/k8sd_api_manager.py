@@ -367,8 +367,8 @@ class UpdateClusterConfigRequest(BaseModel):
         datastore (Optional[UserFacingDatastoreConfig]): The clusters datastore configuration.
     """
 
-    config: UserFacingClusterConfig = Field(None)
-    datastore: UserFacingDatastoreConfig = Field(None)
+    config: Optional[UserFacingClusterConfig] = Field(None)
+    datastore: Optional[UserFacingDatastoreConfig] = Field(None)
 
 
 class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
