@@ -304,7 +304,7 @@ class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
         client_key: client key of the external datastore cluster in PEM format.
     """
 
-    type: Optional[str]] = Field(None)
+    type: Optional[str] = Field(None)
     servers: Optional[List[str]] = Field(None)
     ca_crt: Optional[str] = Field(None, alias="ca-crt")
     client_crt: Optional[str] = Field(None, alias="client-crt")
