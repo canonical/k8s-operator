@@ -48,9 +48,10 @@ async def test_update_etcd_cluster(kubernetes_cluster: model.Model):
     """Test that adding etcd clusters are propagated to the k8s cluster."""
     k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
     etcd = kubernetes_cluster.applications["etcd"]
-
-    await etcd.add_unit()
-    await etcd.add_unit()
+    count = 3 - len(etcd.units)
+    if count > 0:
+        await etcd.add_unit(count=count)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=20*60)
 
     expected_servers = []
     for u in etcd.units:
