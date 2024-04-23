@@ -1,0 +1,6 @@
+amd64:
+- name: k8s
+  channel: edge
+arm64:
+- name: k8s
+  channel: edge

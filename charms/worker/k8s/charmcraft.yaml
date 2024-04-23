@@ -51,10 +51,6 @@ bases:
       architectures: [amd64]
 config:
   options:
-    channel:
-      default: edge
-      type: string
-      description: Snap channel of the k8s snap
     datastore:
       default: dqlite
       type: string
