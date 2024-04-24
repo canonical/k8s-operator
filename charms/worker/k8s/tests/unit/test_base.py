@@ -42,7 +42,7 @@ def mock_reconciler_handlers(harness):
     """
     handler_names = {
         "_evaluate_removal",
-        "_install_k8s_snap",
+        "_install_snaps",
         "_apply_snap_requirements",
         "_check_k8sd_ready",
         "_join_cluster",

@@ -28,6 +28,7 @@ from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
+import charms.operator_libs_linux.v2.snap as snap_lib
 import ops
 import yaml
 from charms.contextual_status import WaitingStatus, on_error
@@ -50,10 +51,9 @@ from charms.k8s.v0.k8sd_api_manager import (
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
-from charms.operator_libs_linux.v2.snap import SnapError, SnapState
-from charms.operator_libs_linux.v2.snap import ensure as snap_ensure
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
+from snap import management as snap_management
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 
 # Log messages can be retrieved using juju debug-log
@@ -198,12 +198,11 @@ class K8sCharm(ops.CharmBase):
         """
         return self.xcp.name or ""
 
-    @on_error(ops.BlockedStatus("Failed to install k8s snap."), SnapError)
-    def _install_k8s_snap(self):
-        """Install the k8s snap package."""
+    @on_error(ops.BlockedStatus("Failed to install snaps."), snap_lib.SnapError)
+    def _install_snaps(self):
+        """Install snap packages."""
         status.add(ops.MaintenanceStatus("Ensuring snap installation"))
-        log.info("Ensuring k8s snap version")
-        snap_ensure("k8s", SnapState.Latest.value, self.config["channel"])
+        snap_management()
 
     @on_error(WaitingStatus("Waiting to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -527,7 +526,7 @@ class K8sCharm(ops.CharmBase):
             return
 
         self._apply_proxy_environment()
-        self._install_k8s_snap()
+        self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
         if self.lead_control_plane:
