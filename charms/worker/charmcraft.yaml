@@ -42,10 +42,6 @@ bases:
       architectures: [amd64]
 config:
   options:
-    channel:
-      default: edge
-      type: string
-      description: Snap channel of the k8s snap
     labels:
       default: ""
       type: string
@@ -59,15 +55,17 @@ parts:
   charm:
     build-packages: [git]
     charm-entrypoint: k8s/src/charm.py
-  lib:
-    # move the ./k8s/lib path to ./lib since 
-    # charmcraft assumes it to be there once the charm runs
+  promote:
+    # move paths out of ./k8s to ./ since 
+    # charmcraft assumes ./lib to be there
+    # charmcraft assumes ./templates to be there
     after: [charm]
     plugin: nil
     source: ./
     override-prime: |
-      rm -rf $CRAFT_PRIME/lib
+      rm -rf $CRAFT_PRIME/lib $CRAFT_PRIME/templates
       mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
+      mv $CRAFT_PRIME/k8s/templates $CRAFT_PRIME/templates
 
 provides:
   cos-agent:

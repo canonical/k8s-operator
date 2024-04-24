@@ -1,0 +1,43 @@
+name: Publish Charms to 1.xx/edge
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - release-*
+
+jobs:
+  configure-channel:
+    runs-on: ubuntu-latest
+    outputs:
+      track: ${{ steps.channel.outputs.track }}
+      risk: ${{ steps.channel.outputs.risk }}
+    steps:
+      - name: Determine Channel
+        id: channel
+        env:
+          BRANCH: ${{ github.base_ref || github.ref }}
+        run: |
+          BRANCH=${BRANCH#refs/heads/}  # strip off refs/heads/ if it exists
+          if [[ "${BRANCH}" == "main" ]]; then
+            echo "track=latest" >> "$GITHUB_OUTPUT"
+            echo "risk=edge" >> "$GITHUB_OUTPUT"
+          elif [[ "${BRANCH}" =~ "^release-[0-9]+\.[0-9]+$" ]]; then
+            echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
+            echo "risk=beta" >> "$GITHUB_OUTPUT"
+          fi
+  publish-to-edge:
+    needs: [configure-channel]
+    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
+    strategy:
+      matrix:
+        charm: [
+          {path: "./charms/worker/", tagPrefix: "k8s-worker"}, 
+          {path: "./charms/worker/k8s/", tagPrefix: "k8s"}
+        ]
+    secrets: inherit
+    with:
+      channel: ${{needs.configure-channel.outputs.track}}/${{needs.configure-channel.outputs.risk}}
+      working-directory: ${{ matrix.charm.path }}
+      tag-prefix: ${{ matrix.charm.tagPrefix }}

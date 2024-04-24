@@ -12,17 +12,22 @@ from unittest.mock import MagicMock, patch
 from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
+    BootstrapConfig,
+    ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
     CreateJoinTokenResponse,
     DNSConfig,
     EmptyResponse,
     InvalidResponseError,
+    JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
+    NetworkConfig,
     TokenMetadata,
     UnixSocketHTTPConnection,
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
+    UserFacingDatastoreConfig,
 )
 
 
@@ -74,6 +79,27 @@ class TestBaseRequestModel(unittest.TestCase):
         self.assertIn("Error code must be 0", str(context.exception))
 
 
+class TestBootstrapConfigTyping(unittest.TestCase):
+    """Test BootstrapConfig types."""
+
+    def test_json_representation_drops_unset_fields(self):
+        """Test a default BootstrapConfig is empty."""
+        config = BootstrapConfig()
+        assert config.json(exclude_none=True, by_alias=True) == "{}"
+
+    def test_json_representation_coerced_from_str(self):
+        """Test a field that should be an int, is parsed from a str."""
+        config = BootstrapConfig(**{"k8s-dqlite-port": "1"})
+        assert config.k8s_dqlite_port == 1
+        assert config.json(exclude_none=True, by_alias=True) == '{"k8s-dqlite-port": 1}'
+
+    def test_json_representation_coerced_from_int(self):
+        """Test a field that should be a str, is parsed from an int."""
+        config = BootstrapConfig(**{"datastore-type": 1})
+        assert config.datastore_type == "1"
+        assert config.json(exclude_none=True, by_alias=True) == '{"datastore-type": "1"}'
+
+
 class TestUnixSocketHTTPConnection(unittest.TestCase):
     """Test UnixSocketHTTPConnection."""
 
@@ -122,20 +148,21 @@ class TestK8sdAPIManager(unittest.TestCase):
         """Test bootstrap."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
+        a = NetworkConfig(enabled=False)
+        b = UserFacingClusterConfig(network=a)
+        config = BootstrapConfig(**{"cluster-config": b})
+
         self.api_manager.bootstrap_k8s_snap(
-            CreateClusterRequest(
-                name="test-node", address="127.0.0.1:6400", config={"bootstrapConfig": "foobar"}
-            )
+            CreateClusterRequest(name="test-node", address="127.0.0.1:6400", config=config)
         )
         mock_send_request.assert_called_once_with(
-            "/cluster/control",
+            "/1.0/k8sd/cluster",
             "POST",
             EmptyResponse,
             {
-                "bootstrap": True,
                 "name": "test-node",
                 "address": "127.0.0.1:6400",
-                "config": {"bootstrapConfig": "foobar"},
+                "config": {"cluster-config": {"network": {"enabled": False}}},
             },
         )
 
@@ -170,7 +197,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         token = self.api_manager.create_join_token("test-node")
 
-        self.assertEqual(token, "test-token")
+        self.assertEqual(token.get_secret_value(), "test-token")
         mock_connection.request.assert_called_once_with(
             "POST",
             "/1.0/k8sd/cluster/tokens",
@@ -209,11 +236,36 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
-    def test_join_cluster(self, mock_send_request):
+    def test_join_cluster_control_plane(self, mock_send_request):
         """Test successfully joining a cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
-        self.api_manager.join_cluster("test-node", "127.0.0.1:6400", "test-token")
+        request = JoinClusterRequest(
+            name="test-node", address="127.0.0.1:6400", token="test-token"
+        )
+        request.config = ControlPlaneNodeJoinConfig(extra_sans=["127.0.0.1"])
+        self.api_manager.join_cluster(request)
+        mock_send_request.assert_called_once_with(
+            "/1.0/k8sd/cluster/join",
+            "POST",
+            EmptyResponse,
+            {
+                "name": "test-node",
+                "address": "127.0.0.1:6400",
+                "token": "test-token",
+                "config": "extra-sans:\n- 127.0.0.1\n",
+            },
+        )
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_join_cluster_worker(self, mock_send_request):
+        """Test successfully joining a cluster."""
+        mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
+
+        request = JoinClusterRequest(
+            name="test-node", address="127.0.0.1:6400", token="test-token"
+        )
+        self.api_manager.join_cluster(request)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster/join",
             "POST",
@@ -238,13 +290,29 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         dns_config = DNSConfig(enabled=True)
         user_config = UserFacingClusterConfig(dns=dns_config)
-        request = UpdateClusterConfigRequest(config=user_config)
+        datastore = UserFacingDatastoreConfig(
+            type="external",
+            servers=["localhost:123"],
+            ca_crt="ca-crt",
+            client_crt="client-crt",
+            client_key="client-key",
+        )
+        request = UpdateClusterConfigRequest(config=user_config, datastore=datastore)
         self.api_manager.update_cluster_config(request)
         mock_send_request.assert_called_once_with(
             "/1.0/k8sd/cluster/config",
             "PUT",
             EmptyResponse,
-            {"config": {"dns": {"enabled": True}}},
+            {
+                "config": {"dns": {"enabled": True}},
+                "datastore": {
+                    "type": "external",
+                    "servers": ["localhost:123"],
+                    "ca-crt": "ca-crt",
+                    "client-crt": "client-crt",
+                    "client-key": "client-key",
+                },
+            },
         )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -258,7 +326,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         test_user = "test_user"
         test_groups = ["bar", "baz"]
         token = self.api_manager.request_auth_token(test_user, test_groups)
-        assert token == test_token
+        assert token.get_secret_value() == test_token
         mock_send_request.assert_called_once_with(
             "/1.0/kubernetes/auth/tokens",
             "POST",

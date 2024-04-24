@@ -42,7 +42,7 @@ def mock_reconciler_handlers(harness):
     """
     handler_names = {
         "_evaluate_removal",
-        "_install_k8s_snap",
+        "_install_snaps",
         "_apply_snap_requirements",
         "_check_k8sd_ready",
         "_join_cluster",
@@ -59,6 +59,7 @@ def mock_reconciler_handlers(harness):
             "_apply_cos_requirements",
             "_copy_internal_kubeconfig",
             "_revoke_cluster_tokens",
+            "_ensure_cluster_config",
             "_expose_ports",
         }
 
@@ -86,7 +87,10 @@ def test_update_status(harness):
     """
     harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
     harness.charm.on.update_status.emit()
-    assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
+    if harness.charm.is_worker:
+        assert harness.model.unit.status == ops.BlockedStatus("Missing cluster integration")
+    else:
+        assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
 
 
 def test_set_leader(harness):

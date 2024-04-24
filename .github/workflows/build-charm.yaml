@@ -20,7 +20,7 @@ jobs:
     name: Build and push charms
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4.1.3
       - uses: canonical/setup-lxd@v0.1.1
       - name: Extract charm name
         working-directory: ${{ inputs.working-directory }}

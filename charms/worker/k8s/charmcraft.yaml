@@ -51,16 +51,39 @@ bases:
       architectures: [amd64]
 config:
   options:
-    channel:
-      default: edge
+    datastore:
+      default: dqlite
       type: string
-      description: Snap channel of the k8s snap
+      description: |
+        The datastore to use in Canonical Kubernetes. This cannot be changed
+        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
+        chosen, the charm should be integrated with the etcd charm.
     labels:
       default: ""
       type: string
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.      
+    register-with-taints:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of taints to apply to this node at registration time.
+
+        This config is only used at deploy time when Kubelet first registers the
+        node with Kubernetes. To change node taints after deploy time, use kubectl
+        instead.
+
+        For more information, see the upstream Kubernetes documentation about
+        taints:
+        https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+    service-cidr:
+      type: string
+      default: 10.152.183.0/24
+      description: |
+        CIDR to use for Kubernetes services. After deployment it is
+        only possible to increase the size of the IP range. It is not possible to
+        change or shrink the address range after deployment.
 
 actions:
   get-kubeconfig:
@@ -87,3 +110,9 @@ provides:
     interface: k8s-cluster
   cos-worker-tokens:
     interface: cos-tokens
+
+requires:
+  etcd:
+    interface: etcd
+  external-cloud-provider:
+    interface: external_cloud_provider

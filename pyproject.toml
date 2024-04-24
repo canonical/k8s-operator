@@ -40,11 +40,12 @@ profile = "black"
 ignore_missing_imports = true
 explicit_package_bases = true
 namespace_packages = true
+plugins = "pydantic.mypy"
 
 [tool.pylint]
 # Ignore too-few-public-methods due to pydantic models
 # Ignore no-self-argument due to pydantic validators
-disable = "wrong-import-order,redefined-outer-name,too-few-public-methods,no-self-argument,fixme,parse-error"
+disable = "wrong-import-order,redefined-outer-name,too-many-instance-attributes,too-few-public-methods,no-self-argument,fixme,parse-error"
 # Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
 extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
 
@@ -54,7 +55,6 @@ ignored-classes = "ProfileManager,InstanceManager,NetworkManager"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-log_cli_level = "INFO"
 
 # Linting tools configuration
 [tool.ruff]

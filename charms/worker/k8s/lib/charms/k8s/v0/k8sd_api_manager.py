@@ -31,9 +31,10 @@ import logging
 import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
-from typing import Dict, Generator, List, Optional, Type, TypeVar
+from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 
-from pydantic import BaseModel, Field, validator
+import yaml
+from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
 
 # The unique Charmhub library identifier, never change it
 LIBID = "6a5f235306864667a50437c08ba7e83f"
@@ -46,61 +47,6 @@ LIBAPI = 0
 LIBPATCH = 2
 
 logger = logging.getLogger(__name__)
-
-
-class CreateClusterRequest(BaseModel):
-    """Request model for creating a new Canonical Kubernetes cluster.
-
-    Attributes:
-        bootstrap (bool): Flag to enable or disable the bootstrap process for
-            the cluster. Defaults to True.
-        name (str): The name of the cluster to be created.
-        address (str): The address where the cluster is hosted.
-        config (Dict[str, str]): A dictionary of additional configuration
-            parameters for the cluster.
-    """
-
-    bootstrap: bool = True
-    name: str
-    address: str
-    config: Dict[str, str]
-
-
-class BootstrapConfig(BaseModel):
-    """Configuration model for bootstrapping a Canonical K8s cluster.
-
-    Attributes:
-        components (List[str]): A list of default components to be installed
-            during the bootstrap process. Defaults to ["dns", "metrics-server",
-            "network"].
-        cluster_cidr (str): The IP address range for the cluster's pods. Defaults
-            to "10.1.0.0/16".
-        service_cidr (str): The IP address range for the cluster services. Defaults
-            to "10.152.183.0/24".
-        rbac (bool): Flag to enable or disable role-based access control
-            (RBAC). Defaults to True.
-        k8s_dqlite_port (int): The port used by Dqlite. Defaults to 9000.
-        datastore (str): The type of datastore used by the cluster.
-            Defaults to "k8s-dqlite".
-        datastore_url (str): The URL of the datastore. Optional; defaults to None.
-        datastore_ca_cert (str): The CA certificate for the datastore.
-            Optional; defaults to None.
-        datastore_client_cert (str): The client certificate for accessing the
-            datastore. Optional; defaults to None.
-        datastore_client_key (str): The client key for accessing the datastore.
-            Optional; defaults to None.
-    """
-
-    components: List[str] = ["dns", "metrics-server", "network"]
-    cluster_cidr: str = Field("10.1.0.0/16", alias="cluster-cidr")
-    service_cidr: str = Field("10.152.183.0/24", alias="service-cidr")
-    rbac: bool = Field(True, alias="enable-rbac")
-    k8s_dqlite_port: int = Field(9000, alias="k8s-dqlite-port")
-    datastore: str = "k8s-dqlite"
-    datastore_url: str = Field(None, alias="datastore-url")
-    datastore_ca_cert: str = Field(None, alias="datastore-ca-crt")
-    datastore_client_cert: str = Field(None, alias="datastore-client-crt")
-    datastore_client_key: str = Field(None, alias="datastore-client-key")
 
 
 class K8sdAPIManagerError(Exception):
@@ -179,10 +125,10 @@ class TokenMetadata(BaseModel):
     """Model representing metadata for a token.
 
     Attributes:
-        token (str): The actual token string.
+        token (SecretStr): The token string. (accessible via .get_secret_value() )
     """
 
-    token: str
+    token: SecretStr
 
 
 class AuthTokenResponse(BaseRequestModel):
@@ -217,8 +163,8 @@ class ClusterMember(BaseModel):
 
     name: str
     address: str
-    cluster_role: str = Field(None, alias="cluster-role")
-    datastore_role: str = Field(None, alias="datastore-role")
+    cluster_role: Optional[str] = Field(None, alias="cluster-role")
+    datastore_role: Optional[str] = Field(None, alias="datastore-role")
 
 
 class DNSConfig(BaseModel):
@@ -231,7 +177,7 @@ class DNSConfig(BaseModel):
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    enabled: Optional[bool]
+    enabled: Optional[bool] = Field(None)
     cluster_domain: Optional[str] = Field(None, alias="cluster-domain")
     service_ip: Optional[str] = Field(None, alias="service-ip")
     upstream_nameservers: Optional[List[str]] = Field(None, alias="upstream-nameservers")
@@ -246,7 +192,7 @@ class IngressConfig(BaseModel):
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
-    enabled: Optional[bool]
+    enabled: Optional[bool] = Field(None)
     default_tls_secret: Optional[str] = Field(None, alias="default-tls-secret")
     enable_proxy_protocol: Optional[bool] = Field(None, alias="enable-proxy-protocol")
 
@@ -266,8 +212,8 @@ class LoadBalancerConfig(BaseModel):
         bgp_peer_port: The port for BGP peering.
     """
 
-    enabled: Optional[bool]
-    cidrs: Optional[List[str]] = Field(None, alias="cidrs")
+    enabled: Optional[bool] = Field(None)
+    cidrs: Optional[List[str]] = Field(None)
     l2_enabled: Optional[bool] = Field(None, alias="l2-enabled")
     l2_interfaces: Optional[List[str]] = Field(None, alias="l2-interfaces")
     bgp_enabled: Optional[bool] = Field(None, alias="bgp-enabled")
@@ -287,7 +233,7 @@ class LocalStorageConfig(BaseModel):
         set_default: Optional flag to set this as the default storage option.
     """
 
-    enabled: Optional[bool]
+    enabled: Optional[bool] = Field(None)
     local_path: Optional[str] = Field(None, alias="local-path")
     reclaim_policy: Optional[str] = Field(None, alias="reclaim-policy")
     set_default: Optional[bool] = Field(None, alias="set-default")
@@ -300,7 +246,7 @@ class NetworkConfig(BaseModel):
         enabled: Optional flag which represents the status of Network.
     """
 
-    enabled: Optional[bool]
+    enabled: Optional[bool] = Field(None)
 
 
 class GatewayConfig(BaseModel):
@@ -310,7 +256,7 @@ class GatewayConfig(BaseModel):
         enabled: Optional flag which represents the status of Gateway.
     """
 
-    enabled: Optional[bool]
+    enabled: Optional[bool] = Field(None)
 
 
 class MetricsServerConfig(BaseModel):
@@ -320,7 +266,7 @@ class MetricsServerConfig(BaseModel):
         enabled: Optional flag which represents the status of MetricsServer.
     """
 
-    enabled: Optional[bool]
+    enabled: Optional[bool] = Field(None)
 
 
 class UserFacingClusterConfig(BaseModel):
@@ -334,15 +280,83 @@ class UserFacingClusterConfig(BaseModel):
         local_storage: Local storage configuration for the cluster.
         gateway: Gateway configuration for the cluster.
         metrics_server: Metrics server configuration for the cluster.
+        cloud_provider: The cloud provider for the cluster.
     """
 
-    network: Optional[NetworkConfig] = None
-    dns: Optional[DNSConfig] = None
-    ingress: Optional[IngressConfig] = None
+    network: Optional[NetworkConfig] = Field(None)
+    dns: Optional[DNSConfig] = Field(None)
+    ingress: Optional[IngressConfig] = Field(None)
     load_balancer: Optional[LoadBalancerConfig] = Field(None, alias="load-balancer")
     local_storage: Optional[LocalStorageConfig] = Field(None, alias="local-storage")
-    gateway: Optional[GatewayConfig]
+    gateway: Optional[GatewayConfig] = Field(None)
     metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
+    cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
+
+
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):  # type: ignore[call-arg]
+    """Aggregated configuration model for the user-facing datastore aspects of a cluster.
+
+    Attributes:
+        type: Type of the datastore. For runtime updates, this needs to be "external".
+        servers: Server addresses of the external datastore.
+        ca_crt: CA certificate of the external datastore cluster in PEM format.
+        client_crt: client certificate of the external datastore cluster in PEM format.
+        client_key: client key of the external datastore cluster in PEM format.
+    """
+
+    type: Optional[str] = Field(None)
+    servers: Optional[List[str]] = Field(None)
+    ca_crt: Optional[str] = Field(None, alias="ca-crt")
+    client_crt: Optional[str] = Field(None, alias="client-crt")
+    client_key: Optional[str] = Field(None, alias="client-key")
+
+
+class BootstrapConfig(BaseModel):
+    """Configuration model for bootstrapping a Canonical K8s cluster.
+
+    Attributes:
+        cluster_config (UserFacingClusterConfig): The cluster configuration settings.
+        control_plane_taints (List[str]): Register with the following control-plane taints
+        pod_cidr (str): The IP address range for the cluster's pods.
+        service_cidr (str): The IP address range for the cluster services.
+        disable_rbac (bool): Flag to disable role-based access control
+        secure_port (int): The secure port used for Kubernetes.
+        k8s_dqlite_port (int): The port used by Dqlite.
+        datastore_type (str): The type of datastore used by the cluster.
+        datastore_servers (List[AnyHttpUrl]): The servers used by the datastore.
+        datastore_ca_cert (str): The CA certificate for the datastore.
+        datastore_client_cert (str): The client certificate for accessing the datastore.
+        datastore_client_key (str): The client key for accessing the datastore.
+        extra_sans (List[str]): List of extra sans for the self-signed certificates
+    """
+
+    cluster_config: Optional[UserFacingClusterConfig] = Field(None, alias="cluster-config")
+    control_plane_taints: Optional[List[str]] = Field(None, alias="control-plane-taints")
+    pod_cidr: Optional[str] = Field(None, alias="pod-cidr")
+    service_cidr: Optional[str] = Field(None, alias="service-cidr")
+    disable_rbac: Optional[bool] = Field(None, alias="disable-rbac")
+    secure_port: Optional[int] = Field(None, alias="secure-port")
+    k8s_dqlite_port: Optional[int] = Field(None, alias="k8s-dqlite-port")
+    datastore_type: Optional[str] = Field(None, alias="datastore-type")
+    datastore_servers: Optional[List[AnyHttpUrl]] = Field(None, alias="datastore-servers")
+    datastore_ca_cert: Optional[str] = Field(None, alias="datastore-ca-crt")
+    datastore_client_cert: Optional[str] = Field(None, alias="datastore-client-crt")
+    datastore_client_key: Optional[str] = Field(None, alias="datastore-client-key")
+    extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
+
+
+class CreateClusterRequest(BaseModel):
+    """Request model for creating a new Canonical Kubernetes cluster.
+
+    Attributes:
+        name (str): The name of the cluster to be created.
+        address (str): The address where the cluster is hosted.
+        config (BootstrapConfig): Additional configuration parameters for the cluster.
+    """
+
+    name: str
+    address: str
+    config: BootstrapConfig
 
 
 class UpdateClusterConfigRequest(BaseModel):
@@ -350,9 +364,85 @@ class UpdateClusterConfigRequest(BaseModel):
 
     Attributes:
         config (Optional[UserFacingClusterConfig]): The cluster configuration.
+        datastore (Optional[UserFacingDatastoreConfig]): The clusters datastore configuration.
     """
 
-    config: UserFacingClusterConfig
+    config: Optional[UserFacingClusterConfig] = Field(None)
+    datastore: Optional[UserFacingDatastoreConfig] = Field(None)
+
+
+class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
+    """Request model for the config on a node joining the cluster.
+
+    Attributes:
+        kubelet_crt (str): node's certificate
+        kubelet_key (str): node's certificate key
+    """
+
+    kubelet_crt: Optional[str] = Field(None, alias="kubelet-crt")
+    kubelet_key: Optional[str] = Field(None, alias="kubelet-key")
+
+
+class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
+    """Request model for the config on a control-plane node joining the cluster.
+
+    Attributes:
+        extra_sans (List[str]): List of extra sans for the self-signed certificates
+        apiserver_crt (str): apiserver certificate
+        apiserver_client_key (str): apiserver certificate key
+        front_proxy_client_crt (str): front-proxy certificate
+        front_proxy_client_key (str): front-proxy certificate key
+    """
+
+    extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
+
+    apiserver_crt: Optional[str] = Field(None, alias="apiserver-crt")
+    apiserver_client_key: Optional[str] = Field(None, alias="apiserver-key")
+    front_proxy_client_crt: Optional[str] = Field(None, alias="front-proxy-client-crt")
+    front_proxy_client_key: Optional[str] = Field(None, alias="front-proxy-client-key")
+
+
+class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
+    """Request model for a node joining the cluster.
+
+    Attributes:
+        name (str): node's certificate
+        address (str): node's certificate key
+        token (str): token
+        config (NodeJoinConfig): Node Config
+    """
+
+    name: str
+    address: str
+    token: SecretStr
+    config: Optional[NodeJoinConfig] = Field(None)
+
+    def dict(self, **kwds) -> Dict[Any, Any]:
+        """Render object into a dict.
+
+        Arguments:
+            kwds: keyword arguments
+
+        Returns:
+            dict mapping of the object
+        """
+        rendered = super().dict(**kwds)
+        rendered["token"] = self.token.get_secret_value()
+        if self.config:
+            rendered["config"] = yaml.safe_dump(self.config.dict(**kwds))
+        return rendered
+
+
+class DatastoreStatus(BaseModel):
+    """information regarding the active datastore.
+
+    Attributes:
+        datastore_type (str): external or k8s-dqlite datastore
+        servers: (List(str)): list of server addresses of the external datastore cluster.
+    """
+
+    datastore_type: Optional[str] = Field(None, alias="type")
+    servers: Optional[List[str]] = Field(None, alias="servers")
 
 
 class ClusterStatus(BaseModel):
@@ -361,12 +451,14 @@ class ClusterStatus(BaseModel):
     Attributes:
         ready (bool): Indicates if the cluster is ready.
         members (List[ClusterMember]): List of members in the cluster.
-        config (Optional[UserFacingClusterConfig]): information about the cluster configuration.
+        config (UserFacingClusterConfig): information about the cluster configuration.
+        datastore (DatastoreStatus): information regarding the active datastore.
     """
 
-    ready: Optional[bool] = False
-    members: Optional[List[ClusterMember]]
-    config: Optional[UserFacingClusterConfig]
+    ready: bool = Field(False)
+    members: Optional[List[ClusterMember]] = Field(None)
+    config: Optional[UserFacingClusterConfig] = Field(None)
+    datastore: Optional[DatastoreStatus] = Field(None)
 
 
 class ClusterMetadata(BaseModel):
@@ -383,11 +475,11 @@ class GetClusterStatusResponse(BaseRequestModel):
     """Response model for getting the status of the k8sd cluster.
 
     Attributes:
-        metadata (Optional[ClusterMetadata]): Metadata containing the cluster status.
-                                              Can be None if the status is not available.
+        metadata (ClusterMetadata): Metadata containing the cluster status.
+                                    Can be None if the status is not available.
     """
 
-    metadata: Optional[ClusterMetadata] = None
+    metadata: Optional[ClusterMetadata] = Field(None)
 
 
 class KubeConfigMetadata(BaseModel):
@@ -574,7 +666,7 @@ class K8sdAPIManager:
                 f"HTTP or Socket error" f"\tmethod={method}\n" f"\tendpoint={endpoint}"
             ) from e
 
-    def create_join_token(self, name: str, worker: bool = False):
+    def create_join_token(self, name: str, worker: bool = False) -> SecretStr:
         """Create a join token.
 
         Args:
@@ -582,7 +674,7 @@ class K8sdAPIManager:
             worker (bool): Whether the node should join as control-plane or worker.
 
         Returns:
-            str: The generated join token if successful.
+            SecretStr: The generated join token if successful.
         """
         endpoint = "/1.0/k8sd/cluster/tokens"
         body = {
@@ -592,17 +684,15 @@ class K8sdAPIManager:
         join_response = self._send_request(endpoint, "POST", CreateJoinTokenResponse, body)
         return join_response.metadata.token
 
-    def join_cluster(self, name: str, address: str, token: str):
+    def join_cluster(self, config: JoinClusterRequest):
         """Join a node to the k8s cluster.
 
         Args:
-            name (str): Name of the node.
-            address (str): address to which k8sd should be bound
-            token (str): The join token for this node.
+            config: JoinClusterRequest: config to join the cluster
         """
         endpoint = "/1.0/k8sd/cluster/join"
-        body = {"name": name, "address": address, "token": token}
-        self._send_request(endpoint, "POST", EmptyResponse, body)
+        request = config.dict(exclude_none=True, by_alias=True)
+        self._send_request(endpoint, "POST", EmptyResponse, request)
 
     def remove_node(self, name: str, force: bool = True):
         """Remove a node from the cluster.
@@ -622,8 +712,16 @@ class K8sdAPIManager:
             config (UpdateClusterConfigRequest): The cluster configuration.
         """
         endpoint = "/1.0/k8sd/cluster/config"
-        body = config.dict(exclude_none=True)
+        body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
+
+    def get_cluster_status(self) -> GetClusterStatusResponse:
+        """Retrieve cluster status.
+
+        Returns:
+            cluster_status: status of the cluster.
+        """
+        return self._send_request("/1.0/k8sd/cluster", "GET", GetClusterStatusResponse)
 
     def is_cluster_bootstrapped(self) -> bool:
         """Check if K8sd has been bootstrapped.
@@ -632,9 +730,8 @@ class K8sdAPIManager:
             bool: True if the cluster has been bootstrapped, False otherwise.
         """
         try:
-            endpoint = "/1.0/k8sd/cluster"
-            cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
-            return cluster_status.error_code == 0
+            status = self.get_cluster_status()
+            return status.error_code == 0
         except (K8sdConnectionError, InvalidResponseError) as e:
             logger.error("Invalid response while checking if cluster is bootstrapped: %s", e)
         return False
@@ -647,11 +744,8 @@ class K8sdAPIManager:
         Returns:
             bool: True if the cluster is ready, False otherwise.
         """
-        endpoint = "/1.0/k8sd/cluster"
-        cluster_status = self._send_request(endpoint, "GET", GetClusterStatusResponse)
-        if cluster_status.metadata:
-            return cluster_status.metadata.status.ready
-        return False
+        status = self.get_cluster_status()
+        return status.metadata and status.metadata.status.ready
 
     def check_k8sd_ready(self):
         """Check if k8sd is ready."""
@@ -663,14 +757,12 @@ class K8sdAPIManager:
 
         Args:
             request (CreateClusterRequest): The request model to bootstrap the cluster.
-
-        TODO: Add bootstrap config support
         """
-        endpoint = "/cluster/control"
+        endpoint = "/1.0/k8sd/cluster"
         body = request.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
-    def request_auth_token(self, username: str, groups: List[str]) -> str:
+    def request_auth_token(self, username: str, groups: List[str]) -> SecretStr:
         """Request a Kubernetes authentication token.
 
         Args:
@@ -678,7 +770,7 @@ class K8sdAPIManager:
             groups (List[str]): Groups associated with the user.
 
         Returns:
-            str: The authentication token.
+            SecretStr: The authentication token.
         """
         endpoint = "/1.0/kubernetes/auth/tokens"
         body = {"username": username, "groups": groups}

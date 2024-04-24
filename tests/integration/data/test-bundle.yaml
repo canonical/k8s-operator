@@ -4,16 +4,18 @@
 name: integration-test
 description: |-
   Used to deploy or refresh within an integration test model
-series: jammy
+series: focal
 applications:
   k8s:
     charm: k8s
     channel: latest/edge
     num_units: 3
+    constraints: cores=2 mem=8G root-disk=16G
     expose: true
   k8s-worker:
     charm: k8s-worker
     channel: latest/edge
     num_units: 2
+    constraints: cores=2 mem=8G root-disk=16G
 relations:
   - [k8s, k8s-worker:cluster]
