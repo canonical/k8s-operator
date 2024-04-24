@@ -24,7 +24,7 @@ jobs:
       - uses: canonical/setup-lxd@v0.1.1
 
       - name: Get hash of the source
-        run: echo "SRC_HASH=${{ hashFiles('**/charms/**/*.yaml', '**/charms/**/*.py, **/charms/**/requirements.txt') }}" >> $GITHUB_ENV
+        run: echo "SRC_HASH=${{ hashFiles('**/charms/**/*.yaml', '**/charms/**/*.py', '**/charms/**/requirements.txt') }}" >> $GITHUB_ENV
 
       - name: Extract charm name
         working-directory: ${{ inputs.working-directory }}

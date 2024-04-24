@@ -1,7 +1,10 @@
-ops >= 2.2.0
-cosl == 0.0.8
-pydantic == 1.*
-charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
-charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@main
-charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@main#subdirectory=ops
-charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@main
+charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@255dd4a23defc16dcdac832306e5f460a0f1200c
+charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e1c5fc69e98100a7d43c0ad5a7969bba1ecbcd40
+charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@9b212854e768f13c26cc907bed51444e97e51b50#subdirectory=ops
+charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502
+cosl==0.0.8
+ops==2.12.0
+pydantic==1.10.15
+PyYAML==6.0.1
+typing_extensions==4.11.0
+websocket-client==1.8.0
