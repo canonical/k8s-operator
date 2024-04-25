@@ -277,16 +277,13 @@ async def grafana_agent(kubernetes_cluster: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: juju.model.Model):
-    """
-    Fixture to pull the kubeconfig out of the kubernetes cluster
-    """
+async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: Model):
+    """Fixture to pull the kubeconfig out of the kubernetes cluster."""
     k8s = kubernetes_cluster.applications["k8s"].units[0]
-    action = await k8s.run("k8s config")
-    result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to get kubeconfig with kubectl"
+    action = await k8s.run_action("get-kubeconfig")
+    action = await action.wait()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_text(result.results["stdout"])
+    kubeconfig_path.write_text(action.results["kubeconfig"])
     yield kubeconfig_path
 
 
@@ -296,8 +293,6 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     This fixture deploys Coredns on the specified
     Kubernetes (k8s) model for testing purposes.
     """
-    log.info("Deploying Coredns ")
-
     coredns_alias = "coredns-model"
 
     config = type.__call__(Configuration)
@@ -308,6 +303,7 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
     k8s_model = await ops_test.track_model(
         coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
     )
+    log.info("Deploying Coredns ")
     await k8s_model.deploy("coredns", trust=True)
     await k8s_model.wait_for_idle(apps=["coredns"], status="active")
     yield k8s_model
@@ -317,10 +313,8 @@ async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, kubernetes_cluster: juju.model.Model):
-    """
-    This function offers Coredns in the specified Kubernetes (k8s) model.
-    """
+async def integrate_coredns(coredns_model: Model, kubernetes_cluster: Model):
+    """This function offers Coredns in the specified Kubernetes (k8s) model."""
     log.info("Offering Coredns...")
     await coredns_model.create_offer("coredns:dns-provider")
     await coredns_model.block_until(lambda: "coredns" in coredns_model.application_offers)
@@ -334,14 +328,13 @@ async def integrate_coredns(ops_test: OpsTest, coredns_model: juju.model.Model, 
 
     offer_url = f"{model_owner}/{coredns_model.name}.coredns"
     saas = await kubernetes_cluster.consume(offer_url)
-
     log.info("Coredns consumed...")
 
     log.info("Relating Coredns...")
     await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
     assert "coredns" in kubernetes_cluster.remote_applications
 
-    yield
+    yield coredns_model
 
     # Now let's clean up
     await kubernetes_cluster.applications["k8s"].destroy_relation("k8s:dns-provider", "coredns")

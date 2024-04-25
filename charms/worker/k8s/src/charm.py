@@ -51,7 +51,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     UserFacingDatastoreConfig,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
-from charms.interface_kube_dns import KubeDnsRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
@@ -384,11 +383,10 @@ class K8sCharm(ops.CharmBase):
         """Enable necessary components for the Kubernetes cluster."""
         status.add(ops.MaintenanceStatus("Updating K8s features"))
         log.info("Enabling K8s features")
-        dns_config = DNSConfig(enabled=True)
+        dns_config = self._get_dns_config()
         network_config = NetworkConfig(enabled=True)
         user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
         update_request = UpdateClusterConfigRequest(config=user_cluster_config)
-
         self.api_manager.update_cluster_config(update_request)
 
     @on_error(
@@ -421,32 +419,7 @@ class K8sCharm(ops.CharmBase):
 
         self.api_manager.update_cluster_config(update_request)
 
-    def _configure_components(self):
-        """Enable necessary components for the Kubernetes cluster."""
-        dns_settings = self._dns_charm_integrated()
-        status.add(ops.MaintenanceStatus(f"Configuring DNS"))
-
-        if dns_settings:
-            self.api_manager.configure_component("dns", False)
-            self.api_manager.configure_dns(dns_settings.get("dns_domain"), dns_settings.get("dns_ip"))
-        else:
-            self.api_manager.configure_component("dns", True)
-
-        status.add(ops.MaintenanceStatus("Enabling Network"))
-        self.api_manager.configure_component("network", True)
-
-    def _dns_charm_integrated(self) -> Optional[dict]:
-        """Check if the DNS charm is integrated."""
-        status.add(ops.MaintenanceStatus("Configuring DNS and Network"))
-
-        dns_config = self._get_dns_config()
-        network_config = NetworkConfig(enabled=True)
-
-        user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
-        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
-        self.api_manager.update_cluster_config(update_request)
-
-    def _get_dns_config(self) -> Optional[dict]:
+    def _get_dns_config(self) -> DNSConfig:
         """Get DNS config either for the enabled built-in dns or an integrated charm.
 
         Returns:
