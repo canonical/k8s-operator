@@ -399,6 +399,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         WaitingStatus("Ensure that the cluster configuration is up-to-date"),
+        AssertionError,
         InvalidResponseError,
         K8sdConnectionError,
     )
