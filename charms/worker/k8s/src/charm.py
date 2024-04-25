@@ -55,6 +55,7 @@ from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
 from snap import management as snap_management
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
+from typing_extensions import Literal
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -78,14 +79,14 @@ def _get_public_address() -> str:
     return subprocess.check_output(cmd).decode("UTF-8").strip()
 
 
-def _cluster_departing_unit(event: ops.EventBase) -> Union[bool, ops.Unit]:
+def _cluster_departing_unit(event: ops.EventBase) -> Union[Literal[False], ops.Unit]:
     """Determine if the given event signals the end of the cluster for this unit.
 
     Args:
         event (ops.EventBase): event to consider.
 
     Returns:
-        Optional[ops.Unit] Unit leaving the cluster
+        Literal[False] | ops.Unit - False or the Unit leaving the cluster
     """
     return (
         isinstance(event, ops.RelationDepartedEvent)
@@ -628,10 +629,9 @@ class K8sCharm(ops.CharmBase):
             bool: True when this unit is marked as Ready
         """
         node = node or self.get_node_name()
-        run = f"{KUBECTL_PATH} --kubeconfig {self._internal_kubeconfig} get nodes {node}"
-        cmd = shlex.split(run) + ['-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
+        cmd = ["nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
         try:
-            return subprocess.check_output(cmd) == b"True"
+            return self.kubectl_get(cmd) == "True"
         except subprocess.CalledProcessError:
             return False
 
@@ -669,6 +669,39 @@ class K8sCharm(ops.CharmBase):
                 self._update_status()
         except status.ReconcilerError:
             log.exception("Can't update_status")
+
+    def kubectl(self, *args) -> str:
+        """Run kubectl command.
+
+        Arguments:
+            args: arguments passed to kubectl
+
+        Returns:
+            string response
+
+        Raises:
+            CalledProcessError: in the event of a failed kubectl
+        """
+        cmd = [KUBECTL_PATH, f"--kubeconfig={self._internal_kubeconfig}", *args]
+        log.info("Executing %s", cmd)
+        try:
+            return subprocess.check_output(cmd, text=True)
+        except subprocess.CalledProcessError as e:
+            log.error(
+                "Command failed: %s}\nreturncode: %s\nstdout: %s", cmd, e.returncode, e.output
+            )
+            raise
+
+    def kubectl_get(self, *args) -> str:
+        """Run kubectl get command.
+
+        Arguments:
+            args: arguments passed to kubectl get
+
+        Returns:
+            string response
+        """
+        return self.kubectl("get", *args)
 
     @property
     def _internal_kubeconfig(self) -> Path:
