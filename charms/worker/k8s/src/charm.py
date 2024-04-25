@@ -628,8 +628,8 @@ class K8sCharm(ops.CharmBase):
             bool: True when this unit is marked as Ready
         """
         node = node or self.get_node_name()
-        cmd = shlex.split(f"k8s kubectl get nodes {node}")
-        cmd += ['-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
+        run = f"{KUBECTL_PATH} --kubeconfig {self._internal_kubeconfig} get nodes {node}"
+        cmd = shlex.split(run) + ['-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
         try:
             return subprocess.check_output(cmd) == b"True"
         except subprocess.CalledProcessError:
