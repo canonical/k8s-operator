@@ -20,7 +20,7 @@ jobs:
     name: Build and push charms
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4.1.4
+      - uses: actions/checkout@v4
       - uses: canonical/setup-lxd@v0.1.1
 
       - name: Get hash of the source
