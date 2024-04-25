@@ -24,7 +24,7 @@ import subprocess
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -76,6 +76,22 @@ def _get_public_address() -> str:
     """
     cmd = ["unit-get", "public-address"]
     return subprocess.check_output(cmd).decode("UTF-8").strip()
+
+
+def _cluster_departing_unit(event: ops.EventBase) -> Union[bool, ops.Unit]:
+    """Determine if the given event signals the end of the cluster for this unit.
+
+    Args:
+        event (ops.EventBase): event to consider.
+
+    Returns:
+        Optional[ops.Unit] Unit leaving the cluster
+    """
+    return (
+        isinstance(event, ops.RelationDepartedEvent)
+        and event.relation.name in ["k8s-cluster", "cluster"]
+        and event.departing_unit
+    )
 
 
 class K8sCharm(ops.CharmBase):
@@ -311,13 +327,22 @@ class K8sCharm(ops.CharmBase):
             log.info("Using external as cloud-provider")
             config.cloud_provider = "external"
 
-    def _revoke_cluster_tokens(self):
+    def _revoke_cluster_tokens(self, event: ops.EventBase):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
 
         if self is dying, only try to remove itself from the cluster
+        if event is relation_departed, remove that unit
+
+        Args:
+            event (ops.Event): event triggering token revocation
+
         """
         log.info("Garbage collect cluster tokens")
-        to_remove = {self.unit} if self.is_dying else None
+        to_remove = set()
+        if self.is_dying:
+            to_remove |= {self.unit}
+        if unit := _cluster_departing_unit(event):
+            to_remove |= {unit}
 
         if peer := self.model.get_relation("cluster"):
             self.distributor.revoke_tokens(
@@ -511,18 +536,20 @@ class K8sCharm(ops.CharmBase):
             self.api_manager.join_cluster(request)
             log.info("Success")
 
-    def _reconcile(self, event):
+    def _reconcile(self, event: ops.EventBase):
         """Reconcile state change events.
 
         Args:
             event: ops.EventBase - event that triggered the reconciliation
         """
+        log.info("Reconcile event=%s", event)
+
         self._evaluate_removal(event)
         if self.is_dying and self.lead_control_plane:
-            self._revoke_cluster_tokens()
+            self._revoke_cluster_tokens(event)
         if self.is_dying:
             self._update_status()
-            self._last_gasp(event)
+            self._last_gasp()
             return
 
         self._apply_proxy_environment()
@@ -535,7 +562,7 @@ class K8sCharm(ops.CharmBase):
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
-            self._revoke_cluster_tokens()
+            self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
         self._join_cluster()
         self._configure_cos_integration()
@@ -567,6 +594,10 @@ class K8sCharm(ops.CharmBase):
         if version := self._get_snap_version():
             self.unit.set_workload_version(version)
 
+        if not self._is_node_ready():
+            status.add(ops.WaitingStatus("Node not yet Ready"))
+            return
+
     def _evaluate_removal(self, event: ops.EventBase):
         """Determine if my unit is being removed.
 
@@ -575,25 +606,46 @@ class K8sCharm(ops.CharmBase):
         """
         if self.is_dying:
             return
-        if isinstance(event, ops.RelationDepartedEvent):
-            # if a unit is departing, and it's me?
-            self._stored.removing = event.departing_unit == self.unit
+        if unit := _cluster_departing_unit(event):
+            # Juju says I am being removed
+            self._stored.removing = unit == self.unit
+        elif isinstance(event, ops.RelationBrokenEvent) and event.relation.name == "cluster":
+            # Control-plane never experience RelationBroken on "cluster", it's a peer relation
+            # Worker units experience RelationBroken on "cluster" when the relation is removed
+            # or this unit is being removed.
+            self._stored.removing = self.is_worker
         elif isinstance(event, (ops.RemoveEvent, ops.StopEvent)):
             # If I myself am dying, its me!
             self._stored.removing = True
 
-    def _last_gasp(self, event):
-        """Busy wait on stop event until the unit isn't clustered anymore.
+    def _is_node_ready(self, node: str = "") -> bool:
+        """Determine if node is in the kubernetes cluster.
 
         Args:
-            event: ops.EventBase - event that triggered charm hook
+            node (str): name of node
+
+        Returns:
+            bool: True when this unit is marked as Ready
         """
-        if not isinstance(event, ops.StopEvent):
-            return
-        busy_wait = 30
+        node = node or self.get_node_name()
+        cmd = shlex.split(f"k8s kubectl get nodes {node}")
+        cmd += ['-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
+        try:
+            return subprocess.check_output(cmd) == b"True"
+        except subprocess.CalledProcessError:
+            return False
+
+    def _last_gasp(self):
+        """Busy wait on stop event until the unit isn't clustered anymore."""
+        busy_wait, reported_down = 30, 0
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
-        while busy_wait and self.api_manager.is_cluster_bootstrapped():
+        while busy_wait and reported_down == 3:
             log.info("Waiting for this unit to uncluster")
+            if self._is_node_ready():
+                log.info("Cluster Node is still ready")
+                reported_down = 0
+            else:
+                reported_down += 1
             sleep(1)
             busy_wait -= 1
 
