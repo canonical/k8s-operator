@@ -631,7 +631,7 @@ class K8sCharm(ops.CharmBase):
         node = node or self.get_node_name()
         cmd = ["nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
         try:
-            return self.kubectl_get(cmd) == "True"
+            return self.kubectl_get(*cmd) == "True"
         except subprocess.CalledProcessError:
             return False
 
