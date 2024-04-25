@@ -639,10 +639,10 @@ class K8sCharm(ops.CharmBase):
         """Busy wait on stop event until the unit isn't clustered anymore."""
         busy_wait, reported_down = 30, 0
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
-        while busy_wait and reported_down == 3:
+        while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
-            if self._is_node_ready():
-                log.info("Cluster Node is still ready")
+            if self._is_node_ready() or self.api_manager.is_cluster_bootstrapped():
+                log.info("Node is still reportedly clustered")
                 reported_down = 0
             else:
                 reported_down += 1
