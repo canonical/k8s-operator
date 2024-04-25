@@ -24,7 +24,7 @@ import subprocess
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -264,12 +264,12 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
 
-    def _configure_datastore(self, config: BootstrapConfig):
+    def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
 
         Args:
-            config (BootstrapConfig): The bootstrap configuration object for
-                the Kubernetes cluster that is being configured. This object
+            config (BootstrapConfig|UpdateClusterConfigRequst):
+                The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
         datastore = self.config.get("datastore")
@@ -290,12 +290,21 @@ class K8sCharm(ops.CharmBase):
             assert etcd_relation, "Missing etcd relation"  # nosec
             assert self.etcd.is_ready, "etcd is not ready"  # nosec
 
-            config.datastore_type = "external"
             etcd_config = self.etcd.get_client_credentials()
-            config.datastore_ca_cert = etcd_config.get("client_ca", "")
-            config.datastore_client_cert = etcd_config.get("client_cert", "")
-            config.datastore_client_key = etcd_config.get("client_key", "")
-            config.datastore_servers = self.etcd.get_connection_string().split(",")
+            if isinstance(config, BootstrapConfig):
+                config.datastore_type = "external"
+                config.datastore_ca_cert = etcd_config.get("client_ca", "")
+                config.datastore_client_cert = etcd_config.get("client_cert", "")
+                config.datastore_client_key = etcd_config.get("client_key", "")
+                config.datastore_servers = self.etcd.get_connection_string().split(",")
+            elif isinstance(config, UpdateClusterConfigRequest):
+                config.datastore = UserFacingDatastoreConfig(
+                    type="external",
+                    servers=self.etcd.get_connection_string().split(","),
+                    ca_crt=etcd_config.get("client_ca", ""),
+                    client_crt=etcd_config.get("client_cert", ""),
+                    client_key=etcd_config.get("client_key", ""),
+                )
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
 
@@ -404,18 +413,7 @@ class K8sCharm(ops.CharmBase):
 
         update_request = UpdateClusterConfigRequest()
 
-        # TODO: Ensure other configs here as well.
-
-        if self.config.get("datastore") == "etcd":
-            etcd_config = self.etcd.get_client_credentials()
-            update_request.datastore = UserFacingDatastoreConfig(
-                type="external",
-                servers=self.etcd.get_connection_string().split(","),
-                ca_crt=etcd_config.get("client_ca", ""),
-                client_crt=etcd_config.get("client_cert", ""),
-                client_key=etcd_config.get("client_key", ""),
-            )
-
+        self._configure_datastore(update_request.datastore)
         self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
