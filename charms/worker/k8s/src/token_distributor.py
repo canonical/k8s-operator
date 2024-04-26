@@ -6,7 +6,7 @@
 import contextlib
 import logging
 from enum import Enum, auto
-from typing import Optional, Set
+from typing import Optional
 
 import charms.contextual_status as status
 import ops
@@ -164,24 +164,24 @@ class TokenDistributor:
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
-    def _revoke_cluster_token(self, name: str, _):
+    def _revoke_cluster_token(self, name: str, ignore_errors: bool):
         """Remove a cluster token.
 
         Args:
             name (str): The name of the node.
+            ignore_errors (bool): Whether or not errors can be ignored
 
         Raises:
             K8sdConnectionError: reraises cluster token revoke failures
         """
         try:
             self.api_manager.remove_node(name)
-        except (K8sdConnectionError, InvalidResponseError):
-            if name == self.node_name:
-                # I'm unclustering myself
+        except (K8sdConnectionError, InvalidResponseError) as e:
+            if ignore_errors:
                 # Let's just ignore some of these expected errors:
                 # "Remote end closed connection without response"
                 # "Failed to check if node is control-plane"
-                log.exception("Unclustering ones self can expect an error")
+                log.warning("Unclustering self leads to an expected error: %s", e)
             else:
                 raise
 
@@ -192,6 +192,30 @@ class TokenDistributor:
             name (str): The name of the node.
         """
         # TODO: implement removing cos token
+
+    def _get_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> Optional[str]:
+        """Lookup juju secret offered to a unit on this relation.
+
+        Args:
+            relation (ops.Relation): Which relation (cluster or k8s-cluster)
+            unit (ops.Unit): The unit the secret is intended for
+
+        Returns:
+            secret_id (None | str) if on the relation
+        """
+        return relation.data[self.charm.unit].get(SECRET_ID.format(unit.name))
+
+    def _revoke_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> None:
+        """Revoke and remove juju secret offered to a unit on this relation.
+
+        Args:
+            relation (ops.Relation): Which relation (cluster or k8s-cluster)
+            unit (ops.Unit): The unit the secret is intended for
+        """
+        secret_id = SECRET_ID.format(unit.name)
+        if juju_secret := relation.data[self.charm.unit].pop(secret_id, None):
+            secret = self.charm.model.get_secret(id=juju_secret)
+            secret.remove_all_revisions()
 
     def allocate_tokens(
         self,
@@ -210,7 +234,7 @@ class TokenDistributor:
         Raises:
             ValueError: If an invalid token_strategy is provided.
         """
-        invalidate_on_join = token_strategy == TokenStrategy.CLUSTER
+        revoke_on_join = token_strategy == TokenStrategy.CLUSTER
         units = relation.units
         if self.charm.app == relation.app:
             # include self in peer relations
@@ -245,12 +269,20 @@ class TokenDistributor:
                     relation.name,
                     unit.name,
                 )
-                app_databag[unit.name] = name
-                if invalidate_on_join:
-                    relation.data[self.charm.unit].pop(secret_id, None)
+                app_databag[unit.name] = f"joined-{name}"
+                if revoke_on_join:
+                    self._revoke_juju_secret(relation, unit)
+
                 continue  # unit reports its joined already
             if relation.data[self.charm.unit].get(secret_id):
-                continue  # unit already assigned a token
+                # unit already assigned a token
+                log.info(
+                    "Waiting for token to be recovered %s unit=%s:%s",
+                    token_type.value,
+                    relation.name,
+                    unit.name,
+                )
+                continue
 
             log.info(
                 "Creating token for %s unit=%s hostname=%s", token_type.value, unit.name, name
@@ -260,13 +292,14 @@ class TokenDistributor:
             secret = relation.app.add_secret(content)
             secret.grant(relation, unit=unit)
             relation.data[self.charm.unit][secret_id] = secret.id or ""
+            app_databag[unit.name] = f"pending-{name}"
 
     def revoke_tokens(
         self,
         relation: ops.Relation,
         token_strategy: TokenStrategy,
         token_type: ClusterTokenType,
-        to_remove: Optional[Set[ops.Unit]] = None,
+        to_remove: Optional[ops.Unit] = None,
     ):
         """Revoke tokens from units in a relation.
 
@@ -275,24 +308,30 @@ class TokenDistributor:
             token_strategy (TokenStrategy): The strategy of token creation.
             token_type (ClusterTokenType, optional): The type of cluster token.
                 Defaults to ClusterTokenType.NONE.
-            to_remove (Set[ops.Unit], optional): Specific units to ensure its token is revoked
+            to_remove (ops.Unit, optional): unit to ensure its token is revoked
 
         Raises:
             ValueError: If an invalid token_strategy is provided.
         """
+        # any unit currently in the relation
+        all_units = relation.units
+        if self.charm.app == relation.app:
+            # include self in peer relations
+            all_units |= {self.charm.unit}
+
+        # any unit in the app_databag, which successfully recovered its token
         app_databag = relation.data[self.charm.app]
         joined = {self.charm.model.get_unit(str(u)) for u in app_databag}
-        if to_remove is not None:
-            remaining = joined - to_remove
-        else:
-            remaining = joined & (relation.units | {self.charm.unit})
-        remove = joined - remaining
+
+        # establish the remaining units
+        remove = {to_remove} if to_remove else (joined - all_units)
+        remaining = joined - remove
 
         if not remove:
             return
 
         log.info(
-            "Revoke report for %s \n\tjoined=%s\n\tremoving=%s\n\tremaining=%s",
+            "Token report for %s \n\tjoined=%s\n\tremoving=%s\n\tremaining=%s",
             relation.name,
             ",".join(sorted(u.name for u in joined)),
             ",".join(sorted(u.name for u in remove)),
@@ -305,13 +344,20 @@ class TokenDistributor:
 
         status.add(ops.MaintenanceStatus(f"Revoking {token_type.value} tokens"))
         for unit in remove:
-            if hostname := app_databag.get(unit.name):
+            if node_state := app_databag.get(unit.name):
+                state, node = node_state.split("-", 1)
                 log.info(
-                    "Revoking token for %s unit=%s:%s hostname=%s",
+                    "Revoking token for %s unit=%s:%s %s node=%s",
                     token_type.value,
                     relation.name,
                     unit.name,
-                    hostname,
+                    state,
+                    node,
                 )
-                token_strat(hostname, token_type)
+                # ignore pending state, because we can't confirm
+                # if the other node ever used the token to join
+                # ignore self revocation
+                ignore_errors = self.node_name == node or state == "pending"
+                token_strat(node, ignore_errors)
                 del app_databag[unit.name]
+                self._revoke_juju_secret(relation, unit)
