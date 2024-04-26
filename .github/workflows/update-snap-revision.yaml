@@ -62,7 +62,7 @@ jobs:
       uses: peter-evans/create-pull-request@v6
       if: ${{ steps.update-revision.outputs.result != '' }}
       with:
-        commit-message: Update K8s ${{ env.TRACK }}/stable revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch}}
+        commit-message: Update K8s ${{ env.TRACK }}/stable revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}
         title: "Update K8s ${{ env.TRACK }}/stable revision on ${{ matrix.arch }}"
         body: |-
           Updates K8s version for ${{ env.TRACK }}/stable
