@@ -8,12 +8,14 @@
 
 
 import contextlib
+from pathlib import Path
 from unittest import mock
 
 import ops
 import ops.testing
 import pytest
 from charm import K8sCharm
+from charms.k8s.v0.k8sd_api_manager import BootstrapConfig, UpdateClusterConfigRequest
 
 
 @pytest.fixture(params=["worker", "control-plane"])
@@ -23,7 +25,10 @@ def harness(request):
     Args:
         request: pytest request object
     """
-    harness = ops.testing.Harness(K8sCharm)
+    meta = Path(__file__).parent / "../../charmcraft.yaml"
+    if request.param == "worker":
+        meta = Path(__file__).parent / "../../../charmcraft.yaml"
+    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
     harness.begin()
     harness.charm.is_worker = request.param == "worker"
     yield harness
@@ -106,3 +111,83 @@ def test_set_leader(harness):
     assert harness.charm.reconciler.stored.reconciled
     called = {name: h for name, h in handlers.items() if h.called}
     assert len(called) == len(handlers)
+
+
+def test_configure_datastore_bootstrap_config_dqlite(harness):
+    """Test configuring the datastore=dqlite on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    bs_config = BootstrapConfig()
+    harness.charm._configure_datastore(bs_config)
+    assert bs_config.datastore_ca_cert is None
+    assert bs_config.datastore_client_cert is None
+    assert bs_config.datastore_client_key is None
+    assert bs_config.datastore_servers is None
+    assert bs_config.datastore_type is None
+
+
+def test_configure_datastore_bootstrap_config_etcd(harness):
+    """Test configuring the datastore=etcd on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    bs_config = BootstrapConfig()
+    harness.update_config({"datastore": "etcd"})
+    harness.add_relation("etcd", "etcd")
+    with mock.patch.object(harness.charm, "etcd") as mock_etcd:
+        mock_etcd.is_ready = True
+        mock_etcd.get_client_credentials.return_value = {}
+        mock_etcd.get_connection_string.return_value = "foo:1234,bar:1234"
+        harness.charm._configure_datastore(bs_config)
+    assert bs_config.datastore_ca_cert == ""
+    assert bs_config.datastore_client_cert == ""
+    assert bs_config.datastore_client_key == ""
+    assert bs_config.datastore_servers == ["foo:1234", "bar:1234"]
+    assert bs_config.datastore_type == "external"
+
+
+def test_configure_datastore_runtime_config_dqlite(harness):
+    """Test configuring the datastore=dqlite on runtime changes.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    uccr_config = UpdateClusterConfigRequest()
+    harness.charm._configure_datastore(uccr_config)
+    assert uccr_config.datastore is None
+
+
+def test_configure_datastore_runtime_config_etcd(harness):
+    """Test configuring the datastore=etcd on runtime changes.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.update_config({"datastore": "etcd"})
+    harness.add_relation("etcd", "etcd")
+    with mock.patch.object(harness.charm, "etcd") as mock_etcd:
+        mock_etcd.is_ready = True
+        mock_etcd.get_client_credentials.return_value = {}
+        mock_etcd.get_connection_string.return_value = "foo:1234,bar:1234"
+        uccr_config = UpdateClusterConfigRequest()
+        harness.charm._configure_datastore(uccr_config)
+    assert uccr_config.datastore.ca_crt == ""
+    assert uccr_config.datastore.client_crt == ""
+    assert uccr_config.datastore.client_key == ""
+    assert uccr_config.datastore.servers == ["foo:1234", "bar:1234"]
+    assert uccr_config.datastore.type == "external"
