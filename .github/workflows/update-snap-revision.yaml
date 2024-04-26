@@ -23,7 +23,7 @@ jobs:
         NAMES=$(jq -r '.[] | .name' <<< $DATA)
         RELEASES=()
         for BRANCH in ${NAMES}; do
-            if [[ $BRANCH == release-* ]]; then
+            if [[ "${BRANCH}" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
                 RELEASES+=($BRANCH)
             fi
         done
@@ -37,6 +37,11 @@ jobs:
         branch: ${{ fromJSON(needs.stable-branches.outputs.branches) }}
         arch: ["amd64", "arm64"]
     steps:
+    - name: Prepare Track
+      run: |-
+        BRANCH="${{matrix.branch}}"
+        echo "TRACK=${BRANCH:8}" | tee -a "$GITHUB_OUTPUT"
+
     - name: Checkout ${{ matrix.branch }}
       uses: actions/checkout@v4
       with:
