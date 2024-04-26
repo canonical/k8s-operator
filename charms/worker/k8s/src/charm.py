@@ -297,6 +297,7 @@ class K8sCharm(ops.CharmBase):
                 config.datastore_client_cert = etcd_config.get("client_cert", "")
                 config.datastore_client_key = etcd_config.get("client_key", "")
                 config.datastore_servers = self.etcd.get_connection_string().split(",")
+                log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
                 config.datastore = UserFacingDatastoreConfig(
                     type="external",
@@ -305,6 +306,8 @@ class K8sCharm(ops.CharmBase):
                     client_crt=etcd_config.get("client_cert", ""),
                     client_key=etcd_config.get("client_key", ""),
                 )
+                log.info("etcd servers: %s", config.datastore.servers)
+
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
 
@@ -414,7 +417,7 @@ class K8sCharm(ops.CharmBase):
 
         update_request = UpdateClusterConfigRequest()
 
-        self._configure_datastore(update_request.datastore)
+        self._configure_datastore(update_request)
         self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
