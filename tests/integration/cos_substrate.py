@@ -253,8 +253,7 @@ class LXDSubstrate(COSSubstrate):
             return None
 
     def get_kubeconfig(self, container) -> str:
-        """
-        Get kubeconfig from a container.
+        """Get kubeconfig from a container.
 
         Args:
             container: Container instance.

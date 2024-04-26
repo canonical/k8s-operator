@@ -715,17 +715,6 @@ class K8sdAPIManager:
         body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
-    def configure_dns(self, dns_domain: str, dns_ip: str):
-        """Configure the DNS for the k8s cluster.
-
-        Args:
-            dns_domain (str): The domain name for the DNS.
-            dns_ip (str): The IP address for the DNS.
-        """
-        endpoint = "/1.0/k8sd/cluster/config"
-        body = {"dns.dns-ip": dns_ip, "dns.cluster-domain": dns_domain, "dns.enabled": False}
-        self._send_request(endpoint, "POST", EmptyResponse, body)
-
     def get_cluster_status(self) -> GetClusterStatusResponse:
         """Retrieve cluster status.
 
