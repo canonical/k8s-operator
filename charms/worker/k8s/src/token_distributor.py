@@ -181,7 +181,7 @@ class TokenDistributor:
                 # Let's just ignore some of these expected errors:
                 # "Remote end closed connection without response"
                 # "Failed to check if node is control-plane"
-                log.warning("Unclustering self leads to an expected error: %s", e)
+                log.warning("Remove_Node %s: but with an expected error: %s", name, e)
             else:
                 raise
 
