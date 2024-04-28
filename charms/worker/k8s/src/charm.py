@@ -351,11 +351,11 @@ class K8sCharm(ops.CharmBase):
 
         """
         log.info("Garbage collect cluster tokens")
-        to_remove = set()
+        to_remove = None
         if self.is_dying:
-            to_remove |= {self.unit}
-        if unit := _cluster_departing_unit(event):
-            to_remove |= {unit}
+            to_remove = self.unit
+        elif unit := _cluster_departing_unit(event):
+            to_remove = unit
 
         if peer := self.model.get_relation("cluster"):
             self.distributor.revoke_tokens(
@@ -515,10 +515,12 @@ class K8sCharm(ops.CharmBase):
     )
     def _join_cluster(self):
         """Retrieve the join token from secret databag and join the cluster."""
-        if self.is_control_plane and self.api_manager.is_cluster_bootstrapped():
-            return
-
         if not (relation := self.model.get_relation("cluster")):
+            status.add(ops.BlockedStatus("Missing cluster integration"))
+            assert False, "Missing cluster integration"  # nosec
+
+        if self.is_control_plane and self.api_manager.is_cluster_bootstrapped():
+            relation.data[self.unit]["joined"] = self.get_node_name()
             return
 
         if self.collector.joined(relation):
@@ -530,14 +532,14 @@ class K8sCharm(ops.CharmBase):
             address = binding and binding.network.ingress_address
             node_name = self.get_node_name()
             cluster_addr = f"{address}:{K8SD_PORT}"
-            log.info("Joining %s to %s...", node_name, cluster_addr)
+            log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_addr)
             request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
             if self.is_control_plane:
                 request.config = ControlPlaneNodeJoinConfig()
                 request.config.extra_sans = [_get_public_address()]
 
             self.api_manager.join_cluster(request)
-            log.info("Success")
+            log.info("Joined %s(%s)", self.unit, node_name)
 
     def _reconcile(self, event: ops.EventBase):
         """Reconcile state change events.
@@ -587,11 +589,7 @@ class K8sCharm(ops.CharmBase):
         if self.is_dying:
             status.add(ops.WaitingStatus("Preparing to leave cluster"))
             return
-        if self.is_worker:
-            if not self.model.get_relation("cluster"):
-                status.add(ops.BlockedStatus("Missing cluster integration"))
-                assert False, "Missing cluster integration"  # nosec
-        else:
+        if self.is_control_plane:
             assert self.api_manager.is_cluster_ready(), "control-plane not yet ready"  # nosec
 
         if version := self._get_snap_version():
