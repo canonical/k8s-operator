@@ -99,9 +99,9 @@ parts:
 
 peers:
   cluster:
-    interface: cluster
+    interface: k8s-cluster
   cos-tokens:
-    interface: cos-tokens
+    interface: cos-k8s-tokens
 
 provides:
   cos-agent:
@@ -109,7 +109,7 @@ provides:
   k8s-cluster:
     interface: k8s-cluster
   cos-worker-tokens:
-    interface: cos-tokens
+    interface: cos-k8s-tokens
 
 requires:
   etcd:
