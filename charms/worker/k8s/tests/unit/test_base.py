@@ -92,10 +92,7 @@ def test_update_status(harness):
     """
     harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
     harness.charm.on.update_status.emit()
-    if harness.charm.is_worker:
-        assert harness.model.unit.status == ops.BlockedStatus("Missing cluster integration")
-    else:
-        assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
+    assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
 
 
 def test_set_leader(harness):
@@ -140,6 +137,7 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
     if harness.charm.is_worker:
         pytest.skip("Not applicable on workers")
 
+    harness.disable_hooks()
     bs_config = BootstrapConfig()
     harness.update_config({"datastore": "etcd"})
     harness.add_relation("etcd", "etcd")
@@ -178,6 +176,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
     if harness.charm.is_worker:
         pytest.skip("Not applicable on workers")
 
+    harness.disable_hooks()
     harness.update_config({"datastore": "etcd"})
     harness.add_relation("etcd", "etcd")
     with mock.patch.object(harness.charm, "etcd") as mock_etcd:
