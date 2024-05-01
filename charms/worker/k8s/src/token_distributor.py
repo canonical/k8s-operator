@@ -424,11 +424,9 @@ class TokenDistributor:
                     state,
                     node,
                 )
-                ignore_errors = self.node_name == node  # ignore errors removing myself
-                ignore_errors |= state == "pending"  # ignore errors on pending tokens
-                ignore_errors |= (
-                    local_cluster != remote_cluster
-                )  # ignore errors if cluster doesn't match
+                ignore_errors = self.node_name == node  # removing myself
+                ignore_errors |= state == "pending"  # on pending tokens
+                ignore_errors |= local_cluster != remote_cluster  # if cluster doesn't match
                 token_strat(node, ignore_errors)
                 self.drop_node(relation, unit)
                 self._revoke_juju_secret(relation, unit)
