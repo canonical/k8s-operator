@@ -61,17 +61,6 @@ class TokenCollector:
         self.charm = charm
         self.node_name = node_name
 
-    def joined(self, relation: ops.Relation) -> str:
-        """Report if this unit has completed token transfer.
-
-        Args:
-            relation (ops.Relation): The relation to check
-
-        Returns:
-            str: if the local unit is joined on this relation.
-        """
-        return relation.data[self.charm.unit].get("joined")
-
     def request(self, relation: ops.Relation):
         """Ensure this unit is requesting a token.
 
@@ -81,40 +70,34 @@ class TokenCollector:
         # the presence of node-name is used to request a token
         relation.data[self.charm.unit]["node-name"] = self.node_name
 
-    def recover_cluster_name(self, relation: ops.Relation) -> str:
-        """Recover cluster name from the lead unit on the relation.
+    def cluster_name(self, relation: ops.Relation, local: bool) -> str:
+        """Get the cluster name from this relation.
 
         Args:
             relation (ops.Relation): The relation to check
+            local (bool):
+                True  - Cached through this unit's "joined" field
+                        should only be called when certain this unit is clustered
+                False - Considers only the connected unit's "cluster-name" field
 
         Returns:
             the recovered cluster name from existing relations
         """
-        values = {
-            value for unit in relation.units if (value := relation.data[unit].get("cluster-name"))
-        }
-        if values:
-            assert len(values) == 1, f"Failed to find 1 {relation.name}:cluster-name"  # nosec
-            (value,) = values
-            return value
-
-        return ""
-
-    def joined_cluster_name(self, relation: ops.Relation) -> str:
-        """Return the current cluster this unit is joined with.
-
-        Args:
-            relation (ops.Relation): The relation to check
-
-        Returns:
-            either the current joined, or the recovered cluster name
-        """
-        if cluster_name := relation.data[self.charm.unit].get("joined"):
-            return cluster_name
-        cluster_name = relation.data[self.charm.unit]["joined"] = self.recover_cluster_name(
-            relation
-        )
-        return cluster_name
+        cluster_name = ""
+        if not local:
+            # recover_cluster_name
+            values = set()
+            for unit in relation.units:
+                if value := relation.data[unit].get("cluster-name"):
+                    values |= {value}
+            if values:
+                assert len(values) == 1, f"Failed to find 1 {relation.name}:cluster-name"  # nosec
+                (cluster_name,) = values
+        elif not (cluster_name := relation.data[self.charm.unit].get("joined")):
+            # joined_cluster_name
+            cluster_name = self.cluster_name(relation, False)
+            relation.data[self.charm.unit]["joined"] = cluster_name
+        return cluster_name or ""
 
     @contextlib.contextmanager
     def recover_token(self, relation: ops.Relation):
@@ -147,7 +130,7 @@ class TokenCollector:
         yield content["token"]
 
         # signal that the relation is joined, the token is used
-        self.recover_cluster_name(relation)
+        self.cluster_name(relation, True)
 
 
 class TokenDistributor:

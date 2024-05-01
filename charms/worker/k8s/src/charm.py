@@ -217,7 +217,7 @@ class K8sCharm(ops.CharmBase):
                     self._is_node_present(),
                 ]
             ):
-                self._stored.cluster_name = self.collector.joined_cluster_name(relation)
+                self._stored.cluster_name = self.collector.cluster_name(relation, True)
 
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
         return self._stored.cluster_name
@@ -555,10 +555,9 @@ class K8sCharm(ops.CharmBase):
         self._update_status()
         self._last_gasp()
 
+        relation = self.model.get_relation("cluster")
         local_cluster = self.get_cluster_name()
-        remote_cluster = (
-            relation := self.model.get_relation("cluster")
-        ) and self.collector.recover_cluster_name(relation)
+        remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
         if local_cluster and local_cluster != remote_cluster:
             status.add(ops.BlockedStatus("Cannot rejoin new cluster - remove unit"))
 
