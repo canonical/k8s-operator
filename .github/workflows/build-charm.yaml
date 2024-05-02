@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ inputs.working-directory }}packed/
-          key: ${{ runner.os}}-${{ env.CHARM_NAME }}-charm-${{ env.SRC_HASH }}
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ env.CHARM_NAME }}-charm-${{ env.SRC_HASH }}
 
       - name: Use cached charm
         if: ${{ env.CHARM_NAME != 'UNKNOWN' && steps.cache-charm.outputs.cache-hit == 'true' }}
