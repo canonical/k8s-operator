@@ -23,7 +23,9 @@ jobs:
     runs-on: ${{ inputs.runs-on-label }}
     steps:
       - uses: actions/checkout@v4.1.3
-      - uses: canonical/setup-lxd@v0.1.1
+      - uses: addyess/setup-lxd@main
+        with:
+          group: lxd
 
       - name: Get hash of the source
         run: echo "SRC_HASH=${{ hashFiles('**/charms/**/*.yaml', '**/charms/**/*.py', '**/charms/**/requirements.txt') }}" >> $GITHUB_ENV
@@ -44,6 +46,11 @@ jobs:
         working-directory: ${{ inputs.working-directory }}/${{ matrix.path }}
         run: |
           echo "CHARM_FILE=$(ls packed/${{env.CHARM_NAME}}_*.charm)" >> $GITHUB_ENV
+
+      - name: Debug runner
+        run: |
+          groups
+          id
 
       - name: Pack charm
         if: ${{ env.CHARM_NAME != 'UNKNOWN' && !cancelled() && steps.cache-charm.outputs.cache-hit != 'true' }}
