@@ -30,15 +30,16 @@ jobs:
       matrix:
         arch:
           - arch: amd64
-            runs-on-label: ubuntu-22.04
+            runs-on-label: X64
           - arch: arm64
-            runs-on-label: Ubuntu_ARM64_4C_16G_01
+            runs-on-label: ARM64
         path:
           - "./charms/worker/k8s/"
           - "./charms/worker/"
     uses: ./.github/workflows/build-charm.yaml
     with:
       working-directory:  ${{ matrix.path }}
+      arch: ${{ matrix.arch.arch }}
       runs-on-label: ${{ matrix.arch.runs-on-label }}
 
   integration-tests:
