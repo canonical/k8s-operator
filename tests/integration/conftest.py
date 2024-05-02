@@ -217,7 +217,10 @@ async def cloud_arch(ops_test: OpsTest) -> str:
     assert ops_test.model, "Model must be present"
     controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
-    arch = set(machine.safe_data["hardware-characteristics"]["arch"] for machine in controller_model.machines.values())
+    arch = set(
+        machine.safe_data["hardware-characteristics"]["arch"]
+        for machine in controller_model.machines.values()
+    )
     return arch.pop()
 
 
