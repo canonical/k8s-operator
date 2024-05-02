@@ -7,6 +7,7 @@
 """Unit tests snap module."""
 
 import io
+import subprocess
 import unittest.mock as mock
 from pathlib import Path
 
@@ -120,3 +121,19 @@ def test_management_installs_store(cache, install_local, args):
     cache()["k8s"].ensure.assert_called_once_with(
         state=snap.snap_lib.SnapState.Present, channel="edge"
     )
+
+
+@mock.patch("subprocess.check_output")
+def test_version(check_output):
+    """Test snap list returns the correct version."""
+    check_output.return_value = b""
+    assert snap.version(snap="k8s") is None
+
+    check_output.return_value = """
+Name  Version    Rev    Tracking       Publisher   Notes
+k8s   1.30.0     1234   latest/stable  canonical✓
+""".encode()
+    assert snap.version(snap="k8s") == "1.30.0"
+
+    check_output.side_effect = subprocess.CalledProcessError(-1, [], None, None)
+    assert snap.version(snap="k8s") is None

@@ -4,7 +4,7 @@ charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502
 charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns@3b94af979dbb3ecd926faa30b37dc366e90385e5
 cosl==0.0.8
-ops==2.12.0
+ops==2.13.0
 pydantic==1.10.15
 PyYAML==6.0.1
 typing_extensions==4.11.0
