@@ -82,12 +82,14 @@ class Charm:
 
     Attrs:
         ops_test:  Instance of the pytest-operator plugin
+        arch:      Cloud Architecture
         path:      Path to the charm file
         metadata:  Charm's metadata
         app_name:  Preferred name of the juju application
     """
 
     ops_test: OpsTest
+    arch: str
     path: Path
     _charmfile: Optional[Path] = None
 
@@ -122,7 +124,8 @@ class Charm:
                     Path().glob(charm_name),  # Look in top-level path
                     self.path.glob(charm_name),  # Look in charm-level path
                 )
-                self._charmfile, *_ = filter(lambda s: s.name.startswith(header), potentials)
+                arch_choices = filter(lambda s: self.arch in str(s), potentials)
+                self._charmfile, *_ = filter(lambda s: s.name.startswith(header), arch_choices)
                 log.info("For %s found charmfile %s", self.app_name, self._charmfile)
             except ValueError:
                 log.warning("No pre-built charm is available, let's build it")
@@ -200,6 +203,22 @@ class Bundle:
             existing = dict(kv.split("=", 1) for kv in val.split())
             existing.update(constraints)
             app["constraints"] = " ".join(f"{k}={v}" for k, v in existing.items())
+
+
+async def cloud_arch(ops_test: OpsTest) -> str:
+    """Return current architecture of the selected controller
+
+    Args:
+        ops_test (OpsTest): ops_test plugin
+
+    Returns:
+        string describing current architecture of the underlying cloud
+    """
+    assert ops_test.model, "Model must be present"
+    controller = await ops_test.model.get_controller()
+    controller_model = await controller.get_model("controller")
+    arch = set(machine.safe_data["hardware-characteristics"]["arch"] for machine in controller_model.machines.values())
+    return arch.pop()
 
 
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
@@ -321,9 +340,10 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
             return
 
     log.info("Deploying cluster using %s bundle.", bundle_file)
+    arch = await cloud_arch(ops_test)
 
     charm_path = ("worker/k8s", "worker")
-    charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
+    charms = [Charm(ops_test, arch, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )

@@ -6,10 +6,12 @@ name: Build Charms
 on:
   workflow_call:
     inputs:
-      runs-on:
+      arch:
+        type: string
+        description: Architecture of the built charm file
+      runs-on-label:
         type: string
         description: Image runner for building the images
-        default: ubuntu-22.04
       working-directory:
         type: string
         description: The working directory for jobs
@@ -18,7 +20,7 @@ on:
 jobs:
   build-charms:
     name: Build and push charms
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ inputs.runs-on-label }}
     steps:
       - uses: actions/checkout@v4
       - uses: canonical/setup-lxd@v0.1.2
@@ -61,6 +63,6 @@ jobs:
         if: ${{ env.CHARM_FILE != '' && !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.CHARM_NAME }}-charm
+          name: ${{ env.CHARM_NAME }}-${{ inputs.arch }}-charm
           path: ${{ inputs.working-directory }}/${{ env.CHARM_FILE }}
           if-no-files-found: error
