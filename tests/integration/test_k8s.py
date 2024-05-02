@@ -58,10 +58,10 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
         juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
         assert len(k8s.units + worker.units) == len(
             labelled
-        ), "Not all nodes labeled with custom-label"
+        ), "Not all nodes labelled with custom-label"
         assert len(k8s.units + worker.units) == len(
             juju_nodes
-        ), "Not all nodes labeled as juju-charms"
+        ), "Not all nodes labelled as juju-charms"
     finally:
         await asyncio.gather(
             k8s.reset_config(list(label_config)), worker.reset_config(list(label_config))
@@ -71,7 +71,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     nodes = await get_nodes(k8s.units[0])
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
-    assert 0 == len(labelled), "Not all nodes labeled with custom-label"
+    assert 0 == len(labelled), "Not all nodes labelled with custom-label"
 
 
 @pytest.mark.abort_on_fail

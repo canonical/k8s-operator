@@ -9,6 +9,7 @@
 
 
 import logging
+import re
 import subprocess
 from pathlib import Path
 from typing import List, Literal, Optional, Union
@@ -115,3 +116,27 @@ def management():
         elif isinstance(args, SnapStoreArgument):
             log.info("Ensuring %s snap version", args.name)
             which.ensure(**args.dict(exclude_none=True))
+
+
+def version(snap: str) -> Optional[str]:
+    """Retrieve the version of the installed snap package.
+
+    Arguments:
+        snap: (str): Name of the snap
+
+    Returns:
+        Optional[str]: The version of the installed snap package, or None if
+        not available.
+    """
+    try:
+        result = subprocess.check_output(["/usr/bin/snap", "list", snap])
+    except subprocess.CalledProcessError:
+        return None
+
+    output = result.decode().strip()
+    match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
+    if match:
+        return match.group()
+
+    log.info("Snap k8s not found or no version available.")
+    return None

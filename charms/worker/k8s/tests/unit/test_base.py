@@ -91,8 +91,9 @@ def test_update_status(harness):
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = True  # Pretended to be reconciled
+    harness.model.unit.status = ops.WaitingStatus("Unchanged")
     harness.charm.on.update_status.emit()
-    assert harness.model.unit.status == ops.WaitingStatus("Cluster not yet ready")
+    assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
 def test_set_leader(harness):
@@ -103,6 +104,7 @@ def test_set_leader(harness):
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
     with mock_reconciler_handlers(harness) as handlers:
+        handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
     assert harness.model.unit.status == ops.ActiveStatus("Ready")
     assert harness.charm.reconciler.stored.reconciled

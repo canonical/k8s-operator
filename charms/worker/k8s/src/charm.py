@@ -17,14 +17,14 @@ certificate storage.
 
 import logging
 import os
-import re
 import shlex
 import socket
 import subprocess
+import uuid
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -54,6 +54,7 @@ from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
 from snap import management as snap_management
+from snap import version as snap_version
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 from typing_extensions import Literal
 
@@ -95,6 +96,10 @@ def _cluster_departing_unit(event: ops.EventBase) -> Union[Literal[False], ops.U
     )
 
 
+class NodeRemovedError(Exception):
+    """Raised to prevent reconciliation of dying node."""
+
+
 class K8sCharm(ops.CharmBase):
     """A charm for managing a K8s cluster via the k8s snap.
 
@@ -102,7 +107,6 @@ class K8sCharm(ops.CharmBase):
         is_worker: true if this is a worker unit
         is_control_plane: true if this is a control-plane unit
         lead_control_plane: true if this is a control-plane unit and its the leader
-        is_dying: true if the unit is being removed
     """
 
     _stored = ops.StoredState()
@@ -122,10 +126,10 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
-        self.labeler = LabelMaker(
+        self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
-        self._stored.set_default(removing=False)
+        self._stored.set_default(is_dying=False, cluster_name="")
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -180,11 +184,6 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
 
-    @property
-    def is_dying(self) -> bool:
-        """Returns true if the unit is being removed."""
-        return bool(self._stored.removing)
-
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
         proxy_settings = self._get_proxy_env()
@@ -196,6 +195,32 @@ class K8sCharm(ops.CharmBase):
             current_env.update(proxy_settings)
             with open("/etc/environment", mode="w", encoding="utf-8") as file:
                 file.write("\n".join([f"{k}={v}" for k, v in current_env.items()]))
+
+    def get_cluster_name(self) -> str:
+        """Craft a unique name for the cluster once joined or bootstrapped.
+
+        Note: It won't change for the lifetime of the unit.
+
+        Returns:
+            the cluster name.
+        """
+        unit, node = self.unit.name, self.get_node_name()
+        if not self._stored.cluster_name:
+            if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
+                # TODO: replace with API call once available from the snap
+                self._stored.cluster_name = str(uuid.uuid4())
+            elif not (relation := self.model.get_relation("cluster")):
+                pass
+            elif any(
+                [
+                    self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
+                    self._is_node_present(),
+                ]
+            ):
+                self._stored.cluster_name = self.collector.cluster_name(relation, True)
+
+        log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
+        return self._stored.cluster_name
 
     def get_node_name(self) -> str:
         """Return the lowercase hostname.
@@ -352,7 +377,7 @@ class K8sCharm(ops.CharmBase):
         """
         log.info("Garbage collect cluster tokens")
         to_remove = None
-        if self.is_dying:
+        if self._stored.is_dying:
             to_remove = self.unit
         elif unit := _cluster_departing_unit(event):
             to_remove = unit
@@ -377,10 +402,6 @@ class K8sCharm(ops.CharmBase):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         log.info("Prepare clustering")
         if peer := self.model.get_relation("cluster"):
-            node_name = self.get_node_name()
-            peer.data[self.unit]["node-name"] = node_name
-            peer.data[self.unit]["joined"] = node_name
-
             self.distributor.allocate_tokens(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
@@ -489,24 +510,6 @@ class K8sCharm(ops.CharmBase):
                 proxy_settings[env_key.lower()] = env_value
         return proxy_settings
 
-    def _get_snap_version(self) -> Optional[str]:
-        """Retrieve the version of the installed Kubernetes snap package.
-
-        Returns:
-            Optional[str]: The version of the installed k8s snap package, or None if
-            not available.
-        """
-        cmd = "snap list k8s"
-        result = subprocess.check_output(shlex.split(cmd))
-        output = result.decode().strip()
-        match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
-
-        if match:
-            return match.group()
-
-        log.info("Snap k8s not found or no version available.")
-        return None
-
     @on_error(
         WaitingStatus("Waiting for Cluster token"),
         AssertionError,
@@ -519,11 +522,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.BlockedStatus("Missing cluster integration"))
             assert False, "Missing cluster integration"  # nosec
 
-        if self.is_control_plane and self.api_manager.is_cluster_bootstrapped():
-            relation.data[self.unit]["joined"] = self.get_node_name()
-            return
-
-        if self.collector.joined(relation):
+        if self.get_cluster_name():
             return
 
         status.add(ops.MaintenanceStatus("Joining cluster"))
@@ -541,6 +540,29 @@ class K8sCharm(ops.CharmBase):
             self.api_manager.join_cluster(request)
             log.info("Joined %s(%s)", self.unit, node_name)
 
+    @on_error(WaitingStatus("Awaiting cluster removal"))
+    def _death_handler(self, event: ops.EventBase):
+        """Reconcile end of unit's position in the cluster.
+
+        Args:
+            event: ops.EventBase - events triggered after notification of removal
+
+        Raises:
+            NodeRemovedError: at the end of every loop to prevent the unit from ever reconciling
+        """
+        if self.lead_control_plane:
+            self._revoke_cluster_tokens(event)
+        self._update_status()
+        self._last_gasp()
+
+        relation = self.model.get_relation("cluster")
+        local_cluster = self.get_cluster_name()
+        remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
+        if local_cluster and local_cluster != remote_cluster:
+            status.add(ops.BlockedStatus("Cannot rejoin new cluster - remove unit"))
+
+        raise NodeRemovedError()
+
     def _reconcile(self, event: ops.EventBase):
         """Reconcile state change events.
 
@@ -549,13 +571,8 @@ class K8sCharm(ops.CharmBase):
         """
         log.info("Reconcile event=%s", event)
 
-        self._evaluate_removal(event)
-        if self.is_dying and self.lead_control_plane:
-            self._revoke_cluster_tokens(event)
-        if self.is_dying:
-            self._update_status()
-            self._last_gasp()
-            return
+        if self._evaluate_removal(event):
+            self._death_handler(event)
 
         self._apply_proxy_environment()
         self._install_snaps()
@@ -577,50 +594,75 @@ class K8sCharm(ops.CharmBase):
             self._copy_internal_kubeconfig()
             self._expose_ports()
 
-    @on_error(
-        ops.WaitingStatus("Cluster not yet ready"),
-        AssertionError,
-        subprocess.CalledProcessError,
-        InvalidResponseError,
-        K8sdConnectionError,
-    )
     def _update_status(self):
         """Check k8s snap status."""
-        if self.is_dying:
-            status.add(ops.WaitingStatus("Preparing to leave cluster"))
-            return
-        if self.is_control_plane:
-            assert self.api_manager.is_cluster_ready(), "control-plane not yet ready"  # nosec
-
-        if version := self._get_snap_version():
+        if version := snap_version("k8s"):
             self.unit.set_workload_version(version)
 
-        if not self._is_node_ready():
-            status.add(ops.WaitingStatus("Node not yet Ready"))
+        if not self.get_cluster_name():
+            status.add(ops.WaitingStatus("Node not Clustered"))
             return
 
-    def _evaluate_removal(self, event: ops.EventBase):
+        if not self._is_node_ready():
+            status.add(ops.WaitingStatus("Node not Ready"))
+            return
+
+    def _evaluate_removal(self, event: ops.EventBase) -> bool:
         """Determine if my unit is being removed.
 
         Args:
             event: ops.EventBase - event that triggered charm hook
+
+        Returns:
+            True if being removed, otherwise False
         """
-        if self.is_dying:
-            return
-        if unit := _cluster_departing_unit(event):
+        if self._stored.is_dying:
+            pass
+        elif (unit := _cluster_departing_unit(event)) and unit == self.unit:
             # Juju says I am being removed
-            self._stored.removing = unit == self.unit
-        elif isinstance(event, ops.RelationBrokenEvent) and event.relation.name == "cluster":
+            self._stored.is_dying = True
+        elif (
+            isinstance(event, ops.RelationBrokenEvent)
+            and event.relation.name == "cluster"
+            and self.is_worker
+        ):
             # Control-plane never experience RelationBroken on "cluster", it's a peer relation
             # Worker units experience RelationBroken on "cluster" when the relation is removed
             # or this unit is being removed.
-            self._stored.removing = self.is_worker
+            self._stored.is_dying = True
+        elif (
+            self.is_worker
+            and self.get_cluster_name()
+            and (relation := self.model.get_relation("cluster"))
+            and not relation.units
+        ):
+            # If a worker unit has been clustered,
+            # but there are no more control-plane units on the relation
+            # this unit cannot be re-clustered
+            self._stored.is_dying = True
         elif isinstance(event, (ops.RemoveEvent, ops.StopEvent)):
             # If I myself am dying, its me!
-            self._stored.removing = True
+            self._stored.is_dying = True
+        return self._stored.is_dying
+
+    def _is_node_present(self, node: str = "") -> bool:
+        """Determine if node is in the kubernetes cluster.
+
+        Args:
+            node (str): name of node
+
+        Returns:
+            bool: True when this unit appears in the node list
+        """
+        node = node or self.get_node_name()
+        cmd = ["nodes", node, "-o=jsonpath={.metadata.name}"]
+        try:
+            return self.kubectl_get(*cmd) == node
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
 
     def _is_node_ready(self, node: str = "") -> bool:
-        """Determine if node is in the kubernetes cluster.
+        """Determine if node is Ready in the kubernetes cluster.
 
         Args:
             node (str): name of node
@@ -632,7 +674,7 @@ class K8sCharm(ops.CharmBase):
         cmd = ["nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
         try:
             return self.kubectl_get(*cmd) == "True"
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
     def _last_gasp(self):
@@ -654,8 +696,8 @@ class K8sCharm(ops.CharmBase):
         """Apply labels to the node."""
         status.add(ops.MaintenanceStatus("Ensuring Kubernetes Node Labels"))
         node = self.get_node_name()
-        if self.labeler.active_labels() is not None:
-            self.labeler.apply_node_labels()
+        if self.labeller.active_labels() is not None:
+            self.labeller.apply_node_labels()
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)
@@ -664,6 +706,7 @@ class K8sCharm(ops.CharmBase):
         """Handle update-status event."""
         if not self.reconciler.stored.reconciled:
             return
+
         try:
             with status.context(self.unit):
                 self._update_status()

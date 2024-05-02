@@ -26,6 +26,7 @@ except K8sdAPIManagerError as e:
 Similarly, the module allows for requesting authentication tokens and
 managing K8s components.
 """
+import enum
 import json
 import logging
 import socket
@@ -49,6 +50,18 @@ LIBPATCH = 2
 logger = logging.getLogger(__name__)
 
 
+class ErrorCodes(enum.Enum):
+    """Enumerate the response codes from the k8s api.
+
+    Attributes:
+        StatusNodeUnavailable: returned when the node isn't in the cluster
+        StatusNodeInUse: returned when the node is in the cluster already
+    """
+
+    StatusNodeUnavailable = 520
+    StatusNodeInUse = 521
+
+
 class K8sdAPIManagerError(Exception):
     """Base exception for K8sd API Manager errors."""
 
@@ -58,7 +71,21 @@ class K8sdConnectionError(K8sdAPIManagerError):
 
 
 class InvalidResponseError(K8sdAPIManagerError):
-    """Raised when the response is invalid or unexpected."""
+    """Raised when the response is invalid or unexpected.
+
+    Attributes:
+        code (int): HTTP Status code
+    """
+
+    def __init__(self, code: int, msg: str) -> None:
+        """Initialise the InvalidResponseError.
+
+        Args:
+            code (int): http response code
+            msg (str): Message associated with the error
+        """
+        super().__init__(f"Error status {code}\n" + msg)
+        self.code = code
 
 
 class BaseRequestModel(BaseModel):
@@ -649,17 +676,18 @@ class K8sdAPIManager:
                 data = response.read().decode()
                 if not 200 <= response.status < 300:
                     raise InvalidResponseError(
-                        f"Error status {response.status}\n"
+                        response.status,
                         f"\tmethod={method}\n"
                         f"\tendpoint={endpoint}\n"
                         f"\treason={response.reason}\n"
-                        f"\tbody={data}"
+                        f"\tbody={data}",
                     )
             return response_cls.parse_raw(data)
 
         except ValueError as e:
             raise InvalidResponseError(
-                f"Request failed:\n" f"\tmethod={method}\n" f"\tendpoint={endpoint}"
+                response.status,
+                f"Request failed:\n" f"\tmethod={method}\n" f"\tendpoint={endpoint}",
             ) from e
         except (socket.error, HTTPException) as e:
             raise K8sdConnectionError(
