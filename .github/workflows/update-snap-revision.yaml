@@ -3,7 +3,6 @@ name: Update Snap Revisions
 on:
   schedule:
     - cron: "0 */5 * * *" # every 5 hours
-  pull_request:
 
 
 jobs:
@@ -48,12 +47,6 @@ jobs:
       with:
         ref: ${{ matrix.branch }}
 
-    - name: Checkout Updater Script
-      uses: actions/checkout@v4
-      with:
-        sparse-checkout: |
-          .github/workflows/
-
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -64,7 +57,6 @@ jobs:
       run: |
         pip install pyyaml
         python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }} ${{ env.TRACK }} stable
-        exit 1
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v6
