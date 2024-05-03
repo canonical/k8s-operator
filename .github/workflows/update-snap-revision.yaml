@@ -62,6 +62,7 @@ jobs:
     - name: Update Revision
       id: update-revision
       run: |
+        pip install pyyaml
         python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }} ${{ env.TRACK }} stable
         exit 1
 
