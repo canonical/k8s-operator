@@ -174,6 +174,26 @@ class Bundle:
         app["charm"] = str(path.resolve())
         app["channel"] = None
 
+    def drop_constraints(self):
+        """Remove constraints on applications. Useful for testing on lxd."""
+        for app in self.applications.values():
+            app["constraints"] = None
+
+
+async def cloud_type(ops_test: OpsTest):
+    """Return current cloud type of the selected controller
+
+    Args:
+        ops_test (OpsTest): ops_test plugin
+
+    Returns:
+        string describing current type of the underlying cloud
+    """
+    assert ops_test.model, "Model must be present"
+    controller = await ops_test.model.get_controller()
+    cloud = await controller.cloud()
+    return cloud.cloud.type_
+
 
 async def cloud_profile(ops_test: OpsTest):
     """Apply lxd-profile to the model if the juju cloud is lxd.
@@ -181,10 +201,7 @@ async def cloud_profile(ops_test: OpsTest):
     Args:
         ops_test (OpsTest): ops_test plugin
     """
-    assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
-    cloud = await controller.cloud()
-    if cloud.cloud.type_ == "lxd":
+    if await cloud_type(ops_test) == "lxd" and ops_test.model:
         lxd = LXDSubstrate("", "")
         profile_name = f"juju-{ops_test.model.name}"
         lxd.remove_profile(profile_name)
@@ -257,6 +274,8 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
     bundle = Bundle(ops_test, Path(__file__).parent / "data" / bundle_file)
+    if await cloud_type(ops_test) == "lxd":
+        bundle.drop_constraints()
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle, raise_on_blocked) as the_model:

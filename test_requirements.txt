@@ -3,5 +3,5 @@ pydantic<2
 pylxd
 pytest
 pytest-asyncio
-pytest-operator @ git+https://github.com/charmed-kubernetes/pytest-operator@3902dbd6ad8e84ceffec842a04ebed2372f0ec34
+pytest-operator
 tenacity
