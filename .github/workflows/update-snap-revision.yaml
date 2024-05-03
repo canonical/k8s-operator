@@ -3,6 +3,7 @@ name: Update Snap Revisions
 on:
   schedule:
     - cron: "0 */5 * * *" # every 5 hours
+  pull_request:
 
 
 jobs:
@@ -45,11 +46,16 @@ jobs:
     - name: Checkout ${{ matrix.branch }}
       uses: actions/checkout@v4
       with:
-        repository: ${{ github.repository }}
         ref: ${{ matrix.branch }}
 
+    - name: Checkout Updater Script
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          .github/workflows/update-snap-revision.py
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
@@ -57,6 +63,7 @@ jobs:
       id: update-revision
       run: |
         python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }} ${{ env.TRACK }} stable
+        exit 1
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v6
@@ -70,3 +77,6 @@ jobs:
           * arch = ${{ matrix.arch }}
         branch: revision-update-job/${{ env.TRACK }}/${{matrix.arch}}/${{ steps.update-revision.outputs.result }}
         base: ${{ matrix.branch }}
+        add-paths: |
+          charms/worker/k8s/templates/*.yaml
+

@@ -53,7 +53,7 @@ def update_current_revision(arch: str, rev: str):
         for value in arch_spec:
             if value.get("name") == "k8s":
                 value["revision"] = rev
-    log.info("Updating  arch=%s revision=%s", arch, rev)
+    log.info("Updating arch=%s revision=%s", arch, rev)
     with INSTALLATION.open("w") as f:
         f.writelines(LICENSE)
         f.write(yaml.safe_dump(content))
@@ -63,6 +63,7 @@ def update_github_env(variable:str, value:str):
     if github_output := os.environ.get("GITHUB_OUTPUT", None):
         with Path(github_output).open(mode="a+") as f:
             f.write(f"{variable}={value}")
+
 
 if __name__ == "__main__":
     arch, track, risk = sys.argv[1:]
