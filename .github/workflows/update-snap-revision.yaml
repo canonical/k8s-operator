@@ -40,7 +40,7 @@ jobs:
     - name: Prepare Track
       run: |-
         BRANCH="${{matrix.branch}}"
-        echo "TRACK=${BRANCH:8}" | tee -a "$GITHUB_OUTPUT"
+        echo "TRACK=${BRANCH:8}" | tee -a "$GITHUB_ENV"
 
     - name: Checkout ${{ matrix.branch }}
       uses: actions/checkout@v4
