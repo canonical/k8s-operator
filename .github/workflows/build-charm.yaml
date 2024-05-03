@@ -22,8 +22,8 @@ jobs:
     name: Build and push charms
     runs-on: ${{ inputs.runs-on-label }}
     steps:
-      - uses: actions/checkout@v4.1.3
-      - uses: canonical/setup-lxd@main
+      - uses: actions/checkout@v4
+      - uses: canonical/setup-lxd@v0.1.1
 
       - name: Get hash of the source
         run: echo "SRC_HASH=${{ hashFiles('**/charms/**/*.yaml', '**/charms/**/*.py', '**/charms/**/requirements.txt') }}" >> $GITHUB_ENV
