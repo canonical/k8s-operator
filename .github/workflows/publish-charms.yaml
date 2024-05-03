@@ -23,9 +23,12 @@ jobs:
           if [[ "${BRANCH}" == "main" ]]; then
             echo "track=latest" >> "$GITHUB_OUTPUT"
             echo "risk=edge" >> "$GITHUB_OUTPUT"
-          elif [[ "${BRANCH}" =~ "^release-[0-9]+\.[0-9]+$" ]]; then
+          elif [[ "${BRANCH}" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
             echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
             echo "risk=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error Failed to determine track/risk from branch ${BRANCH}"
+            exit 1
           fi
   publish-to-edge:
     needs: [configure-channel]
