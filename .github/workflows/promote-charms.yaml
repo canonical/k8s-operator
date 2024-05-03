@@ -39,6 +39,9 @@ jobs:
             echo "track=latest" >> "$GITHUB_OUTPUT"
           elif [[ "${BRANCH}" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
             echo "track=${BRANCH:8}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error Failed to determine track from branch ${BRANCH}"
+          exit 1
           echo "Promote from $track/${{github.event.inputs.origin-risk}} to $track/${{github.event.inputs.destination-risk}}"
   select-charms:
     runs-on: ubuntu-latest
