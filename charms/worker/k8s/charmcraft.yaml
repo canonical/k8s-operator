@@ -58,6 +58,14 @@ config:
         The datastore to use in Canonical Kubernetes. This cannot be changed
         after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
         chosen, the charm should be integrated with the etcd charm.
+    certificates:
+      default: self-signed
+      type: string
+      description: |
+        The certificates generation strategy to use in Canonical Kubernetes.
+        This cannot be changed after deployment. Allowed values are "self-signed"
+        and "external". If "external" is chosen, the charm should be integrated
+        with the an external certificates authority charm.
     labels:
       default: ""
       type: string
@@ -95,7 +103,16 @@ actions:
 
 parts:
   charm:
-    build-packages: [git]
+    charm-binary-python-packages:
+      - setuptools
+      - cryptography
+    build-packages:
+      - git
+      - libffi-dev
+      - libssl-dev
+      - pkg-config
+      - rustc
+      - cargo
 
 peers:
   cluster:
@@ -112,6 +129,8 @@ provides:
     interface: cos-tokens
 
 requires:
+  certificates:
+    interface: tls-certificates
   etcd:
     interface: etcd
   external-cloud-provider:

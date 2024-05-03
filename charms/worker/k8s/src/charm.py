@@ -30,7 +30,9 @@ from urllib.parse import urlparse
 import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
 import ops
+import utils
 import yaml
+from certificates import K8sCertificates
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
@@ -52,6 +54,7 @@ from charms.k8s.v0.k8sd_api_manager import (
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from charms.tls_certificates_interface.v3.tls_certificates import TLSCertificatesRequiresV3
 from cos_integration import COSIntegration
 from snap import management as snap_management
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
@@ -66,16 +69,7 @@ ETC_KUBERNETES = Path("/etc/kubernetes")
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
-
-
-def _get_public_address() -> str:
-    """Get public address from juju.
-
-    Returns:
-        (str) public ip address of the unit
-    """
-    cmd = ["unit-get", "public-address"]
-    return subprocess.check_output(cmd).decode("UTF-8").strip()
+SUPPORTED_CERTIFICATES = ["self-signed", "external"]
 
 
 class K8sCharm(ops.CharmBase):
@@ -101,8 +95,16 @@ class K8sCharm(ops.CharmBase):
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.xcp = ExternalCloudProvider(self, xcp_relation)
+        self.certificates = TLSCertificatesRequiresV3(self, "certificates")
+        certificates_events = [
+            self.certificates.on.certificate_available,
+            self.certificates.on.certificate_expiring,
+            self.certificates.on.certificate_invalidated,
+            self.certificates.on.all_certificates_invalidated,
+        ]
+        self.k8s_certificates = K8sCertificates(self, self.certificates)
         self.cos = COSIntegration(self)
-        self.reconciler = Reconciler(self, self._reconcile)
+        self.reconciler = Reconciler(self, self._reconcile, custom_events=certificates_events)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeler = LabelMaker(
@@ -237,10 +239,11 @@ class K8sCharm(ops.CharmBase):
 
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
+        self.k8s_certificates.generate_bootstrap_certificates(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
         bootstrap_config.service_cidr = self.config["service-cidr"]
         bootstrap_config.control_plane_taints = self.config["register-with-taints"].split()
-        bootstrap_config.extra_sans = [_get_public_address()]
+        bootstrap_config.extra_sans = [utils.get_public_address()]
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
@@ -506,7 +509,7 @@ class K8sCharm(ops.CharmBase):
             request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
             if self.is_control_plane:
                 request.config = ControlPlaneNodeJoinConfig()
-                request.config.extra_sans = [_get_public_address()]
+                request.config.extra_sans = [utils.get_public_address()]
 
             self.api_manager.join_cluster(request)
             log.info("Success")
@@ -530,6 +533,7 @@ class K8sCharm(ops.CharmBase):
         self._apply_snap_requirements()
         self._check_k8sd_ready()
         if self.lead_control_plane:
+            self.k8s_certificates.collect_certificate(event)
             self._bootstrap_k8s_snap()
             self._enable_functionalities()
             self._create_cluster_tokens()
@@ -647,7 +651,7 @@ class K8sCharm(ops.CharmBase):
             server = event.params.get("server")
             if not server:
                 log.info("No server requested, use public-address")
-                server = f"{_get_public_address()}:6443"
+                server = f"{utils.get_public_address()}:6443"
             log.info("Requesting kubeconfig for server=%s", server)
             resp = self.api_manager.get_kubeconfig(server)
             event.set_results({"kubeconfig": resp})
