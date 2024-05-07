@@ -7,7 +7,6 @@ from typing import List
 
 import ops
 import utils
-
 from charms.k8s.v0.k8sd_api_manager import BootstrapConfig
 from charms.tls_certificates_interface.v3.tls_certificates import (
     CertificateAvailableEvent,
@@ -30,13 +29,20 @@ class K8sCertificates:
 
         Args:
             charm: An instance of the charm.
-            certificates: An instance of the TLSCertificatesv3 requirer library.
+            certificates: An instance of the TLSCertificatesv3 library.
         """
         self.charm = charm
         self.certificates = certificates
 
     def _check_secret(self, label: str):
-        """Check if a secret with the specified label exists in Juju."""
+        """Check if a secret with the specified label exists in Juju.
+
+        Args:
+            label (str): The label of the secret to check for.
+
+        Returns:
+            bool: True if the secret exists, False otherwise.
+        """
         try:
             self.charm.model.get_secret(label=label)
             return True
@@ -44,7 +50,11 @@ class K8sCertificates:
             return False
 
     def _generate_private_key(self, components: List[str]):
-        """Generate private keys for each component and store them as secrets."""
+        """Generate private keys for each component and store them as secrets.
+
+        Args:
+            components (List[str]): A list of components to generate private keys for.
+        """
         content = dict()
 
         for key in components:
@@ -124,7 +134,11 @@ class K8sCertificates:
         self.charm.unit.add_secret(content=content, label=f"{self.charm.unit.name}-csr")
 
     def _generate_certificate(self, components: List[str]):
-        """Request the creation of certificates for components lacking a certificate."""
+        """Request the creation of certificates for components lacking a certificate.
+
+        Args:
+            components (List[str]): A list of components to request certificates for.
+        """
         csr = self.charm.model.get_secret(label=f"{self.charm.unit.name}-csr")
         csr_content = csr.get_content(refresh=True)
 
@@ -143,10 +157,10 @@ class K8sCertificates:
         updates or creates a secret with the certificate, CA certificate, and
         the CSR.
 
-        Parameters:
-        event (CertificateAvailableEvent): An event that triggers the certificate
-                                          collection, containing the certificate,
-                                          CA certificate, and CSR.
+        Args:
+            event (CertificateAvailableEvent): An event that triggers the certificate
+                                              collection, containing the certificate,
+                                              CA certificate, and CSR.
         """
         if not isinstance(event, CertificateAvailableEvent):
             return
@@ -182,12 +196,16 @@ class K8sCertificates:
             log.warning("Event CSR does not match any stored CSR")
 
     def _ensure_complete_certificates(self, components: List[str]):
-        """Ensure the certificates are complete for the unit."""
+        """Ensure the certificates are complete for the unit.
+
+        Args:
+            components (List[str]): A list of components to ensure certificates for.
+        """
         certs = dict()
         for component in components:
             assert self._check_secret(
                 f"{component}-cert-{self.charm.unit.name}"
-            ), f"Missing {component} cert"
+            ), f"Missing {component} cert"  # nosec
             cert_secret = self.charm.model.get_secret(
                 label=f"{component}-cert-{self.charm.unit.name}"
             )
@@ -232,7 +250,14 @@ class K8sCertificates:
         bootstrap_config.apiserver_kubelet_client_key = pk_content["apiserver-kubelet-client"]
 
     def _get_unit_certificates(self, components: List[str]):
-        """Generate the private keys, CSRs and certificates for the unit."""
+        """Generate the private keys, CSRs and certificates for the unit.
+
+        Args:
+            components (List[str]): A list of components to generate certificates for.
+
+        Returns:
+            dict: A dictionary containing the certificates for the components.
+        """
         if not self._check_secret(f"{self.charm.unit.name}-private-keys"):
             self._generate_private_key(
                 components + ["service-account"] if self.charm.lead_control_plane else components
@@ -245,7 +270,7 @@ class K8sCertificates:
         for component in components:
             assert self._check_secret(
                 f"{component}-cert-{self.charm.unit.name}"
-            ), f"Missing {component} certificate"
+            ), f"Missing {component} certificate"  # nosec
             cert_secret = self.charm.model.get_secret(
                 label=f"{component}-cert-{self.charm.unit.name}"
             )

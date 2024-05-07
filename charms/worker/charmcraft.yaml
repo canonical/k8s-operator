@@ -74,6 +74,8 @@ provides:
   cos-agent:
     interface: cos_agent
 requires:
+  certificates:
+    interface: tls-certificates
   cluster:
     interface: k8s-cluster
     # interface to connect with the k8s charm to provide

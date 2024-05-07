@@ -280,8 +280,8 @@ class K8sCharm(ops.CharmBase):
             return
 
         bootstrap_config = BootstrapConfig()
+        self._configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
-        self.k8s_certificates.generate_bootstrap_certificates(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
         bootstrap_config.service_cidr = self.config["service-cidr"]
         bootstrap_config.control_plane_taints = self.config["register-with-taints"].split()
@@ -313,7 +313,7 @@ class K8sCharm(ops.CharmBase):
         """Configure the datastore for the Kubernetes cluster.
 
         Args:
-            config (BootstrapConfig|UpdateClusterConfigRequst):
+            config (BootstrapConfig|UpdateClusterConfigRequest):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
@@ -355,6 +355,32 @@ class K8sCharm(ops.CharmBase):
 
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
+
+    def _configure_certificates(self, config: BootstrapConfig):
+        """Configure the certificates for the Kubernetes cluster.
+
+        Args:
+            config (BootstrapConfig):
+                The configuration object for the Kubernetes cluster. This object
+                will be modified in-place to include the cluster's certificates.
+        """
+        certificates = self.config.get("certificates")
+
+        if certificates not in SUPPORTED_CERTIFICATES:
+            log.error(
+                "Invalid certificates issuer: %s. Supported values: %s",
+                certificates,
+                ", ".join(SUPPORTED_CERTIFICATES),
+            )
+            status.add(ops.BlockedStatus(f"Invalid certificates issuer: {certificates}"))
+        assert certificates in SUPPORTED_CERTIFICATES  # nosec
+
+        if certificates == "external":
+            log.info("Using external certificates")
+            certificates_relation = self.model.get_relation("certificates")
+
+            assert certificates_relation, "Missing certificates relation"  # nosec
+            self.k8s_certificates.generate_bootstrap_certificates(config)
 
     def _configure_cloud_provider(self, config: BootstrapConfig):
         """Configure the cloud-provider for the Kubernetes cluster.
