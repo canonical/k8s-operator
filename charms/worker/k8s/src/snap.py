@@ -117,6 +117,7 @@ def management():
             if which.revision != args.revision:
                 log.info("Ensuring %s snap revision=%s", args.name, args.revision)
                 which.ensure(**args.dict(exclude_none=True))
+                which.hold()
         elif isinstance(args, SnapStoreArgument):
             log.info("Ensuring %s snap channel=%s", args.name, args.channel)
             which.ensure(**args.dict(exclude_none=True))
