@@ -54,7 +54,7 @@ class SnapStoreArgument(BaseModel):
         devmode (bool): If it should be installed as with dev mode enabled
         channel (bool): the channel to install from
         cohort (str): the key of a cohort that this snap belongs to
-        revision (int): the revision of the snap to install
+        revision (str): the revision of the snap to install
     """
 
     install_type: Literal["store"] = Field("store", alias="install-type", exclude=True)
@@ -64,7 +64,7 @@ class SnapStoreArgument(BaseModel):
     state: Optional[snap_lib.SnapState] = Field(snap_lib.SnapState.Present)
     channel: Optional[str] = None
     cohort: Optional[str] = None
-    revision: Optional[int] = None
+    revision: Optional[str] = None
 
 
 SnapArgument = Annotated[
@@ -113,8 +113,12 @@ def management():
         which = cache[args.name]
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
             snap_lib.install_local(**args.dict(exclude_none=True))
+        elif isinstance(args, SnapStoreArgument) and args.revision:
+            if which.revision != args.revision:
+                log.info("Ensuring %s snap revision=%s", args.name, args.revision)
+                which.ensure(**args.dict(exclude_none=True))
         elif isinstance(args, SnapStoreArgument):
-            log.info("Ensuring %s snap version", args.name)
+            log.info("Ensuring %s snap channel=%s", args.name, args.channel)
             which.ensure(**args.dict(exclude_none=True))
 
 

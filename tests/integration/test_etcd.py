@@ -16,7 +16,6 @@ from .helpers import ready_nodes
 # bundle with etcd, for all the test within this module.
 pytestmark = [
     pytest.mark.bundle_file("test-bundle-etcd.yaml"),
-    pytest.mark.ignore_blocked,
 ]
 
 
