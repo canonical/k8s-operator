@@ -109,17 +109,40 @@ def test_management_installs_local(cache, install_local, args):
 @mock.patch("snap._parse_management_arguments")
 @mock.patch("snap.snap_lib.install_local")
 @mock.patch("snap.snap_lib.SnapCache")
-def test_management_installs_store(cache, install_local, args):
+def test_management_installs_store_from_channel(cache, install_local, args):
     """Test installer uses store installer."""
-    cache.return_value.__getitem__.return_value = mock.MagicMock(spec=snap.snap_lib.Snap)
+    cache.return_value.__getitem__.return_value = mock.MagicMock(autospec=snap.snap_lib.Snap)
+    cache.return_value["k8s"].revision = None
     args.return_value = [
         snap.SnapStoreArgument(name="k8s", channel="edge"),
     ]
     snap.management()
+    cache.return_value["k8s"].revision = 123
+    snap.management()
     cache.called_once_with()
     install_local.assert_not_called()
+    assert cache()["k8s"].ensure.call_count == 2
+    cache()["k8s"].ensure.assert_called_with(state=snap.snap_lib.SnapState.Present, channel="edge")
+
+
+@mock.patch("snap._parse_management_arguments")
+@mock.patch("snap.snap_lib.install_local")
+@mock.patch("snap.snap_lib.SnapCache")
+def test_management_installs_store_from_revision(cache, install_local, args):
+    """Test installer uses store installer."""
+    cache.return_value.__getitem__.return_value = mock.MagicMock(autospec=snap.snap_lib.Snap)
+    cache.return_value["k8s"].revision = None
+    args.return_value = [
+        snap.SnapStoreArgument(name="k8s", revision=123),
+    ]
+    snap.management()
+    cache.return_value["k8s"].revision = "123"
+    snap.management()
+    cache.called_once_with()
+    install_local.assert_not_called()
+    assert cache()["k8s"].ensure.call_count == 1
     cache()["k8s"].ensure.assert_called_once_with(
-        state=snap.snap_lib.SnapState.Present, channel="edge"
+        state=snap.snap_lib.SnapState.Present, revision="123"
     )
 
 
