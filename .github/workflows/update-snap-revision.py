@@ -79,7 +79,7 @@ def update_current_revision(arch: str, rev: str):
         f.write(yaml.safe_dump(content))
 
 
-def update_github_env(variable: str, value: str):
+def update_github_output(variable: str, value: str):
     if github_output := os.environ.get("GITHUB_OUTPUT", None):
         with Path(github_output).open(mode="a+") as f:
             f.write(f"{variable}={value}")
@@ -91,6 +91,6 @@ if __name__ == "__main__":
     snapstore_rev = find_snapstore_revision(arch, TRACK, RISK)
     if snapstore_rev and current_rev and current_rev != snapstore_rev:
         update_current_revision(arch, snapstore_rev)
-        update_github_env("result", snapstore_rev)
+        update_github_output("result", snapstore_rev)
     else:
         log.info("No change arch=%s current=%s snapstore=%s", arch, current_rev, snapstore_rev)
