@@ -54,7 +54,6 @@ from charms.k8s.v0.k8sd_api_manager import (
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
-from charms.tls_certificates_interface.v3.tls_certificates import TLSCertificatesRequiresV3
 from cos_integration import COSIntegration
 from snap import management as snap_management
 from snap import version as snap_version
@@ -71,7 +70,6 @@ ETC_KUBERNETES = Path("/etc/kubernetes")
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
-SUPPORTED_CERTIFICATES = ["self-signed", "external"]
 
 
 def _cluster_departing_unit(event: ops.EventBase) -> Union[Literal[False], ops.Unit]:
@@ -116,16 +114,9 @@ class K8sCharm(ops.CharmBase):
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.certificates = TLSCertificatesRequiresV3(self, "certificates")
-        certificates_events = [
-            self.certificates.on.certificate_available,
-            self.certificates.on.certificate_expiring,
-            self.certificates.on.certificate_invalidated,
-            self.certificates.on.all_certificates_invalidated,
-        ]
-        self.k8s_certificates = K8sCertificates(self, self.certificates)
+        self.certificates = K8sCertificates(self)
         self.cos = COSIntegration(self)
-        self.reconciler = Reconciler(self, self._reconcile, custom_events=certificates_events)
+        self.reconciler = Reconciler(self, self._reconcile, custom_events=self.certificates.events)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -280,7 +271,7 @@ class K8sCharm(ops.CharmBase):
             return
 
         bootstrap_config = BootstrapConfig()
-        self._configure_certificates(bootstrap_config)
+        self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
         bootstrap_config.service_cidr = self.config["service-cidr"]
@@ -355,32 +346,6 @@ class K8sCharm(ops.CharmBase):
 
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
-
-    def _configure_certificates(self, config: BootstrapConfig):
-        """Configure the certificates for the Kubernetes cluster.
-
-        Args:
-            config (BootstrapConfig):
-                The configuration object for the Kubernetes cluster. This object
-                will be modified in-place to include the cluster's certificates.
-        """
-        certificates = self.config.get("certificates")
-
-        if certificates not in SUPPORTED_CERTIFICATES:
-            log.error(
-                "Invalid certificates issuer: %s. Supported values: %s",
-                certificates,
-                ", ".join(SUPPORTED_CERTIFICATES),
-            )
-            status.add(ops.BlockedStatus(f"Invalid certificates issuer: {certificates}"))
-        assert certificates in SUPPORTED_CERTIFICATES  # nosec
-
-        if certificates == "external":
-            log.info("Using external certificates")
-            certificates_relation = self.model.get_relation("certificates")
-
-            assert certificates_relation, "Missing certificates relation"  # nosec
-            self.k8s_certificates.generate_bootstrap_certificates(config)
 
     def _configure_cloud_provider(self, config: BootstrapConfig):
         """Configure the cloud-provider for the Kubernetes cluster.
@@ -607,8 +572,8 @@ class K8sCharm(ops.CharmBase):
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
+        self.certificates.collect_certificate(event)
         if self.lead_control_plane:
-            self.k8s_certificates.collect_certificate(event)
             self._bootstrap_k8s_snap()
             self._enable_functionalities()
             self._create_cluster_tokens()
