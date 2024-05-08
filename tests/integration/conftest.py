@@ -167,9 +167,13 @@ class Bundle:
             name (str):  Which application
             path (Path): Path to local charm
         """
-        app = self.applications[name]
-        app["charm"] = str(path.resolve())
-        app["channel"] = None
+        # FIXME: Omit non present charms
+        try:
+            app = self.applications[name]
+            app["charm"] = str(path.resolve())
+            app["channel"] = None
+        except KeyError:
+            log.warning("Application %s not found in bundle", name)
 
     def drop_constraints(self):
         """Remove constraints on applications. Useful for testing on lxd."""

@@ -40,7 +40,7 @@ jobs:
     needs: [build-all-charms, extra-args]
     strategy:
       matrix:
-        suite: ["k8s", "etcd"]
+        suite: ["k8s", "etcd", "certificates"]
     secrets: inherit
     with:
       provider: lxd
