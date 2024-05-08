@@ -2,14 +2,37 @@
 # See LICENSE file for licensing details.
 """Additions to tools missing from juju library."""
 
+import ipaddress
 import json
 import logging
-from typing import Optional
+from pathlib import Path
+from typing import List, Optional
 
+import yaml
 from juju.model import Model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
+
+
+async def is_deployed(model: Model, bundle_path: Path) -> bool:
+    """Checks if model has apps defined by the bundle.
+    If all apps are deployed, wait for model to be active/idle
+
+    Args:
+        model: juju model
+        bundle_path: path to bundle for comparison
+
+    Returns:
+        true if all apps and relations are in place and units are active/idle
+    """
+    bundle = yaml.safe_load(bundle_path.open())
+    apps = bundle["applications"]
+    for app in apps:
+        if app not in model.applications:
+            return False
+    await model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
+    return True
 
 
 async def get_address(model: Model, app_name: str, unit_num: Optional[int] = None) -> str:
@@ -30,6 +53,33 @@ async def get_address(model: Model, app_name: str, unit_num: Optional[int] = Non
         if unit_num is None
         else app["units"][f"{app_name}/{unit_num}"]["address"]
     )
+
+
+async def get_unit_cidrs(model: Model, app_name: str, unit_num: int) -> List[str]:
+    """Find unit network cidrs on a unit.
+
+    Args:
+        model: juju model
+        app_name: string name of application
+        unit_num: integer number of a juju unit
+
+    Returns:
+        list of network cidrs
+    """
+    unit = model.applications[app_name].units[unit_num]
+    action = await unit.run("ip --json route show")
+    result = await action.wait()
+    assert result.results["return-code"] == 0, "Failed to get routes"
+    routes = json.loads(result.results["stdout"])
+    local_cidrs = set()
+    for rt in routes:
+        try:
+            cidr = ipaddress.ip_network(rt.get("dst"))
+        except ValueError:
+            continue
+        if cidr.prefixlen < 32:
+            local_cidrs.add(str(cidr))
+    return list(sorted(local_cidrs))
 
 
 async def get_nodes(k8s):
