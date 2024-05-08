@@ -4,8 +4,7 @@
 amd64:
   - name: k8s
     install-type: store
-    channel: 1.30-classic/stable
-    revision: 301
+    channel: edge
 arm64:
   - name: k8s
     install-type: store

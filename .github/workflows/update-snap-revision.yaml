@@ -56,16 +56,16 @@ jobs:
       id: update-revision
       run: |
         pip install pyyaml
-        python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }} ${{ env.TRACK }} stable
+        python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }}
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v6
       if: ${{ steps.update-revision.outputs.result != '' }}
       with:
-        commit-message: Update K8s ${{ env.TRACK }}/stable revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}
-        title: "Update K8s ${{ env.TRACK }}/stable revision on ${{ matrix.arch }}"
+        commit-message: '[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}'
+        title: "[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision on ${{ matrix.arch }}"
         body: |-
-          Updates K8s version for ${{ env.TRACK }}/stable
+          Updates K8s version for ${{ env.TRACK }}
           * revision=${{ steps.update-revision.outputs.result }}
           * arch = ${{ matrix.arch }}
         branch: revision-update-job/${{ env.TRACK }}/${{matrix.arch}}/${{ steps.update-revision.outputs.result }}
