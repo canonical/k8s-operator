@@ -355,6 +355,19 @@ class BootstrapConfig(BaseModel):
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
+        ca_cert (str): The CA certificate used by the cluster.
+        ca_key (str): The CA private key used by the cluster.
+        front_proxy_ca_cert (str): The CA certificate for the front proxy.
+        front_proxy_ca_key (str): The CA key for the front proxy.
+        front_proxy_client_cert (str): The client certificate for the front proxy.
+        front_proxy_client_key (str): The client key for the front proxy.
+        apiserver_kubelet_client_crt (str): The client certificate for the Kubelet.
+        apiserver_kubelet_client_key (str): The client key for the Kubelet.
+        service_account_key (str): The key used to sign service account tokens.
+        apiserver_crt (str): The certificate for the Kubernetes API server.
+        apiserver_key (str): The private key for the Kubernetes API server.
+        kubelet_crt (str): The certificate for the kubelet.
+        kubelet_key (str): The private key for the kubelet.
     """
 
     cluster_config: Optional[UserFacingClusterConfig] = Field(None, alias="cluster-config")
@@ -370,6 +383,21 @@ class BootstrapConfig(BaseModel):
     datastore_client_cert: Optional[str] = Field(None, alias="datastore-client-crt")
     datastore_client_key: Optional[str] = Field(None, alias="datastore-client-key")
     extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
+
+    ca_cert: Optional[str] = Field(None, alias="ca-crt")
+    ca_key: Optional[str] = Field(None, alias="ca-key")
+    front_proxy_ca_cert: Optional[str] = Field(None, alias="front-proxy-ca-crt")
+    front_proxy_ca_key: Optional[str] = Field(None, alias="front-proxy-ca-key")
+    front_proxy_client_cert: Optional[str] = Field(None, alias="front-proxy-client-crt")
+    front_proxy_client_key: Optional[str] = Field(None, alias="front-proxy-client-key")
+    apiserver_kubelet_client_crt: Optional[str] = Field(None, alias="apiserver-kubelet-client-crt")
+    apiserver_kubelet_client_key: Optional[str] = Field(None, alias="apiserver-kubelet-client-key")
+
+    service_account_key: Optional[str] = Field(None, alias="service-account-key")
+    apiserver_crt: Optional[str] = Field(None, alias="apiserver-crt")
+    apiserver_key: Optional[str] = Field(None, alias="apiserver-key")
+    kubelet_crt: Optional[str] = Field(None, alias="kubelet-crt")
+    kubelet_key: Optional[str] = Field(None, alias="kubelet-key")
 
 
 class CreateClusterRequest(BaseModel):

@@ -36,11 +36,11 @@ jobs:
       working-directory:  ${{ matrix.path }}
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
     needs: [build-all-charms, extra-args]
     strategy:
       matrix:
-        suite: ["k8s", "etcd"]
+        suite: ["k8s", "etcd", "certificates"]
     secrets: inherit
     with:
       provider: lxd
@@ -48,8 +48,6 @@ jobs:
       extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
       load-test-enabled: false
       zap-enabled: false
-      self-hosted-runner: true
-      self-hosted-runner-label: "large"
       trivy-fs-enabled: true
       trivy-image-config: "trivy.yaml"
       tmate-debug: true

@@ -1,7 +1,9 @@
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@255dd4a23defc16dcdac832306e5f460a0f1200c
 charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e1c5fc69e98100a7d43c0ad5a7969bba1ecbcd40
 charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@9b212854e768f13c26cc907bed51444e97e51b50#subdirectory=ops
-charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502
+charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@d802829b5e71b2cbf974cd5c7c69d7ce2137b308
+jsonschema==4.17.3
+cryptography==42.0.7
 cosl==0.0.8
 ops==2.13.0
 pydantic==1.10.15

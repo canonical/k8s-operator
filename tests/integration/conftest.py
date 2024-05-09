@@ -48,9 +48,6 @@ def pytest_configure(config):
     """
     config.addinivalue_line("markers", "cos: mark COS integration tests.")
     config.addinivalue_line("markers", "bundle_file(name): specify a YAML bundle file for a test.")
-    config.addinivalue_line(
-        "markers", "ignore_blocked: specify if the bundle deploy should ignore BlockedStatus."
-    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -170,9 +167,13 @@ class Bundle:
             name (str):  Which application
             path (Path): Path to local charm
         """
-        app = self.applications[name]
-        app["charm"] = str(path.resolve())
-        app["channel"] = None
+        # FIXME: Omit non present charms
+        try:
+            app = self.applications[name]
+            app["charm"] = str(path.resolve())
+            app["channel"] = None
+        except KeyError:
+            log.warning("Application %s not found in bundle", name)
 
     def drop_constraints(self):
         """Remove constraints on applications. Useful for testing on lxd."""
@@ -214,7 +215,6 @@ async def deploy_model(
     ops_test: OpsTest,
     model_name: str,
     bundle: Bundle,
-    raise_on_blocked=True,
 ):
     """Add a juju model, deploy apps into it, wait for them to be active.
 
@@ -223,7 +223,6 @@ async def deploy_model(
         ops_test:          Instance of the pytest-operator plugin
         model_name:        name of the model in which to deploy
         bundle:            Bundle object to deploy or redeploy into the model
-        raise_on_blocked:  Raise if any unit in the model is blocked
 
     Yields:
         model object
@@ -246,7 +245,6 @@ async def deploy_model(
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
                 status="active",
-                raise_on_blocked=raise_on_blocked,
                 timeout=30 * 60,
             )
         yield the_model
@@ -259,11 +257,6 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     bundle_marker = request.node.get_closest_marker("bundle_file")
     if bundle_marker:
         bundle_file = bundle_marker.args[0]
-
-    raise_on_blocked = True
-    ignore_blocked = request.node.get_closest_marker("ignore_blocked")
-    if ignore_blocked:
-        raise_on_blocked = False
 
     log.info("Deploying cluster using %s bundle.", bundle_file)
 
@@ -278,7 +271,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.drop_constraints()
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
-    async with deploy_model(request, ops_test, model, bundle, raise_on_blocked) as the_model:
+    async with deploy_model(request, ops_test, model, bundle) as the_model:
         yield the_model
 
 
