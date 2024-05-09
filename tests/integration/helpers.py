@@ -28,8 +28,22 @@ async def is_deployed(model: Model, bundle_path: Path) -> bool:
     """
     bundle = yaml.safe_load(bundle_path.open())
     apps = bundle["applications"]
-    for app in apps:
+    for app, conf in apps.items():
         if app not in model.applications:
+            log.warning(
+                "Cannot use existing model(%s): Application (%s) isn't deployed", model.name, app
+            )
+            return False
+        min_units = conf.get("num_units") or 1
+        num_units = len(model.applications[app].units)
+        if num_units < min_units:
+            log.warning(
+                "Cannot use existing model(%s): Application(%s) has insufficient units %d < %d",
+                model.name,
+                app,
+                num_units,
+                min_units,
+            )
             return False
     await model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
     return True
