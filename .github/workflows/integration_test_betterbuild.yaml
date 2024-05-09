@@ -1,0 +1,58 @@
+
+name: Integration tests
+
+on:
+  pull_request:
+
+jobs:
+  extra-args:
+    runs-on: ubuntu-latest
+    outputs:
+      args: ${{ steps.flags.outputs.args }}
+    steps:
+      - name: Determine extra args
+        id: flags
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          JOB: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
+        run: |
+          EXTRA_ARGS="--crash-dump=on-failure"
+          if [[ "$TITLE" == *"[COS]"* ]]; then
+            EXTRA_ARGS="$EXTRA_ARGS --cos"
+          fi
+          echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
+
+  # build-all-charms:
+  #   needs: [extra-args]
+  #   strategy:
+  #     matrix:
+  #       arch:
+  #         - arch: amd64
+  #           runs-on-label: X64
+  #         - arch: arm64
+  #           runs-on-label: ARM64
+  #   uses: ./.github/workflows/build-charm.yaml
+  #   with:
+  #     working-directory:  "./charms/worker/"
+  #     arch: ${{ matrix.arch.arch }}
+  #     runs-on-label: ${{ matrix.arch.runs-on-label }}
+
+  integration-tests:
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
+    needs: [extra-args]
+    secrets: inherit
+    with:
+      provider: lxd
+      juju-channel: 3.3/stable
+      extra-arguments: ${{needs.extra-args.outputs.args}}
+      load-test-enabled: false
+      modules: '["test_k8s", "test_etcd"]'
+      zap-enabled: false
+      self-hosted-runner: true
+      self-hosted-runner-label: "large"
+      trivy-fs-enabled: true
+      trivy-image-config: "trivy.yaml"
+      tmate-debug: true
+      test-timeout: 120
+      test-tox-env: integration
