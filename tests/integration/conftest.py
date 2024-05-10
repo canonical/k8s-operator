@@ -38,6 +38,9 @@ def pytest_addoption(parser: pytest.Parser):
     """
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
+    parser.addoption(
+        "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
+    )
 
 
 def pytest_configure(config):
@@ -200,30 +203,16 @@ async def cloud_proxied(ops_test: OpsTest):
 
     Args:
         ops_test (OpsTest): ops_test plugin
-
-    Returns:
-        true if proxy was configured.
     """
     assert ops_test.model, "Model must be present"
     controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
-    controller_unit = controller_model.applications["controller"].units[0]
-    http_proxy, site = "http://squid.internal:3128", "https://ghcr.io"
-    curl_cmd = f'curl -x {http_proxy} {site} --HEAD -s -o /dev/null -I -w "%{{http_code}}"'
-    action = await controller_unit.run(curl_cmd)
-    result = await action.wait()
-    if uses_proxy := result.results["return-code"] == 0 and result.results["stdout"] == "200":
-        static_no_proxy_data = Path(__file__).parent / "data" / "static-no-proxy.yaml"
-        static_no_proxy = yaml.safe_load(static_no_proxy_data.open())
-        local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
-        no_proxy = {*static_no_proxy, *local_no_proxy}
-        conf = {
-            "juju-http-proxy": http_proxy,
-            "juju-https-proxy": http_proxy,
-            "juju-no-proxy": ",".join(sorted(no_proxy)),
-        }
-        await ops_test.model.set_config(conf)
-    return uses_proxy
+    proxy_config_file = Path(__file__).parent / "data" / "static-proxy-config.yaml"
+    proxy_configs = yaml.safe_load(proxy_config_file.read_text())
+    local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
+    no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
+    proxy_configs["juju-no-proxy"] = ",".join(sorted(no_proxy))
+    await ops_test.model.set_config(proxy_configs)
 
 
 async def cloud_profile(ops_test: OpsTest):
@@ -306,7 +295,8 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     bundle = Bundle(ops_test, bundle_path)
     if "lxd" == await cloud_type(ops_test):
         bundle.drop_constraints()
-    await cloud_proxied(ops_test)
+    if request.config.option.apply_proxy:
+        await cloud_proxied(ops_test)
 
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
