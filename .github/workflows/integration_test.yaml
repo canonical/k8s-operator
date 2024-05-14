@@ -40,7 +40,7 @@ jobs:
       matrix:
         arch:
         - {id: amd64, builder-label: ubuntu-22.04, tester-arch: x64}
-        #- {id: arm64, builder-label: ARM64, tester-label: ARM64}
+        - {id: arm64, builder-label: ARM64, tester-label: ARM64}
         suite: ["k8s", "etcd", "ceph"]
     with:
       identifier: ${{ matrix.arch.id }}-${{ matrix.suite }}
