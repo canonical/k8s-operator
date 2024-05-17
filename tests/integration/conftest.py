@@ -243,7 +243,10 @@ async def deploy_model(
                 status="active",
                 timeout=30 * 60,
             )
-        yield the_model
+        try:
+            yield the_model
+        except GeneratorExit:
+            log.fatal("Failed to determine model: model_name=%s", model_name)
 
 
 @pytest_asyncio.fixture(scope="module")
