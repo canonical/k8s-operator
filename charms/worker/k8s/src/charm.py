@@ -153,6 +153,26 @@ class K8sCharm(ops.CharmBase):
             self.etcd = EtcdReactiveRequires(self)
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
+        # kubernetes-info
+        if self.lead_control_plane:
+            self.framework.observe(self.on.ceph_k8s_info_relation_changed, self._k8s_info)
+
+    def _k8s_info(self, event: ops.RelationChangedEvent):
+        """Send cluster information on the kubernetes-info relation.
+
+        Provide applications with cluster characteristics. This should only run on the lead
+        k8s control plane unit.
+
+        Args:
+            event: ops.RelationChangedEvent - event triggered by the relation changed hook
+        """
+        if not self.lead_control_plane:
+            return
+
+        if event.relation.name == "ceph-k8s-info":
+            rel = event.relation
+            rel.data[self.app]["kubelet-root-dir"] = "/var/lib/kubelet"
+
     @status.on_error(
         ops.WaitingStatus("Installing COS requirements"),
         subprocess.CalledProcessError,

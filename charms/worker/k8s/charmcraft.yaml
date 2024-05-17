@@ -176,6 +176,8 @@ provides:
     interface: cos-k8s-tokens
   containerd:
     interface: containerd
+  ceph-k8s-info:
+    interface: kubernetes-info
 
 requires:
   etcd:
