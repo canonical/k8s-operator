@@ -287,7 +287,7 @@ class K8sCharm(ops.CharmBase):
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
-        binding = self.model.get_binding("juju-info")
+        binding = self.model.get_binding("cluster")
         address = binding and binding.network.ingress_address
         node_name = self.get_node_name()
         payload = CreateClusterRequest(
