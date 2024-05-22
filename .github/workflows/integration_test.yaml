@@ -36,23 +36,24 @@ jobs:
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     needs: [charmcraft-channel, extra-args]
+    secrets: inherit
     strategy:
       matrix:
         arch:
-        - {id: amd64-k8s,  suite: k8s,  builder-label: ubuntu-22.04, tester-arch: x64}
-        - {id: amd64-etcd, suite: etcd, builder-label: ubuntu-22.04, tester-arch: x64}
-    secrets: inherit
+        - {id: amd64, builder-label: ubuntu-22.04, tester-arch: x64}
+        suite: ["k8s", "etcd", "ceph"]
     with:
-      identifier: ${{ matrix.arch.id }}
+      identifier: ${{ matrix.arch.id }}-${{ matrix.suite }}
+      builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
-      extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.arch.suite }}
+      extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
       test-timeout: 120
-      test-tox-env: integration-${{ matrix.arch.suite }}
+      test-tox-env: integration-${{ matrix.suite }}
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
