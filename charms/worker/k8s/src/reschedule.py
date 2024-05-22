@@ -7,7 +7,7 @@ import logging
 import subprocess
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Optional, Tuple, TypedDict
+from typing import Optional, Sequence, TypedDict
 
 import ops
 
@@ -16,11 +16,11 @@ Period = timedelta  # Type aliasing
 BIN_SYSTEMCTL = "/usr/bin/systemctl"
 SYSTEMD_SERVICE = """
 [Unit]
-Description=Dispatch the {event} event on {unit}
+Description=Dispatch the {event} event on {app}/{unit_num}
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/timeout {timeout} /usr/bin/bash -c '/usr/bin/juju-exec "{unit}" "JUJU_DISPATCH_PATH={event} ./dispatch"'
+ExecStart=/usr/bin/timeout {timeout} /usr/bin/bash -c '/usr/bin/juju-exec "{app}/{unit_num}" "JUJU_DISPATCH_PATH={event} ./dispatch"'
 
 [Install]
 WantedBy=multi-user.target
@@ -32,15 +32,15 @@ Requires={app}.{event}.service
 
 [Timer]
 Unit={app}.{event}.service
-OnUnitInactiveSec={interval}m
-RandomizedDelaySec={random_delay}m
+OnUnitInactiveSec={interval}s
+RandomizedDelaySec={random_delay}s
 
 [Install]
 WantedBy=timers.target
 """
 
 
-def execute_command(args: List[str], check_exit: bool = True) -> Tuple[str, int]:
+def _execute_command(args: Sequence[str], check_exit: bool = True) -> int:
     """Subprocess run wrapper.
 
     Args:
@@ -50,8 +50,8 @@ def execute_command(args: List[str], check_exit: bool = True) -> Tuple[str, int]
     Returns:
         stdout, int : tuple to handled output.
     """
-    s = subprocess.run(args, capture_output=True, check=check_exit)
-    return s.stdout.decode(), s.returncode
+    s = subprocess.run(args, check=check_exit)
+    return s.returncode
 
 
 class TimerError(Exception):
@@ -76,10 +76,10 @@ class EventConfig(TypedDict):
     Attributes:
         app: Name of the juju application.
         event: Name of the event.
-        interval: Minutes between the event trigger.
-        random_delay: Minutes of random delay added between event trigger.
-        timeout: Minutes before the event handle is timeout.
-        unit: Name of the juju unit.
+        interval: Seconds between the event trigger.
+        random_delay: Seconds of random delay added between event trigger.
+        timeout: Seconds before the event handle is timeout.
+        unit_num: Number of the juju unit.
     """
 
     app: str
@@ -87,14 +87,15 @@ class EventConfig(TypedDict):
     interval: int
     random_delay: int
     timeout: int
-    unit: str
+    unit_num: int
 
 
 class EventTimer:
     """Manages the timer to emit juju events at regular intervals.
 
     Attributes:
-        unit_name (str): Name of the juju unit to emit events to.
+        app_name (str): Name of the juju application
+        unit_num (str): Name of the juju unit
     """
 
     _systemd_path = Path("/etc/systemd/system")
@@ -106,8 +107,16 @@ class EventTimer:
             unit: Name of the juju unit to emit events to.
         """
         self._unit = unit
-        self.unit_name = unit.name
-        self.app_name = unit.app.name
+
+    @property
+    def unit_num(self) -> int:
+        """Number of the current charm unit."""
+        return int(self._unit.name.split("/", 1)[-1])
+
+    @property
+    def app_name(self) -> str:
+        """Application name of the current charm unit."""
+        return self._unit.app.name
 
     def _render_event_template(
         self, template_type: str, event_name: str, context: EventConfig
@@ -138,7 +147,7 @@ class EventTimer:
         try:
             # We choose status over is-active here to provide debug logs that show the output of
             # the timer.
-            _, ret_code = execute_command(
+            ret_code = _execute_command(
                 [BIN_SYSTEMCTL, "status", f"{self.app_name}.{event_name}.timer"], check_exit=False
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as ex:
@@ -146,49 +155,45 @@ class EventTimer:
 
         return ret_code == 0
 
-    def ensure_event_timer(
-        self, event_name: str, interval: int, timeout: Optional[int] = None
-    ) -> None:
+    def ensure(self, event_name: str, interval: int, timeout: Optional[int] = None) -> None:
         """Ensure that a systemd service and timer are registered to dispatch the given event.
 
-        The interval is how frequently, in minutes, the event should be dispatched.
+        The interval is how frequently, in seconds, the event should be dispatched.
 
         The timeout is the number of seconds before an event is timed out. If not set or 0,
         it defaults to half the interval period.
 
         Args:
             event_name: Name of the juju event to schedule.
-            interval: Number of minutes between emitting each event.
-            timeout: Timeout for each event handle in minutes.
+            interval: Number of seconds between emitting each event.
+            timeout: Timeout for each event handle in seconds.
 
         Raises:
             TimerEnableError: Timer cannot be started. Events will be not emitted.
         """
-        if timeout is not None:
-            timeout_in_secs = timeout * 60
-        else:
-            timeout_in_secs = interval * 30
+        if timeout is None:
+            timeout = interval // 2
 
         context: EventConfig = {
+            "app": self.app_name,
             "event": event_name,
             "interval": interval,
             "random_delay": interval // 4,
-            "timeout": timeout_in_secs,
-            "unit": self.unit_name,
-            "app": self.app_name,
+            "timeout": timeout,
+            "unit_num": self.unit_num,
         }
         self._render_event_template("service", event_name, context)
         self._render_event_template("timer", event_name, context)
 
         systemd_timer = f"{self.app_name}.{event_name}.timer"
         try:
-            execute_command([BIN_SYSTEMCTL, "daemon-reload"])
-            execute_command([BIN_SYSTEMCTL, "enable", systemd_timer])
-            execute_command([BIN_SYSTEMCTL, "start", systemd_timer])
+            _execute_command([BIN_SYSTEMCTL, "daemon-reload"])
+            _execute_command([BIN_SYSTEMCTL, "enable", systemd_timer])
+            _execute_command([BIN_SYSTEMCTL, "start", systemd_timer])
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as ex:
             raise TimerEnableError(f"Unable to enable systemd timer {systemd_timer}") from ex
 
-    def disable_event_timer(self, event_name: str) -> None:
+    def disable(self, event_name: str) -> None:
         """Disable the systemd timer for the given event.
 
         Args:
@@ -200,8 +205,8 @@ class EventTimer:
         systemd_timer = f"{self.app_name}.{event_name}.timer"
         try:
             # Don't check for errors in case the timer wasn't registered.
-            execute_command([BIN_SYSTEMCTL, "stop", systemd_timer], check_exit=False)
-            execute_command([BIN_SYSTEMCTL, "disable", systemd_timer], check_exit=False)
+            _execute_command([BIN_SYSTEMCTL, "stop", systemd_timer], check_exit=False)
+            _execute_command([BIN_SYSTEMCTL, "disable", systemd_timer], check_exit=False)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as ex:
             raise TimerDisableError(f"Unable to disable systemd timer {systemd_timer}") from ex
 
@@ -227,10 +232,10 @@ class PeriodicEvent:
         """
         log.info("Creating timer for %s", self._name)
         if not self._timer.is_active(self._name):
-            self._timer.ensure_event_timer(self._name, period.seconds // 60)
+            self._timer.ensure(self._name, period.seconds)
 
     def cancel(self):
         """Cancel any active triggers."""
         log.info("Cancelling timer for %s", self._name)
         if self._timer.is_active(self._name):
-            self._timer.disable_event_timer(self._name)
+            self._timer.disable(self._name)
