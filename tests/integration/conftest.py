@@ -193,9 +193,9 @@ class Bundle:
         for name in self.applications:
             app = self.applications[name]
             constraint_list = app.get("constraints") or ""
-            constraints = dict(constraint.split("=") for constraint in constraint_list)
+            constraints = dict(constraint.split("=") for constraint in constraint_list.split())
             constraints["arch"] = arch
-            app["constraints"] = " ".join(f"{k}={v}" for k, v in constraints.items())
+            app["constraints"] = " ".join(f"{k}={v}" for k, v in sorted(constraints.items()))
 
     def drop_constraints(self):
         """Remove constraints on applications. Useful for testing on lxd."""
