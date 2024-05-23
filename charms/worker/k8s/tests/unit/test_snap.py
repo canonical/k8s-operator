@@ -101,7 +101,7 @@ def test_management_installs_local(cache, install_local, args):
         snap.SnapFileArgument(name="k8s", filename=Path("path/to/thing")),
     ]
     snap.management()
-    cache.called_once_with()
+    cache.assert_called_once_with()
     cache["k8s"].ensure.assert_not_called()
     install_local.assert_called_once_with(filename=Path("path/to/thing"))
 
@@ -119,7 +119,7 @@ def test_management_installs_store_from_channel(cache, install_local, args):
     snap.management()
     cache.return_value["k8s"].revision = 123
     snap.management()
-    cache.called_once_with()
+    cache.assert_called_with()
     install_local.assert_not_called()
     assert cache()["k8s"].ensure.call_count == 2
     cache()["k8s"].ensure.assert_called_with(state=snap.snap_lib.SnapState.Present, channel="edge")
@@ -138,7 +138,7 @@ def test_management_installs_store_from_revision(cache, install_local, args):
     snap.management()
     cache.return_value["k8s"].revision = "123"
     snap.management()
-    cache.called_once_with()
+    cache.assert_called_with()
     install_local.assert_not_called()
     assert cache()["k8s"].ensure.call_count == 1
     cache()["k8s"].ensure.assert_called_once_with(
