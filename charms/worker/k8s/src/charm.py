@@ -31,6 +31,7 @@ import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
 import containerd
 import ops
+import reschedule
 import yaml
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -625,9 +626,12 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.WaitingStatus("Node not Clustered"))
             return
 
+        trigger = reschedule.PeriodicEvent(self)
         if not self._is_node_ready():
             status.add(ops.WaitingStatus("Node not Ready"))
+            trigger.create(reschedule.Period(seconds=30))
             return
+        trigger.cancel()
 
     def _evaluate_removal(self, event: ops.EventBase) -> bool:
         """Determine if my unit is being removed.
