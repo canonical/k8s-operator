@@ -62,7 +62,7 @@ class TestBaseRequestModel(unittest.TestCase):
         }
         with self.assertRaises(ValueError) as context:
             BaseRequestModel(**invalid_data)
-        self.assertIn("Status code must be 200", str(context.exception))
+        assert "Status code must be 200" in str(context.exception)
 
     def test_invalid_error_code(self):
         """Test handling invalid error code."""
@@ -76,7 +76,7 @@ class TestBaseRequestModel(unittest.TestCase):
         }
         with self.assertRaises(ValueError) as context:
             BaseRequestModel(**invalid_data)
-        self.assertIn("Error code must be 0", str(context.exception))
+        assert "Error code must be 0" in str(context.exception)
 
 
 class TestBootstrapConfigTyping(unittest.TestCase):
@@ -132,7 +132,7 @@ class TestUnixSocketHTTPConnection(unittest.TestCase):
             conn.connect()
 
         mock_socket.assert_called_once_with(AF_UNIX, SOCK_STREAM)
-        self.assertIn("Error connecting to socket", str(context.exception))
+        assert "Error connecting to socket" in str(context.exception)
 
 
 class TestK8sdAPIManager(unittest.TestCase):
