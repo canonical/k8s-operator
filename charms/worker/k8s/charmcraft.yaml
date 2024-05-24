@@ -160,6 +160,8 @@ provides:
     interface: k8s-cluster
   cos-worker-tokens:
     interface: cos-k8s-tokens
+  containerd:
+    interface: containerd
 
 requires:
   etcd:

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import ops
 import pydantic
 import tomli_w
 
@@ -257,21 +258,21 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """Ensure client and ca certificates."""
         ca_file_path = self.get_ca_file_path()
         if self.ca_file:
-            log.debug("Configure custom CA %s", ca_file_path)
+            log.debug("Configure custom CA path %s", ca_file_path)
             _ensure_file(ca_file_path, self.ca_file, 0o600, 0, 0)
         else:
             ca_file_path.unlink(missing_ok=True)
 
         cert_file_path = self.get_cert_file_path()
         if self.cert_file:
-            log.debug("Configure client certificate %s", cert_file_path)
+            log.debug("Configure client certificate path %s", cert_file_path)
             _ensure_file(cert_file_path, self.cert_file, 0o600, 0, 0)
         else:
             cert_file_path.unlink(missing_ok=True)
 
         key_file_path = self.get_key_file_path()
         if self.key_file:
-            log.debug("Configure client key %s", key_file_path)
+            log.debug("Configure client key path %s", key_file_path)
             _ensure_file(key_file_path, self.key_file, 0o600, 0, 0)
         else:
             key_file_path.unlink(missing_ok=True)
@@ -317,9 +318,10 @@ def ensure_registry_configs(registries: List[Registry]):
         registries (List[Registry]): list of registries
     """
     auth_config: Dict[str, Any] = {}
+    unneeded = {host.parent.name for host in CONFIG_PATH.glob("**/hosts.toml")}
     for r in registries:
+        unneeded -= {r.host}
         log.info("Configure registry %s (%s)", r.host, r.url)
-
         r.ensure_certificates()
         _ensure_file(r.get_hosts_toml_path(), tomli_w.dumps(r.get_hosts_toml()), 0o600, 0, 0)
 
@@ -327,7 +329,11 @@ def ensure_registry_configs(registries: List[Registry]):
             log.debug("Configure username and password for %s (%s)", r.url, r.host)
             auth_config.update(**r.get_auth_config())
 
-    if not auth_config:
+    for r in unneeded:
+        log.info("Removing unneeded registry %s", r)
+        (CONFIG_PATH / r / "hosts.toml").unlink(missing_ok=True)
+
+    if not auth_config and not unneeded:
         return
 
     registry_configs = {
@@ -341,3 +347,38 @@ def ensure_registry_configs(registries: List[Registry]):
     if _ensure_file(CONFIG_TOML, new_containerd_toml, 0o600, 0, 0):
         log.info("Restart containerd to apply registry configurations")
         subprocess.run(["/usr/bin/snap", "restart", "k8s.containerd"])
+
+
+def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):
+    """Share containerd configuration over relation application databag.
+
+    Args:
+        config (str): list of registries
+        relation (ops.Relation): relation on which to share.
+    """
+    if not relation:
+        log.info("No relation to share containerd config.")
+        return
+    relation.data[app]["custom-registries"] = config
+
+
+def recover(relation: Optional[ops.Relation]) -> List[Registry]:
+    """Share containerd configuration over relation application databag.
+
+    Args:
+        relation (ops.Relation): relation on which to receive.
+
+    Returns:
+        RegistryConfigs parsed from json_str
+    """
+    if not relation:
+        log.info("No relation to recover containerd config.")
+        return []
+    if not (app_databag := relation.data.get(relation.app)):
+        log.warning("No application data to recover containerd config.")
+        return []
+    if not (config := app_databag.get("custom-registries")):
+        log.warning("No 'custom-registries' to recover containerd config.")
+        return []
+    log.info("Recovering containerd from relation %s", relation.id)
+    return parse_registries(config)

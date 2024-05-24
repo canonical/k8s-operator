@@ -305,13 +305,17 @@ class K8sCharm(ops.CharmBase):
     )
     def _config_containerd_registries(self):
         """Apply containerd custom registries."""
-        registries = []
+        registries, config = [], ""
+        containerd_relation = self.model.get_relation("containerd")
         if self.is_control_plane:
             config = self.config["containerd_custom_registries"]
             registries = containerd.parse_registries(config)
-        if registries:
-            self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
-            containerd.ensure_registry_configs(registries)
+        else:
+            registries = containerd.recover(containerd_relation)
+        self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
+        containerd.ensure_registry_configs(registries)
+        if self.lead_control_plane:
+            containerd.share(config, self.app, containerd_relation)
 
     def _configure_cos_integration(self):
         """Retrieve the join token from secret databag and join the cluster."""
