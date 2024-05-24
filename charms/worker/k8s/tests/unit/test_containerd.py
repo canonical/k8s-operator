@@ -5,7 +5,7 @@
 
 """Unit tests containerd module."""
 import unittest.mock as mock
-from pathlib import Path
+from os import getgid, getuid
 
 import containerd
 import pytest
@@ -37,14 +37,14 @@ new-block
     )
 
 
-def test_ensure_file(tmpdir):
+def test_ensure_file(tmp_path):
     """Test ensure file method."""
-    test_file = Path(tmpdir / "test.txt")
-    assert containerd._ensure_file(test_file, "data", 0o644, 1000, 1000)
+    test_file = tmp_path / "test.txt"
+    assert containerd._ensure_file(test_file, "data", 0o644, getuid(), getgid())
     assert test_file.read_text() == "data"
     assert test_file.stat().st_mode == 0o100644
-    assert test_file.stat().st_uid == 1000
-    assert test_file.stat().st_gid == 1000
+    assert test_file.stat().st_uid == getuid()
+    assert test_file.stat().st_gid == getgid()
 
 
 def test_registry_parse_default():
@@ -198,6 +198,7 @@ def test_registry_methods():
                 ),
             ]
         )
+
 
 @mock.patch("containerd._ensure_file")
 @mock.patch("containerd.subprocess.run")
