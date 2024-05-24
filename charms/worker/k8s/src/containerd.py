@@ -3,7 +3,14 @@
 
 # Learn more at: https://juju.is/docs/sdk
 
-"""Configuration for containerd."""
+"""Configuration for containerd.
+
+The format for the hosts.toml file is as follows:
+https://github.com/containerd/containerd/blob/main/docs/hosts.md
+
+The format for the config.toml file is as follows:
+https://github.com/containerd/containerd/blob/main/docs/cri/config.md
+"""
 
 import base64
 import json
@@ -329,9 +336,9 @@ def ensure_registry_configs(registries: List[Registry]):
             log.debug("Configure username and password for %s (%s)", r.url, r.host)
             auth_config.update(**r.get_auth_config())
 
-    for r in unneeded:
+    for h in unneeded:
         log.info("Removing unneeded registry %s", r)
-        (CONFIG_PATH / r / "hosts.toml").unlink(missing_ok=True)
+        (CONFIG_PATH / h / "hosts.toml").unlink(missing_ok=True)
 
     if not auth_config and not unneeded:
         return
@@ -354,6 +361,7 @@ def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):
 
     Args:
         config (str): list of registries
+        app (ops.Application): application to share with.
         relation (ops.Relation): relation on which to share.
     """
     if not relation:

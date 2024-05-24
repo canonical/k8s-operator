@@ -22,7 +22,7 @@ from kubernetes.client import Configuration
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import get_address
+from .helpers import get_address, get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +38,9 @@ def pytest_addoption(parser: pytest.Parser):
     """
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
+    parser.addoption(
+        "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
+    )
 
 
 def pytest_configure(config):
@@ -192,6 +195,26 @@ async def cloud_type(ops_test: OpsTest):
     return cloud.cloud.type_
 
 
+async def cloud_proxied(ops_test: OpsTest):
+    """Setup a cloud proxy settings if necessary
+
+    Test if ghcr.io is reachable through a proxy, if so,
+    Apply expected proxy config to juju model.
+
+    Args:
+        ops_test (OpsTest): ops_test plugin
+    """
+    assert ops_test.model, "Model must be present"
+    controller = await ops_test.model.get_controller()
+    controller_model = await controller.get_model("controller")
+    proxy_config_file = Path(__file__).parent / "data" / "static-proxy-config.yaml"
+    proxy_configs = yaml.safe_load(proxy_config_file.read_text())
+    local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
+    no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
+    proxy_configs["juju-no-proxy"] = ",".join(sorted(no_proxy))
+    await ops_test.model.set_config(proxy_configs)
+
+
 async def cloud_profile(ops_test: OpsTest):
     """Apply lxd-profile to the model if the juju cloud is lxd.
 
@@ -256,18 +279,28 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     bundle_marker = request.node.get_closest_marker("bundle_file")
     if bundle_marker:
         bundle_file = bundle_marker.args[0]
+    bundle_path = Path(__file__).parent / "data" / bundle_file
+    model = "main"
+
+    with ops_test.model_context(model) as the_model:
+        if await is_deployed(the_model, bundle_path):
+            log.info("Using existing model.")
+            yield ops_test.model
+            return
 
     log.info("Deploying cluster using %s bundle.", bundle_file)
 
-    model = "main"
     charm_path = ("worker/k8s", "worker")
     charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
-    bundle = Bundle(ops_test, Path(__file__).parent / "data" / bundle_file)
-    if await cloud_type(ops_test) == "lxd":
+    bundle = Bundle(ops_test, bundle_path)
+    if "lxd" == await cloud_type(ops_test):
         bundle.drop_constraints()
+    if request.config.option.apply_proxy:
+        await cloud_proxied(ops_test)
+
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
