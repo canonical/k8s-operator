@@ -9,10 +9,11 @@ The format for the hosts.toml file is as follows:
 https://github.com/containerd/containerd/blob/main/docs/hosts.md
 
 The format for the config.toml file is as follows:
-https://github.com/containerd/containerd/blob/main/docs/cri/config.md
+https://github.com/containerd/containerd/blob/main/docs/cri/registry.md
 """
 
 import base64
+import collections
 import json
 import logging
 import os
@@ -105,6 +106,12 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         key_file (str):
         skip_verify (bool):
         override_path (bool):
+        ca_file_path (Path):
+        cert_file_path (Path):
+        key_file_path (Path):
+        hosts_toml_path (Path):
+        auth_config (Dict[str, Any]):
+        hosts_toml (Dict[str, Any]):
     """
 
     # e.g. "https://registry-1.docker.io"
@@ -138,9 +145,9 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         if not self.host and (host := urlparse(self.url).netloc):
             self.host = host
 
-    @pydantic.validator("ca_file")
-    def parse_base64_ca_file(cls, v: str) -> str:
-        """Validate Certificate Authority Content.
+    @pydantic.validator("ca_file", "cert_file", "key_file")
+    def parse_base64(cls, v: str) -> str:
+        """Validate Base64 Content.
 
         Args:
             v (str): value to validate
@@ -150,31 +157,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """
         return base64.b64decode(v.encode()).decode()
 
-    @pydantic.validator("cert_file")
-    def parse_base64_cert_file(cls, v: str) -> str:
-        """Validate Cert Content.
-
-        Args:
-            v (str): value to validate
-
-        Returns:
-            validated content
-        """
-        return base64.b64decode(v.encode()).decode()
-
-    @pydantic.validator("key_file")
-    def parse_base64_key_file(cls, v: str) -> str:
-        """Validate Key Content.
-
-        Args:
-            v (str): value to validate
-
-        Returns:
-            validated content
-        """
-        return base64.b64decode(v.encode()).decode()
-
-    def get_ca_file_path(self) -> Path:
+    @property
+    def ca_file_path(self) -> Path:
         """Return CA file path.
 
         Returns:
@@ -182,7 +166,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """
         return CONFIG_PATH / self.host / "ca.crt"
 
-    def get_cert_file_path(self) -> Path:
+    @property
+    def cert_file_path(self) -> Path:
         """Return Cert file path.
 
         Returns:
@@ -190,7 +175,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """
         return CONFIG_PATH / self.host / "client.crt"
 
-    def get_key_file_path(self) -> Path:
+    @property
+    def key_file_path(self) -> Path:
         """Return Key file path.
 
         Returns:
@@ -198,7 +184,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """
         return CONFIG_PATH / self.host / "client.key"
 
-    def get_hosts_toml_path(self) -> Path:
+    @property
+    def hosts_toml_path(self) -> Path:
         """Return hosts.toml path.
 
         Returns:
@@ -206,18 +193,16 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """
         return CONFIG_PATH / self.host / "hosts.toml"
 
-    def get_auth_config(self) -> Dict[str, Any]:
+    @property
+    def auth_config(self) -> Dict[str, Any]:
         """Return auth configuration for registry.
 
         Returns:
             This registry's auth content
         """
-        host = urlparse(self.url).netloc
-        if not host:
-            return {}
-        elif self.username and self.password:
+        if self.username and self.password:
             return {
-                host: {
+                self.host: {
                     "auth": {
                         "username": self.username.get_secret_value(),
                         "password": self.password.get_secret_value(),
@@ -226,7 +211,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             }
         elif self.identitytoken:
             return {
-                host: {
+                self.host: {
                     "auth": {
                         "identitytoken": self.identitytoken.get_secret_value(),
                     }
@@ -235,7 +220,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         else:
             return {}
 
-    def get_hosts_toml(self) -> Dict[str, Any]:
+    @property
+    def hosts_toml(self) -> Dict[str, Any]:
         """Return data for hosts.toml file.
 
         Returns:
@@ -243,13 +229,13 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         """
         host_config: Dict[str, Any] = {"capabilities": ["pull", "resolve"]}
         if self.ca_file:
-            host_config["ca"] = self.get_ca_file_path().as_posix()
+            host_config["ca"] = self.ca_file_path.as_posix()
         if self.cert_file and self.key_file:
             host_config["client"] = [
-                [self.get_cert_file_path().as_posix(), self.get_key_file_path().as_posix()]
+                [self.cert_file_path.as_posix(), self.key_file_path.as_posix()]
             ]
         elif self.cert_file:
-            host_config["client"] = self.get_cert_file_path().as_posix()
+            host_config["client"] = self.cert_file_path.as_posix()
 
         if self.skip_verify:
             host_config["skip_verify"] = True
@@ -263,26 +249,32 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
 
     def ensure_certificates(self):
         """Ensure client and ca certificates."""
-        ca_file_path = self.get_ca_file_path()
+        ca_file_path = self.ca_file_path
         if self.ca_file:
             log.debug("Configure custom CA path %s", ca_file_path)
             _ensure_file(ca_file_path, self.ca_file, 0o600, 0, 0)
         else:
             ca_file_path.unlink(missing_ok=True)
 
-        cert_file_path = self.get_cert_file_path()
+        cert_file_path = self.cert_file_path
         if self.cert_file:
             log.debug("Configure client certificate path %s", cert_file_path)
             _ensure_file(cert_file_path, self.cert_file, 0o600, 0, 0)
         else:
             cert_file_path.unlink(missing_ok=True)
 
-        key_file_path = self.get_key_file_path()
+        key_file_path = self.key_file_path
         if self.key_file:
             log.debug("Configure client key path %s", key_file_path)
             _ensure_file(key_file_path, self.key_file, 0o600, 0, 0)
         else:
             key_file_path.unlink(missing_ok=True)
+
+    def ensure_hosts_toml(self):
+        """Ensure hosts.toml file."""
+        hosts_toml_path = self.hosts_toml_path
+        log.debug("Configure hosts.toml %s", hosts_toml_path)
+        _ensure_file(hosts_toml_path, tomli_w.dumps(self.hosts_toml), 0o600, 0, 0)
 
 
 class RegistryConfigs(pydantic.BaseModel, extra=pydantic.Extra.forbid):
@@ -315,7 +307,11 @@ def parse_registries(json_str: str) -> List[Registry]:
     except json.JSONDecodeError as e:
         raise ValueError(f"not valid JSON: {e}") from e
 
-    return RegistryConfigs(registries=parsed).registries
+    parsed = RegistryConfigs(registries=parsed)
+    dupes = [x for x, y in collections.Counter(x.host for x in parsed.registries).items() if y > 1]
+    if len(dupes):
+        raise ValueError(f"duplicate host definitions: {','.join(dupes)}")
+    return parsed.registries
 
 
 def ensure_registry_configs(registries: List[Registry]):
@@ -330,11 +326,11 @@ def ensure_registry_configs(registries: List[Registry]):
         unneeded -= {r.host}
         log.info("Configure registry %s (%s)", r.host, r.url)
         r.ensure_certificates()
-        _ensure_file(r.get_hosts_toml_path(), tomli_w.dumps(r.get_hosts_toml()), 0o600, 0, 0)
+        r.ensure_hosts_toml()
 
         if r.username and r.password:
             log.debug("Configure username and password for %s (%s)", r.url, r.host)
-            auth_config.update(**r.get_auth_config())
+            auth_config.update(r.auth_config)
 
     for h in unneeded:
         log.info("Removing unneeded registry %s", r)
