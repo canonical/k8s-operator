@@ -46,6 +46,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdAPIManager,
     K8sdConnectionError,
     NetworkConfig,
+    NodeJoinConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
@@ -271,7 +272,7 @@ class K8sCharm(ops.CharmBase):
             return
 
         bootstrap_config = BootstrapConfig()
-        self.certificates.configure_certificates(bootstrap_config)
+        self._create_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
         bootstrap_config.service_cidr = self.config["service-cidr"]
@@ -409,6 +410,17 @@ class K8sCharm(ops.CharmBase):
                 token_type=ClusterTokenType.WORKER,
             )
 
+    @on_error(WaitingStatus("Waiting for certificates"), AssertionError)
+    def _create_certificates(self, config):
+        """Create certificates for the Kubernetes node.
+
+        Args:
+            config: The join configuration object for the Kubernetes node.
+        """
+        log.info("Creating unit certificates")
+        status.add(ops.MaintenanceStatus("Creating Certificates"))
+        self.certificates.configure_certificates(config)
+
     def _create_cos_tokens(self):
         """Create COS tokens and distribute them to peers and workers.
 
@@ -530,6 +542,10 @@ class K8sCharm(ops.CharmBase):
             if self.is_control_plane:
                 request.config = ControlPlaneNodeJoinConfig()
                 request.config.extra_sans = [utils.get_public_address()]
+            else:
+                request.config = NodeJoinConfig()
+
+            self._create_certificates(request.config)
 
             self.api_manager.join_cluster(request)
             log.info("Joined %s(%s)", self.unit, node_name)
