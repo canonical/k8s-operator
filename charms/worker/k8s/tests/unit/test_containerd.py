@@ -12,31 +12,6 @@ import pytest
 import tomli_w
 
 
-def test_ensure_block():
-    """Test ensure block method."""
-    t = containerd._ensure_block("source\ndata", "inner-block", "# {mark} managed by test")
-    assert (
-        t
-        == """source
-data
-# begin managed by test
-inner-block
-# end managed by test
-"""
-    )
-
-    t = containerd._ensure_block(t, "new-block", "# {mark} managed by test")
-    assert (
-        t
-        == """source
-data
-# begin managed by test
-new-block
-# end managed by test
-"""
-    )
-
-
 def test_ensure_file(tmp_path):
     """Test ensure file method."""
     test_file = tmp_path / "test.txt"
@@ -133,47 +108,40 @@ def test_registry_methods():
         override_path=True,
     )
 
-    registry.ca_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/ca.crt"
-    registry.cert_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/cert.crt"
-    registry.key_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/key.crt"
-    registry.hosts_toml_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/hosts.toml"
+    assert registry.ca_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/ca.crt"
+    assert registry.cert_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/client.crt"
+    assert registry.key_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/client.key"
+    assert registry.hosts_toml_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/hosts.toml"
 
-    registry.auth_config == {
-        "ghcr-mirror.io": {
-            "username": "user",
-            "password": "pass",
-        }
-    }
+    assert registry.auth_config_header == {"Authorization": "Basic dXNlcjpwYXNz"}
 
     registry.password = None
-    registry.auth_config == {
-        "ghcr-mirror.io": {
-            "identitytoken": "token",
-        }
-    }
+    assert registry.auth_config_header == {"Authorization": "Bearer token"}
 
-    registry.hosts_toml == {
+    assert registry.hosts_toml == {
         "server": "http://ghcr.io",
         "host": {
-            "capabilities": ["pull", "resolve"],
             "http://ghcr.io": {
+                "capabilities": ["pull", "resolve"],
                 "ca": str(registry.ca_file_path),
                 "client": [[str(registry.cert_file_path), str(registry.key_file_path)]],
                 "skip_verify": True,
                 "override_path": True,
+                "header": {"Authorization": "Bearer token"},
             },
         },
     }
     registry.key_file = None
-    registry.hosts_toml == {
+    assert registry.hosts_toml == {
         "server": "http://ghcr.io",
         "host": {
-            "capabilities": ["pull", "resolve"],
             "http://ghcr.io": {
+                "capabilities": ["pull", "resolve"],
                 "ca": str(registry.ca_file_path),
                 "client": str(registry.cert_file_path),
                 "skip_verify": True,
                 "override_path": True,
+                "header": {"Authorization": "Bearer token"},
             },
         },
     }
@@ -217,4 +185,4 @@ def test_ensure_registry_configs(mock_ensure_file):
     )
 
     containerd.ensure_registry_configs([registry])
-    assert mock_ensure_file.call_count == 5, "5 files should be written"
+    assert mock_ensure_file.call_count == 4, "4 files should be written"

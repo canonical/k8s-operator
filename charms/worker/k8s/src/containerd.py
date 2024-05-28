@@ -27,33 +27,6 @@ import tomli_w
 
 log = logging.getLogger(__name__)
 HOSTSD_PATH = Path("/var/snap/k8s/common/etc/containerd/hosts.d/")
-CONFD_PATH = Path("/var/snap/k8s/common/etc/containerd/conf.d/")
-
-
-def _ensure_block(data: str, block: str, block_marker: str) -> str:
-    """Ensure a block of text appears within the data between separators.
-
-    Args:
-        data (str):  source data to include block
-        block (str): block of text to replace between block_marker
-        block_marker (str): can contain `{mark}`, which is replaced with begin and end
-
-    Returns:
-        a copy of data which contains `block`, surrounded by the specified `block_marker`.
-    """
-    if block_marker:
-        marker_begin = "\n" + block_marker.replace("{mark}", "begin") + "\n"
-        marker_end = "\n" + block_marker.replace("{mark}", "end") + "\n"
-    else:
-        marker_begin, marker_end = "\n", "\n"
-
-    begin_index = data.rfind(marker_begin)
-    end_index = data.find(marker_end, begin_index + 1)
-
-    if begin_index == -1 or end_index == -1:
-        return f"{data}{marker_begin}{block}{marker_end}"
-
-    return f"{data[:begin_index]}{marker_begin}{block}{data[end_index:]}"
 
 
 def _ensure_file(
@@ -109,7 +82,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         cert_file_path (Path):
         key_file_path (Path):
         hosts_toml_path (Path):
-        auth_config (Dict[str, Any]):
+        auth_config_header (Dict[str, Any]):
         hosts_toml (Dict[str, Any]):
     """
 
@@ -193,29 +166,21 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         return HOSTSD_PATH / self.host / "hosts.toml"
 
     @property
-    def auth_config(self) -> Dict[str, Any]:
-        """Return auth configuration for registry.
+    def auth_config_header(self) -> Dict[str, Any]:
+        """Return a fixed auth configuration header for registry.
+
+        TODO: May need to be extended for other auth methods (eg. oauth2, etc.)
 
         Returns:
-            This registry's auth content
+            This registry's auth content headers
         """
         if self.username and self.password:
-            return {
-                self.host: {
-                    "auth": {
-                        "username": self.username.get_secret_value(),
-                        "password": self.password.get_secret_value(),
-                    }
-                }
-            }
+            log.debug("Configure basic auth for %s (%s)", self.url, self.host)
+            v = self.username.get_secret_value() + ":" + self.password.get_secret_value()
+            return {"Authorization": "Basic " + base64.b64encode(v.encode()).decode()}
         elif self.identitytoken:
-            return {
-                self.host: {
-                    "auth": {
-                        "identitytoken": self.identitytoken.get_secret_value(),
-                    }
-                }
-            }
+            log.debug("Configure bearer token for %s (%s)", self.url, self.host)
+            return {"Authorization": "Bearer " + self.identitytoken.get_secret_value()}
         else:
             return {}
 
@@ -240,6 +205,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             host_config["skip_verify"] = True
         if self.override_path:
             host_config["override_path"] = True
+        if config := self.auth_config_header:
+            host_config["header"] = config
 
         return {
             "server": self.url,
@@ -319,7 +286,6 @@ def ensure_registry_configs(registries: List[Registry]):
     Args:
         registries (List[Registry]): list of registries
     """
-    auth_config: Dict[str, Any] = {}
     unneeded = {host.parent.name for host in HOSTSD_PATH.glob("**/hosts.toml")}
     for r in registries:
         unneeded -= {r.host}
@@ -327,26 +293,9 @@ def ensure_registry_configs(registries: List[Registry]):
         r.ensure_certificates()
         r.ensure_hosts_toml()
 
-        if r.username and r.password:
-            log.debug("Configure username and password for %s (%s)", r.url, r.host)
-            auth_config.update(r.auth_config)
-
     for h in unneeded:
-        log.info("Removing unneeded registry %s", r)
+        log.info("Removing unneeded registry %s", h)
         (HOSTSD_PATH / h / "hosts.toml").unlink(missing_ok=True)
-
-    if not auth_config and not unneeded:
-        return
-
-    registry_configs = {
-        "plugins": {"io.containerd.grpc.v1.cri": {"registry": {"configs": auth_config}}}
-    }
-
-    conf_d = CONFD_PATH / "00-custom-registries.toml"
-    new_containerd_toml = _ensure_block(
-        "", tomli_w.dumps(registry_configs), "# {mark} managed by charm"
-    )
-    _ensure_file(conf_d, new_containerd_toml, 0o600, 0, 0)
 
 
 def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):
