@@ -23,5 +23,6 @@ pytestmark = [
 async def test_nodes_ready(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
-    expected_nodes = len(k8s.units)
+    worker = kubernetes_cluster.applications["k8s-worker"]
+    expected_nodes = len(k8s.units) + len(worker.units)
     await ready_nodes(k8s.units[0], expected_nodes)

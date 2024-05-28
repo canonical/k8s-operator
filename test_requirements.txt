@@ -5,3 +5,4 @@ pytest
 pytest-asyncio
 pytest-operator
 tenacity
+requests < 2.32  # https://github.com/canonical/pylxd/issues/579

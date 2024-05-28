@@ -4,12 +4,16 @@
 """K8s Certificates module."""
 import ipaddress
 import logging
-from typing import List
+from typing import List, Union
 
 import charms.contextual_status as status
 import ops
 import utils
-from charms.k8s.v0.k8sd_api_manager import BootstrapConfig
+from charms.k8s.v0.k8sd_api_manager import (
+    BootstrapConfig,
+    ControlPlaneNodeJoinConfig,
+    NodeJoinConfig,
+)
 from charms.tls_certificates_interface.v3.tls_certificates import (
     CertificateAvailableEvent,
     TLSCertificatesRequiresV3,
@@ -23,6 +27,8 @@ WORKER_COMPONENTS = ["kubelet"]
 CONTROL_PLANE_COMPONENTS = ["apiserver", "front-proxy-client"] + WORKER_COMPONENTS
 LEADER_CONTROL_PLANE_COMPONENTS = ["apiserver-kubelet-client"] + CONTROL_PLANE_COMPONENTS
 SUPPORTED_CERTIFICATES = ["self-signed", "external"]
+
+CertificatesConfig = Union[BootstrapConfig, ControlPlaneNodeJoinConfig, NodeJoinConfig]
 
 
 class K8sCertificates:
@@ -83,6 +89,20 @@ class K8sCertificates:
             cert_content = cert_secret.get_content(refresh=True)
             certs[component] = cert_content
 
+    def _gather_certificates_and_keys(self, components: List[str]):
+        """Gather certificates and private keys for the specified components.
+
+        Args:
+            components (List[str]): A list of components to gather certificates for.
+
+        Returns:
+            tuple: A tuple containing the certificates and private keys for the components.
+        """
+        certificates = self._get_unit_certificates(components)
+        pk_secret = self.model.get_secret(label=f"{self.charm.unit.name}-private-keys")
+        pk_content = pk_secret.get_content(refresh=True)
+        return certificates, pk_content
+
     def _generate_certificate(self, components: List[str]):
         """Request the creation of certificates for components lacking a certificate.
 
@@ -109,8 +129,11 @@ class K8sCertificates:
 
         address = utils.get_public_address()
         node_name = self.charm.get_node_name()
-        service_cidr = self.charm.config["service-cidr"]
-        kubernetes_service = str(ipaddress.IPv4Network(service_cidr)[1])
+        sans_ip = [address, "127.0.0.1"]
+        if self.charm.is_control_plane:
+            service_cidr = self.charm.config["service-cidr"]
+            kubernetes_service = str(ipaddress.IPv4Network(service_cidr)[1])
+            sans_ip.append(kubernetes_service)
 
         if "apiserver" in components:
             api_server_csr = generate_csr(
@@ -123,7 +146,7 @@ class K8sCertificates:
                     "kubernetes.default.svc",
                     "kubernetes.default.svc.cluster.local",
                 ],
-                sans_ip=[address, "127.0.0.1", kubernetes_service],
+                sans_ip=sans_ip,
             )
 
             content["apiserver-csr"] = api_server_csr.decode()
@@ -150,7 +173,7 @@ class K8sCertificates:
                     "kubernetes.default.svc",
                     "kubernetes.default.svc.cluster.local",
                 ],
-                sans_ip=[address, "127.0.0.1", kubernetes_service],
+                sans_ip=sans_ip,
             )
 
             content["kubelet-csr"] = kubelet_csr.decode()
@@ -257,13 +280,13 @@ class K8sCertificates:
         else:
             log.warning("Event CSR does not match any stored CSR")
 
-    def configure_certificates(self, config: BootstrapConfig):
-        """Configure the certificates for the Kubernetes cluster.
+    def configure_certificates(self, config: CertificatesConfig):
+        """Configure the certificates for the Kubernetes node.
 
         Args:
-            config (BootstrapConfig):
-                The configuration object for the Kubernetes cluster. This object
-                will be modified in-place to include the cluster's certificates.
+            config (CertificatesConfig): The configuration object for the
+            Kubernetes node. This object will be modified in-place to include
+            the cluster's certificates.
         """
         certificates = self.config.get("certificates")
 
@@ -282,10 +305,19 @@ class K8sCertificates:
 
             assert certificates_relation, "Missing certificates relation"  # nosec
 
-            if self.charm.lead_control_plane:
+            if self.charm.lead_control_plane and isinstance(config, BootstrapConfig):
+                log.info("Generating bootstrap certificates")
                 self.generate_bootstrap_certificates(config)
+            elif self.charm.is_control_plane and isinstance(config, ControlPlaneNodeJoinConfig):
+                log.info("Generating control plane certificates")
+                self.generate_control_plane_certificates(config)
+            elif isinstance(config, NodeJoinConfig):
+                log.info("Generating worker certificates")
+                self.generate_worker_certificates(config)
+            else:
+                log.error("Invalid configuration object provided")
 
-    def generate_bootstrap_certificates(self, bootstrap_config: BootstrapConfig):
+    def generate_bootstrap_certificates(self, config: BootstrapConfig):
         """Configure the provided BootstrapConfig certificates.
 
         This method gathers necessary certificates and private keys for the
@@ -293,31 +325,69 @@ class K8sCertificates:
         attributes of the BootstrapConfig object.
 
         Args:
-            bootstrap_config (BootstrapConfig): An instance of BootstrapConfig
-                where the certificates and keys will be stored.
+            config (BootstrapConfig): An instance of BootstrapConfig where the
+            certificates and keys will be stored.
         """
         components = LEADER_CONTROL_PLANE_COMPONENTS
-        certificates = self._get_unit_certificates(components)
-        pk_secret = self.model.get_secret(label=f"{self.charm.unit.name}-private-keys")
-        pk_content = pk_secret.get_content(refresh=True)
+        certificates, pk_content = self._gather_certificates_and_keys(components)
 
-        bootstrap_config.ca_cert = certificates["apiserver"]["ca-certificate"]
+        config.ca_cert = certificates["apiserver"]["ca-certificate"]
 
-        bootstrap_config.apiserver_crt = certificates["apiserver"]["certificate"]
-        bootstrap_config.apiserver_key = pk_content["apiserver"]
+        config.apiserver_crt = certificates["apiserver"]["certificate"]
+        config.apiserver_key = pk_content["apiserver"]
 
-        bootstrap_config.kubelet_crt = certificates["kubelet"]["certificate"]
-        bootstrap_config.kubelet_key = pk_content["kubelet"]
+        config.kubelet_crt = certificates["kubelet"]["certificate"]
+        config.kubelet_key = pk_content["kubelet"]
 
-        bootstrap_config.front_proxy_ca_cert = certificates["front-proxy-client"]["ca-certificate"]
-        bootstrap_config.front_proxy_client_cert = certificates["front-proxy-client"][
+        config.front_proxy_ca_cert = certificates["front-proxy-client"]["ca-certificate"]
+        config.front_proxy_client_cert = certificates["front-proxy-client"]["certificate"]
+        config.front_proxy_client_key = pk_content["front-proxy-client"]
+
+        config.service_account_key = pk_content["service-account"]
+
+        config.apiserver_kubelet_client_crt = certificates["apiserver-kubelet-client"][
             "certificate"
         ]
-        bootstrap_config.front_proxy_client_key = pk_content["front-proxy-client"]
+        config.apiserver_kubelet_client_key = pk_content["apiserver-kubelet-client"]
 
-        bootstrap_config.service_account_key = pk_content["service-account"]
+    def generate_control_plane_certificates(self, config: ControlPlaneNodeJoinConfig):
+        """Configure the provided ControlPlaneNodeJoinConfig certificates.
 
-        bootstrap_config.apiserver_kubelet_client_crt = certificates["apiserver-kubelet-client"][
-            "certificate"
-        ]
-        bootstrap_config.apiserver_kubelet_client_key = pk_content["apiserver-kubelet-client"]
+        This method gathers necessary certificates and private keys for the
+        control plane components and assigns them to the respective attributes
+        of the ControlPlaneNodeJoinConfig object.
+
+        Args:
+            config (ControlPlaneNodeJoinConfig): An instance of
+            ControlPlaneNodeJoinConfig where the certificates and keys will be
+            stored.
+
+        """
+        components = CONTROL_PLANE_COMPONENTS
+        certificates, pk_content = self._gather_certificates_and_keys(components)
+
+        config.apiserver_crt = certificates["apiserver"]["certificate"]
+        config.apiserver_key = pk_content["apiserver"]
+
+        config.kubelet_crt = certificates["kubelet"]["certificate"]
+        config.kubelet_key = pk_content["kubelet"]
+
+        config.front_proxy_client_crt = certificates["front-proxy-client"]["certificate"]
+        config.front_proxy_client_key = pk_content["front-proxy-client"]
+
+    def generate_worker_certificates(self, config: NodeJoinConfig):
+        """Configure the provided NodeJoinConfig certificates.
+
+        This method gathers necessary certificates and private keys for the
+        worker node components and assigns them to the respective attributes
+        of the NodeJoinConfig object.
+
+        Args:
+            config (NodeJoinConfig): An instance of NodeJoinConfig where the
+            certificates and keys will be stored.
+        """
+        components = WORKER_COMPONENTS
+        certificates, pk_content = self._gather_certificates_and_keys(components)
+
+        config.kubelet_crt = certificates["kubelet"]["certificate"]
+        config.kubelet_key = pk_content["kubelet"]

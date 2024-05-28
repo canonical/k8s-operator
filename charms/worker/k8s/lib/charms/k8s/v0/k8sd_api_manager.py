@@ -444,7 +444,7 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     Attributes:
         extra_sans (List[str]): List of extra sans for the self-signed certificates
         apiserver_crt (str): apiserver certificate
-        apiserver_client_key (str): apiserver certificate key
+        apiserver_key (str): apiserver certificate key
         front_proxy_client_crt (str): front-proxy certificate
         front_proxy_client_key (str): front-proxy certificate key
     """
@@ -452,7 +452,7 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
 
     apiserver_crt: Optional[str] = Field(None, alias="apiserver-crt")
-    apiserver_client_key: Optional[str] = Field(None, alias="apiserver-key")
+    apiserver_key: Optional[str] = Field(None, alias="apiserver-key")
     front_proxy_client_crt: Optional[str] = Field(None, alias="front-proxy-client-crt")
     front_proxy_client_key: Optional[str] = Field(None, alias="front-proxy-client-key")
 
