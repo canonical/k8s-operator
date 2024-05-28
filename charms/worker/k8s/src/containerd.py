@@ -17,7 +17,6 @@ import collections
 import json
 import logging
 import os
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -27,8 +26,8 @@ import pydantic
 import tomli_w
 
 log = logging.getLogger(__name__)
-CONFIG_PATH = Path("/var/snap/k8s/common/etc/containerd/hosts.d/")
-CONFIG_TOML = Path("/var/snap/k8s/common/etc/containerd/config.toml")
+HOSTSD_PATH = Path("/var/snap/k8s/common/etc/containerd/hosts.d/")
+CONFD_PATH = Path("/var/snap/k8s/common/etc/containerd/conf.d/")
 
 
 def _ensure_block(data: str, block: str, block_marker: str) -> str:
@@ -164,7 +163,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return CONFIG_PATH / self.host / "ca.crt"
+        return HOSTSD_PATH / self.host / "ca.crt"
 
     @property
     def cert_file_path(self) -> Path:
@@ -173,7 +172,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return CONFIG_PATH / self.host / "client.crt"
+        return HOSTSD_PATH / self.host / "client.crt"
 
     @property
     def key_file_path(self) -> Path:
@@ -182,7 +181,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return CONFIG_PATH / self.host / "client.key"
+        return HOSTSD_PATH / self.host / "client.key"
 
     @property
     def hosts_toml_path(self) -> Path:
@@ -191,7 +190,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return CONFIG_PATH / self.host / "hosts.toml"
+        return HOSTSD_PATH / self.host / "hosts.toml"
 
     @property
     def auth_config(self) -> Dict[str, Any]:
@@ -321,7 +320,7 @@ def ensure_registry_configs(registries: List[Registry]):
         registries (List[Registry]): list of registries
     """
     auth_config: Dict[str, Any] = {}
-    unneeded = {host.parent.name for host in CONFIG_PATH.glob("**/hosts.toml")}
+    unneeded = {host.parent.name for host in HOSTSD_PATH.glob("**/hosts.toml")}
     for r in registries:
         unneeded -= {r.host}
         log.info("Configure registry %s (%s)", r.host, r.url)
@@ -334,7 +333,7 @@ def ensure_registry_configs(registries: List[Registry]):
 
     for h in unneeded:
         log.info("Removing unneeded registry %s", r)
-        (CONFIG_PATH / h / "hosts.toml").unlink(missing_ok=True)
+        (HOSTSD_PATH / h / "hosts.toml").unlink(missing_ok=True)
 
     if not auth_config and not unneeded:
         return
@@ -343,13 +342,11 @@ def ensure_registry_configs(registries: List[Registry]):
         "plugins": {"io.containerd.grpc.v1.cri": {"registry": {"configs": auth_config}}}
     }
 
-    containerd_toml = CONFIG_TOML.read_text() if CONFIG_TOML.exists() else ""
+    conf_d = CONFD_PATH / "00-custom-registries.toml"
     new_containerd_toml = _ensure_block(
-        containerd_toml, tomli_w.dumps(registry_configs), "# {mark} managed by charm"
+        "", tomli_w.dumps(registry_configs), "# {mark} managed by charm"
     )
-    if _ensure_file(CONFIG_TOML, new_containerd_toml, 0o600, 0, 0):
-        log.info("Restart containerd to apply registry configurations")
-        subprocess.run(["/usr/bin/snap", "restart", "k8s.containerd"])
+    _ensure_file(conf_d, new_containerd_toml, 0o600, 0, 0)
 
 
 def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):

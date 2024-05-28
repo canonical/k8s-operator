@@ -133,10 +133,10 @@ def test_registry_methods():
         override_path=True,
     )
 
-    registry.ca_file_path == containerd.CONFIG_PATH / "ghcr-mirror.io/ca.crt"
-    registry.cert_file_path == containerd.CONFIG_PATH / "ghcr-mirror.io/cert.crt"
-    registry.key_file_path == containerd.CONFIG_PATH / "ghcr-mirror.io/key.crt"
-    registry.hosts_toml_path == containerd.CONFIG_PATH / "ghcr-mirror.io/hosts.toml"
+    registry.ca_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/ca.crt"
+    registry.cert_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/cert.crt"
+    registry.key_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/key.crt"
+    registry.hosts_toml_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/hosts.toml"
 
     registry.auth_config == {
         "ghcr-mirror.io": {
@@ -201,8 +201,7 @@ def test_registry_methods():
 
 
 @mock.patch("containerd._ensure_file")
-@mock.patch("containerd.subprocess.run")
-def test_ensure_registry_configs(mock_run, mock_ensure_file):
+def test_ensure_registry_configs(mock_ensure_file):
     """Test registry methods."""
     registry = containerd.Registry(
         host="ghcr-mirror.io",
@@ -219,4 +218,3 @@ def test_ensure_registry_configs(mock_run, mock_ensure_file):
 
     containerd.ensure_registry_configs([registry])
     assert mock_ensure_file.call_count == 5, "5 files should be written"
-    mock_run.assert_called_once_with(["/usr/bin/snap", "restart", "k8s.containerd"])
