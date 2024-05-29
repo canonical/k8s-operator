@@ -1,0 +1,12 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+juju-http-proxy: http://squid.internal:3128
+juju-https-proxy: http://squid.internal:3128
+juju-no-proxy:
+  - localhost
+  - "127.0.0.1"
+  - "0.0.0.0"
+  - ppa.launchpad.net
+  - "10.0.8.0/24"
+  - "10.152.183.0/24"

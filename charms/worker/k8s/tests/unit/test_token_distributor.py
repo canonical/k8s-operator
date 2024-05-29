@@ -58,9 +58,7 @@ def test_cluster_name_joined(harness):
     """Test cluster name while not bootstrapped."""
     harness.disable_hooks()
     collector = token_distributor.TokenCollector(harness.charm, "my-node")
-    relation_id = harness.add_relation(
-        "cluster", "remote", unit_data={"cluster-name": "my-cluster"}
-    )
+    relation_id = harness.add_relation("cluster", "k8s", unit_data={"cluster-name": "my-cluster"})
     # Fetching the remote doesn't update joined field
     remote = collector.cluster_name(harness.charm.model.get_relation("cluster"), False)
     assert remote == "my-cluster"

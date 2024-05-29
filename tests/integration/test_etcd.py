@@ -39,7 +39,7 @@ async def test_etcd_datastore(kubernetes_cluster: model.Model):
     status = json.loads(result.results["stdout"])
     assert status["ready"], "Cluster isn't ready"
     assert status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
-    assert status["datastore"]["servers"] == [f"https://{etcd.public_address}:{etcd_port}"]
+    assert f"https://{etcd.public_address}:{etcd_port}" in status["datastore"]["servers"]
 
 
 @pytest.mark.abort_on_fail

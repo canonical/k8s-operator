@@ -96,54 +96,44 @@ amd64:
 @mock.patch("snap.snap_lib.SnapCache")
 def test_management_installs_local(cache, install_local, args):
     """Test installer uses local installer."""
-    cache.return_value.__getitem__.return_value = mock.MagicMock(spec=snap.snap_lib.Snap)
-    args.return_value = [
-        snap.SnapFileArgument(name="k8s", filename=Path("path/to/thing")),
-    ]
+    k8s_snap = cache()["k8s"]
+    args.return_value = [snap.SnapFileArgument(name="k8s", filename=Path("path/to/thing"))]
     snap.management()
-    cache.called_once_with()
-    cache["k8s"].ensure.assert_not_called()
+    k8s_snap.ensure.assert_not_called()
     install_local.assert_called_once_with(filename=Path("path/to/thing"))
 
 
 @mock.patch("snap._parse_management_arguments")
 @mock.patch("snap.snap_lib.install_local")
 @mock.patch("snap.snap_lib.SnapCache")
-def test_management_installs_store_from_channel(cache, install_local, args):
+@pytest.mark.parametrize("revision", [None, "123"])
+def test_management_installs_store_from_channel(cache, install_local, args, revision):
     """Test installer uses store installer."""
-    cache.return_value.__getitem__.return_value = mock.MagicMock(autospec=snap.snap_lib.Snap)
-    cache.return_value["k8s"].revision = None
-    args.return_value = [
-        snap.SnapStoreArgument(name="k8s", channel="edge"),
-    ]
+    k8s_snap = cache()["k8s"]
+    k8s_snap.revision = revision
+    args.return_value = [snap.SnapStoreArgument(name="k8s", channel="edge")]
     snap.management()
-    cache.return_value["k8s"].revision = 123
-    snap.management()
-    cache.called_once_with()
     install_local.assert_not_called()
-    assert cache()["k8s"].ensure.call_count == 2
-    cache()["k8s"].ensure.assert_called_with(state=snap.snap_lib.SnapState.Present, channel="edge")
+    k8s_snap.ensure.assert_called_once_with(state=snap.snap_lib.SnapState.Present, channel="edge")
 
 
 @mock.patch("snap._parse_management_arguments")
 @mock.patch("snap.snap_lib.install_local")
 @mock.patch("snap.snap_lib.SnapCache")
-def test_management_installs_store_from_revision(cache, install_local, args):
+@pytest.mark.parametrize("revision", [None, "456", "123"])
+def test_management_installs_store_from_revision(cache, install_local, args, revision):
     """Test installer uses store installer."""
-    cache.return_value.__getitem__.return_value = mock.MagicMock(autospec=snap.snap_lib.Snap)
-    cache.return_value["k8s"].revision = None
-    args.return_value = [
-        snap.SnapStoreArgument(name="k8s", revision=123),
-    ]
+    k8s_snap = cache()["k8s"]
+    k8s_snap.revision = revision
+    args.return_value = [snap.SnapStoreArgument(name="k8s", revision=123)]
     snap.management()
-    cache.return_value["k8s"].revision = "123"
-    snap.management()
-    cache.called_once_with()
     install_local.assert_not_called()
-    assert cache()["k8s"].ensure.call_count == 1
-    cache()["k8s"].ensure.assert_called_once_with(
-        state=snap.snap_lib.SnapState.Present, revision="123"
-    )
+    if revision == "123":
+        k8s_snap.ensure.assert_not_called()
+    else:
+        k8s_snap.ensure.assert_called_once_with(
+            state=snap.snap_lib.SnapState.Present, revision="123"
+        )
 
 
 @mock.patch("subprocess.check_output")
