@@ -35,8 +35,8 @@ applications:
     constraints: cores=2 mem=4G root-disk=16G
     num_units: 1
     storage:
-      osd-devices: 1G,2
-      osd-journals: 1G,1
+      osd-devices: 'lxd,1G,2'
+      osd-journals: 'lxd,1G,1'
 relations:
   - [k8s, k8s-worker:cluster]
   - [ceph-csi, k8s:ceph-k8s-info]
