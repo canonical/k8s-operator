@@ -1,4 +1,6 @@
-juju
+# workaround for juju == 3.5.0.0
+# https://github.com/juju/python-libjuju/issues/1052
+juju @ git+https://github.com/juju/python-libjuju.git@53cd33d884f3ca710e1fa026c74f31b02281be69
 pydantic<2
 pylxd
 pytest
