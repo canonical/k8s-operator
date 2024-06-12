@@ -35,6 +35,7 @@ import yaml
 from charms.contextual_status import WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
+from charms.interface_kube_dns import KubeDnsRequires
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
@@ -127,6 +128,7 @@ class K8sCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
+        self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
         self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
@@ -441,11 +443,10 @@ class K8sCharm(ops.CharmBase):
         """Enable necessary components for the Kubernetes cluster."""
         status.add(ops.MaintenanceStatus("Updating K8s features"))
         log.info("Enabling K8s features")
-        dns_config = DNSConfig(enabled=True)
+        dns_config = self._get_dns_config()
         network_config = NetworkConfig(enabled=True)
         user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
         update_request = UpdateClusterConfigRequest(config=user_cluster_config)
-
         self.api_manager.update_cluster_config(update_request)
 
     @on_error(
@@ -467,6 +468,22 @@ class K8sCharm(ops.CharmBase):
 
         self._configure_datastore(update_request)
         self.api_manager.update_cluster_config(update_request)
+
+    def _get_dns_config(self) -> DNSConfig:
+        """Get DNS config either for the enabled built-in dns or an integrated charm.
+
+        Returns:
+            DNSConfig: A DNSConfig object with the cluster domain,
+            service IP and whether the default dns is enabled or not.
+        """
+        if self.kube_dns.domain is not None and self.kube_dns.address is not None:
+            return DNSConfig(
+                enabled=False,
+                cluster_domain=self.kube_dns.domain,
+                service_ip=self.kube_dns.address,
+            )
+
+        return DNSConfig(enabled=True)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.

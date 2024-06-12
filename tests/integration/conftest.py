@@ -321,6 +321,73 @@ async def grafana_agent(kubernetes_cluster: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
+async def cluster_kubeconfig(ops_test: OpsTest, kubernetes_cluster: Model):
+    """Fixture to pull the kubeconfig out of the kubernetes cluster."""
+    k8s = kubernetes_cluster.applications["k8s"].units[0]
+    action = await k8s.run_action("get-kubeconfig")
+    action = await action.wait()
+    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
+    kubeconfig_path.write_text(action.results["kubeconfig"])
+    yield kubeconfig_path
+
+
+@pytest_asyncio.fixture(scope="module")
+async def coredns_model(ops_test: OpsTest, cluster_kubeconfig: Path):
+    """
+    This fixture deploys Coredns on the specified
+    Kubernetes (k8s) model for testing purposes.
+    """
+    coredns_alias = "coredns-model"
+
+    config = type.__call__(Configuration)
+    k8s_config.load_config(client_configuration=config, config_file=str(cluster_kubeconfig))
+
+    log.info("Adding k8s cloud")
+    k8s_cloud = await ops_test.add_k8s(skip_storage=True, kubeconfig=config)
+    k8s_model = await ops_test.track_model(
+        coredns_alias, cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
+    )
+    log.info("Deploying Coredns ")
+    await k8s_model.deploy("coredns", trust=True)
+    await k8s_model.wait_for_idle(apps=["coredns"], status="active")
+    yield k8s_model
+
+    # the cluster is consuming this model: remove saas first
+    await ops_test.forget_model(coredns_alias, timeout=40)
+
+
+@pytest_asyncio.fixture(scope="module")
+async def integrate_coredns(coredns_model: Model, kubernetes_cluster: Model):
+    """This function offers Coredns in the specified Kubernetes (k8s) model."""
+    log.info("Offering Coredns...")
+    await coredns_model.create_offer("coredns:dns-provider")
+    await coredns_model.block_until(lambda: "coredns" in coredns_model.application_offers)
+    log.info("Coredns offered...")
+
+    log.info("Consuming Coredns...")
+    model_owner = untag("user-", coredns_model.info.owner_tag)
+
+    await coredns_model.wait_for_idle(status="active")
+    await kubernetes_cluster.wait_for_idle(status="active")
+
+    offer_url = f"{model_owner}/{coredns_model.name}.coredns"
+    saas = await kubernetes_cluster.consume(offer_url)
+    log.info("Coredns consumed...")
+
+    log.info("Relating Coredns...")
+    await kubernetes_cluster.integrate("k8s:dns-provider", "coredns")
+    assert "coredns" in kubernetes_cluster.remote_applications
+
+    yield coredns_model
+
+    # Now let's clean up
+    await kubernetes_cluster.applications["k8s"].destroy_relation("k8s:dns-provider", "coredns")
+    await kubernetes_cluster.wait_for_idle(status="active")
+    await kubernetes_cluster.remove_saas(saas)
+    await coredns_model.remove_offer(f"{coredns_model.name}.{saas}", force=True)
+
+
+@pytest_asyncio.fixture(scope="module")
 async def cos_model(
     ops_test: OpsTest, kubernetes_cluster, _grafana_agent  # pylint: disable=W0613
 ):
