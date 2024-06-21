@@ -54,6 +54,53 @@ bases:
       architectures: [amd64]
 config:
   options:
+    containerd_custom_registries:
+      type: string
+      default: "[]"
+      description: |
+        Registry endpoints and credentials. Setting this config allows containerd
+        to pull images from registries where auth is required.
+
+        The value for this config must be a JSON array of credential objects, like this:
+          e.g.: [{"url": "https://registry.example.com", "host": "my.registry:port", "username": "user", "password": "pass"}]
+
+        Credential Object Parameters:
+        url: REQUIRED str
+          the URL to the registry, include the port if not it isn't implied from the schema.
+            e.g: "url": "https://my.registry:8443"
+            e.g: "url": "http://my.registry"
+
+        host: OPTIONAL str - defaults to auto-generated from the url
+          could be registry host address or a name
+            e.g.: myregistry.io:9000, 10.10.10.10:5432
+            e.g.: myregistry.io, myregistry
+          Note: It will be derived from `url` if not provided.
+            e.g.: "url": "http://10.10.10.10:8000" --> "host": "10.10.10.10:8000"
+
+        username: OPTIONAL str - default ''
+        password: OPTIONAL str - default ''
+        identitytoken: OPTIONAL str - default ''
+          Used by containerd for basic authentication to the registry.
+
+        ca_file: OPTIONAL str - default ''
+        cert_file: OPTIONAL str - default ''
+        key_file: OPTIONAL str - default ''
+          For ssl/tls communication these should be a base64 encoded file
+          e.g.:  "ca_file": "'"$(base64 -w 0 < my.custom.registry.pem)"'"
+
+        skip_verify: OPTIONAL bool - default false
+          For situations where the registry has self-signed or expired certs and a quick work-around is necessary.
+          e.g.: "skip_verify": true
+
+        example config)
+        juju config containerd custom_registries='[{
+            "url": "https://registry.example.com",
+            "host": "ghcr.io",
+            "ca_file": "'"$(base64 -w 0 < ~/my.custom.ca.pem)"'",
+            "cert_file": "'"$(base64 -w 0 < ~/my.custom.cert.pem)"'",
+            "key_file": "'"$(base64 -w 0 < ~/my.custom.key.pem)"'",
+        }]'
+
     datastore:
       default: dqlite
       type: string
@@ -113,6 +160,8 @@ provides:
     interface: k8s-cluster
   cos-worker-tokens:
     interface: cos-k8s-tokens
+  containerd:
+    interface: containerd
 
 requires:
   etcd:

@@ -82,3 +82,5 @@ requires:
     #   juju integrate k8s:k8s-cluster k8s-worker:cluster
   cos-tokens:
     interface: cos-k8s-tokens
+  containerd:
+    interface: containerd

@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 
 import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
+import containerd
 import ops
 import reschedule
 import yaml
@@ -296,6 +297,26 @@ class K8sCharm(ops.CharmBase):
 
         # TODO: Make port (and address) configurable.
         self.api_manager.bootstrap_k8s_snap(payload)
+
+    @on_error(
+        ops.BlockedStatus("Failed to apply containerd_custom_registries, check logs for details"),
+        ValueError,
+        subprocess.CalledProcessError,
+        OSError,
+    )
+    def _config_containerd_registries(self):
+        """Apply containerd custom registries."""
+        registries, config = [], ""
+        containerd_relation = self.model.get_relation("containerd")
+        if self.is_control_plane:
+            config = self.config["containerd_custom_registries"]
+            registries = containerd.parse_registries(config)
+        else:
+            registries = containerd.recover(containerd_relation)
+        self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
+        containerd.ensure_registry_configs(registries)
+        if self.lead_control_plane:
+            containerd.share(config, self.app, containerd_relation)
 
     def _configure_cos_integration(self):
         """Retrieve the join token from secret databag and join the cluster."""
@@ -588,6 +609,7 @@ class K8sCharm(ops.CharmBase):
             self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
         self._join_cluster()
+        self._config_containerd_registries()
         self._configure_cos_integration()
         self._update_status()
         self._apply_node_labels()
