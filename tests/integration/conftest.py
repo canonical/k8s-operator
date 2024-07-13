@@ -184,7 +184,7 @@ class Bundle:
     def drop_constraints(self):
         """Remove constraints on applications. Useful for testing on lxd."""
         for app in self.applications.values():
-            app["constraints"] = None
+            app["constraints"] = ""
 
     def add_constraints(self, constraints: Dict[str, str]):
         """Add constraints to applications.
@@ -193,7 +193,10 @@ class Bundle:
             constraints:  Mapping of constraints to add to applications.
         """
         for app in self.applications.values():
-            val: str = app["constraints"]
+            if app.get("num_units", 0) < 1:
+                log.info("Skipping constraints for subordinate charm: %s", app["charm"])
+                continue
+            val: str = app.get("constraints", "")
             existing = dict(kv.split("=", 1) for kv in val.split())
             existing.update(constraints)
             app["constraints"] = " ".join(f"{k}={v}" for k, v in existing.items())
