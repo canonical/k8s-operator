@@ -32,15 +32,15 @@ jobs:
           fi
   publish-to-edge:
     needs: [configure-channel]
-    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
     strategy:
       matrix:
-        charm: [
-          {path: "./charms/worker/", tagPrefix: "k8s-worker"}, 
-          {path: "./charms/worker/k8s/", tagPrefix: "k8s"}
-        ]
+        arch:
+          - amd64
+#         - arm64
     secrets: inherit
     with:
+      identifier: ${{matrix.arch}}
       channel: ${{needs.configure-channel.outputs.track}}/${{needs.configure-channel.outputs.risk}}
-      working-directory: ${{ matrix.charm.path }}
-      tag-prefix: ${{ matrix.charm.tagPrefix }}
+      working-directory:  ./charms/
+      tag-prefix: ${{matrix.arch}}

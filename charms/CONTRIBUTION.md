@@ -7,7 +7,6 @@ The `k8s` and `k8s-worker` charms are noticeably tucked into one-another.
 ```
 └── worker
     ├── charmcraft.yaml
-    ├── requirements.txt
     └── k8s
         ├── charmcraft.yaml
         ├── lib
@@ -25,15 +24,14 @@ The unique parts of the charm are what are in each charm's top-level directory:
 
 ```
 charmcraft.yaml
-config.yaml
-actions.yaml
-metadata.yaml
-requirements.yaml
+.jujuignore
+icon.svg
+README.md
 ```
 
 In order to exclude the `k8s` exclusive components from the `k8s-worker` charm, charmcraft will read the `worker/.jujuignore` file to determine what to leave out of the final charm.
 
-### What's not
+### What's shared
 
 The shared portions of each charm are within `worker/k8s` (except for the above mentioned exclusions).  This includes shared libraries from `worker/k8s/lib`, shared source from `worker/k8s/src`, shared python dependencies from `worker/k8s/requirements.txt`
 
