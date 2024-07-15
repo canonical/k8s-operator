@@ -216,16 +216,20 @@ async def cloud_proxied(ops_test: OpsTest):
 
 
 async def cloud_profile(ops_test: OpsTest):
-    """Apply lxd-profile to the model if the juju cloud is lxd.
+    """Apply Cloud Specific Settings to the model
 
     Args:
         ops_test (OpsTest): ops_test plugin
     """
-    if await cloud_type(ops_test) == "lxd" and ops_test.model:
+    _type = await cloud_type(ops_test)
+    if _type == "lxd" and ops_test.model:
+        # lxd-profile to the model if the juju cloud is lxd.
         lxd = LXDSubstrate("", "")
         profile_name = f"juju-{ops_test.model.name}"
         lxd.remove_profile(profile_name)
         lxd.apply_profile("k8s.profile", profile_name)
+    elif _type == "ec2" and ops_test.model:
+        await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
 @contextlib.asynccontextmanager
