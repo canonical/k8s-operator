@@ -229,10 +229,7 @@ async def cloud_profile(ops_test: OpsTest):
         lxd.remove_profile(profile_name)
         lxd.apply_profile("k8s.profile", profile_name)
     elif _type == "ec2" and ops_test.model:
-        await ops_test.model.set_config({
-            "container-networking-method": "local",
-            "fan-config": ""
-        })
+        await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
 @contextlib.asynccontextmanager
