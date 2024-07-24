@@ -113,7 +113,7 @@ Sometimes you will want to debug certain situations, and having the models torn 
 
 Running the integration tests with extra arguments can be accomplished with
 ```shell
-tox run -e integration-tests -- --positional --arguments
+tox run -e integration -- --positional --arguments
 ```
 
 #### COS Integration
@@ -122,7 +122,7 @@ The COS integration tests are optional as these are slow/heavy tests. Currently,
 
 #### Useful arguments
 `--keep-models`: Doesn't delete the model once the integration tests are finished
-`--model`: Rerun the test with a given model name -- if it already exist, the integration tests will use it
+`--model`: Rerun the test with a given model name -- if it already exist, the integration tests will use it. The model is not destroyed after the tests are finished.
 `-k regex-pattern`: run a specific set of matching tests names ignore other passing tests
 Remember that cloud costs could be incurred for every machine -- so be sure to clean up your models on clouds if you instruct pytest-operator to not clean up the models. 
 
