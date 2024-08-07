@@ -43,6 +43,7 @@ header:
       - 'CODEOWNERS'
       - 'icon.svg'
       - 'LICENSE'
+      - '.charmcraft-channel'
       - 'pyproject.toml'
       - 'trivy.yaml'
       - 'zap_rules.tsv'
