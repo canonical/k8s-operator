@@ -44,7 +44,7 @@ jobs:
     secrets: inherit
     with:
       provider: lxd
-      juju-channel: 3.3/stable
+      juju-channel: 3/stable
       extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
       load-test-enabled: false
       zap-enabled: false
