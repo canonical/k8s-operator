@@ -30,6 +30,10 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: echo "CHARM_NAME=$([ -f charmcraft.yaml ] && yq '.name' charmcraft.yaml || echo UNKNOWN)" >> $GITHUB_ENV
 
+      - name: Read charmcraft version file
+        id: charmcraft
+        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
+
       - name: Cache charm output
         id: cache-charm
         uses: actions/cache@v4
@@ -47,7 +51,7 @@ jobs:
         if: ${{ env.CHARM_NAME != 'UNKNOWN' && !cancelled() && steps.cache-charm.outputs.cache-hit != 'true' }}
         working-directory: ${{ inputs.working-directory }}/${{ matrix.path }}
         run: |
-          sudo snap install charmcraft --classic --channel latest/stable
+          sudo snap install charmcraft --classic --channel ${{ steps.charmcraft.outputs.channel }}
           charmcraft pack -v
           mkdir -p packed
           mv *.charm packed/
