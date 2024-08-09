@@ -7,7 +7,7 @@
 import socket
 import unittest
 from socket import AF_UNIX, SOCK_STREAM
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from lib.charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
@@ -142,6 +142,53 @@ class TestK8sdAPIManager(unittest.TestCase):
         """Setup environment."""
         self.mock_factory = MagicMock()
         self.api_manager = K8sdAPIManager(factory=self.mock_factory)
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_check_k8sd_in_error(self, mock_send_request):
+        """Test bootstrap."""
+        not_found = InvalidResponseError(code=404, msg="Not Found")
+        in_error = InvalidResponseError(code=504, msg="In Error")
+        mock_send_request.side_effect = [not_found, in_error]
+
+        with self.assertRaises(InvalidResponseError) as ie:
+            self.api_manager.check_k8sd_ready()
+        mock_send_request.assert_has_calls(
+            [
+                call("/core/1.0/ready", "GET", EmptyResponse),
+                call("/cluster/1.0/ready", "GET", EmptyResponse),
+            ]
+        )
+        assert ie.exception.code == 504
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_check_k8sd_not_found(self, mock_send_request):
+        """Test bootstrap."""
+        not_found = InvalidResponseError(code=404, msg="Not Found")
+        mock_send_request.side_effect = [not_found, not_found]
+
+        with self.assertRaises(K8sdConnectionError):
+            self.api_manager.check_k8sd_ready()
+        mock_send_request.assert_has_calls(
+            [
+                call("/core/1.0/ready", "GET", EmptyResponse),
+                call("/cluster/1.0/ready", "GET", EmptyResponse),
+            ]
+        )
+
+    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_check_k8sd_ready(self, mock_send_request):
+        """Test bootstrap."""
+        not_found = InvalidResponseError(code=404, msg="Not Found")
+        success = EmptyResponse(status_code=200, type="test", error_code=0)
+        mock_send_request.side_effect = [not_found, success]
+
+        self.api_manager.check_k8sd_ready()
+        mock_send_request.assert_has_calls(
+            [
+                call("/core/1.0/ready", "GET", EmptyResponse),
+                call("/cluster/1.0/ready", "GET", EmptyResponse),
+            ]
+        )
 
     @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_bootstrap_k8s_snap(self, mock_send_request):

@@ -776,9 +776,30 @@ class K8sdAPIManager:
         return status.metadata and status.metadata.status.ready
 
     def check_k8sd_ready(self):
-        """Check if k8sd is ready."""
-        endpoint = "/cluster/1.0/ready"
-        self._send_request(endpoint, "GET", EmptyResponse)
+        """Check if k8sd is ready using various microcluster endpoints.
+
+        Raises:
+            K8sdConnectionError: If the response is Not Found on all endpoints.
+        """
+        ready_endpoints = ["/core/1.0/ready", "/cluster/1.0/ready"]
+        for endpoint in ready_endpoints:
+            try:
+                self._send_request(endpoint, "GET", EmptyResponse)
+                break
+            except InvalidResponseError as ex:
+                if ex.code == 404:
+                    logger.warning(
+                        "Encountered 404 while checking if micro-cluster is ready @ %s: %s",
+                        endpoint,
+                        ex,
+                    )
+                    # Try the next endpoint if the current one is not found
+                    continue
+                raise
+        else:
+            raise K8sdConnectionError(
+                "Exhausted all endpoints while checking if micro-cluster is ready"
+            )
 
     def bootstrap_k8s_snap(self, request: CreateClusterRequest) -> None:
         """Bootstrap the k8s cluster.
