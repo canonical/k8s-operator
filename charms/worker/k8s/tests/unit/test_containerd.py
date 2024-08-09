@@ -62,13 +62,14 @@ def test_registry_parse_all_fields():
     "registry_errors",
     [
         ("{", "not valid JSON"),
-        ("{}", "value is not a valid list"),
-        ("[1]", "value is not a valid dict"),
-        ("[{}]", "url\n  field required"),
-        ('[{"url": 1}]', "invalid or missing URL scheme"),
+        ("{}", "Input should be a valid list"),
+        ("[1]", "Input should be a valid dictionary"),
+        ("[{}]", "url\n  Field required"),
+        ('[{"url": 1}]', "URL input should be a string"),
+        ('[{"url": "not-a-url"}]', "Input should be a valid URL"),
         (
             '[{"url": "http://ghcr.io", "why-am-i-here": "abc"}]',
-            "extra fields not permitted",
+            "Extra inputs are not permitted",
         ),
         (
             '[{"url": "http://ghcr.io"}, {"url": "http://ghcr.io"}]',
@@ -80,6 +81,7 @@ def test_registry_parse_all_fields():
         "Not a List",
         "List Item not an object",
         "Missing required field",
+        "URL not a string",
         "Invalid URL",
         "Restricted field",
         "Duplicate host",
@@ -119,9 +121,9 @@ def test_registry_methods():
     assert registry.auth_config_header == {"Authorization": "Bearer token"}
 
     assert registry.hosts_toml == {
-        "server": "http://ghcr.io",
+        "server": "http://ghcr.io/",
         "host": {
-            "http://ghcr.io": {
+            "http://ghcr.io/": {
                 "capabilities": ["pull", "resolve"],
                 "ca": str(registry.ca_file_path),
                 "client": [[str(registry.cert_file_path), str(registry.key_file_path)]],
@@ -133,9 +135,9 @@ def test_registry_methods():
     }
     registry.key_file = None
     assert registry.hosts_toml == {
-        "server": "http://ghcr.io",
+        "server": "http://ghcr.io/",
         "host": {
-            "http://ghcr.io": {
+            "http://ghcr.io/": {
                 "capabilities": ["pull", "resolve"],
                 "ca": str(registry.ca_file_path),
                 "client": str(registry.cert_file_path),
