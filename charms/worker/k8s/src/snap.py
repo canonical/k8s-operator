@@ -68,15 +68,21 @@ class SnapStoreArgument(BaseModel):
 
     @field_validator("revision", mode="before")
     @classmethod
-    def _validate_revision(cls, value: Union[str, int, None]) -> str:
+    def _validate_revision(cls, value: Union[str, int, None]) -> Optional[str]:
         """Validate the revision is a valid snap revision.
 
         Arguments:
             value: (str): The revision to validate
+
+        Returns:
+            str: The validated revision
+
+        Raises:
+            ValueError: If the revision isn't an integer
         """
         if isinstance(value, int):
             return str(value)
-        if not re.match(r"^\d+$", value):
+        if value and not re.match(r"^\d+$", value):
             raise ValueError(f"Revision is not an integer: {value}")
         return value
 
@@ -112,7 +118,7 @@ def _parse_management_arguments() -> List[SnapArgument]:
         raise snap_lib.SnapError(f"Failed to find revision for arch={arch}")
 
     try:
-        adapter = TypeAdapter(SnapArgument)
+        adapter: TypeAdapter[SnapArgument] = TypeAdapter(SnapArgument)
         args: List[SnapArgument] = [adapter.validate_python(arg) for arg in arch_spec]  # type: ignore[arg-type]
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)

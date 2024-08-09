@@ -33,10 +33,10 @@ import socket
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPException
 from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
-from typing_extensions import Self
 
 import yaml
 from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, field_validator, model_validator
+from typing_extensions import Self
 
 # The unique Charmhub library identifier, never change it
 LIBID = "6a5f235306864667a50437c08ba7e83f"
@@ -138,7 +138,9 @@ class BaseRequestModel(BaseModel):
         """
         if self.error_code != 0:
             error_message = self.error or "Unknown error"
-            raise ValueError(f"Error code must be 0, received {self.error_code}. Error message: {error_message}")
+            raise ValueError(
+                f"Error code must be 0, received {self.error_code}. Error message: {error_message}"
+            )
         return self
 
 
@@ -368,8 +370,6 @@ class BootstrapConfig(BaseModel):
     datastore_client_cert: Optional[str] = Field(None, alias="datastore-client-crt")
     datastore_client_key: Optional[str] = Field(None, alias="datastore-client-key")
     extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
-
-
 
 
 class CreateClusterRequest(BaseModel):
