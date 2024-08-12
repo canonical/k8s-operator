@@ -168,6 +168,7 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         with self.assertRaises(K8sdConnectionError):
             self.api_manager.check_k8sd_ready()
+
         mock_send_request.assert_has_calls(
             [
                 call("/core/1.0/ready", "GET", EmptyResponse),
@@ -183,6 +184,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         mock_send_request.side_effect = [not_found, success]
 
         self.api_manager.check_k8sd_ready()
+
         mock_send_request.assert_has_calls(
             [
                 call("/core/1.0/ready", "GET", EmptyResponse),

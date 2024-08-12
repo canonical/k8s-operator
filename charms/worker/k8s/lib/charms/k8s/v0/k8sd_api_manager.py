@@ -782,15 +782,17 @@ class K8sdAPIManager:
             K8sdConnectionError: If the response is Not Found on all endpoints.
         """
         ready_endpoints = ["/core/1.0/ready", "/cluster/1.0/ready"]
-        for endpoint in ready_endpoints:
+        for i, endpoint in enumerate(ready_endpoints):
             try:
                 self._send_request(endpoint, "GET", EmptyResponse)
                 break
             except InvalidResponseError as ex:
                 if ex.code == 404:
                     logger.warning(
-                        "Encountered 404 while checking if micro-cluster is ready @ %s: %s",
+                        "micro-cluster unavailable @ %s (%s of %s): %s",
                         endpoint,
+                        i + 1,
+                        len(ready_endpoints),
                         ex,
                     )
                     # Try the next endpoint if the current one is not found
