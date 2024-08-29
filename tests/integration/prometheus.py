@@ -7,7 +7,7 @@ import json
 import logging
 import urllib.parse
 import urllib.request
-from typing import Optional
+from typing import List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -68,11 +68,14 @@ class Prometheus:
 
         return data
 
-    async def check_metrics(self, query: str):
+    async def get_metrics(self, query: str) -> List:
         """Query Prometheus for metrics.
 
         Args:
             query (str): The Prometheus query to execute.
+
+        Returns:
+            List: A list of results from the query.
         """
         api_path = "api/v1/query"
         uri = f"{self.base_uri}/{api_path}"
@@ -85,4 +88,4 @@ class Prometheus:
         assert response.code == 200, f"Failed to query '{query}': {data}"
         result = json.loads(data)
         assert result.get("status") == "success", f"Query failed: {result}"
-        assert result.get("data", {}).get("result"), "Data not yet available"
+        return result.get("data", {}).get("result", [])
