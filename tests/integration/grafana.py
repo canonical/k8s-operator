@@ -17,7 +17,7 @@ class Grafana:
     def __init__(
         self,
         model_name: str,
-        host: Optional[str] = "localhost",
+        base: Optional[str] = "http://localhost",
         username: Optional[str] = "admin",
         password: Optional[str] = "",
     ):
@@ -25,11 +25,11 @@ class Grafana:
 
         Args:
             model_name (str): The name of the model where Grafana is deployed.
-            host (Optional[str]): Host address of Grafana application. Defaults to 'localhost'.
+            base (Optional[str]): Base url of Grafana application. Defaults to 'http://localhost'.
             username (Optional[str]): Username for authentication. Defaults to 'admin'.
             password (Optional [str]): Password for authentication. Defaults to ''.
         """
-        self.base_uri = f"http://{host}/{model_name}-grafana"
+        self.base_uri = f"{base}/{model_name}-grafana"
         self.username = username
         self.password = password
 

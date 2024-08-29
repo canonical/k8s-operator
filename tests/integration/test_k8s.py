@@ -137,13 +137,13 @@ async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):
 @pytest.mark.cos
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
 async def test_grafana(
-    traefik_address: str,
+    traefik_url: str,
     grafana_password: str,
     expected_dashboard_titles: set,
     cos_model: model.Model,
 ):
     """Test integration with Grafana."""
-    grafana = Grafana(model_name=cos_model.name, host=traefik_address, password=grafana_password)
+    grafana = Grafana(model_name=cos_model.name, base=traefik_url, password=grafana_password)
     await asyncio.wait_for(grafana.is_ready(), timeout=10 * 60)
     dashboards = await grafana.dashboards_all()
     actual_dashboard_titles = set()
@@ -157,12 +157,11 @@ async def test_grafana(
 @pytest.mark.cos
 @pytest.mark.usefixtures("related_prometheus")
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_address: str, cos_model: model.Model):
+async def test_prometheus(traefik_url: str, cos_model: model.Model):
     """Test integration with Prometheus."""
-    prometheus = Prometheus(model_name=cos_model.name, host=traefik_address)
-    while not await prometheus.is_ready():
-        log.info("Waiting for Prometheus to be ready.")
-        await asyncio.sleep(5)
+    prometheus = Prometheus(model_name=cos_model.name, base=traefik_url)
+    await asyncio.wait_for(prometheus.is_ready(), timeout=10 * 60)
+
     queries = [
         'up{job="kubelet", metrics_path="/metrics"} > 0',
         'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
