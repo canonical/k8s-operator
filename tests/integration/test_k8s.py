@@ -172,6 +172,6 @@ async def test_prometheus(traefik_url: str, cos_model: model.Model):
         'up{job="kube-proxy"} > 0',
         'up{job="kube-state-metrics"} > 0',
     ]
-    results = asyncio.gather(*[prometheus.get_metrics(query) for query in queries])
+    results = await asyncio.gather(*[prometheus.get_metrics(query) for query in queries])
     failed = [query for query, result in zip(queries, results) if not result]
     assert not failed, f"Failed queries: {failed}"
