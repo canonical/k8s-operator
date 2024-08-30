@@ -125,7 +125,7 @@ class BaseRequestModel(BaseModel):
         return v
 
     @validator("error_code", always=True)
-    def check_error_code(cls, v, values):
+    def check_error_code(cls, v, values) -> int:
         """Validate the error_code field.
 
         Args:

@@ -19,7 +19,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
 
 import ops
 import pydantic
@@ -114,7 +113,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             kwargs: construction keyword arguments
         """
         super(Registry, self).__init__(*args, **kwargs)
-        if not self.host and (host := urlparse(self.url).netloc):
+        if not self.host and (host := self.url.host):
             self.host = host
 
     @pydantic.validator("ca_file", "cert_file", "key_file")

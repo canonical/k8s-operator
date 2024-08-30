@@ -162,6 +162,7 @@ class LXDSubstrate(COSSubstrate):
             self.client.networks.create(**network_config)
             log.info("Network created successfully.")
             reserved_start = dhcp_range_stop + 1
+            log.info("Reserved IP range: %s-%s", reserved_start, reserved_stop)
             return reserved_start, reserved_stop
         except LXDExceptions:
             log.exception("Failed to create network")
