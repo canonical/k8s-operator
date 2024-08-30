@@ -12,6 +12,7 @@ from itertools import chain
 from pathlib import Path
 from typing import List, Mapping, Optional
 
+import juju.utils
 import pytest
 import pytest_asyncio
 import yaml
@@ -22,7 +23,7 @@ from kubernetes.client import Configuration
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import get_address, get_unit_cidrs, is_deployed
+from .helpers import get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
 
@@ -314,7 +315,16 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
 async def grafana_agent(kubernetes_cluster: Model):
     """Deploy Grafana Agent."""
-    await kubernetes_cluster.deploy("grafana-agent", channel="stable")
+    primary = kubernetes_cluster.applications["k8s"]
+    data = primary.units[0].machine.safe_data
+    machine_arch = data["hardware-characteristics"]["arch"]
+    machine_series = juju.utils.get_version_series(data["base"].split("@")[1])
+
+    await kubernetes_cluster.deploy(
+        f"ch:{machine_arch}/{machine_series}/grafana-agent",
+        channel="stable",
+        series=machine_series,
+    )
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
     await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
@@ -322,6 +332,9 @@ async def grafana_agent(kubernetes_cluster: Model):
     yield
 
     await kubernetes_cluster.remove_application("grafana-agent")
+    await kubernetes_cluster.applications["k8s"].destroy_relation(
+        "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
+    )
 
 
 @pytest_asyncio.fixture(scope="module")
@@ -388,9 +401,13 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def traefik_address(cos_model: Model, _cos_lite_installed):
-    """Fixture to get Traefik address."""
-    yield await get_address(model=cos_model, app_name="traefik")
+async def traefik_url(cos_model: Model, _cos_lite_installed):
+    """Fixture to fetch Traefik url."""
+    action = await cos_model.applications["traefik"].units[0].run_action("show-proxied-endpoints")
+    action = await action.wait()
+    p_e = json.loads(action.results["proxied-endpoints"])
+
+    yield p_e["traefik"]["url"]
 
 
 @pytest_asyncio.fixture(scope="module")
