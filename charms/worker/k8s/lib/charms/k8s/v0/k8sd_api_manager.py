@@ -35,8 +35,7 @@ from http.client import HTTPConnection, HTTPException
 from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, field_validator, model_validator
-from typing_extensions import Self
+from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
 
 # The unique Charmhub library identifier, never change it
 LIBID = "6a5f235306864667a50437c08ba7e83f"
@@ -108,8 +107,7 @@ class BaseRequestModel(BaseModel):
     error_code: int
     error: str = Field(default="")
 
-    @field_validator("status_code")
-    @classmethod
+    @validator("status_code", always=True)
     def check_status_code(cls, v):
         """Validate the status_code field.
 
@@ -126,22 +124,24 @@ class BaseRequestModel(BaseModel):
             raise ValueError(f"Status code must be 200. Received {v}")
         return v
 
-    @model_validator(mode="after")
-    def check_error_code(self) -> Self:
+    @validator("error_code", always=True)
+    def check_error_code(cls, v, values) -> int:
         """Validate the error_code field.
 
+        Args:
+            v (int): The value of the error_code field to validate.
+            values (dict): The values dictionary.
+
         Returns:
-            self: The validated error code if it is 0.
+            int: The validated error code if it is 0.
 
         Raises:
             ValueError: If the error_code is not 0.
         """
-        if self.error_code != 0:
-            error_message = self.error or "Unknown error"
-            raise ValueError(
-                f"Error code must be 0, received {self.error_code}. Error message: {error_message}"
-            )
-        return self
+        if v != 0:
+            error_message = values.get("error", "Unknown error")
+            raise ValueError(f"Error code must be 0, received {v}. Error message: {error_message}")
+        return v
 
 
 class EmptyResponse(BaseRequestModel):
@@ -320,7 +320,7 @@ class UserFacingClusterConfig(BaseModel):
     cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
 
 
-class UserFacingDatastoreConfig(BaseModel, populate_by_name=True):  # type: ignore[call-arg]
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):  # type: ignore[call-arg]
     """Aggregated configuration model for the user-facing datastore aspects of a cluster.
 
     Attributes:
@@ -398,7 +398,7 @@ class UpdateClusterConfigRequest(BaseModel):
     datastore: Optional[UserFacingDatastoreConfig] = Field(None)
 
 
-class NodeJoinConfig(BaseModel, populate_by_name=True):
+class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
     """Request model for the config on a node joining the cluster.
 
     Attributes:
@@ -410,7 +410,7 @@ class NodeJoinConfig(BaseModel, populate_by_name=True):
     kubelet_key: Optional[str] = Field(None, alias="kubelet-key")
 
 
-class ControlPlaneNodeJoinConfig(NodeJoinConfig, populate_by_name=True):
+class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
     """Request model for the config on a control-plane node joining the cluster.
 
     Attributes:
@@ -429,7 +429,7 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, populate_by_name=True):
     front_proxy_client_key: Optional[str] = Field(None, alias="front-proxy-client-key")
 
 
-class JoinClusterRequest(BaseModel, populate_by_name=True):
+class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
     """Request model for a node joining the cluster.
 
     Attributes:
@@ -444,7 +444,7 @@ class JoinClusterRequest(BaseModel, populate_by_name=True):
     token: SecretStr
     config: Optional[NodeJoinConfig] = Field(None)
 
-    def model_dump(self, **kwds) -> Dict[str, Any]:
+    def dict(self, **kwds) -> Dict[Any, Any]:
         """Render object into a dict.
 
         Arguments:
@@ -453,10 +453,10 @@ class JoinClusterRequest(BaseModel, populate_by_name=True):
         Returns:
             dict mapping of the object
         """
-        rendered = super().model_dump(**kwds)
+        rendered = super().dict(**kwds)
         rendered["token"] = self.token.get_secret_value()
         if self.config:
-            rendered["config"] = yaml.safe_dump(self.config.model_dump(**kwds))
+            rendered["config"] = yaml.safe_dump(self.config.dict(**kwds))
         return rendered
 
 
@@ -682,7 +682,7 @@ class K8sdAPIManager:
                         f"\treason={response.reason}\n"
                         f"\tbody={data}",
                     )
-            return response_cls(**json.loads(data))
+            return response_cls.parse_raw(data)
 
         except ValueError as e:
             raise InvalidResponseError(
@@ -719,7 +719,7 @@ class K8sdAPIManager:
             config: JoinClusterRequest: config to join the cluster
         """
         endpoint = "/1.0/k8sd/cluster/join"
-        request = config.model_dump(exclude_none=True, by_alias=True)
+        request = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "POST", EmptyResponse, request)
 
     def remove_node(self, name: str, force: bool = True):
@@ -740,7 +740,7 @@ class K8sdAPIManager:
             config (UpdateClusterConfigRequest): The cluster configuration.
         """
         endpoint = "/1.0/k8sd/cluster/config"
-        body = config.model_dump(exclude_none=True, by_alias=True)
+        body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:
@@ -810,7 +810,7 @@ class K8sdAPIManager:
             request (CreateClusterRequest): The request model to bootstrap the cluster.
         """
         endpoint = "/1.0/k8sd/cluster"
-        body = request.model_dump(exclude_none=True, by_alias=True)
+        body = request.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "POST", EmptyResponse, body)
 
     def request_auth_token(self, username: str, groups: List[str]) -> SecretStr:

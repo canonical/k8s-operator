@@ -16,7 +16,7 @@ from typing import List, Literal, Optional, Union
 
 import charms.operator_libs_linux.v2.snap as snap_lib
 import yaml
-from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
 
 # Log messages can be retrieved using juju debug-log
@@ -66,8 +66,7 @@ class SnapStoreArgument(BaseModel):
     cohort: Optional[str] = None
     revision: Optional[str] = None
 
-    @field_validator("revision", mode="before")
-    @classmethod
+    @validator("revision", pre=True)
     def _validate_revision(cls, value: Union[str, int, None]) -> Optional[str]:
         """Validate the revision is a valid snap revision.
 
@@ -118,8 +117,7 @@ def _parse_management_arguments() -> List[SnapArgument]:
         raise snap_lib.SnapError(f"Failed to find revision for arch={arch}")
 
     try:
-        adapter: TypeAdapter[SnapArgument] = TypeAdapter(SnapArgument)
-        args: List[SnapArgument] = [adapter.validate_python(arg) for arg in arch_spec]  # type: ignore[arg-type]
+        args: List[SnapArgument] = [parse_obj_as(SnapArgument, arg) for arg in arch_spec]  # type: ignore[arg-type]
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)
         raise snap_lib.SnapError("Failed to validate snap args")
@@ -133,15 +131,15 @@ def management():
     for args in _parse_management_arguments():
         which = cache[args.name]
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
-            snap_lib.install_local(**args.model_dump(exclude_none=True))
+            snap_lib.install_local(**args.dict(exclude_none=True))
         elif isinstance(args, SnapStoreArgument) and args.revision:
             if which.revision != args.revision:
                 log.info("Ensuring %s snap revision=%s", args.name, args.revision)
-                which.ensure(**args.model_dump(exclude_none=True))
+                which.ensure(**args.dict(exclude_none=True))
                 which.hold()
         elif isinstance(args, SnapStoreArgument):
             log.info("Ensuring %s snap channel=%s", args.name, args.channel)
-            which.ensure(**args.model_dump(exclude_none=True))
+            which.ensure(**args.dict(exclude_none=True))
 
 
 def version(snap: str) -> Optional[str]:

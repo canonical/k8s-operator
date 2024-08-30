@@ -161,6 +161,7 @@ async def test_prometheus(traefik_url: str, cos_model: model.Model):
     """Test integration with Prometheus."""
     prometheus = Prometheus(model_name=cos_model.name, base=traefik_url)
     await asyncio.wait_for(prometheus.is_ready(), timeout=10 * 60)
+
     queries = [
         'up{job="kubelet", metrics_path="/metrics"} > 0',
         'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',

@@ -146,10 +146,7 @@ actions:
 parts:
   charm:
     plugin: charm
-    build-packages:
-    - git
-    - rustc
-    - cargo
+    build-packages: [git]
 
 peers:
   cluster:

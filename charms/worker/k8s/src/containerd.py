@@ -63,7 +63,7 @@ def _ensure_file(
     return changed
 
 
-class Registry(pydantic.BaseModel, extra="forbid"):
+class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
     """Represents a containerd registry.
 
     Attrs:
@@ -116,7 +116,7 @@ class Registry(pydantic.BaseModel, extra="forbid"):
         if not self.host and (host := self.url.host):
             self.host = host
 
-    @pydantic.field_validator("ca_file", "cert_file", "key_file")
+    @pydantic.validator("ca_file", "cert_file", "key_file")
     def parse_base64(cls, v: str) -> str:
         """Validate Base64 Content.
 
@@ -208,8 +208,8 @@ class Registry(pydantic.BaseModel, extra="forbid"):
             host_config["header"] = config
 
         return {
-            "server": self.url.unicode_string(),
-            "host": {self.url.unicode_string(): host_config},
+            "server": self.url,
+            "host": {self.url: host_config},
         }
 
     def ensure_certificates(self):
@@ -242,7 +242,7 @@ class Registry(pydantic.BaseModel, extra="forbid"):
         _ensure_file(hosts_toml_path, tomli_w.dumps(self.hosts_toml), 0o600, 0, 0)
 
 
-class RegistryConfigs(pydantic.BaseModel, extra="forbid"):
+class RegistryConfigs(pydantic.BaseModel, extra=pydantic.Extra.forbid):
     """Represents a set of containerd registries.
 
     Attrs:
