@@ -16,7 +16,7 @@ from typing import List, Literal, Optional, Union
 
 import charms.operator_libs_linux.v2.snap as snap_lib
 import yaml
-from pydantic import BaseModel, Field, ValidationError, parse_obj_as
+from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
 
 # Log messages can be retrieved using juju debug-log
@@ -65,6 +65,25 @@ class SnapStoreArgument(BaseModel):
     channel: Optional[str] = None
     cohort: Optional[str] = None
     revision: Optional[str] = None
+
+    @validator("revision", pre=True)
+    def _validate_revision(cls, value: Union[str, int, None]) -> Optional[str]:
+        """Validate the revision is a valid snap revision.
+
+        Arguments:
+            value: (str): The revision to validate
+
+        Returns:
+            str: The validated revision
+
+        Raises:
+            ValueError: If the revision isn't an integer
+        """
+        if isinstance(value, int):
+            return str(value)
+        if value and not re.match(r"^\d+$", value):
+            raise ValueError(f"Revision is not an integer: {value}")
+        return value
 
 
 SnapArgument = Annotated[

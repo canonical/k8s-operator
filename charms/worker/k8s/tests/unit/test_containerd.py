@@ -66,6 +66,7 @@ def test_registry_parse_all_fields():
         ("[1]", "value is not a valid dict"),
         ("[{}]", "url\n  field required"),
         ('[{"url": 1}]', "invalid or missing URL scheme"),
+        ('[{"url": "not-a-url"}]', "invalid or missing URL scheme"),
         (
             '[{"url": "http://ghcr.io", "why-am-i-here": "abc"}]',
             "extra fields not permitted",
@@ -80,6 +81,7 @@ def test_registry_parse_all_fields():
         "Not a List",
         "List Item not an object",
         "Missing required field",
+        "URL not a string",
         "Invalid URL",
         "Restricted field",
         "Duplicate host",
@@ -97,7 +99,7 @@ def test_registry_methods():
     """Test registry methods."""
     registry = containerd.Registry(
         host="ghcr-mirror.io",
-        url="http://ghcr.io",
+        url="http://ghcr.io/",
         ca_file="Y2FfZmlsZQ==",
         cert_file="Y2VydF9maWxl",
         key_file="a2V5X2ZpbGU=",
@@ -119,9 +121,9 @@ def test_registry_methods():
     assert registry.auth_config_header == {"Authorization": "Bearer token"}
 
     assert registry.hosts_toml == {
-        "server": "http://ghcr.io",
+        "server": "http://ghcr.io/",
         "host": {
-            "http://ghcr.io": {
+            "http://ghcr.io/": {
                 "capabilities": ["pull", "resolve"],
                 "ca": str(registry.ca_file_path),
                 "client": [[str(registry.cert_file_path), str(registry.key_file_path)]],
@@ -133,9 +135,9 @@ def test_registry_methods():
     }
     registry.key_file = None
     assert registry.hosts_toml == {
-        "server": "http://ghcr.io",
+        "server": "http://ghcr.io/",
         "host": {
-            "http://ghcr.io": {
+            "http://ghcr.io/": {
                 "capabilities": ["pull", "resolve"],
                 "ca": str(registry.ca_file_path),
                 "client": str(registry.cert_file_path),
