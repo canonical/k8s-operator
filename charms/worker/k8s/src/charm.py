@@ -448,10 +448,18 @@ class K8sCharm(ops.CharmBase):
 
         log.info("Prepare cos tokens")
         if rel := self.model.get_relation("cos-tokens"):
-            self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
+            self.distributor.allocate_tokens(
+                relation=rel,
+                token_strategy=TokenStrategy.COS,
+                token_type=ClusterTokenType.CONTROL_PLANE,
+            )
 
         if rel := self.model.get_relation("cos-worker-tokens"):
-            self.distributor.allocate_tokens(relation=rel, token_strategy=TokenStrategy.COS)
+            self.distributor.allocate_tokens(
+                relation=rel,
+                token_strategy=TokenStrategy.COS,
+                token_type=ClusterTokenType.WORKER,
+            )
 
     @on_error(
         WaitingStatus("Waiting to enable features"),
