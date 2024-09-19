@@ -104,6 +104,38 @@ class NodeRemovedError(Exception):
     """Raised to prevent reconciliation of dying node."""
 
 
+class DynamicActiveStatus(status.ActiveStatus):
+    """An ActiveStatus class that can be updated.
+
+    Attributes:
+        message (str): explanation of the unit status
+        prefix  (str): Optional prefix to the unit status
+        postfix (str): Optional postfix to the unit status
+    """
+
+    def __init__(self):
+        """Initialise the DynamicActiveStatus."""
+        super().__init__("Ready")
+        self.prefix: str = ""
+        self.postfix: str = ""
+
+    @property
+    def message(self) -> str:
+        """Return the message for the status."""
+        pre = f"{self.prefix} :" if self.prefix else ""
+        post = f" ({self.postfix})" if self.postfix else ""
+        return f"{pre}{self._message}{post}"
+
+    @message.setter
+    def message(self, message: str):
+        """Set the message for the status.
+
+        Args:
+            message (str): explanation of the unit status
+        """
+        self._message = message
+
+
 class K8sCharm(ops.CharmBase):
     """A charm for managing a K8s cluster via the k8s snap.
 
@@ -127,7 +159,8 @@ class K8sCharm(ops.CharmBase):
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.xcp = ExternalCloudProvider(self, xcp_relation)
         self.cos = COSIntegration(self)
-        self.reconciler = Reconciler(self, self._reconcile)
+        self.active_status = DynamicActiveStatus()
+        self.reconciler = Reconciler(self, self._reconcile, exit_status=self.active_status)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -260,7 +293,7 @@ class K8sCharm(ops.CharmBase):
     def _install_snaps(self):
         """Install snap packages."""
         status.add(ops.MaintenanceStatus("Ensuring snap installation"))
-        snap_management()
+        snap_management(self)
 
     @on_error(WaitingStatus("Waiting to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -711,8 +744,11 @@ class K8sCharm(ops.CharmBase):
 
     def _update_status(self):
         """Check k8s snap status."""
-        if version := snap_version("k8s"):
+        version, overridden = snap_version("k8s")
+        if version:
             self.unit.set_workload_version(version)
+
+        self.active_status.postfix = "Snap Override Active" if overridden else ""
 
         if not self.get_cluster_name():
             status.add(ops.WaitingStatus("Node not Clustered"))
@@ -826,7 +862,7 @@ class K8sCharm(ops.CharmBase):
             return
 
         try:
-            with status.context(self.unit):
+            with status.context(self.unit, exit_status=self.active_status):
                 self._update_status()
         except status.ReconcilerError:
             log.exception("Can't update_status")
