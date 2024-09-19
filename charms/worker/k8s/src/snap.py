@@ -10,11 +10,14 @@
 
 import logging
 import re
+import shlex
+import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 import charms.operator_libs_linux.v2.snap as snap_lib
+import ops
 import yaml
 from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
@@ -31,7 +34,7 @@ class SnapFileArgument(BaseModel):
         name (str): The name of the snap after installed
         filename (Path): Path to the snap to locally install
         classic (bool): If it should be installed as a classic snap
-        dangerous (bool): If it should be installed as a dangerouse snap
+        dangerous (bool): If it should be installed as a dangerous snap
         devmode (bool): If it should be installed as with dev mode enabled
     """
 
@@ -91,8 +94,101 @@ SnapArgument = Annotated[
 ]
 
 
-def _parse_management_arguments() -> List[SnapArgument]:
+def _local_arch() -> str:
+    """Retrieve the local architecture.
+
+    Returns:
+        str: The architecture of this machine
+    """
+    dpkg_arch = ["dpkg", "--print-architecture"]
+    return subprocess.check_output(dpkg_arch).decode("UTF-8").strip()
+
+
+def _default_snap_installation() -> Path:
+    """Return the default snap_installation manifest.
+
+    Returns:
+        path to the default snap_installation manifest
+    """
+    return Path("templates/snap_installation.yaml")
+
+
+def _overridden_snap_installation() -> Path:
+    """Return the overridden snap_installation manifest.
+
+    Returns:
+        path to the overridden snap_installation manifest
+    """
+    return Path("./snap-installation/resource/snap_installation.yaml")
+
+
+def _select_snap_installation(charm: ops.CharmBase) -> Path:
+    """Select the snap_installation manifest.
+
+    Arguments:
+        charm: The charm instance necessary to check the unit resources
+
+    Returns:
+        path: The path to the snap_installation manifest
+
+    Raises:
+        SnapError: when the management issue cannot be resolved
+    """
+    try:
+        resource_path = charm.model.resources.fetch("snap-installation")
+    except (ops.ModelError, NameError):
+        log.error("Something went wrong when claiming 'snap-installation' resource.")
+        return _default_snap_installation()
+
+    resource_size = resource_path.stat().st_size
+    log.info("Resource path size: %d bytes", resource_size)
+    unpack_path = _overridden_snap_installation().parent
+    shutil.rmtree(unpack_path, ignore_errors=True)
+    if resource_size == 0:
+        log.info("Resource size is zero bytes. Use the charm defined snap installation script")
+        return _default_snap_installation()
+
+    # Unpack the snap-installation resource
+    unpack_path.mkdir(parents=True, exist_ok=True)
+    command = f"tar -xzvf {resource_path} -C {unpack_path} --no-same-owner"
+    try:
+        subprocess.check_call(shlex.split(command))
+    except subprocess.CalledProcessError as e:
+        log.error("Failed to extract 'snap-installation:'")
+        raise snap_lib.SnapError("Invalid snap-installation resource") from e
+
+    # Find the snap_installation manifest
+    snap_installation = unpack_path / "snap_installation.yaml"
+    if snap_installation.exists():
+        log.info("Found snap_installation manifest")
+        return snap_installation
+
+    snap_path = list(unpack_path.glob("*.snap"))
+    if len(snap_path) == 1:
+        log.info("Found snap_installation snap: %s", snap_path[0])
+        arch = _local_arch()
+        manifest = {
+            arch: [
+                {
+                    "install-type": "file",
+                    "name": "k8s",
+                    "filename": str(snap_path[0]),
+                    "dangerous": True,
+                }
+            ]
+        }
+        yaml.safe_dump(manifest, snap_installation.open("w"))
+        return snap_installation
+
+    log.error("Failed to find a snap file in snap_installation resource")
+    raise snap_lib.SnapError("Failed to find snap_installation manifest")
+
+
+def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
     """Parse snap management arguments.
+
+    Arguments:
+        charm: The charm instance necessary to check the unit resources
 
     Raises:
         SnapError: when the management issue cannot be resolved
@@ -100,7 +196,7 @@ def _parse_management_arguments() -> List[SnapArgument]:
     Returns:
         Parsed arguments list for the specific host architecture
     """
-    revision = Path("templates/snap_installation.yaml")
+    revision = _select_snap_installation(charm)
     if not revision.exists():
         raise snap_lib.SnapError(f"Failed to find file={revision}")
     try:
@@ -108,8 +204,8 @@ def _parse_management_arguments() -> List[SnapArgument]:
     except yaml.YAMLError as e:
         log.error("Failed to load file=%s, %s", revision, e)
         raise snap_lib.SnapError(f"Failed to load file={revision}")
-    dpkg_arch = ["dpkg", "--print-architecture"]
-    arch = subprocess.check_output(dpkg_arch).decode("UTF-8").strip()
+
+    arch = _local_arch()
 
     if not (isinstance(body, dict) and (arch_spec := body.get(arch))):
         log.warning("Failed to find revision for arch=%s", arch)
@@ -126,10 +222,14 @@ def _parse_management_arguments() -> List[SnapArgument]:
     return args
 
 
-def management():
-    """Manage snap installations on this machine."""
+def management(charm: ops.CharmBase) -> None:
+    """Manage snap installations on this machine.
+
+    Arguments:
+        charm: The charm instance
+    """
     cache = snap_lib.SnapCache()
-    for args in _parse_management_arguments():
+    for args in _parse_management_arguments(charm):
         which = cache[args.name]
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
             snap_lib.install_local(**args.dict(exclude_none=True))
@@ -143,7 +243,7 @@ def management():
             which.ensure(**args.dict(exclude_none=True))
 
 
-def version(snap: str) -> Optional[str]:
+def version(snap: str) -> Tuple[Optional[str], bool]:
     """Retrieve the version of the installed snap package.
 
     Arguments:
@@ -153,15 +253,16 @@ def version(snap: str) -> Optional[str]:
         Optional[str]: The version of the installed snap package, or None if
         not available.
     """
+    overridden = _overridden_snap_installation().exists()
     try:
         result = subprocess.check_output(["/usr/bin/snap", "list", snap])
     except subprocess.CalledProcessError:
-        return None
+        return None, overridden
 
     output = result.decode().strip()
     match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
     if match:
-        return match.group()
+        return match.group(), overridden
 
     log.info("Snap k8s not found or no version available.")
-    return None
+    return None, overridden
