@@ -11,9 +11,10 @@ import io
 import subprocess
 import tarfile
 from pathlib import Path
+from textwrap import dedent
 from unittest import mock
 
-import ops
+import ops.testing
 import pytest
 import snap
 from charm import K8sCharm
@@ -134,25 +135,53 @@ def _create_gzip_tar_string(file_data_dict):
     return gzip_buffer.getvalue()
 
 
-def test_resource_supplied_installation(harness):
+def test_resource_supplied_installation_by_channel(harness):
     """Test file cannot be parsed."""
     arch = snap._local_arch()
     yaml_data = f"{arch}:\n- install-type: store\n  name: k8s\n  channel: edge"
     file_data = {"./snap_installation.yaml": yaml_data}
     harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
     args = snap._parse_management_arguments(harness.charm)
+    assert len(args) == 1
+    assert isinstance(args[0], snap.SnapStoreArgument)
     assert args[0].channel == "edge"
     assert args[0].name == "k8s"
     assert args[0].install_type == "store"
 
 
-def test_resource_supplied_snap(harness):
+def test_resource_supplied_installation_by_filename(harness, resource_snap_installation):
+    """Test file cannot be parsed."""
+    arch = snap._local_arch()
+    yaml_data = dedent(
+        f"""
+        {arch}:
+        - install-type: file
+          name: k8s
+          filename: ./k8s_xxxx.snap
+          dangerous: true
+         """
+    ).strip()
+    file_data = {"./snap_installation.yaml": yaml_data, "./k8s_xxxx.snap": ""}
+    harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
+    args = snap._parse_management_arguments(harness.charm)
+    assert len(args) == 1
+    assert isinstance(args[0], snap.SnapFileArgument)
+    assert args[0].install_type == "file"
+    assert args[0].name == "k8s"
+    assert args[0].filename == resource_snap_installation.parent / "k8s_xxxx.snap"
+    assert args[0].dangerous
+
+
+def test_resource_supplied_snap(harness, resource_snap_installation):
     """Test file cannot be parsed."""
     file_data = {"./k8s_xxxx.snap": ""}
     harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
     args = snap._parse_management_arguments(harness.charm)
+    assert len(args) == 1
+    assert isinstance(args[0], snap.SnapFileArgument)
     assert args[0].name == "k8s"
     assert args[0].install_type == "file"
+    assert args[0].filename == resource_snap_installation.parent / "k8s_xxxx.snap"
     assert args[0].dangerous
 
 
