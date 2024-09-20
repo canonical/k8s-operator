@@ -122,6 +122,26 @@ def _overridden_snap_installation() -> Path:
     return Path("./snap-installation/resource/snap_installation.yaml")
 
 
+def _normalize_paths(snap_installation):
+    """Normalize the paths in the snap_installation manifest.
+
+    Arguments:
+        snap_installation: The path to the snap_installation manifest
+    """
+    snap_installation = snap_installation.resolve()
+    content = yaml.safe_load(snap_installation.read_text(encoding="utf-8"))
+    updated = False
+    for arch, snaps in content.items():
+        for idx, snap in enumerate(snaps):
+            if snap.get("filename"):
+                resolved = (snap_installation.parent / snap["filename"]).resolve()
+                log.info("Resolving snap filename: %s to %s", snap["filename"], resolved)
+                content[arch][idx]["filename"] = str(resolved)
+                updated = True
+    if updated:
+        yaml.safe_dump(content, snap_installation.open(mode="w", encoding="utf-8"))
+
+
 def _select_snap_installation(charm: ops.CharmBase) -> Path:
     """Select the snap_installation manifest.
 
@@ -161,6 +181,7 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
     snap_installation = unpack_path / "snap_installation.yaml"
     if snap_installation.exists():
         log.info("Found snap_installation manifest")
+        _normalize_paths(snap_installation)
         return snap_installation
 
     snap_path = list(unpack_path.glob("*.snap"))
