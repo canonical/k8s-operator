@@ -9,7 +9,7 @@ import unittest
 from socket import AF_UNIX, SOCK_STREAM
 from unittest.mock import MagicMock, call, patch
 
-from lib.charms.k8s.v0.k8sd_api_manager import (
+from charms.k8s.v0.k8sd_api_manager import (
     AuthTokenResponse,
     BaseRequestModel,
     BootstrapConfig,
@@ -143,7 +143,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         self.mock_factory = MagicMock()
         self.api_manager = K8sdAPIManager(factory=self.mock_factory)
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_check_k8sd_in_error(self, mock_send_request):
         """Test bootstrap."""
         not_found = InvalidResponseError(code=404, msg="Not Found")
@@ -160,7 +160,7 @@ class TestK8sdAPIManager(unittest.TestCase):
         )
         assert ie.exception.code == 504
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_check_k8sd_not_found(self, mock_send_request):
         """Test bootstrap."""
         not_found = InvalidResponseError(code=404, msg="Not Found")
@@ -176,7 +176,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             ]
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_check_k8sd_ready(self, mock_send_request):
         """Test bootstrap."""
         not_found = InvalidResponseError(code=404, msg="Not Found")
@@ -192,7 +192,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             ]
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_bootstrap_k8s_snap(self, mock_send_request):
         """Test bootstrap."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
@@ -254,7 +254,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             headers={"Content-Type": "application/json"},
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_create_join_token(self, mock_send_request):
         """Test successful request for join token."""
         mock_send_request.return_value = CreateJoinTokenResponse(
@@ -269,7 +269,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             {"name": "test-node", "worker": False},
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_create_join_token_worker(self, mock_send_request):
         """Test successful request for join token for a worker."""
         mock_send_request.return_value = CreateJoinTokenResponse(
@@ -284,7 +284,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             {"name": "test-node", "worker": True},
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_join_cluster_control_plane(self, mock_send_request):
         """Test successfully joining a cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
@@ -306,7 +306,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             },
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_join_cluster_worker(self, mock_send_request):
         """Test successfully joining a cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
@@ -322,7 +322,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             {"name": "test-node", "address": "127.0.0.1:6400", "token": "test-token"},
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_remove_node(self, mock_send_request):
         """Test successfully removing a node from the cluster."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
@@ -332,7 +332,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             "/1.0/k8sd/cluster/remove", "POST", EmptyResponse, {"name": "test-node", "force": True}
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_update_cluster_config(self, mock_send_request):
         """Test successfully updating cluster config."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
@@ -364,7 +364,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             },
         )
 
-    @patch("lib.charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
     def test_request_auth_token(self, mock_send_request):
         """Test successfully requesting auth-token."""
         test_token = "foo:mytoken"

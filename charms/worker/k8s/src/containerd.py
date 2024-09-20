@@ -112,7 +112,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             args:   construction positional arguments
             kwargs: construction keyword arguments
         """
-        super(Registry, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if not self.host and (host := self.url.host):
             self.host = host
 
@@ -177,11 +177,10 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             log.debug("Configure basic auth for %s (%s)", self.url, self.host)
             v = self.username.get_secret_value() + ":" + self.password.get_secret_value()
             return {"Authorization": "Basic " + base64.b64encode(v.encode()).decode()}
-        elif self.identitytoken:
+        if self.identitytoken:
             log.debug("Configure bearer token for %s (%s)", self.url, self.host)
             return {"Authorization": "Bearer " + self.identitytoken.get_secret_value()}
-        else:
-            return {}
+        return {}
 
     @property
     def hosts_toml(self) -> Dict[str, Any]:
