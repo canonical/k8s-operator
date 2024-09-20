@@ -6,8 +6,8 @@
 """Unit tests reschedule module."""
 
 import subprocess
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 import ops
 import pytest
@@ -45,21 +45,21 @@ def test_event_timer_properties(harness):
 
 
 @mock.patch("reschedule._execute_command")
-def test_event_timer_is_active(exec, harness):
+def test_event_timer_is_active(_exec, harness):
     """Test Event Timer is_active."""
-    exec.return_value = 0
+    _exec.return_value = 0
 
     et = reschedule.EventTimer(harness.charm.unit)
     assert et.is_active("update-status")
 
-    exec.return_value = -1
+    _exec.return_value = -1
     et = reschedule.EventTimer(harness.charm.unit)
     assert not et.is_active("update-status")
 
-    exec.side_effect = subprocess.CalledProcessError(-1, [])
+    _exec.side_effect = subprocess.CalledProcessError(-1, [])
     et = reschedule.EventTimer(harness.charm.unit)
     with pytest.raises(reschedule.TimerStatusError):
-        not et.is_active("update-status")
+        assert not et.is_active("update-status")
 
 
 @mock.patch("reschedule.Path.write_text")
@@ -79,9 +79,9 @@ def test_render_event_template(write_text, harness):
 
 
 @mock.patch("reschedule._execute_command")
-def test_event_timer_ensure(exec, harness):
+def test_event_timer_ensure(_exec, harness):
     """Test ensure on event timer."""
-    exec.return_value = ("", 0)
+    _exec.return_value = ("", 0)
 
     et = reschedule.EventTimer(harness.charm.unit)
     with mock.patch.object(et, "_render_event_template") as rendered:
@@ -104,9 +104,9 @@ def test_event_timer_ensure(exec, harness):
 
 
 @mock.patch("reschedule._execute_command")
-def test_event_timer_disable(exec, harness):
+def test_event_timer_disable(_exec, harness):
     """Test disable on event timer."""
-    exec.return_value = ("", 0)
+    _exec.return_value = ("", 0)
 
     et = reschedule.EventTimer(harness.charm.unit)
     et.disable("update-status")
@@ -115,7 +115,7 @@ def test_event_timer_disable(exec, harness):
         mock.call([sysctl, "stop", "k8s.update-status.timer"], check_exit=False),
         mock.call([sysctl, "disable", "k8s.update-status.timer"], check_exit=False),
     ]
-    exec.assert_has_calls(calls)
+    _exec.assert_has_calls(calls)
 
 
 @mock.patch("reschedule.EventTimer.ensure")

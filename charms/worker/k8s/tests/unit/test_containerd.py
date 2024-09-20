@@ -4,8 +4,8 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 """Unit tests containerd module."""
-import unittest.mock as mock
 from os import getgid, getuid
+from unittest import mock
 
 import containerd
 import pytest

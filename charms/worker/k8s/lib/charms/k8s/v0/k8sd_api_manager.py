@@ -54,12 +54,12 @@ class ErrorCodes(enum.Enum):
     """Enumerate the response codes from the k8s api.
 
     Attributes:
-        StatusNodeUnavailable: returned when the node isn't in the cluster
-        StatusNodeInUse: returned when the node is in the cluster already
+        STATUS_NODE_UNAVAILABLE: returned when the node isn't in the cluster
+        STATUS_NODE_IN_USE: returned when the node is in the cluster already
     """
 
-    StatusNodeUnavailable = 520
-    StatusNodeInUse = 521
+    STATUS_NODE_UNAVAILABLE = 520
+    STATUS_NODE_IN_USE = 521
 
 
 class K8sdAPIManagerError(Exception):
@@ -320,7 +320,7 @@ class UserFacingClusterConfig(BaseModel):
     cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
 
 
-class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):  # type: ignore[call-arg]
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
     """Aggregated configuration model for the user-facing datastore aspects of a cluster.
 
     Attributes:

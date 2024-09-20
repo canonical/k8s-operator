@@ -104,8 +104,7 @@ def _parse_management_arguments() -> List[SnapArgument]:
     if not revision.exists():
         raise snap_lib.SnapError(f"Failed to find file={revision}")
     try:
-        with revision.open() as f:
-            body = yaml.safe_load(f)
+        body = yaml.safe_load(revision.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
         log.error("Failed to load file=%s, %s", revision, e)
         raise snap_lib.SnapError(f"Failed to load file={revision}")
@@ -117,7 +116,9 @@ def _parse_management_arguments() -> List[SnapArgument]:
         raise snap_lib.SnapError(f"Failed to find revision for arch={arch}")
 
     try:
-        args: List[SnapArgument] = [parse_obj_as(SnapArgument, arg) for arg in arch_spec]  # type: ignore[arg-type]
+        args: List[SnapArgument] = [
+            parse_obj_as(SnapArgument, arg) for arg in arch_spec  # type: ignore[arg-type]
+        ]
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)
         raise snap_lib.SnapError("Failed to validate snap args")

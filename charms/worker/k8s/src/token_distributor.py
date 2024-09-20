@@ -6,7 +6,7 @@
 import contextlib
 import logging
 from enum import Enum, auto
-from typing import Dict, Optional
+from typing import Dict, Optional, Protocol, Union
 
 import charms.contextual_status as status
 import ops
@@ -21,6 +21,24 @@ from pydantic import SecretStr
 log = logging.getLogger(__name__)
 
 SECRET_ID = "{0}-secret-id"  # nosec
+
+
+class K8sCharm(Protocol):
+    """Typing for the K8sCharm.
+
+    Attributes:
+        app (ops.Application): The application object.
+        model (ops.Model): The model object.
+        unit (ops.Unit): The unit object.
+    """
+
+    app: ops.Application
+    model: ops.Model
+    unit: ops.Unit
+
+    def get_cluster_name(self) -> str:
+        """Get the cluster name."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
 
 class TokenStrategy(Enum):
@@ -49,51 +67,7 @@ class ClusterTokenType(Enum):
     NONE = ""
 
 
-class TokenManager:
-    """Protocol for managing tokens.
-
-    Attributes:
-        api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
-        allocator_needs_tokens: Whether or not the allocator needs tokens.
-        strategy: The strategy for token creation.
-        revoke_on_join: Whether or not to revoke a token once it's joined.
-    """
-
-    allocator_needs_tokens: bool
-    strategy: TokenStrategy
-    revoke_on_join: bool
-
-    def __init__(self, api_manager: K8sdAPIManager):
-        """Initialize a TokenManager instance.
-
-        Args:
-            api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
-        """
-        self.api_manager = api_manager
-
-    def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
-        """Create a token.
-
-        Args:
-            name (str): The name of the node.
-            token_type (ClusterTokenType): The type of cluster token.
-
-        Returns:
-            SecretStr: The created token.
-        """
-        return SecretStr("")
-
-    def revoke(self, name: str, ignore_errors: bool):
-        """Remove a token.
-
-        Args:
-            name (str): The name of the node.
-            ignore_errors (bool): Whether or not errors can be ignored
-        """
-        ...
-
-
-class ClusterTokenManager(TokenManager):
+class ClusterTokenManager:
     """Class for managing cluster tokens.
 
     Attributes:
@@ -105,6 +79,14 @@ class ClusterTokenManager(TokenManager):
     allocator_needs_tokens: bool = False
     strategy: TokenStrategy = TokenStrategy.CLUSTER
     revoke_on_join = True
+
+    def __init__(self, api_manager: K8sdAPIManager):
+        """Initialize a ClusterTokenManager instance.
+
+        Args:
+            api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
+        """
+        self.api_manager = api_manager
 
     def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
         """Create a cluster token.
@@ -132,7 +114,7 @@ class ClusterTokenManager(TokenManager):
         try:
             self.api_manager.remove_node(name)
         except (K8sdConnectionError, InvalidResponseError) as e:
-            if ignore_errors or e.code == ErrorCodes.StatusNodeUnavailable:
+            if ignore_errors or e.code == ErrorCodes.STATUS_NODE_UNAVAILABLE:
                 # Let's just ignore some of these expected errors:
                 # "Remote end closed connection without response"
                 # "Failed to check if node is control-plane"
@@ -142,7 +124,7 @@ class ClusterTokenManager(TokenManager):
                 raise
 
 
-class CosTokenManager(TokenManager):
+class CosTokenManager:
     """Class for managing COS tokens.
 
     Attributes:
@@ -155,27 +137,42 @@ class CosTokenManager(TokenManager):
     strategy: TokenStrategy = TokenStrategy.COS
     revoke_on_join = False
 
-    def create(self, name: str, _) -> SecretStr:
+    def __init__(self, api_manager: K8sdAPIManager):
+        """Initialize a CosTokenManager instance.
+
+        Args:
+            api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
+        """
+        self.api_manager = api_manager
+
+    def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
         """Create a COS token.
 
         Args:
             name (str): The name of the node.
+            token_type (ClusterTokenType): The type of cluster token (ignored)
 
         Returns:
             SecretStr: The created COS token.
         """
+        # pylint: disable=unused-argument
         return self.api_manager.request_auth_token(
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
-    def revoke(self, _: str, __):
-        """Remove a COS token intentionally left unimplemented."""
+    def revoke(self, name: str, ignore_errors: bool):
+        """Remove a COS token intentionally left unimplemented.
+
+        Args:
+            name (str): The name of the node.
+            ignore_errors (bool): Whether or not errors can be ignored
+        """
 
 
 class TokenCollector:
     """Helper class for collecting tokens for units in a relation."""
 
-    def __init__(self, charm: ops.CharmBase, node_name: str):
+    def __init__(self, charm: K8sCharm, node_name: str):
         """Initialize a TokenCollector instance.
 
         Args:
@@ -207,7 +204,7 @@ class TokenCollector:
         Returns:
             the recovered cluster name from existing relations
         """
-        cluster_name = ""
+        cluster_name: Optional[str] = ""
         if not local:
             # recover_cluster_name
             values = set()
@@ -260,7 +257,7 @@ class TokenCollector:
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
-    def __init__(self, charm: ops.CharmBase, node_name: str, api_manager: K8sdAPIManager):
+    def __init__(self, charm: K8sCharm, node_name: str, api_manager: K8sdAPIManager):
         """Initialize a TokenDistributor instance.
 
         Args:
@@ -270,7 +267,7 @@ class TokenDistributor:
         """
         self.charm = charm
         self.node_name = node_name
-        self.token_strategies: Dict[TokenStrategy, TokenManager] = {
+        self.token_strategies: Dict[TokenStrategy, Union[ClusterTokenManager, CosTokenManager]] = {
             TokenStrategy.CLUSTER: ClusterTokenManager(api_manager),
             TokenStrategy.COS: CosTokenManager(api_manager),
         }
@@ -479,19 +476,15 @@ class TokenDistributor:
             ",".join(sorted(u.name for u in remaining)),
         )
 
-        tokenizer = self.token_strategies.get(token_strategy)
-        assert tokenizer, f"Invalid token_strategy: {token_strategy}"  # nosec
-
         status.add(
             ops.MaintenanceStatus(
                 f"Revoking {token_type.name.title()} {token_strategy.name.title()} tokens"
             )
         )
-        local_cluster = self.charm.get_cluster_name()
+
         for unit in remove:
             if node_state := app_databag.get(unit):
                 state, node = node_state.split("-", 1)
-                remote_cluster = (data := relation.data.get(unit)) and data.get("joined")
                 log.info(
                     "Revoking %s, token for %s unit=%s:%s %s node=%s",
                     token_strategy.name.title(),
@@ -503,7 +496,23 @@ class TokenDistributor:
                 )
                 ignore_errors = self.node_name == node  # removing myself
                 ignore_errors |= state == "pending"  # on pending tokens
-                ignore_errors |= local_cluster != remote_cluster  # if cluster doesn't match
-                tokenizer.revoke(node, ignore_errors)
+                # if cluster doesn't match
+                ignore_errors |= self.charm.get_cluster_name() != joined_cluster(relation, unit)
+                self.token_strategies[token_strategy].revoke(node, ignore_errors)
                 self.drop_node(relation, unit)
                 self._revoke_juju_secret(relation, unit)
+
+
+def joined_cluster(relation: ops.Relation, unit: ops.Unit) -> Optional[str]:
+    """Get the cluster name from this relation.
+
+    Args:
+        relation (ops.Relation): The relation to check
+        unit (ops.Unit): The unit to check
+
+    Returns:
+        the recovered cluster name from existing relations
+    """
+    if data := relation.data.get(unit):
+        return data.get("joined")
+    return None
