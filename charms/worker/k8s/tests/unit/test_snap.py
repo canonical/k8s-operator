@@ -136,7 +136,7 @@ def _create_gzip_tar_string(file_data_dict):
 
 
 def test_resource_supplied_installation_by_channel(harness):
-    """Test file cannot be parsed."""
+    """Test resource installs by store channel."""
     arch = snap._local_arch()
     yaml_data = f"{arch}:\n- install-type: store\n  name: k8s\n  channel: edge"
     file_data = {"./snap_installation.yaml": yaml_data}
@@ -150,7 +150,7 @@ def test_resource_supplied_installation_by_channel(harness):
 
 
 def test_resource_supplied_installation_by_filename(harness, resource_snap_installation):
-    """Test file cannot be parsed."""
+    """Test resource installs by included filename."""
     arch = snap._local_arch()
     yaml_data = dedent(
         f"""
@@ -159,6 +159,7 @@ def test_resource_supplied_installation_by_filename(harness, resource_snap_insta
           name: k8s
           filename: ./k8s_xxxx.snap
           dangerous: true
+          classic: true
          """
     ).strip()
     file_data = {"./snap_installation.yaml": yaml_data, "./k8s_xxxx.snap": ""}
@@ -170,10 +171,11 @@ def test_resource_supplied_installation_by_filename(harness, resource_snap_insta
     assert args[0].name == "k8s"
     assert args[0].filename == resource_snap_installation.parent / "k8s_xxxx.snap"
     assert args[0].dangerous
+    assert args[0].classic
 
 
 def test_resource_supplied_snap(harness, resource_snap_installation):
-    """Test file cannot be parsed."""
+    """Test resource installs by snap only."""
     file_data = {"./k8s_xxxx.snap": ""}
     harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
     args = snap._parse_management_arguments(harness.charm)
@@ -183,6 +185,7 @@ def test_resource_supplied_snap(harness, resource_snap_installation):
     assert args[0].install_type == "file"
     assert args[0].filename == resource_snap_installation.parent / "k8s_xxxx.snap"
     assert args[0].dangerous
+    assert args[0].classic
 
 
 @mock.patch("subprocess.check_output")
