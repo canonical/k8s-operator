@@ -6,7 +6,7 @@
 import contextlib
 import logging
 from enum import Enum, auto
-from typing import Dict, Optional, Protocol
+from typing import Dict, Optional, Protocol, Union
 
 import charms.contextual_status as status
 import ops
@@ -65,45 +65,6 @@ class ClusterTokenType(Enum):
     CONTROL_PLANE = "control-plane"
     WORKER = "worker"
     NONE = ""
-
-
-class TokenManager(Protocol):
-    """Protocol for managing tokens.
-
-    Attributes:
-        allocator_needs_tokens: Whether or not the allocator needs tokens.
-        strategy: The strategy for token creation.
-        revoke_on_join: Whether or not to revoke a token once it's joined.
-    """
-
-    allocator_needs_tokens: bool
-    strategy: TokenStrategy
-    revoke_on_join: bool
-
-    def __init__(self, api_manager: K8sdAPIManager):
-        """Initialize a TokenManager instance.
-
-        Args:
-            api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
-        """
-
-    def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
-        """Create a token.
-
-        Args:
-            name (str): The name of the node.
-            token_type (ClusterTokenType): The type of cluster token.
-        """
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    def revoke(self, name: str, ignore_errors: bool):
-        """Remove a token.
-
-        Args:
-            name (str): The name of the node.
-            ignore_errors (bool): Whether or not errors can be ignored
-        """
-        ...  # pylint: disable=unnecessary-ellipsis
 
 
 class ClusterTokenManager:
@@ -296,7 +257,7 @@ class TokenCollector:
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
-    def __init__(self, charm: "K8sCharm", node_name: str, api_manager: K8sdAPIManager):
+    def __init__(self, charm: K8sCharm, node_name: str, api_manager: K8sdAPIManager):
         """Initialize a TokenDistributor instance.
 
         Args:
@@ -306,7 +267,7 @@ class TokenDistributor:
         """
         self.charm = charm
         self.node_name = node_name
-        self.token_strategies: Dict[TokenStrategy, TokenManager] = {
+        self.token_strategies: Dict[TokenStrategy, Union[ClusterTokenManager, CosTokenManager]] = {
             TokenStrategy.CLUSTER: ClusterTokenManager(api_manager),
             TokenStrategy.COS: CosTokenManager(api_manager),
         }
