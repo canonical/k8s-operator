@@ -95,6 +95,7 @@ def _cluster_departing_unit(event: ops.EventBase) -> Union[Literal[False], ops.U
         isinstance(event, ops.RelationDepartedEvent)
         and event.relation.name in ["k8s-cluster", "cluster"]
         and event.departing_unit
+        or False
     )
 
 
@@ -131,7 +132,7 @@ class K8sCharm(ops.CharmBase):
         self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
-        self._stored.set_default(is_dying=False, cluster_name="")
+        self._stored.set_default(is_dying=False, cluster_name=str())
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -206,8 +207,7 @@ class K8sCharm(ops.CharmBase):
         Returns:
             the cluster name.
         """
-        unit, node = self.unit.name, self.get_node_name()
-        if not self._stored.cluster_name:
+        if self._stored.cluster_name == "":
             if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
                 # TODO: replace with API call once available from the snap
                 self._stored.cluster_name = str(uuid.uuid4())
@@ -221,8 +221,9 @@ class K8sCharm(ops.CharmBase):
             ):
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
 
+        unit, node = self.unit.name, self.get_node_name()
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
-        return self._stored.cluster_name
+        return str(self._stored.cluster_name)
 
     def get_node_name(self) -> str:
         """Return the lowercase hostname.
@@ -282,8 +283,8 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
-        bootstrap_config.service_cidr = self.config["service-cidr"]
-        bootstrap_config.control_plane_taints = self.config["register-with-taints"].split()
+        bootstrap_config.service_cidr = str(self.config["service-cidr"])
+        bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
@@ -309,7 +310,7 @@ class K8sCharm(ops.CharmBase):
         registries, config = [], ""
         containerd_relation = self.model.get_relation("containerd")
         if self.is_control_plane:
-            config = self.config["containerd_custom_registries"]
+            config = str(self.config["containerd_custom_registries"])
             registries = containerd.parse_registries(config)
         else:
             registries = containerd.recover(containerd_relation)
@@ -399,7 +400,7 @@ class K8sCharm(ops.CharmBase):
         """
         log.info("Garbage collect cluster tokens")
         to_remove = None
-        if self._stored.is_dying:
+        if self._stored.is_dying is True:
             to_remove = self.unit
         elif unit := _cluster_departing_unit(event):
             to_remove = unit
@@ -650,7 +651,7 @@ class K8sCharm(ops.CharmBase):
         Returns:
             True if being removed, otherwise False
         """
-        if self._stored.is_dying:
+        if self._stored.is_dying is True:
             pass
         elif (unit := _cluster_departing_unit(event)) and unit == self.unit:
             # Juju says I am being removed
@@ -677,7 +678,7 @@ class K8sCharm(ops.CharmBase):
         elif isinstance(event, (ops.RemoveEvent, ops.StopEvent)):
             # If I myself am dying, its me!
             self._stored.is_dying = True
-        return self._stored.is_dying
+        return bool(self._stored.is_dying)
 
     def _is_node_present(self, node: str = "") -> bool:
         """Determine if node is in the kubernetes cluster.
