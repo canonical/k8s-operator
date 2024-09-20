@@ -28,6 +28,8 @@ from .cos_substrate import LXDSubstrate
 from .helpers import get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
+TEST_DATA = Path(__file__).parent / "data"
+DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -50,12 +52,7 @@ def pytest_addoption(parser: pytest.Parser):
         default=False,
         help="If cloud is LXD, use containers",
     )
-    parser.addoption(
-        "--upgrade-from", 
-        dest="upgrade_from", 
-        default=None,
-        help=""
-    )
+    parser.addoption("--upgrade-from", dest="upgrade_from", default=None, help="")
 
 
 def pytest_configure(config):
@@ -222,6 +219,7 @@ class Bundle:
         if path:
             app["charm"] = str(path.resolve())
             app["channel"] = None
+            app["resources"] = {"snap-installation": DEFAULT_SNAP_INSTALLATION}
         if channel:
             app["charm"] = name
             app["channel"] = channel
@@ -299,7 +297,7 @@ async def cloud_proxied(ops_test: OpsTest):
     assert ops_test.model, "Model must be present"
     controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
-    proxy_config_file = Path(__file__).parent / "data" / "static-proxy-config.yaml"
+    proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
     proxy_configs = yaml.safe_load(proxy_config_file.read_text())
     local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
     no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
@@ -444,7 +442,8 @@ async def upgrade_model(model: Model, switch_to_path: dict[str, Path]):
             app_name: Name of the application to refresh
         """
         app: Application = model.applications[app_name]
-        await app.refresh(path=switch_to_path[app_name])
+        resources = {"snap-installation": DEFAULT_SNAP_INSTALLATION}
+        await app.refresh(path=switch_to_path[app_name], resources=resources)
 
     await asyncio.gather(*[_refresh(app) for app in switch_to_path])
     await model.wait_for_idle(
