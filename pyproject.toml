@@ -82,5 +82,6 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+
 [tool.pyright]
-extraPaths = ["./charms/worker/k8s/lib"]
+extraPaths = ["./charms/worker/k8s/lib","./charms/worker/k8s/src"]

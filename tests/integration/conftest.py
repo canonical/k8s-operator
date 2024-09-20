@@ -30,6 +30,7 @@ from .helpers import get_unit_cidrs, is_deployed
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
+DEFAULT_RESOURCES = {"snap-installation": str(DEFAULT_SNAP_INSTALLATION.resolve())}
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -219,7 +220,7 @@ class Bundle:
         if path:
             app["charm"] = str(path.resolve())
             app["channel"] = None
-            app["resources"] = {"snap-installation": DEFAULT_SNAP_INSTALLATION}
+            app["resources"] = DEFAULT_RESOURCES
         if channel:
             app["charm"] = name
             app["channel"] = channel
@@ -442,8 +443,7 @@ async def upgrade_model(model: Model, switch_to_path: dict[str, Path]):
             app_name: Name of the application to refresh
         """
         app: Application = model.applications[app_name]
-        resources = {"snap-installation": DEFAULT_SNAP_INSTALLATION}
-        await app.refresh(path=switch_to_path[app_name], resources=resources)
+        await app.refresh(path=switch_to_path[app_name], resources=DEFAULT_RESOURCES)
 
     await asyncio.gather(*[_refresh(app) for app in switch_to_path])
     await model.wait_for_idle(
