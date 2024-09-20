@@ -194,6 +194,7 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
                     "install-type": "file",
                     "name": "k8s",
                     "filename": str(snap_path[0]),
+                    "classic": True,
                     "dangerous": True,
                 }
             ]
