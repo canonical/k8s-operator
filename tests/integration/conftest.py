@@ -16,6 +16,7 @@ import juju.utils
 import pytest
 import pytest_asyncio
 import yaml
+from juju.application import Application
 from juju.model import Model
 from juju.tag import untag
 from kubernetes import config as k8s_config
@@ -26,13 +27,16 @@ from .cos_substrate import LXDSubstrate
 from .helpers import get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
+TEST_DATA = Path(__file__).parent / "data"
+DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
+DEFAULT_RESOURCES = {"snap-installation": str(DEFAULT_SNAP_INSTALLATION.resolve())}
 
 
 def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
 
-    --charm-file can be called multiple times for each
-      supplied charm
+    --charm-file can be used multiple times, specifies which local charm files are available
+    --upgrade-from
 
     Args:
         parser: Pytest parser.
@@ -42,6 +46,7 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
     )
+    parser.addoption("--upgrade-from", dest="upgrade_from", default=None)
 
 
 def pytest_configure(config):
@@ -164,16 +169,27 @@ class Bundle:
         yaml.safe_dump(self.content, target.open("w"))
         return target
 
-    def switch(self, name: str, path: Path):
-        """Replace charmhub application with a local charm path.
+    def switch(self, name: str, path: Optional[Path] = None, channel: Optional[str] = None):
+        """Replace charmhub application with a local charm path or specific channel.
 
         Args:
-            name (str):  Which application
-            path (Path): Path to local charm
+            name (str):    Which application
+            path (Path):   Optional path to local charm
+            channel (str): Optional channel to use
+
+        Raises:
+            ValueError: if both path and channel are provided, or neither are provided
         """
         app = self.applications[name]
-        app["charm"] = str(path.resolve())
-        app["channel"] = None
+        if (not path and not channel) or (path and channel):
+            raise ValueError("channel and path are mutually exclusive")
+        if path:
+            app["charm"] = str(path.resolve())
+            app["channel"] = None
+            app["resources"] = DEFAULT_RESOURCES
+        if channel:
+            app["charm"] = name
+            app["channel"] = channel
 
     def drop_constraints(self):
         """Remove constraints on applications. Useful for testing on lxd."""
@@ -208,7 +224,7 @@ async def cloud_proxied(ops_test: OpsTest):
     assert ops_test.model, "Model must be present"
     controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
-    proxy_config_file = Path(__file__).parent / "data" / "static-proxy-config.yaml"
+    proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
     proxy_configs = yaml.safe_load(proxy_config_file.read_text())
     local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
     no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
@@ -284,7 +300,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     bundle_marker = request.node.get_closest_marker("bundle_file")
     if bundle_marker:
         bundle_file = bundle_marker.args[0]
-    bundle_path = Path(__file__).parent / "data" / bundle_file
+    bundle_path = TEST_DATA / bundle_file
     model = "main"
 
     with ops_test.model_context(model) as the_model:
@@ -294,22 +310,54 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
             return
 
     log.info("Deploying cluster using %s bundle.", bundle_file)
-
-    charm_path = ("worker/k8s", "worker")
-    charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
-    charm_files = await asyncio.gather(
-        *[charm.resolve(request.config.option.charm_files) for charm in charms]
-    )
     bundle = Bundle(ops_test, bundle_path)
     if "lxd" == await cloud_type(ops_test):
         bundle.drop_constraints()
     if request.config.option.apply_proxy:
         await cloud_proxied(ops_test)
 
+    charms = [Charm(ops_test, Path("charms") / p) for p in ("worker/k8s", "worker")]
+    charm_files_args = request.config.option.charm_files
+    charm_files = await asyncio.gather(*[charm.resolve(charm_files_args) for charm in charms])
+    switch_to_path = {}
     for path, charm in zip(charm_files, charms):
-        bundle.switch(charm.app_name, path)
+        if upgrade_channel := request.config.option.upgrade_from:
+            bundle.switch(charm.app_name, channel=upgrade_channel)
+            switch_to_path[charm.app_name] = path
+        else:
+            bundle.switch(charm.app_name, path=path)
+
     async with deploy_model(request, ops_test, model, bundle) as the_model:
+        await upgrade_model(the_model, switch_to_path)
         yield the_model
+
+
+async def upgrade_model(model: Model, switch_to_path: dict[str, Path]):
+    """Upgrade the model with the provided charms.
+
+    Args:
+        model:          Juju model
+        switch_to_path: Mapping of app_name to charm
+
+    """
+    if not switch_to_path:
+        return
+
+    async def _refresh(app_name: str):
+        """Refresh the application.
+
+        Args:
+            app_name: Name of the application to refresh
+        """
+        app: Application = model.applications[app_name]
+        await app.refresh(path=switch_to_path[app_name], resources=DEFAULT_RESOURCES)
+
+    await asyncio.gather(*[_refresh(app) for app in switch_to_path])
+    await model.wait_for_idle(
+        apps=list(switch_to_path.keys()),
+        status="active",
+        timeout=30 * 60,
+    )
 
 
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
