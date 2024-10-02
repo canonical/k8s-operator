@@ -60,7 +60,7 @@ def fetch_dashboards(source_url: str):
         with urlopen(source_url) as response:  # nosec
             return yaml.safe_load(response.read())
     except URLError as e:
-        logging.error(f"Error fetching dashboard data: {e}")
+        logging.error("Error fetching dashboard data: %s", e)
         return None
 
 
@@ -101,7 +101,7 @@ def prepare_dashboard(json_value):
     return json.dumps(json_value, indent=4).replace("$datasource", "$prometheusds")
 
 
-def save_dashboard_to_file(name, data):
+def save_dashboard_to_file(name, data: str):
     """Save the prepared dashboard JSON to a file.
 
     Args:
@@ -109,9 +109,9 @@ def save_dashboard_to_file(name, data):
         data (str): file content to write
     """
     filepath = os.path.join(TARGET_DIR, name)
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         f.write(data)
-    logging.info(f"Dashboard '{name}' saved to {filepath}")
+    logging.info("Dashboard '%s' saved to %s", name, filepath)
 
 
 def main():

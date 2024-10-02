@@ -52,11 +52,11 @@ def download_and_process_rule_files(temp_dir: Path):
         source_url = f"{SOURCE}/{file}"
         temp_file = temp_dir / file
         try:
-            logging.info(f"Downloading {source_url}")
+            logging.info("Downloading %s", source_url)
             with urlopen(source_url) as response:  # nosec
                 process_rule_file(response, temp_file, source_url)
         except URLError as e:
-            logging.error(f"Error fetching dashboard data: {e}")
+            logging.error("Error fetching dashboard data: %s", e)
 
 
 def process_rule_file(contents, destination_file: Path, source_url: str):
@@ -88,7 +88,7 @@ def process_rule_file(contents, destination_file: Path, source_url: str):
 
     with destination_file.open("w") as file:
         file.write("\n".join(data))
-    logging.info(f"Processed and saved to {destination_file}")
+    logging.info("Processed and saved to %s", destination_file)
 
 
 def move_processed_files(temp_dir):
@@ -100,13 +100,13 @@ def move_processed_files(temp_dir):
     for temp_file in temp_dir.iterdir():
         final_path = ALERT_RULES_DIR / temp_file.name
         shutil.move(str(temp_file), str(final_path))
-        logging.info(f"Moved {temp_file.name} to {final_path}")
+        logging.info("Moved %s to %s", temp_file.name, final_path)
 
 
 def apply_patches():
     """Apply patches to the downloaded and processed rule files."""
     for patch_file in PATCHES_DIR.glob("*"):
-        logging.info(f"Applying patch {patch_file}")
+        logging.info("Applying patch %s", patch_file)
         subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
 
 
@@ -114,14 +114,11 @@ def main():
     """Fetch, process, and save AlertManager rules."""
     with TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        try:
-            download_and_process_rule_files(temp_path)
-            shutil.rmtree(ALERT_RULES_DIR, ignore_errors=True)
-            ALERT_RULES_DIR.mkdir(parents=True)
-            move_processed_files(temp_path)
-            apply_patches()
-        except Exception as e:
-            logging.error("An error occurred: %s" % e)
+        download_and_process_rule_files(temp_path)
+        shutil.rmtree(ALERT_RULES_DIR, ignore_errors=True)
+        ALERT_RULES_DIR.mkdir(parents=True)
+        move_processed_files(temp_path)
+        apply_patches()
 
 
 if __name__ == "__main__":

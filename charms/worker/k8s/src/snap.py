@@ -16,7 +16,7 @@ from typing import List, Literal, Optional, Union
 
 import charms.operator_libs_linux.v2.snap as snap_lib
 import yaml
-from pydantic import BaseModel, Field, ValidationError, parse_obj_as
+from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
 
 # Log messages can be retrieved using juju debug-log
@@ -66,6 +66,25 @@ class SnapStoreArgument(BaseModel):
     cohort: Optional[str] = None
     revision: Optional[str] = None
 
+    @validator("revision", pre=True)
+    def _validate_revision(cls, value: Union[str, int, None]) -> Optional[str]:
+        """Validate the revision is a valid snap revision.
+
+        Arguments:
+            value: (str): The revision to validate
+
+        Returns:
+            str: The validated revision
+
+        Raises:
+            ValueError: If the revision isn't an integer
+        """
+        if isinstance(value, int):
+            return str(value)
+        if value and not re.match(r"^\d+$", value):
+            raise ValueError(f"Revision is not an integer: {value}")
+        return value
+
 
 SnapArgument = Annotated[
     Union[SnapFileArgument, SnapStoreArgument], Field(discriminator="install_type")
@@ -85,8 +104,7 @@ def _parse_management_arguments() -> List[SnapArgument]:
     if not revision.exists():
         raise snap_lib.SnapError(f"Failed to find file={revision}")
     try:
-        with revision.open() as f:
-            body = yaml.safe_load(f)
+        body = yaml.safe_load(revision.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
         log.error("Failed to load file=%s, %s", revision, e)
         raise snap_lib.SnapError(f"Failed to load file={revision}")
@@ -98,7 +116,9 @@ def _parse_management_arguments() -> List[SnapArgument]:
         raise snap_lib.SnapError(f"Failed to find revision for arch={arch}")
 
     try:
-        args: List[SnapArgument] = [parse_obj_as(SnapArgument, arg) for arg in arch_spec]  # type: ignore[arg-type]
+        args: List[SnapArgument] = [
+            parse_obj_as(SnapArgument, arg) for arg in arch_spec  # type: ignore[arg-type]
+        ]
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)
         raise snap_lib.SnapError("Failed to validate snap args")

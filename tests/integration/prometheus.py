@@ -4,9 +4,12 @@
 
 
 import json
+import logging
 import urllib.parse
 import urllib.request
-from typing import Optional
+from typing import List, Optional
+
+log = logging.getLogger(__name__)
 
 
 class Prometheus:
@@ -15,16 +18,16 @@ class Prometheus:
     def __init__(
         self,
         model_name: str,
-        host: Optional[str] = "localhost",
+        base: Optional[str] = "http://localhost",
     ):
         """Initialize Prometheus instance.
 
         Args:
             model_name (str): The name of the model where Prometheus is deployed.
-            host (Optional[str]): Host address of the Prometheus application.
-                Defaults to 'localhost'.
+            base (Optional[str]): Base url of the Prometheus application.
+                Defaults to 'http://localhost'.
         """
-        self.base_uri = f"http://{host}/{model_name}-prometheus-0"
+        self.base_uri = f"{base}/{model_name}-prometheus-0"
 
     def _get_url(self, url):
         """Send GET request to the provided URL.
@@ -35,6 +38,7 @@ class Prometheus:
         Returns:
             str: The response data.
         """
+        log.info("Query: %s", url)
         with urllib.request.urlopen(url) as response:
             data = response.read().decode()
 
@@ -64,11 +68,14 @@ class Prometheus:
 
         return data
 
-    async def check_metrics(self, query: str):
+    async def get_metrics(self, query: str) -> List:
         """Query Prometheus for metrics.
 
         Args:
             query (str): The Prometheus query to execute.
+
+        Returns:
+            List: A list of results from the query.
         """
         api_path = "api/v1/query"
         uri = f"{self.base_uri}/{api_path}"
@@ -81,4 +88,4 @@ class Prometheus:
         assert response.code == 200, f"Failed to query '{query}': {data}"
         result = json.loads(data)
         assert result.get("status") == "success", f"Query failed: {result}"
-        assert result.get("data", {}).get("result"), "Data not yet available"
+        return result.get("data", {}).get("result", [])

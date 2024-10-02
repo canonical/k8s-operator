@@ -54,12 +54,12 @@ class ErrorCodes(enum.Enum):
     """Enumerate the response codes from the k8s api.
 
     Attributes:
-        StatusNodeUnavailable: returned when the node isn't in the cluster
-        StatusNodeInUse: returned when the node is in the cluster already
+        STATUS_NODE_UNAVAILABLE: returned when the node isn't in the cluster
+        STATUS_NODE_IN_USE: returned when the node is in the cluster already
     """
 
-    StatusNodeUnavailable = 520
-    StatusNodeInUse = 521
+    STATUS_NODE_UNAVAILABLE = 520
+    STATUS_NODE_IN_USE = 521
 
 
 class K8sdAPIManagerError(Exception):
@@ -125,7 +125,7 @@ class BaseRequestModel(BaseModel):
         return v
 
     @validator("error_code", always=True)
-    def check_error_code(cls, v, values):
+    def check_error_code(cls, v, values) -> int:
         """Validate the error_code field.
 
         Args:
@@ -320,7 +320,7 @@ class UserFacingClusterConfig(BaseModel):
     cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
 
 
-class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):  # type: ignore[call-arg]
+class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
     """Aggregated configuration model for the user-facing datastore aspects of a cluster.
 
     Attributes:
@@ -776,9 +776,32 @@ class K8sdAPIManager:
         return status.metadata and status.metadata.status.ready
 
     def check_k8sd_ready(self):
-        """Check if k8sd is ready."""
-        endpoint = "/cluster/1.0/ready"
-        self._send_request(endpoint, "GET", EmptyResponse)
+        """Check if k8sd is ready using various microcluster endpoints.
+
+        Raises:
+            K8sdConnectionError: If the response is Not Found on all endpoints.
+        """
+        ready_endpoints = ["/core/1.0/ready", "/cluster/1.0/ready"]
+        for i, endpoint in enumerate(ready_endpoints):
+            try:
+                self._send_request(endpoint, "GET", EmptyResponse)
+                break
+            except InvalidResponseError as ex:
+                if ex.code == 404:
+                    logger.warning(
+                        "micro-cluster unavailable @ %s (%s of %s): %s",
+                        endpoint,
+                        i + 1,
+                        len(ready_endpoints),
+                        ex,
+                    )
+                    # Try the next endpoint if the current one is not found
+                    continue
+                raise
+        else:
+            raise K8sdConnectionError(
+                "Exhausted all endpoints while checking if micro-cluster is ready"
+            )
 
     def bootstrap_k8s_snap(self, request: CreateClusterRequest) -> None:
         """Bootstrap the k8s cluster.

@@ -6,7 +6,7 @@ import ipaddress
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import yaml
 from juju.model import Model
@@ -47,26 +47,6 @@ async def is_deployed(model: Model, bundle_path: Path) -> bool:
             return False
     await model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
     return True
-
-
-async def get_address(model: Model, app_name: str, unit_num: Optional[int] = None) -> str:
-    """Find unit address for any application.
-
-    Args:
-        model: juju model
-        app_name: string name of application
-        unit_num: integer number of a juju unit
-
-    Returns:
-        unit address as a string
-    """
-    status = await model.get_status()
-    app = status["applications"][app_name]
-    return (
-        app.public_address
-        if unit_num is None
-        else app["units"][f"{app_name}/{unit_num}"]["address"]
-    )
 
 
 async def get_unit_cidrs(model: Model, app_name: str, unit_num: int) -> List[str]:

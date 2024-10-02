@@ -56,6 +56,7 @@ config:
         https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#noderestriction
 parts:
   charm:
+    plugin: charm
     build-packages: [git]
     charm-entrypoint: k8s/src/charm.py
   promote:
