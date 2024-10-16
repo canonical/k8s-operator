@@ -92,8 +92,8 @@ config:
           For situations where the registry has self-signed or expired certs and a quick work-around is necessary.
           e.g.: "skip_verify": true
 
-        example config)
-        juju config containerd custom_registries='[{
+        Example config:
+        juju config k8s containerd_custom_registries='[{
             "url": "https://registry.example.com",
             "host": "ghcr.io",
             "ca_file": "'"$(base64 -w 0 < ~/my.custom.ca.pem)"'",
