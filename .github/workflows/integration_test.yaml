@@ -36,7 +36,7 @@ jobs:
       working-directory:  ${{ matrix.path }}
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@347c04309d21e628f2114c24947931141ee921a3
     needs: [build-all-charms, extra-args]
     strategy:
       matrix:
