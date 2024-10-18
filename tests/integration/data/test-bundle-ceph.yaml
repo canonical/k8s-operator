@@ -1,0 +1,44 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: integration-test-ceph
+description: |-
+  Used to deploy or refresh within an integration test model
+series: jammy
+applications:
+  k8s:
+    charm: k8s
+    channel: latest/edge
+    constraints: cores=2 mem=8G root-disk=16G
+    num_units: 1
+  k8s-worker:
+    charm: k8s-worker
+    channel: latest/edge
+    constraints: cores=2 mem=8G root-disk=16G
+    num_units: 1
+  ceph-csi:
+    charm: ceph-csi
+    channel: latest/stable
+    options:
+      provisioner-replicas: 1
+  ceph-mon:
+    charm: ceph-mon
+    channel: quincy/stable
+    constraints: cores=2 mem=4G root-disk=16G
+    num_units: 1
+    options:
+      monitor-count: 1
+      expected-osd-count: 1
+  ceph-osd:
+    charm: ceph-osd
+    channel: quincy/stable
+    constraints: cores=2 mem=4G root-disk=16G
+    num_units: 1
+    storage:
+      osd-devices: 1G,2
+      osd-journals: 1G,1
+relations:
+  - [k8s, k8s-worker:cluster]
+  - [ceph-csi, k8s:ceph-k8s-info]
+  - [ceph-csi, ceph-mon:client]
+  - [ceph-mon, ceph-osd:mon]
