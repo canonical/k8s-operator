@@ -15,6 +15,7 @@ optional cloud-providers, optional schedulers, external backing stores, and exte
 certificate storage.
 """
 
+import json
 import logging
 import os
 import shlex
@@ -132,7 +133,7 @@ class K8sCharm(ops.CharmBase):
         self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
-        self._stored.set_default(is_dying=False, cluster_name=str())
+        self._stored.set_default(is_dying=False, cluster_name=str(), annotations={})
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -283,6 +284,7 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig()
         self._configure_datastore(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
+        self._configure_annotations(bootstrap_config)
         bootstrap_config.service_cidr = str(self.config["service-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
@@ -328,6 +330,61 @@ class K8sCharm(ops.CharmBase):
         log.info("Updating COS integration")
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
+
+    def _get_valid_annotations(self) -> Union[dict, None]:
+        """Fetch and validate annotations from charm configuration.
+
+        Returns:
+            dict: The parsed annotations if valid, otherwise None.
+        """
+        raw_annotations = self.config.get("annotations")
+        if not raw_annotations:
+            return None
+
+        try:
+            assert isinstance(
+                raw_annotations, str
+            ), "Annotations raw value must be a string"  # nosec
+            annotations = json.loads(raw_annotations)
+            assert isinstance(
+                annotations, dict
+            ), "Annotations content must be a dictionary"  # nosec
+            return annotations
+        except json.JSONDecodeError:
+            log.exception("Invalid annotations: %s", raw_annotations)
+            status.add(ops.BlockedStatus("Invalid Annotations"))
+            assert False, "Invalid annotations"  # nosec
+
+    def _configure_annotations(self, config: BootstrapConfig):
+        """Configure the annotations for the Canonical Kubernetes cluster.
+
+        Args:
+            config (BootstrapConfig): Configuration object to bootstrap the cluster.
+        """
+        annotations = self._get_valid_annotations()
+        if annotations is None:
+            return
+
+        if not config.cluster_config:
+            config.cluster_config = UserFacingClusterConfig(annotations=annotations)
+        else:
+            config.cluster_config.annotations = annotations
+
+    def _update_annotations(self):
+        """Update the annotations for the Canonical Kubernetes cluster."""
+        annotations = self._get_valid_annotations()
+        if annotations is None:
+            return
+
+        status.add(ops.MaintenanceStatus("Updating Annotations"))
+        log.info("Updating Annotations")
+
+        if self._stored.annotations == annotations:
+            return
+
+        config = UserFacingClusterConfig(annotations=annotations)
+        update_request = UpdateClusterConfigRequest(config=config)
+        self.api_manager.update_cluster_config(update_request)
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
@@ -612,6 +669,7 @@ class K8sCharm(ops.CharmBase):
         if self.lead_control_plane:
             self._bootstrap_k8s_snap()
             self._enable_functionalities()
+            self._update_annotations()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
