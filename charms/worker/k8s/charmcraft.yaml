@@ -65,7 +65,7 @@ config:
 
         https://documentation.ubuntu.com/canonical-kubernetes/latest/snap/reference/annotations/
 
-        The value for this config must be a JSON object, like this:
+        Example:
           e.g.: key1=value1 key2=value2
     containerd_custom_registries:
       type: string

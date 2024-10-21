@@ -25,7 +25,7 @@ import uuid
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -331,8 +331,10 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation("cos-tokens"):
             self.collector.request(relation)
 
-    def _get_valid_annotations(self) -> Union[dict, None]:
+    def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate annotations from charm configuration.
+
+        The values are expected to be a space-separated string of key-value pairs.
 
         Returns:
             dict: The parsed annotations if valid, otherwise None.
@@ -341,19 +343,15 @@ class K8sCharm(ops.CharmBase):
         if not raw_annotations:
             return None
 
+        annotations = {}
         try:
-            assert isinstance(
-                raw_annotations, str
-            ), "Annotations raw value must be a string"  # nosec
-            annotations = json.loads(raw_annotations)
-            assert isinstance(
-                annotations, dict
-            ), "Annotations content must be a dictionary"  # nosec
-            return annotations
-        except json.JSONDecodeError:
+            for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
+                assert key and value, "Invalid annotation"  # nosec
+                annotations[key] = value
+        except AssertionError:
             log.exception("Invalid annotations: %s", raw_annotations)
             status.add(ops.BlockedStatus("Invalid Annotations"))
-            assert False, "Invalid annotations"  # nosec
+            raise
 
     def _configure_annotations(self, config: BootstrapConfig):
         """Configure the annotations for the Canonical Kubernetes cluster.
