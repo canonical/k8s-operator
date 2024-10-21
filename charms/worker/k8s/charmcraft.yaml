@@ -56,9 +56,9 @@ config:
   options:
     annotations:
       type: string
-      default: "{}"
+      default: ""
       description: |
-        Annotations is a JSON dictionary (key/value pairs) object that can be
+        Annotations is a space separated list of (key/value) pairs)  that can be
         used to add arbitrary metadata configuration to the Canonical
         Kubernetes cluster. For more information, see the upstream Canonical
         Kubernetes documentation about annotations:
@@ -66,7 +66,7 @@ config:
         https://documentation.ubuntu.com/canonical-kubernetes/latest/snap/reference/annotations/
 
         The value for this config must be a JSON object, like this:
-          e.g.: {"key1": "value1", "key2": "value2"}
+          e.g.: key1=value1 key2=value2
     containerd_custom_registries:
       type: string
       default: "[]"
