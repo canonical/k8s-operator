@@ -15,7 +15,6 @@ optional cloud-providers, optional schedulers, external backing stores, and exte
 certificate storage.
 """
 
-import json
 import logging
 import os
 import shlex
@@ -338,20 +337,27 @@ class K8sCharm(ops.CharmBase):
 
         Returns:
             dict: The parsed annotations if valid, otherwise None.
+
+        Raises:
+            AssertionError: If the any of the annotations are invalid.
         """
         raw_annotations = self.config.get("annotations")
         if not raw_annotations:
             return None
 
+        raw_annotations = str(raw_annotations)
+
         annotations = {}
         try:
             for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
-                assert key and value, "Invalid annotation"  # nosec
+                assert key and value, "Invalid Annotation"  # nosec
                 annotations[key] = value
         except AssertionError:
             log.exception("Invalid annotations: %s", raw_annotations)
             status.add(ops.BlockedStatus("Invalid Annotations"))
             raise
+
+        return annotations
 
     def _configure_annotations(self, config: BootstrapConfig):
         """Configure the annotations for the Canonical Kubernetes cluster.
