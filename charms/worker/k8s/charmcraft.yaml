@@ -54,6 +54,19 @@ bases:
       architectures: [amd64]
 config:
   options:
+    annotations:
+      type: string
+      default: ""
+      description: |
+        Annotations is a space separated list of (key/value) pairs)  that can be
+        used to add arbitrary metadata configuration to the Canonical
+        Kubernetes cluster. For more information, see the upstream Canonical
+        Kubernetes documentation about annotations:
+
+        https://documentation.ubuntu.com/canonical-kubernetes/latest/snap/reference/annotations/
+
+        Example:
+          e.g.: key1=value1 key2=value2
     containerd_custom_registries:
       type: string
       default: "[]"
