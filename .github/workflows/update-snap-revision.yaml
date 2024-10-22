@@ -59,7 +59,7 @@ jobs:
         python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }}
 
     - name: Create pull request
-      uses: peter-evans/create-pull-request@v6
+      uses: peter-evans/create-pull-request@v7
       if: ${{ steps.update-revision.outputs.result != '' }}
       with:
         commit-message: '[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}'
