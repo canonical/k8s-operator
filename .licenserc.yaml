@@ -19,6 +19,7 @@ header:
       - 'charms/worker/k8s/lib/charms/k8s/**'
     paths-ignore:
       - 'charms/worker/k8s/lib/charms/**'
+      - 'tests/integration/data/*.tar.gz'
       - '.github/**'
       - '**/.gitkeep'
       - '**/*.cfg'
