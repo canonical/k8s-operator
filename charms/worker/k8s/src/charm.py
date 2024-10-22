@@ -339,7 +339,7 @@ class K8sCharm(ops.CharmBase):
             dict: The parsed annotations if valid, otherwise None.
 
         Raises:
-            AssertionError: If the any of the annotations are invalid.
+            AssertionError: If any annotation is invalid.
         """
         raw_annotations = self.config.get("annotations")
         if not raw_annotations:
@@ -374,6 +374,10 @@ class K8sCharm(ops.CharmBase):
         else:
             config.cluster_config.annotations = annotations
 
+    @status.on_error(
+        ops.BlockedStatus("Invalid Annotations"),
+        AssertionError,
+    )
     def _update_annotations(self):
         """Update the annotations for the Canonical Kubernetes cluster."""
         annotations = self._get_valid_annotations()
