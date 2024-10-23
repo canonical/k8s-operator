@@ -296,7 +296,7 @@ class MetricsServerConfig(BaseModel):
     enabled: Optional[bool] = Field(None)
 
 
-class UserFacingClusterConfig(BaseModel):
+class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
     """Aggregated configuration model for the user-facing aspects of a cluster.
 
     Attributes:
