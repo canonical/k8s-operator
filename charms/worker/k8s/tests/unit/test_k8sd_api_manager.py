@@ -17,6 +17,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     CreateClusterRequest,
     CreateJoinTokenResponse,
     DNSConfig,
+    LocalStorageConfig,
     EmptyResponse,
     InvalidResponseError,
     JoinClusterRequest,
@@ -336,9 +337,9 @@ class TestK8sdAPIManager(unittest.TestCase):
     def test_update_cluster_config(self, mock_send_request):
         """Test successfully updating cluster config."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
-
         dns_config = DNSConfig(enabled=True)
-        user_config = UserFacingClusterConfig(dns=dns_config)
+        local_storage_config = LocalStorageConfig(enabled=True)
+        user_config = UserFacingClusterConfig(dns=dns_config, local_storage=local_storage_config)
         datastore = UserFacingDatastoreConfig(
             type="external",
             servers=["localhost:123"],
@@ -353,7 +354,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             "PUT",
             EmptyResponse,
             {
-                "config": {"dns": {"enabled": True}},
+                "config": {"dns": {"enabled": True}, "local-storage": {"enabled": True}},
                 "datastore": {
                     "type": "external",
                     "servers": ["localhost:123"],
