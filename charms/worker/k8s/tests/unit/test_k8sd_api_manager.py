@@ -337,7 +337,7 @@ class TestK8sdAPIManager(unittest.TestCase):
     def test_update_cluster_config(self, mock_send_request):
         """Test successfully updating cluster config."""
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
-        
+
         dns_config = DNSConfig(enabled=True)
         local_storage_config = LocalStorageConfig(enabled=True)
         user_config = UserFacingClusterConfig(dns=dns_config, local_storage=local_storage_config)
