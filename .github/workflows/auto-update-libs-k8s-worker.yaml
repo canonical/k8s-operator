@@ -5,8 +5,18 @@ on:
     - cron: "0 1 * * *"
 
 jobs:
+  charmcraft-channel:
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.charmcraft.outputs.channel }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: charmcraft
+      run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
   auto-update-libs:
-    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    needs: [charmcraft-channel]
+    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@main
     secrets: inherit
     with:
       working-directory:  ./charms/worker/k8s
+      charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
