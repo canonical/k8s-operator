@@ -2,11 +2,11 @@ name: Comment on the pull request
 
 on:
   workflow_run:
-    workflows: ["Tests"]
+    workflows: ["Charm Analysis"]
     types:
       - completed
 
 jobs:
   comment-on-pr:
-    uses: canonical/operator-workflows/.github/workflows/comment.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/comment.yaml@main
     secrets: inherit

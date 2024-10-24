@@ -3,10 +3,22 @@ name: Auto-update K8s charm libraries
 on:
   schedule:
     - cron: "0 1 * * *"
+  pull_request:
 
 jobs:
+  charmcraft-channel:
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.charmcraft.outputs.channel }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Get charmcraft channel
+      id: charmcraft
+      run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
   auto-update-libs:
-    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    needs: [charmcraft-channel]
+    uses: addyess/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@akd/auto-update-charmcraft-channel
     secrets: inherit
     with:
       working-directory:  ./charms/worker/k8s
+      charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
