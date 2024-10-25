@@ -22,6 +22,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
+    LocalStorageConfig,
     NetworkConfig,
     TokenMetadata,
     UnixSocketHTTPConnection,
@@ -338,7 +339,8 @@ class TestK8sdAPIManager(unittest.TestCase):
         mock_send_request.return_value = EmptyResponse(status_code=200, type="test", error_code=0)
 
         dns_config = DNSConfig(enabled=True)
-        user_config = UserFacingClusterConfig(dns=dns_config)
+        local_storage_config = LocalStorageConfig(enabled=True)
+        user_config = UserFacingClusterConfig(dns=dns_config, local_storage=local_storage_config)
         datastore = UserFacingDatastoreConfig(
             type="external",
             servers=["localhost:123"],
@@ -353,7 +355,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             "PUT",
             EmptyResponse,
             {
-                "config": {"dns": {"enabled": True}},
+                "config": {"dns": {"enabled": True}, "local-storage": {"enabled": True}},
                 "datastore": {
                     "type": "external",
                     "servers": ["localhost:123"],

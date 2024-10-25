@@ -45,6 +45,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
+    LocalStorageConfig,
     NetworkConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
@@ -538,7 +539,10 @@ class K8sCharm(ops.CharmBase):
         log.info("Enabling K8s features")
         dns_config = DNSConfig(enabled=True)
         network_config = NetworkConfig(enabled=True)
-        user_cluster_config = UserFacingClusterConfig(dns=dns_config, network=network_config)
+        local_storage_config = LocalStorageConfig(enabled=True)
+        user_cluster_config = UserFacingClusterConfig(
+            dns=dns_config, network=network_config, local_storage=local_storage_config
+        )
         update_request = UpdateClusterConfigRequest(config=user_cluster_config)
 
         self.api_manager.update_cluster_config(update_request)
