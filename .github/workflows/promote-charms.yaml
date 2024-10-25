@@ -52,7 +52,7 @@ jobs:
       - name: Determine Charms
         id: charms
         env:
-          CHOICE: ${{ github.event.inputs.charm }}
+          CHOICE: ${{ inputs.charm }}
         run: |
           echo "Determines which charms were chosen from $CHOICE"
           if [[ "${CHOICE}" == "all" ]]; then
@@ -67,10 +67,12 @@ jobs:
     strategy:
       matrix:
         charm-directory: ${{ fromJson(needs.select-charms.outputs.charms) }}
-    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+        arch:
+        - amd64
+    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@main
     with:
-      origin-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.origin-risk }}
-      destination-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.destination-risk }}
-      charm-directory: ./charms
-      working-directory:  ${{ matrix.charm-directory }}
+      base-architecture: ${{ matrix.arch }}
+      charm-directory: ${{ matrix.charm-directory }}
+      destination-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.destination-risk }}
+      origin-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.origin-risk }}
     secrets: inherit
