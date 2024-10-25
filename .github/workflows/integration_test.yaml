@@ -57,6 +57,7 @@ jobs:
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
+      identifier: ${{ matrix.suite }}
       self-hosted-runner: true
       self-hosted-runner-label: "large"
       test-timeout: 120
