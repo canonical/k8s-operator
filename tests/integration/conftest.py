@@ -10,7 +10,7 @@ import shlex
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import List, Mapping, Optional
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import juju.utils
 import pytest
@@ -41,6 +41,12 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
     parser.addoption(
         "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
+    )
+    parser.addoption(
+        "--lxd-containers",
+        action="store_true",
+        default=False,
+        help="If cloud is LXD, use containers",
     )
 
 
@@ -180,20 +186,38 @@ class Bundle:
         for app in self.applications.values():
             app["constraints"] = None
 
+    def add_constraints(self, constraints: Dict[str,str]):
+        """Add constraints to applications.
 
-async def cloud_type(ops_test: OpsTest):
+        Args:
+            constraints:  Mapping of constraints to add to applications.
+        """
+        for app in self.applications.values():
+            val: str = app["constraints"]
+            existing = dict(kv.split("=", 1) for kv in val.split())
+            existing.update(constraints)
+            app["constraints"] = " ".join(f"{k}={v}" for k, v in existing.items())
+
+
+async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller
 
     Args:
         ops_test (OpsTest): ops_test plugin
 
     Returns:
-        string describing current type of the underlying cloud
+        Tuple:
+            string describing current type of the underlying cloud
+            bool   describing if VMs are enabled
     """
     assert ops_test.model, "Model must be present"
     controller = await ops_test.model.get_controller()
     cloud = await controller.cloud()
-    return cloud.cloud.type_
+    _type = cloud.cloud.type_
+    vms = True  # Assume VMs are enabled
+    if _type == "lxd":
+        vms = not ops_test.request.config.getoption("--lxd-containers")
+    return _type, vms
 
 
 async def cloud_proxied(ops_test: OpsTest):
@@ -222,8 +246,8 @@ async def cloud_profile(ops_test: OpsTest):
     Args:
         ops_test (OpsTest): ops_test plugin
     """
-    _type = await cloud_type(ops_test)
-    if _type == "lxd" and ops_test.model:
+    _type, _vms = await cloud_type(ops_test)
+    if _type == "lxd" and not _vms and ops_test.model:
         # lxd-profile to the model if the juju cloud is lxd.
         lxd = LXDSubstrate("", "")
         profile_name = f"juju-{ops_test.model.name}"
@@ -301,8 +325,13 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
     bundle = Bundle(ops_test, bundle_path)
-    if "lxd" == await cloud_type(ops_test):
+    _type, _vms = await cloud_type(ops_test)
+    if _type == "lxd" and not _vms:
+        log.info("Drop lxd machine constraints")
         bundle.drop_constraints()
+    if _type == "lxd" and _vms:
+        log.info("Constrain lxd machines with virt-type: virtual-machine")
+        bundle.add_constraints({"virt-type": "virtual-machine"})
     if request.config.option.apply_proxy:
         await cloud_proxied(ops_test)
 
