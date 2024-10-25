@@ -6,7 +6,7 @@ on:
 
 jobs:
   load-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@ca65a7b2687418554393b36e725647ec4d9f474f
     with:
       provider: lxd
       juju-channel: 3.3/stable

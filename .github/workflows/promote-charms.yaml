@@ -67,7 +67,7 @@ jobs:
     strategy:
       matrix:
         charm-directory: ${{ fromJson(needs.select-charms.outputs.charms) }}
-    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@ca65a7b2687418554393b36e725647ec4d9f474f
     with:
       origin-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.origin-risk }}
       destination-channel: ${{needs.configure-track.outputs.track}}/${{ github.event.inputs.destination-risk }}
