@@ -24,34 +24,44 @@ jobs:
           fi
           echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
 
-  build-all-charms:
-    needs: [extra-args]
-    strategy:
-      matrix:
-        path:
-          - "./charms/worker/k8s/"
-          - "./charms/worker/"
-    uses: ./.github/workflows/build-charm.yaml
-    with:
-      working-directory:  ${{ matrix.path }}
+  # build-all-charms:
+  #   needs: [extra-args]
+  #   strategy:
+  #     matrix:
+  #       path:
+  #         - "./charms/worker/k8s/"
+  #         - "./charms/worker/"
+  #   uses: ./.github/workflows/build-charm.yaml
+  #   with:
+  #     working-directory:  ${{ matrix.path }}
+
+  charmcraft-channel:
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.charmcraft.outputs.channel }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: charmcraft
+      run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
-    needs: [build-all-charms, extra-args]
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
+    needs: [charmcraft-channel, extra-args]
     strategy:
       matrix:
         suite: ["k8s", "etcd"]
     secrets: inherit
     with:
-      provider: lxd
-      juju-channel: 3/stable
+      charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
+      juju-channel: 3/stable
       load-test-enabled: false
-      zap-enabled: false
+      provider: lxd
       self-hosted-runner: true
       self-hosted-runner-label: "large"
-      trivy-fs-enabled: true
-      trivy-image-config: "trivy.yaml"
-      tmate-debug: true
       test-timeout: 120
       test-tox-env: integration-${{ matrix.suite }}
+      trivy-fs-enabled: false
+      trivy-image-config: "trivy.yaml"
+      tmate-debug: true
+      zap-enabled: false
