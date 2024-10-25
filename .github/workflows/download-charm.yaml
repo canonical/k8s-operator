@@ -52,4 +52,3 @@ jobs:
         name: ${{ inputs.charm-name }}-charm
         path: ${{ env.CHARM_FILE }}
         if-no-files-found: error
-    

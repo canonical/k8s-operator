@@ -24,17 +24,6 @@ jobs:
           fi
           echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
 
-  # build-all-charms:
-  #   needs: [extra-args]
-  #   strategy:
-  #     matrix:
-  #       path:
-  #         - "./charms/worker/k8s/"
-  #         - "./charms/worker/"
-  #   uses: ./.github/workflows/build-charm.yaml
-  #   with:
-  #     working-directory:  ${{ matrix.path }}
-
   charmcraft-channel:
     runs-on: ubuntu-24.04
     outputs:
@@ -49,19 +38,21 @@ jobs:
     needs: [charmcraft-channel, extra-args]
     strategy:
       matrix:
-        suite: ["k8s", "etcd"]
+        arch:
+        - {id: amd64-k8s,  suite: k8s,  builder-label: ubuntu-22.04, tester-arch: x64}
+        - {id: amd64-etcd, suite: etcd, builder-label: ubuntu-22.04, tester-arch: x64}
     secrets: inherit
     with:
+      identifier: ${{ matrix.arch.id }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
-      extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
+      extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.arch.suite }}
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
-      identifier: ${{ matrix.suite }}
       self-hosted-runner: true
-      self-hosted-runner-label: "large"
+      self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
       test-timeout: 120
-      test-tox-env: integration-${{ matrix.suite }}
+      test-tox-env: integration-${{ matrix.arch.suite }}
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
