@@ -186,7 +186,7 @@ class Bundle:
         for app in self.applications.values():
             app["constraints"] = None
 
-    def add_constraints(self, constraints: Dict[str,str]):
+    def add_constraints(self, constraints: Dict[str, str]):
         """Add constraints to applications.
 
         Args:
