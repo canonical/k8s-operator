@@ -184,19 +184,6 @@ class Bundle:
         app["charm"] = str(path.resolve())
         app["channel"] = None
 
-    def set_arch(self, arch: str):
-        """Set the architecture of each application in the bundle.
-
-        Args:
-            arch (str):  Which architecture
-        """
-        for name in self.applications:
-            app = self.applications[name]
-            constraint_list = app.get("constraints") or ""
-            constraints = dict(constraint.split("=") for constraint in constraint_list.split())
-            constraints["arch"] = arch
-            app["constraints"] = " ".join(f"{k}={v}" for k, v in sorted(constraints.items()))
-
     def drop_constraints(self):
         """Remove constraints on applications. Useful for testing on lxd."""
         for app in self.applications.values():
@@ -213,6 +200,18 @@ class Bundle:
                 log.info("Skipping constraints for subordinate charm: %s", app["charm"])
                 continue
             val: str = app.get("constraints", "")
+            existing = dict(kv.split("=", 1) for kv in val.split())
+            existing.update(constraints)
+            app["constraints"] = " ".join(f"{k}={v}" for k, v in existing.items())
+
+    def add_constraints(self, constraints: Dict[str, str]):
+        """Add constraints to applications.
+
+        Args:
+            constraints:  Mapping of constraints to add to applications.
+        """
+        for app in self.applications.values():
+            val: str = app["constraints"]
             existing = dict(kv.split("=", 1) for kv in val.split())
             existing.update(constraints)
             app["constraints"] = " ".join(f"{k}={v}" for k, v in existing.items())
@@ -373,7 +372,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.add_constraints({"virt-type": "virtual-machine"})
     if request.config.option.apply_proxy:
         await cloud_proxied(ops_test)
-    bundle.set_arch(arch)
+    bundle.add_constraints({"arch": arch})
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
