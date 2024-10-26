@@ -1,0 +1,54 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: Download Charm
+
+on:
+  workflow_call:
+    inputs:
+      charm-arch:
+        type: string
+        description: The charm architecture to download
+        default: amd64
+      charm-base:
+        type: string
+        description: The charm base to download
+        default: ubuntu@20.04
+      charm-channel:
+        type: string
+        description: The charm channel to download
+        default: latest/edge
+      charm-name:
+        type: string
+        description: The charm name to download
+      juju-channel:
+        type: string
+        description: Which juju client to use for pulling charms
+        default: 3/stable
+      runs-on:
+        type: string
+        description: Image runner for building the images
+        default: ubuntu@22.04
+
+jobs:
+  download-charms:
+    name: Download Charms
+    runs-on: ${{ inputs.runs-on }}
+    env:
+      CHARM_FILE: "${{ inputs.charm-name }}-${{ inputs.charm-channel }}-${{ inputs.charm-base }}-${{ inputs.charm-arch }}.charm"
+    steps:
+    - name: Install Juju
+      run: |
+        sudo snap install juju --channel ${{ inputs.juju-channel }}
+    - name: Download charm
+      run: |
+        CHARM_FILE=${{ env.CHARM_FILE }}
+        CHARM_FILE=${CHARM_FILE//\//-} # replace all slashes with dashes
+        echo CHARM_FILE=${CHARM_FILE} >> $GITHUB_ENV # update GitHub ENV vars
+        juju download ${{ inputs.charm-name }} --channel ${{ inputs.charm-channel }} --base ${{ inputs.charm-base }} --arch ${{ inputs.charm-arch }} - > ${{ env.CHARM_FILE }}
+    - name: Upload charm artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.charm-name }}-charm
+        path: ${{ env.CHARM_FILE }}
+        if-no-files-found: error

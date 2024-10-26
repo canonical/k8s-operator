@@ -296,7 +296,7 @@ class MetricsServerConfig(BaseModel):
     enabled: Optional[bool] = Field(None)
 
 
-class UserFacingClusterConfig(BaseModel):
+class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
     """Aggregated configuration model for the user-facing aspects of a cluster.
 
     Attributes:
@@ -308,6 +308,7 @@ class UserFacingClusterConfig(BaseModel):
         gateway: Gateway configuration for the cluster.
         metrics_server: Metrics server configuration for the cluster.
         cloud_provider: The cloud provider for the cluster.
+        annotations: Dictionary that can be used to store arbitrary metadata configuration.
     """
 
     network: Optional[NetworkConfig] = Field(None)
@@ -318,6 +319,7 @@ class UserFacingClusterConfig(BaseModel):
     gateway: Optional[GatewayConfig] = Field(None)
     metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
     cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
+    annotations: Optional[Dict[str, str]] = Field(None)
 
 
 class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):

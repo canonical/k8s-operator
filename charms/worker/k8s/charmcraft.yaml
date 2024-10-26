@@ -54,6 +54,19 @@ bases:
       architectures: [amd64]
 config:
   options:
+    annotations:
+      type: string
+      default: ""
+      description: |
+        Annotations is a space separated list of (key/value) pairs)  that can be
+        used to add arbitrary metadata configuration to the Canonical
+        Kubernetes cluster. For more information, see the upstream Canonical
+        Kubernetes documentation about annotations:
+
+        https://documentation.ubuntu.com/canonical-kubernetes/latest/snap/reference/annotations/
+
+        Example:
+          e.g.: key1=value1 key2=value2
     containerd_custom_registries:
       type: string
       default: "[]"
@@ -92,8 +105,8 @@ config:
           For situations where the registry has self-signed or expired certs and a quick work-around is necessary.
           e.g.: "skip_verify": true
 
-        example config)
-        juju config containerd custom_registries='[{
+        Example config:
+        juju config k8s containerd_custom_registries='[{
             "url": "https://registry.example.com",
             "host": "ghcr.io",
             "ca_file": "'"$(base64 -w 0 < ~/my.custom.ca.pem)"'",
