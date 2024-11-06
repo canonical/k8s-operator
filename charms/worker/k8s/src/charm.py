@@ -161,23 +161,34 @@ class K8sCharm(ops.CharmBase):
         relation_data = event.relation.data.get(event.unit) #type: ignore
         if not relation_data:
             log.warning("No relation data found for unit %s", event.unit)
+            return
 
         feature_name = relation_data.get("feature-name")
         feature_version = relation_data.get("feature-version") # library version
         feature_attributes = relation_data.get("feature-attributes")
 
-        if feature_name and feature_version and feature_attributes:
-            if feature_name == "load-balancer":
-                feature_attributes = json.loads(feature_attributes)
-                lb_config = LoadBalancerConfig(**feature_attributes)
+        feature_config_classes: Dict[str, type] = {
+            "load-balancer": LoadBalancerConfig,
+            "local-storage": LocalStorageConfig,
+        }
 
-                config = UserFacingClusterConfig(load_balancer=lb_config)
+        if feature_name and feature_version and feature_attributes:
+            feature_attributes = json.loads(feature_attributes)
+
+            config_class = feature_config_classes.get(feature_name)
+            if config_class:
+                feature_config = config_class(**feature_attributes)
+
+                feature_name = feature_name.replace("-", "_")
+                config = UserFacingClusterConfig(**{feature_name: feature_config})
                 update_request = UpdateClusterConfigRequest(config=config)
                 self.api_manager.update_cluster_config(update_request)
 
-                log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(lb_config.dict()))
+                log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(feature_config.dict()))
+            else:
+                log.warning("Unsupported feature name: %s", feature_name)
         else:
-            log.warning("Feature relation data is incomplete, %s", relation_data)
+            log.warning("Feature relation data is incomplete: %s", relation_data)
 
         log.info("Relation %s changed: %s", event.relation.name, relation_data)
 
