@@ -171,6 +171,10 @@ class K8sCharm(ops.CharmBase):
                 feature_attributes = json.loads(feature_attributes)
                 lb_config = LoadBalancerConfig(**feature_attributes)
 
+                config = UserFacingClusterConfig(load_balancer=lb_config)
+                update_request = UpdateClusterConfigRequest(config=config)
+                self.api_manager.update_cluster_config(update_request)
+
                 log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(lb_config.dict()))
         else:
             log.warning("Feature relation data is incomplete, %s", relation_data)
