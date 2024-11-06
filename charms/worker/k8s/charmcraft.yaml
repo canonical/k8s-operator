@@ -126,7 +126,7 @@ config:
       type: string
       description: |
         Labels can be used to organize and to select subsets of nodes in the
-        cluster. Declare node labels in key=value format, separated by spaces.      
+        cluster. Declare node labels in key=value format, separated by spaces.
     register-with-taints:
       type: string
       default: ""
@@ -178,6 +178,9 @@ provides:
     interface: containerd
   ceph-k8s-info:
     interface: kubernetes-info
+  feature:
+    interface: k8s-snap-feature
+    scope: container
 
 requires:
   etcd:
