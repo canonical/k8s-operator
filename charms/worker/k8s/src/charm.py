@@ -21,6 +21,7 @@ import shlex
 import socket
 import subprocess
 import uuid
+import json
 from functools import cached_property
 from pathlib import Path
 from time import sleep
@@ -38,6 +39,7 @@ from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
+    LoadBalancerConfig,
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
     DNSConfig,
@@ -149,9 +151,31 @@ class K8sCharm(ops.CharmBase):
         )
 
         self.framework.observe(self.on.update_status, self._on_update_status)
+        self.framework.observe(self.on.feature_relation_changed, self._on_feature_relation_changed)
+
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
+
+    def _on_feature_relation_changed(self, event: ops.RelationChangedEvent):
+        relation_data = event.relation.data.get(event.unit) #type: ignore
+        if not relation_data:
+            log.warning("No relation data found for unit %s", event.unit)
+
+        feature_name = relation_data.get("feature-name")
+        feature_version = relation_data.get("feature-version") # library version
+        feature_attributes = relation_data.get("feature-attributes")
+
+        if feature_name and feature_version and feature_attributes:
+            if feature_name == "load-balancer":
+                feature_attributes = json.loads(feature_attributes)
+                lb_config = LoadBalancerConfig(**feature_attributes)
+
+                log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(lb_config.dict()))
+        else:
+            log.warning("Feature relation data is incomplete, %s", relation_data)
+
+        log.info("Relation %s changed: %s", event.relation.name, relation_data)
 
     def _k8s_info(self, event: ops.EventBase):
         """Send cluster information on the kubernetes-info relation.
