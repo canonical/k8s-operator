@@ -534,9 +534,13 @@ class FeatureRelationData(BaseModel):
 
     @root_validator(pre=True)
     def check_data(cls, values):
-        assert 'name' in values, "name must be provided"
-        assert 'version' in values, "version must be provided"
-        assert 'attributes' in values, "attributes must be provided"
+        if 'name' not in values:
+            raise ValueError("The 'name' field must be provided")
+        if 'version' not in values:
+            raise ValueError("The 'version' field must be provided")
+        if 'attributes' not in values:
+            raise ValueError("The 'attributes' field must be provided")
+        return values
 
 class GetKubeConfigResponse(BaseRequestModel):
     """Response model for getting the kubeconfig from the cluster.
