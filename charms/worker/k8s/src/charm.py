@@ -151,46 +151,51 @@ class K8sCharm(ops.CharmBase):
         )
 
         self.framework.observe(self.on.update_status, self._on_update_status)
-        self.framework.observe(self.on.feature_relation_changed, self._on_feature_relation_changed)
 
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
-    def _on_feature_relation_changed(self, event: ops.RelationChangedEvent):
-        relation_data = event.relation.data.get(event.unit) #type: ignore
-        if not relation_data:
-            log.warning("No relation data found for unit %s", event.unit)
-            return
+    def _resolve_feature_relations(self, event: ops.EventBase):
+        relation_data = None
 
-        feature_name = relation_data.get("feature-name")
-        feature_version = relation_data.get("feature-version") # library version
-        feature_attributes = relation_data.get("feature-attributes")
+        log.info("Resolving feature relations as snap configuration")
 
-        feature_config_classes: Dict[str, type] = {
-            "load-balancer": LoadBalancerConfig,
-            "local-storage": LocalStorageConfig,
-        }
+        for relation in self.model.relations["feature"]:
+            for unit in relation.units:
+                relation_data = relation.data[unit]
 
-        if feature_name and feature_version and feature_attributes:
-            feature_attributes = json.loads(feature_attributes)
+                if not relation_data:
+                    log.warning("No relation data found for relation [feature] on %s", relation.name)
+                    continue
 
-            config_class = feature_config_classes.get(feature_name)
-            if config_class:
-                feature_config = config_class(**feature_attributes)
+                feature_name = relation_data.get("feature-name")
+                feature_version = relation_data.get("feature-version") # library version
+                feature_attributes = relation_data.get("feature-attributes")
 
-                feature_name = feature_name.replace("-", "_")
-                config = UserFacingClusterConfig(**{feature_name: feature_config})
-                update_request = UpdateClusterConfigRequest(config=config)
-                self.api_manager.update_cluster_config(update_request)
+                if feature_name and feature_version and feature_attributes:
+                    feature_config_classes: Dict[str, type] = {
+                        "load-balancer": LoadBalancerConfig,
+                        "local-storage": LocalStorageConfig,
+                    }
 
-                log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(feature_config.dict()))
-            else:
-                log.warning("Unsupported feature name: %s", feature_name)
-        else:
-            log.warning("Feature relation data is incomplete: %s", relation_data)
+                    config_class = feature_config_classes.get(feature_name)
 
-        log.info("Relation %s changed: %s", event.relation.name, relation_data)
+                    if config_class:
+                        feature_config = config_class.parse_raw(feature_attributes)
+
+                        log.info("%s", feature_config)
+
+                        feature_name = feature_name.replace("-", "_")
+                        config = UserFacingClusterConfig(**{feature_name: feature_config})
+                        update_request = UpdateClusterConfigRequest(config=config)
+                        self.api_manager.update_cluster_config(update_request)
+
+                        log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(feature_config.dict()))
+                    else:
+                        status.add(ops.BlockedStatus(f"Unsupported feature {feature_name}"))
+                else:
+                    log.warning("Feature relation data is incomplete: %s", relation_data)
 
     def _k8s_info(self, event: ops.EventBase):
         """Send cluster information on the kubernetes-info relation.
@@ -739,6 +744,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
+            self._resolve_feature_relations(event)
         self._join_cluster()
         self._config_containerd_registries()
         self._configure_cos_integration()
