@@ -63,6 +63,7 @@ from snap import management as snap_management
 from snap import version as snap_version
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 from typing_extensions import Literal
+from pydantic import ValidationError
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -165,33 +166,34 @@ class K8sCharm(ops.CharmBase):
                 raw_relation_data = relation.data[unit]
 
                 if not raw_relation_data:
-                    log.warning("No relation data found for feature relation on %s", relation.name)
+                    log.warning("No relation data found for %s relation", relation.name)
                     continue
 
-                parsed_relation_data = FeatureRelationData.parse_obj(raw_relation_data)
+                try:
+                    parsed_relation_data = FeatureRelationData.parse_obj(raw_relation_data)
+                except ValidationError as e:
+                    log.warning("The relation data for %s relation is not valid: %s", relation.name, e)
+                    continue
+
                 feature_name = parsed_relation_data.name
-                feature_version = parsed_relation_data.version
                 feature_attributes = parsed_relation_data.attributes
 
-                if feature_name and feature_version and feature_attributes:
-                    feature_config_classes: Dict[str, type] = {
-                        "load-balancer": LoadBalancerConfig,
-                        "local-storage": LocalStorageConfig,
-                    }
-                    if not (config_class := feature_config_classes.get(feature_name)):
-                        status.add(ops.BlockedStatus(f"Unsupported feature {feature_name}"))
-                        continue
+                feature_config_classes: Dict[str, type] = {
+                    "load-balancer": LoadBalancerConfig,
+                    "local-storage": LocalStorageConfig,
+                }
+                if not (config_class := feature_config_classes.get(feature_name)):
+                    status.add(ops.BlockedStatus(f"Unsupported feature {feature_name}"))
+                    continue
 
-                    feature_config = config_class.parse_raw(feature_attributes)
-                    log.info("Updating feature [%s] with config [%s]", feature_name, feature_config)
+                feature_config = config_class.parse_raw(feature_attributes)
+                log.info("Updating feature [%s] with config [%s]", feature_name, feature_config)
 
-                    cluster_config = UserFacingClusterConfig(**{feature_name: feature_config})
-                    update_request = UpdateClusterConfigRequest(config=cluster_config)
-                    self.api_manager.update_cluster_config(update_request)
+                cluster_config = UserFacingClusterConfig(**{feature_name: feature_config})
+                update_request = UpdateClusterConfigRequest(config=cluster_config)
+                self.api_manager.update_cluster_config(update_request)
 
-                    log.info("Feature [%s] updated", feature_name)
-                else:
-                    log.warning("Couldn't resolve feature relation because the relation data is not valid")
+                log.info("Feature [%s] updated", feature_name)
 
     def _k8s_info(self, event: ops.EventBase):
         """Send cluster information on the kubernetes-info relation.

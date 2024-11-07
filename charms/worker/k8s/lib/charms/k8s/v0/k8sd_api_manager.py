@@ -35,7 +35,7 @@ from http.client import HTTPConnection, HTTPException
 from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
+from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator, root_validator
 
 # The unique Charmhub library identifier, never change it
 LIBID = "6a5f235306864667a50437c08ba7e83f"
@@ -526,11 +526,17 @@ class FeatureRelationData(BaseModel):
     Attributes:
         name (str): The feature name.
         version (str): The library version that was used to create the feature object.
-        attributes (Dict[str, str]): The serialized Pydantic model representing the feature.
+        attributes (str): The serialized Pydantic model representing the feature configuration.
     """
-    name: Optional[str] = Field(None)
-    version: Optional[str] = Field(None)
-    attributes: Optional[str] = Field(None)
+    name: str
+    version: str
+    attributes: str
+
+    @root_validator(pre=True)
+    def check_data(cls, values):
+        assert 'name' in values, "name must be provided"
+        assert 'version' in values, "version must be provided"
+        assert 'attributes' in values, "attributes must be provided"
 
 class GetKubeConfigResponse(BaseRequestModel):
     """Response model for getting the kubeconfig from the cluster.
