@@ -520,6 +520,17 @@ class KubeConfigMetadata(BaseModel):
 
     kubeconfig: str
 
+class FeatureRelationData(BaseModel):
+    """Model representing data for a feature relation.
+
+    Attributes:
+        name (str): The feature name.
+        version (str): The library version that was used to create the feature object.
+        attributes (Dict[str, str]): The serialized Pydantic model representing the feature.
+    """
+    name: Optional[str] = Field(None)
+    version: Optional[str] = Field(None)
+    attributes: Optional[str] = Field(None)
 
 class GetKubeConfigResponse(BaseRequestModel):
     """Response model for getting the kubeconfig from the cluster.

@@ -53,6 +53,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
     UserFacingDatastoreConfig,
+    FeatureRelationData,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
@@ -157,45 +158,40 @@ class K8sCharm(ops.CharmBase):
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
     def _resolve_feature_relations(self, event: ops.EventBase):
-        relation_data = None
-
         log.info("Resolving feature relations as snap configuration")
 
         for relation in self.model.relations["feature"]:
             for unit in relation.units:
-                relation_data = relation.data[unit]
+                raw_relation_data = relation.data[unit]
 
-                if not relation_data:
-                    log.warning("No relation data found for relation [feature] on %s", relation.name)
+                if not raw_relation_data:
+                    log.warning("No relation data found for feature relation on %s", relation.name)
                     continue
 
-                feature_name = relation_data.get("feature-name")
-                feature_version = relation_data.get("feature-version") # library version
-                feature_attributes = relation_data.get("feature-attributes")
+                parsed_relation_data = FeatureRelationData.parse_obj(raw_relation_data)
+                feature_name = parsed_relation_data.name
+                feature_version = parsed_relation_data.version
+                feature_attributes = parsed_relation_data.attributes
 
                 if feature_name and feature_version and feature_attributes:
                     feature_config_classes: Dict[str, type] = {
                         "load-balancer": LoadBalancerConfig,
                         "local-storage": LocalStorageConfig,
                     }
-
-                    config_class = feature_config_classes.get(feature_name)
-
-                    if config_class:
-                        feature_config = config_class.parse_raw(feature_attributes)
-
-                        log.info("%s", feature_config)
-
-                        feature_name = feature_name.replace("-", "_")
-                        config = UserFacingClusterConfig(**{feature_name: feature_config})
-                        update_request = UpdateClusterConfigRequest(config=config)
-                        self.api_manager.update_cluster_config(update_request)
-
-                        log.info("Got feature of type [%s], with version [%s] and attributes [%s]", feature_name, feature_version, json.dumps(feature_config.dict()))
-                    else:
+                    if not (config_class := feature_config_classes.get(feature_name)):
                         status.add(ops.BlockedStatus(f"Unsupported feature {feature_name}"))
+                        continue
+
+                    feature_config = config_class.parse_raw(feature_attributes)
+                    log.info("Updating feature [%s] with config [%s]", feature_name, feature_config)
+
+                    cluster_config = UserFacingClusterConfig(**{feature_name: feature_config})
+                    update_request = UpdateClusterConfigRequest(config=cluster_config)
+                    self.api_manager.update_cluster_config(update_request)
+
+                    log.info("Feature [%s] updated", feature_name)
                 else:
-                    log.warning("Feature relation data is incomplete: %s", relation_data)
+                    log.warning("Couldn't resolve feature relation because the relation data is not valid")
 
     def _k8s_info(self, event: ops.EventBase):
         """Send cluster information on the kubernetes-info relation.
