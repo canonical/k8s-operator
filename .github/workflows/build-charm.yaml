@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v4
-      - uses: canonical/setup-lxd@v0.1.1
+      - uses: canonical/setup-lxd@v0.1.2
 
       - name: Get hash of the source
         run: echo "SRC_HASH=${{ hashFiles('**/charms/**/*.yaml', '**/charms/**/*.py', '**/charms/**/requirements.txt') }}" >> $GITHUB_ENV
