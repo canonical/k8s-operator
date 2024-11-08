@@ -16,6 +16,9 @@ target-version = ["py38"]
 [tool.coverage.report]
 show_missing = true
 
+[tool.coverage.xml]
+output = "coverage.xml"
+
 # Linting tools configuration
 [tool.flake8]
 max-line-length = 99

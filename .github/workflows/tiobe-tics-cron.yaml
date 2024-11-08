@@ -1,0 +1,76 @@
+name: TiCS Nightly Security Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 10 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  TiCS:
+
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Latest branches
+          - { branch: main }
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checking out repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{matrix.branch}}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Testing Deps
+        run: |
+          set -eux -o pipefail
+
+          sudo python3 -m pip install tox
+
+      - name: Install Go for Cobertura Coverage Converter
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Run Tests With Coverage
+        run: |
+          set -eux -o pipefail
+
+          pushd $GITHUB_WORKSPACE
+          tox -e unit,coverage-xml
+
+          GENERATED_COVERAGE_XML="$GITHUB_WORKSPACE/charms/worker/k8s/coverage.xml"
+          cat "$GENERATED_COVERAGE_XML"
+
+          # TiCS expects the report to be under a "$(pwd)/.coverage" directory.
+          mkdir -p "$GITHUB_WORKSPACE/.coverage"
+          mv "$GENERATED_COVERAGE_XML" .coverage/coverage.xml
+
+      - name: Run TiCS
+        run: |
+          # NOTE(aznashwan): TiCS install script doesn't define defaults; cannot '-u'
+          set -ex -o pipefail
+
+          export TICSAUTHTOKEN=${{ secrets.TICSAUTHTOKEN }}
+
+          # Install the TiCS and staticcheck
+          go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
+          . <(curl --silent --show-error 'https://canonical.tiobe.com/tiobeweb/TICS/api/public/v1/fapi/installtics/Script?cfg=default&platform=linux&url=https://canonical.tiobe.com/tiobeweb/TICS/')
+
+          cd $GITHUB_WORKSPACE
+          TICSQServer -project k8s-operator -tmpdir /tmp/tics -branchdir "$GITHUB_WORKSPACE"
+
