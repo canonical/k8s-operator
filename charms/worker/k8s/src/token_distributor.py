@@ -7,7 +7,7 @@ import contextlib
 import logging
 import re
 from enum import Enum, auto
-from typing import Dict, Optional, Protocol, Union
+from typing import Dict, Optional, Union
 
 import charms.contextual_status as status
 import ops
@@ -17,6 +17,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdAPIManager,
     K8sdConnectionError,
 )
+from protocols import K8sCharmProtocol
 from pydantic import SecretStr
 
 log = logging.getLogger(__name__)
@@ -24,35 +25,6 @@ log = logging.getLogger(__name__)
 SECRET_ID = "{0}-secret-id"  # nosec
 
 UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
-
-
-class K8sCharm(Protocol):
-    """Typing for the K8sCharm.
-
-    Attributes:
-        app (ops.Application): The application object.
-        model (ops.Model): The model object.
-        unit (ops.Unit): The unit object.
-    """
-
-    @property
-    def app(self) -> ops.Application:
-        """The application object."""
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    @property
-    def model(self) -> ops.Model:
-        """The model object."""
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    @property
-    def unit(self) -> ops.Unit:
-        """The unit object."""
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    def get_cluster_name(self) -> str:
-        """Get the cluster name."""
-        ...  # pylint: disable=unnecessary-ellipsis
 
 
 class TokenStrategy(Enum):
@@ -186,7 +158,7 @@ class CosTokenManager:
 class TokenCollector:
     """Helper class for collecting tokens for units in a relation."""
 
-    def __init__(self, charm: K8sCharm, node_name: str):
+    def __init__(self, charm: K8sCharmProtocol, node_name: str):
         """Initialize a TokenCollector instance.
 
         Args:
@@ -271,7 +243,7 @@ class TokenCollector:
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
-    def __init__(self, charm: K8sCharm, node_name: str, api_manager: K8sdAPIManager):
+    def __init__(self, charm: K8sCharmProtocol, node_name: str, api_manager: K8sdAPIManager):
         """Initialize a TokenDistributor instance.
 
         Args:
