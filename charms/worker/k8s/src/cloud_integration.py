@@ -4,7 +4,7 @@
 """Cloud Integration for Charmed Kubernetes Control Plane."""
 
 import logging
-from typing import Optional, Union
+from typing import Mapping, Optional, Union
 
 import charms.contextual_status as status
 import ops
@@ -40,19 +40,17 @@ class CloudIntegration:
         """
         self.charm = charm
         self.is_control_plane = is_control_plane
+        self.cloud_support: Mapping[str, CloudSpecificIntegration] = {
+            "aws": AWSIntegrationRequires(charm),
+            "gce": GCPIntegrationRequires(charm),
+            "azure": AzureIntegrationRequires(charm),
+        }
 
     @property
     def cloud(self) -> Optional[CloudSpecificIntegration]:
         """Determine if we're integrated with a known cloud."""
         cloud_name = self.charm.get_cloud_name()
-        cloud: CloudSpecificIntegration
-        if cloud_name == "aws":
-            cloud = AWSIntegrationRequires(self.charm)
-        elif cloud_name == "gcp":
-            cloud = GCPIntegrationRequires(self.charm)
-        elif cloud_name == "azure":
-            cloud = AzureIntegrationRequires(self.charm)
-        else:
+        if not (cloud := self.cloud_support.get(cloud_name)):
             log.warning("Skipping direct cloud integration: cloud %s", cloud_name)
             return None
 
@@ -125,7 +123,7 @@ class CloudIntegration:
         if self.is_control_plane:
             cloud.enable_network_management()
             cloud.enable_block_storage_management()
-        evaluation = cloud.evaluate_relation(event)
-        if not evaluation:
-            log.error("Failed to evaluate cloud integration: %s", evaluation)
+        errors = cloud.evaluate_relation(event)
+        if errors:
+            log.error("Failed to evaluate cloud integration: %s", errors)
             raise ValueError("Failed to evaluate cloud integration")
