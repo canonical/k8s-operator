@@ -622,28 +622,26 @@ class K8sCharm(ops.CharmBase):
 
         This method ensures that the Kubernetes version is consistent across the cluster.
         """
-        if not (peer := self.model.get_relation("cluster")):
-            assert False, "Missing cluster integration"  # nosec
-        if not (worker := self.model.get_relation("k8s-cluster")):
-            assert False, "Missing cluster integration"  # nosec
+        peer = self.model.get_relation("cluster")
+        worker = self.model.get_relation("k8s-cluster")
+        if not all([peer, worker]):
+            assert False, "Missing cluster integration"
+
         version = snap_version("k8s")
         assert version, "k8s-snap is not installed"  # nosec
 
-        for unit in peer.units:
-            if unit.name == self.unit.name:
-                continue
-            if peer.data[unit].get("version") != version:
-                status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
-                assert False, "Version mismatch with cluster nodes"  # nosec
-
-        for unit in worker.units:
-            if unit.name == self.unit.name:
-                continue
-            if worker.data[unit].get("version") != version:
-                status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
-                assert False, "Version mismatch with cluster nodes"  # nosec
+        for relation in (peer, worker):
+            units = (unit for unit in relation.units if unit.name != self.unit.name)
+            for unit in units:
+                unit_version = relation.data[unit].get("version")
+                if not unit_version:
+                    assert False, f"Waiting for version from {unit.name}"
+                if unit_version != version:
+                    status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
+                    assert False, "Version mismatch with cluster nodes"  # nosec
 
         peer.data[self.app]["version"] = version
+        worker.data[self.app]["version"] = version
 
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.
