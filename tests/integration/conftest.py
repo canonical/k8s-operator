@@ -36,8 +36,8 @@ DEFAULT_RESOURCES = {"snap-installation": str(DEFAULT_SNAP_INSTALLATION.resolve(
 def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
 
-    --charm-file can be used multiple times, specifies which local charm files are available
-    --upgrade-from
+    --charm-file    can be used multiple times, specifies which local charm files are available
+    --upgrade-from  instruct tests to start with a specific channel, and upgrade to these charms
 
     Args:
         parser: Pytest parser.
@@ -53,7 +53,9 @@ def pytest_addoption(parser: pytest.Parser):
         default=False,
         help="If cloud is LXD, use containers",
     )
-    parser.addoption("--upgrade-from", dest="upgrade_from", default=None, help="")
+    parser.addoption(
+        "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
+    )
 
 
 def pytest_configure(config):
@@ -177,6 +179,28 @@ class Bundle:
     path: Path
     arch: str
     _content: Mapping = field(default_factory=dict)
+
+    @classmethod
+    async def create(cls, ops_test: OpsTest, path: Path) -> "Bundle":
+        """Create a bundle object.
+
+        Args:
+            ops_test:  Instance of the pytest-operator plugin
+            path:      Path to the bundle file
+
+        Returns:
+            Bundle:    Instance of the Bundle
+        """
+        arch = await cloud_arch(ops_test)
+        _type, _vms = await cloud_type(ops_test)
+        bundle = cls(ops_test, path, arch)
+        if _type == "lxd" and not _vms:
+            log.info("Drop lxd machine constraints")
+            bundle.drop_constraints()
+        if _type == "lxd" and _vms:
+            log.info("Constrain lxd machines with virt-type: virtual-machine")
+            bundle.add_constraints({"virt-type": "virtual-machine"})
+        return bundle
 
     @property
     def content(self) -> Mapping:
@@ -368,7 +392,7 @@ async def deploy_model(
 
 
 def bundle_file(request) -> Path:
-    """Fixture to get bundle file.
+    """Helper to get bundle file.
 
     Args:
         request: pytest request object
@@ -396,20 +420,12 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
             return
 
     log.info("Deploying cluster using %s bundle.", bundle_path)
-    arch = await cloud_arch(ops_test)
 
-    bundle = Bundle(ops_test, bundle_path, arch)
-    _type, _vms = await cloud_type(ops_test)
-    if _type == "lxd" and not _vms:
-        log.info("Drop lxd machine constraints")
-        bundle.drop_constraints()
-    if _type == "lxd" and _vms:
-        log.info("Constrain lxd machines with virt-type: virtual-machine")
-        bundle.add_constraints({"virt-type": "virtual-machine"})
+    bundle = await Bundle.create(ops_test, bundle_path)
     if request.config.option.apply_proxy:
         await cloud_proxied(ops_test)
 
-    charms = [Charm(ops_test, arch, Path("charms") / p) for p in ("worker/k8s", "worker")]
+    charms = [Charm(ops_test, bundle.arch, Path("charms") / p) for p in ("worker/k8s", "worker")]
     charm_files_args = request.config.option.charm_files
     charm_files = await asyncio.gather(*[charm.resolve(charm_files_args) for charm in charms])
     switch_to_path = {}
