@@ -5,6 +5,7 @@
 
 import contextlib
 import logging
+import re
 from enum import Enum, auto
 from typing import Dict, Optional, Protocol, Union
 
@@ -308,6 +309,7 @@ class TokenDistributor:
         return {
             self.charm.model.get_unit(str(u)): data
             for u, data in relation.data[self.charm.app].items()
+            if re.match(r"k8s(-worker)?/\d+", u)
         }
 
     def drop_node(self, relation: ops.Relation, unit: ops.Unit):

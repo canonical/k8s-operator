@@ -54,6 +54,7 @@ def mock_reconciler_handlers(harness):
         "_configure_cos_integration",
         "_update_status",
         "_apply_node_labels",
+        "_update_kubernetes_version",
     }
     if harness.charm.is_control_plane:
         handler_names |= {
@@ -66,6 +67,7 @@ def mock_reconciler_handlers(harness):
             "_revoke_cluster_tokens",
             "_ensure_cluster_config",
             "_expose_ports",
+            "_announce_kubernetes_version",
         }
 
     handlers = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]

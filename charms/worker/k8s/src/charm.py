@@ -601,6 +601,50 @@ class K8sCharm(ops.CharmBase):
             log.exception("Failed to get COS token.")
         return []
 
+    @on_error(
+        ops.WaitingStatus("Sharing Cluster Version"),
+        AssertionError,
+    )
+    def _update_kubernetes_version(self):
+        """Update the unit Kubernetes version in the cluster relation."""
+        relation_name = "cluster"
+        if not (relation := self.model.get_relation(relation_name)):
+            assert False, "Missing cluster integration"  # nosec
+        if version := snap_version("k8s"):
+            relation.data[self.unit]["version"] = version
+
+    @on_error(
+        ops.WaitingStatus("Announcing Kubernetes version"),
+        AssertionError,
+    )
+    def _announce_kubernetes_version(self):
+        """Announce the Kubernetes version to the cluster.
+
+        This method ensures that the Kubernetes version is consistent across the cluster.
+        """
+        if not (peer := self.model.get_relation("cluster")):
+            assert False, "Missing cluster integration"  # nosec
+        if not (worker := self.model.get_relation("k8s-cluster")):
+            assert False, "Missing cluster integration"  # nosec
+        version = snap_version("k8s")
+        assert version, "k8s-snap is not installed"  # nosec
+
+        for unit in peer.units:
+            if unit.name == self.unit.name:
+                continue
+            if peer.data[unit].get("version") != version:
+                status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
+                assert False, "Version mismatch with cluster nodes"  # nosec
+
+        for unit in worker.units:
+            if unit.name == self.unit.name:
+                continue
+            if worker.data[unit].get("version") != version:
+                status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
+                assert False, "Version mismatch with cluster nodes"  # nosec
+
+        peer.data[self.app]["version"] = version
+
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.
 
@@ -690,6 +734,7 @@ class K8sCharm(ops.CharmBase):
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
+        self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
@@ -700,6 +745,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
+            self._announce_kubernetes_version()
         self._join_cluster()
         self._config_containerd_registries()
         self._configure_cos_integration()
