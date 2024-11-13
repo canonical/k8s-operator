@@ -5,7 +5,6 @@ on:
   pull_request:
 
 jobs:
-
   extra-args:
     runs-on: ubuntu-latest
     outputs:
@@ -41,12 +40,17 @@ jobs:
       matrix:
         arch:
         - {id: amd64, builder-label: ubuntu-22.04, tester-arch: x64}
-        suite: ["k8s", "etcd", "ceph"]
+        - {id: arm64, builder-label: ARM64,        tester-arch: ARM64}
+        suite: [k8s, etcd, ceph]
+        exclude:
+        - {arch: {id: arm64}, suite: ceph}
     with:
       identifier: ${{ matrix.arch.id }}-${{ matrix.suite }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
-      extra-arguments: ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
+      extra-arguments: >-
+        ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers' || '' }}
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
