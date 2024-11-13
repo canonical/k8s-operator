@@ -21,7 +21,6 @@ import os
 import shlex
 import socket
 import subprocess
-from base64 import b64decode
 from functools import cached_property
 from pathlib import Path
 from time import sleep
@@ -60,6 +59,7 @@ from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from inspector import ClusterInspector
 from literals import DEPENDENCIES
+from kube_control import configure as configure_kube_control
 from ops.interface_kube_control import KubeControlProvides
 from snap import management as snap_management
 from snap import version as snap_version
@@ -481,55 +481,6 @@ class K8sCharm(ops.CharmBase):
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
 
-    def _configure_kube_control(self):
-        """Configure kube-control for the Kubernetes cluster."""
-        if not (binding := self.model.get_binding("kube-control")):
-            return
-
-        status.add(ops.MaintenanceStatus("Configuring Kube Control"))
-        ca_cert, endpoints = "", [f"https://{binding.network.bind_address}:6443"]
-        labels = str(self.model.config["labels"])
-        taints = str(self.model.config["register-with-taints"])
-        if self._internal_kubeconfig.exists():
-            kubeconfig = yaml.safe_load(self._internal_kubeconfig.read_text())
-            cluster = kubeconfig["clusters"][0]["cluster"]
-            ca_cert_b64 = cluster["certificate-authority-data"]
-            ca_cert = b64decode(ca_cert_b64).decode("utf-8")
-
-        self.kube_control.set_api_endpoints(endpoints)
-        self.kube_control.set_ca_certificate(ca_cert)
-
-        if (
-            (cluster_status := self.api_manager.get_cluster_status())
-            and cluster_status.metadata
-            and cluster_status.metadata.status.config
-            and (dns := cluster_status.metadata.status.config.dns)
-        ):
-            self.kube_control.set_dns_address(dns.service_ip or "")
-            self.kube_control.set_dns_domain(dns.cluster_domain or "")
-            self.kube_control.set_dns_enabled(dns.enabled)
-            self.kube_control.set_dns_port(53)
-
-        self.kube_control.set_default_cni("")
-        self.kube_control.set_image_registry("rocks.canonical.com")
-
-        self.kube_control.set_cluster_name(self.get_cluster_name())
-        self.kube_control.set_has_external_cloud_provider(self.xcp.has_xcp)
-        self.kube_control.set_labels(labels.split())
-        self.kube_control.set_taints(taints.split())
-
-        for request in self.kube_control.auth_requests:
-            log.info("Signing kube-control request for '%s 'in '%s'", request.user, request.group)
-            client_token = self.api_manager.request_auth_token(
-                username=request.user, groups=[request.group]
-            )
-            self.kube_control.sign_auth_request(
-                request,
-                client_token=client_token.get_secret_value(),
-                kubelet_token=str(),
-                proxy_token=str(),
-            )
-
     def _configure_cloud_provider(
         self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]
     ):
@@ -663,7 +614,7 @@ class K8sCharm(ops.CharmBase):
 
         self._configure_datastore(update_request)
         self._configure_cloud_provider(update_request)
-        self._configure_kube_control()
+        configure_kube_control(self)
         self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
