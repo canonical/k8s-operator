@@ -33,7 +33,7 @@ import containerd
 import ops
 import reschedule
 import yaml
-from charms.contextual_status import WaitingStatus, on_error
+from charms.contextual_status import ReconcilerError, WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import (
@@ -634,6 +634,48 @@ class K8sCharm(ops.CharmBase):
             log.exception("Failed to get COS token.")
         return []
 
+    @on_error(ops.WaitingStatus("Sharing Cluster Version"))
+    def _update_kubernetes_version(self):
+        """Update the unit Kubernetes version in the cluster relation.
+
+        Raises:
+            ReconcilerError: If the cluster integration is missing.
+        """
+        relation = self.model.get_relation("cluster")
+        if not relation:
+            raise ReconcilerError("Missing cluster integration")
+        if version := snap_version("k8s"):
+            relation.data[self.unit]["version"] = version
+
+    @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
+    def _announce_kubernetes_version(self):
+        """Announce the Kubernetes version to the cluster.
+
+        This method ensures that the Kubernetes version is consistent across the cluster.
+
+        Raises:
+            ReconcilerError: If the k8s snap is not installed, the version is missing,
+                or the version does not match the local version.
+        """
+        if not (local_version := snap_version("k8s")):
+            raise ReconcilerError("k8s-snap is not installed")
+
+        peer = self.model.get_relation("cluster")
+        worker = self.model.get_relation("k8s-cluster")
+
+        for relation in (peer, worker):
+            if not relation:
+                continue
+            units = (unit for unit in relation.units if unit.name != self.unit.name)
+            for unit in units:
+                unit_version = relation.data[unit].get("version")
+                if not unit_version:
+                    raise ReconcilerError(f"Waiting for version from {unit.name}")
+                if unit_version != local_version:
+                    status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
+                    raise ReconcilerError(f"Version mismatch with {unit.name}")
+            relation.data[self.app]["version"] = local_version
+
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.
 
@@ -723,6 +765,7 @@ class K8sCharm(ops.CharmBase):
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
+        self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
@@ -733,6 +776,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
+            self._announce_kubernetes_version()
         self._join_cluster()
         self._config_containerd_registries()
         self._configure_cos_integration()

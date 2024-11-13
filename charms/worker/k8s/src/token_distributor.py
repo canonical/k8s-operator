@@ -5,6 +5,7 @@
 
 import contextlib
 import logging
+import re
 from enum import Enum, auto
 from typing import Dict, Optional, Protocol, Union
 
@@ -21,6 +22,8 @@ from pydantic import SecretStr
 log = logging.getLogger(__name__)
 
 SECRET_ID = "{0}-secret-id"  # nosec
+
+UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
 
 
 class K8sCharm(Protocol):
@@ -299,6 +302,10 @@ class TokenDistributor:
     def active_nodes(self, relation: ops.Relation):
         """Get nodes from application databag for given relation.
 
+        This method filters out entries in the application databag that are not
+        to the cluster units. It uses the regex pattern, which matches patterns
+        like k8s/0, k8s-worker/0, etc.
+
         Args:
             relation (ops.Relation): Which relation (cluster or k8s-cluster)
 
@@ -308,6 +315,7 @@ class TokenDistributor:
         return {
             self.charm.model.get_unit(str(u)): data
             for u, data in relation.data[self.charm.app].items()
+            if UNIT_RE.match(u)
         }
 
     def drop_node(self, relation: ops.Relation, unit: ops.Unit):
