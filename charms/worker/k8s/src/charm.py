@@ -607,8 +607,7 @@ class K8sCharm(ops.CharmBase):
     )
     def _update_kubernetes_version(self):
         """Update the unit Kubernetes version in the cluster relation."""
-        relation_name = "cluster"
-        if not (relation := self.model.get_relation(relation_name)):
+        if not (relation := self.model.get_relation("cluster")):
             assert False, "Missing cluster integration"  # nosec
         if version := snap_version("k8s"):
             relation.data[self.unit]["version"] = version
@@ -624,24 +623,21 @@ class K8sCharm(ops.CharmBase):
         """
         peer = self.model.get_relation("cluster")
         worker = self.model.get_relation("k8s-cluster")
-        if not all([peer, worker]):
-            assert False, "Missing cluster integration"
 
         version = snap_version("k8s")
         assert version, "k8s-snap is not installed"  # nosec
 
         for relation in (peer, worker):
+            assert relation, "Missing cluster integration"  # nosec
             units = (unit for unit in relation.units if unit.name != self.unit.name)
             for unit in units:
                 unit_version = relation.data[unit].get("version")
-                if not unit_version:
-                    assert False, f"Waiting for version from {unit.name}"
+                assert unit_version, f"Waiting for version from {unit.name}"  # nosec
                 if unit_version != version:
                     status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
                     assert False, "Version mismatch with cluster nodes"  # nosec
+            relation.data[self.app]["version"] = version
 
-        peer.data[self.app]["version"] = version
-        worker.data[self.app]["version"] = version
 
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.

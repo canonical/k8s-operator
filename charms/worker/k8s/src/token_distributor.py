@@ -300,6 +300,10 @@ class TokenDistributor:
     def active_nodes(self, relation: ops.Relation):
         """Get nodes from application databag for given relation.
 
+        This method filters out entries in the application databag that are not
+        to the cluster units. It uses the regex pattern, which matches patterns
+        like k8s/0, k8s-worker/0, etc.
+
         Args:
             relation (ops.Relation): Which relation (cluster or k8s-cluster)
 
