@@ -644,7 +644,8 @@ class K8sCharm(ops.CharmBase):
         relation = self.model.get_relation("cluster")
         if not relation:
             raise ReconcilerError("Missing cluster integration")
-        if version := snap_version("k8s"):
+        version, _ = snap_version("k8s")
+        if version:
             relation.data[self.unit]["version"] = version
 
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
@@ -657,7 +658,8 @@ class K8sCharm(ops.CharmBase):
             ReconcilerError: If the k8s snap is not installed, the version is missing,
                 or the version does not match the local version.
         """
-        if not (local_version := snap_version("k8s")):
+        local_version, _ = snap_version("k8s")
+        if not local_version:
             raise ReconcilerError("k8s-snap is not installed")
 
         peer = self.model.get_relation("cluster")
