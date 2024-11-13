@@ -638,7 +638,6 @@ class K8sCharm(ops.CharmBase):
                     assert False, "Version mismatch with cluster nodes"  # nosec
             relation.data[self.app]["version"] = version
 
-
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.
 
