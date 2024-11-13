@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import shlex
 from dataclasses import dataclass, field
 from itertools import chain
@@ -82,14 +83,33 @@ class Charm:
 
     Attrs:
         ops_test:  Instance of the pytest-operator plugin
+        arch:      Cloud Architecture
         path:      Path to the charm file
         metadata:  Charm's metadata
         app_name:  Preferred name of the juju application
     """
 
     ops_test: OpsTest
+    arch: str
     path: Path
     _charmfile: Optional[Path] = None
+    _URL_RE = re.compile(r"ch:(?P<arch>\w+)/(?P<series>\w+)/(?P<charm>.+)")
+
+    @staticmethod
+    def craft_url(charm: str, series: str, arch: str) -> str:
+        """Craft a charm URL.
+
+        Args:
+            charm:  Charm name
+            series: Cloud series
+            arch:   Cloud architecture
+
+        Returns:
+            string: URL to the charm
+        """
+        if m := Charm._URL_RE.match(charm):
+            charm = m.group("charm")
+        return f"ch:{arch}/{series}/{charm}"
 
     @property
     def metadata(self) -> dict:
@@ -122,7 +142,8 @@ class Charm:
                     Path().glob(charm_name),  # Look in top-level path
                     self.path.glob(charm_name),  # Look in charm-level path
                 )
-                self._charmfile, *_ = filter(lambda s: s.name.startswith(header), potentials)
+                arch_choices = filter(lambda s: self.arch in str(s), potentials)
+                self._charmfile, *_ = filter(lambda s: s.name.startswith(header), arch_choices)
                 log.info("For %s found charmfile %s", self.app_name, self._charmfile)
             except ValueError:
                 log.warning("No pre-built charm is available, let's build it")
@@ -142,19 +163,25 @@ class Bundle:
         ops_test:      Instance of the pytest-operator plugin
         path:          Path to the bundle file
         content:       Loaded content from the path
+        arch:          Cloud Architecture
         render:        Path to a rendered bundle
         applications:  Mapping of applications in the bundle.
     """
 
     ops_test: OpsTest
     path: Path
+    arch: str
     _content: Mapping = field(default_factory=dict)
 
     @property
     def content(self) -> Mapping:
         """Yaml content of the bundle loaded into a dict"""
         if not self._content:
-            self._content = yaml.safe_load(self.path.read_bytes())
+            loaded = yaml.safe_load(self.path.read_bytes())
+            series = loaded.get("series", "focal")
+            for app in loaded["applications"].values():
+                app["charm"] = Charm.craft_url(app["charm"], series=series, arch=self.arch)
+            self._content = loaded
         return self._content
 
     @property
@@ -165,6 +192,7 @@ class Bundle:
     @property
     def render(self) -> Path:
         """Path to written bundle config to be deployed."""
+        self.add_constraints({"arch": self.arch})
         target = self.ops_test.tmp_path / "bundles" / self.path.name
         target.parent.mkdir(exist_ok=True, parents=True)
         yaml.safe_dump(self.content, target.open("w"))
@@ -200,6 +228,25 @@ class Bundle:
             existing = dict(kv.split("=", 1) for kv in val.split())
             existing.update(constraints)
             app["constraints"] = " ".join(f"{k}={v}" for k, v in existing.items())
+
+
+async def cloud_arch(ops_test: OpsTest) -> str:
+    """Return current architecture of the selected controller
+
+    Args:
+        ops_test (OpsTest): ops_test plugin
+
+    Returns:
+        string describing current architecture of the underlying cloud
+    """
+    assert ops_test.model, "Model must be present"
+    controller = await ops_test.model.get_controller()
+    controller_model = await controller.get_model("controller")
+    arch = set(
+        machine.safe_data["hardware-characteristics"]["arch"]
+        for machine in controller_model.machines.values()
+    )
+    return arch.pop()
 
 
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
@@ -304,14 +351,26 @@ async def deploy_model(
             log.fatal("Failed to determine model: model_name=%s", model_name)
 
 
+def bundle_file(request) -> Path:
+    """Fixture to get bundle file.
+
+    Args:
+        request: pytest request object
+
+    Returns:
+        path to test's bundle file
+    """
+    _file = "test-bundle.yaml"
+    bundle_marker = request.node.get_closest_marker("bundle_file")
+    if bundle_marker:
+        _file = bundle_marker.args[0]
+    return Path(__file__).parent / "data" / _file
+
+
 @pytest_asyncio.fixture(scope="module")
 async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     """Deploy local kubernetes charms."""
-    bundle_file = "test-bundle.yaml"
-    bundle_marker = request.node.get_closest_marker("bundle_file")
-    if bundle_marker:
-        bundle_file = bundle_marker.args[0]
-    bundle_path = Path(__file__).parent / "data" / bundle_file
+    bundle_path = bundle_file(request)
     model = "main"
 
     with ops_test.model_context(model) as the_model:
@@ -321,13 +380,14 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
             return
 
     log.info("Deploying cluster using %s bundle.", bundle_file)
+    arch = await cloud_arch(ops_test)
 
     charm_path = ("worker/k8s", "worker")
-    charms = [Charm(ops_test, Path("charms") / p) for p in charm_path]
+    charms = [Charm(ops_test, arch, Path("charms") / p) for p in charm_path]
     charm_files = await asyncio.gather(
         *[charm.resolve(request.config.option.charm_files) for charm in charms]
     )
-    bundle = Bundle(ops_test, bundle_path)
+    bundle = Bundle(ops_test, bundle_path, arch)
     _type, _vms = await cloud_type(ops_test)
     if _type == "lxd" and not _vms:
         log.info("Drop lxd machine constraints")
@@ -337,7 +397,6 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
         bundle.add_constraints({"virt-type": "virtual-machine"})
     if request.config.option.apply_proxy:
         await cloud_proxied(ops_test)
-
     for path, charm in zip(charm_files, charms):
         bundle.switch(charm.app_name, path)
     async with deploy_model(request, ops_test, model, bundle) as the_model:
@@ -353,7 +412,7 @@ async def grafana_agent(kubernetes_cluster: Model):
     machine_series = juju.utils.get_version_series(data["base"].split("@")[1])
 
     await kubernetes_cluster.deploy(
-        f"ch:{machine_arch}/{machine_series}/grafana-agent",
+        Charm.craft_url("grafana-agent", machine_series, machine_arch),
         channel="stable",
         series=machine_series,
     )
