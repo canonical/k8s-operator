@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 
 SECRET_ID = "{0}-secret-id"  # nosec
 
+UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
+
 
 class K8sCharm(Protocol):
     """Typing for the K8sCharm.
@@ -313,7 +315,7 @@ class TokenDistributor:
         return {
             self.charm.model.get_unit(str(u)): data
             for u, data in relation.data[self.charm.app].items()
-            if re.match(r"k8s(-worker)?/\d+", u)
+            if UNIT_RE.match(u)
         }
 
     def drop_node(self, relation: ops.Relation, unit: ops.Unit):

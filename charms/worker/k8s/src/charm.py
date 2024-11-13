@@ -603,18 +603,16 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         ops.WaitingStatus("Sharing Cluster Version"),
-        AssertionError,
     )
     def _update_kubernetes_version(self):
         """Update the unit Kubernetes version in the cluster relation."""
-        if not (relation := self.model.get_relation("cluster")):
-            assert False, "Missing cluster integration"  # nosec
+        relation = self.model.get_relation("cluster")
+        assert relation, "Missing cluster integration"  # nosec
         if version := snap_version("k8s"):
             relation.data[self.unit]["version"] = version
 
     @on_error(
         ops.WaitingStatus("Announcing Kubernetes version"),
-        AssertionError,
     )
     def _announce_kubernetes_version(self):
         """Announce the Kubernetes version to the cluster.
@@ -624,19 +622,20 @@ class K8sCharm(ops.CharmBase):
         peer = self.model.get_relation("cluster")
         worker = self.model.get_relation("k8s-cluster")
 
-        version = snap_version("k8s")
-        assert version, "k8s-snap is not installed"  # nosec
+        local_version = snap_version("k8s")
+        assert local_version, "k8s-snap is not installed"  # nosec
 
         for relation in (peer, worker):
-            assert relation, "Missing cluster integration"  # nosec
+            if not relation:
+                continue
             units = (unit for unit in relation.units if unit.name != self.unit.name)
             for unit in units:
                 unit_version = relation.data[unit].get("version")
                 assert unit_version, f"Waiting for version from {unit.name}"  # nosec
-                if unit_version != version:
+                if unit_version != local_version:
                     status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
-                    assert False, "Version mismatch with cluster nodes"  # nosec
-            relation.data[self.app]["version"] = version
+                    assert unit_version==local_version, "Version mismatch with cluster nodes"  # nosec
+            relation.data[self.app]["version"] = local_version
 
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.
