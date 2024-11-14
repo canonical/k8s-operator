@@ -253,16 +253,51 @@ def management(charm: ops.CharmBase) -> None:
     cache = snap_lib.SnapCache()
     for args in _parse_management_arguments(charm):
         which = cache[args.name]
+        if block_refresh(which, args):
+            continue
+        install_args = args.dict(exclude_none=True)
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
-            snap_lib.install_local(**args.dict(exclude_none=True))
+            snap_lib.install_local(**install_args)
         elif isinstance(args, SnapStoreArgument) and args.revision:
             if which.revision != args.revision:
                 log.info("Ensuring %s snap revision=%s", args.name, args.revision)
-                which.ensure(**args.dict(exclude_none=True))
+                which.ensure(**install_args)
                 which.hold()
         elif isinstance(args, SnapStoreArgument):
             log.info("Ensuring %s snap channel=%s", args.name, args.channel)
-            which.ensure(**args.dict(exclude_none=True))
+            which.ensure(**install_args)
+
+
+def block_refresh(which: snap_lib.Snap, args: SnapArgument) -> bool:
+    """Block snap refreshes if the snap is in a specific state.
+
+    Arguments:
+        which: The snap to check
+        args: The snap arguments
+
+    Returns:
+        bool: True if the snap should be blocked from refreshing
+    """
+    if snap_lib.SnapState(which.state) == snap_lib.SnapState.Available:
+        log.info("Allowing %s snap installation", args.name)
+        return False
+    if _overridden_snap_installation().exists():
+        log.info("Allowing %s snap refresh due to snap installation override", args.name)
+        return False
+    if isinstance(args, SnapStoreArgument) and args.revision:
+        if block := which.revision != args.revision:
+            log.info("Blocking %s snap refresh to revision=%s", args.name, args.revision)
+        else:
+            log.info("Allowing %s snap refresh to same revision", args.name)
+        return block
+    if isinstance(args, SnapStoreArgument):
+        if block := which.channel != args.channel:
+            log.info("Blocking %s snap refresh to channel=%s", args.name, args.channel)
+        else:
+            log.info("Allowing %s snap refresh to same channel (%s)", args.name, args.channel)
+        return block
+    log.info("Blocking %s snap refresh", args.name)
+    return True
 
 
 def version(snap: str) -> Tuple[Optional[str], bool]:

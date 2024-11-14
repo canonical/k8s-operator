@@ -66,6 +66,82 @@ def resource_snap_installation(tmp_path):
         yield mock_path
 
 
+@pytest.fixture()
+def block_refresh():
+    """Block snap refresh."""
+    with mock.patch("snap.block_refresh") as mocked:
+        mocked.return_value = False
+        yield mocked
+
+
+@mock.patch("snap.snap_lib.SnapCache")
+@pytest.mark.parametrize(
+    "state, as_file",
+    [
+        [("present", "1234", None), False],
+        [("present", None, "edge"), False],
+        [("present", None, None), True],
+    ],
+    ids=[
+        "installed & store-by-channel",
+        "installed & store-by-revision",
+        "installed & file-without-override",
+    ],
+)
+def test_block_refresh(cache, state, as_file, caplog, resource_snap_installation):
+    """Test block refresh."""
+    caplog.set_level(0)
+    k8s_snap = cache()["k8s"]
+    k8s_snap.state, k8s_snap.revision, k8s_snap.channel = state
+    if as_file:
+        args = snap.SnapFileArgument(
+            name="k8s",
+            filename=resource_snap_installation.parent / "k8s_1234.snap",
+        )
+    else:
+        args = snap.SnapStoreArgument(
+            name="k8s",
+            channel="beta" if k8s_snap.channel else None,
+            revision="5678" if k8s_snap.revision else None,
+        )
+    assert snap.block_refresh(k8s_snap, args)
+    assert "Blocking k8s snap refresh" in caplog.text
+
+
+@mock.patch("snap.snap_lib.SnapCache")
+@pytest.mark.parametrize(
+    "state, overridden",
+    [
+        [("available", None, None), None],
+        [("present", "1234", None), None],
+        [("present", None, "edge"), None],
+        [("present", None, None), True],
+    ],
+    ids=[
+        "not installed yet",
+        "installed & store-by-same-channel",
+        "installed & store-by-same-revision",
+        "installed & override",
+    ],
+)
+def test_not_block_refresh(cache, state, overridden, caplog, resource_snap_installation):
+    """Test block refresh."""
+    caplog.set_level(0)
+    k8s_snap = cache()["k8s"]
+    k8s_snap.state, k8s_snap.revision, k8s_snap.channel = state
+    if overridden:
+        resource_snap_installation.write_text(
+            "amd64:\n- install-type: store\n  name: k8s\n  channel: edge"
+        )
+    args = snap.SnapStoreArgument(
+        name="k8s",
+        channel=k8s_snap.channel,
+        revision=k8s_snap.revision,
+    )
+    assert not snap.block_refresh(k8s_snap, args)
+    assert "Allowing k8s snap" in caplog.text
+
+
 @pytest.mark.usefixtures("missing_snap_installation")
 def test_parse_no_file(harness):
     """Test no file exists."""
@@ -222,6 +298,7 @@ amd64:
     ]
 
 
+@pytest.mark.usefixtures("block_refresh")
 @mock.patch("snap._parse_management_arguments")
 @mock.patch("snap.snap_lib.install_local")
 @mock.patch("snap.snap_lib.SnapCache")
@@ -234,6 +311,7 @@ def test_management_installs_local(cache, install_local, args, harness):
     install_local.assert_called_once_with(filename=Path("path/to/thing"))
 
 
+@pytest.mark.usefixtures("block_refresh")
 @mock.patch("snap._parse_management_arguments")
 @mock.patch("snap.snap_lib.install_local")
 @mock.patch("snap.snap_lib.SnapCache")
@@ -248,6 +326,7 @@ def test_management_installs_store_from_channel(cache, install_local, args, revi
     k8s_snap.ensure.assert_called_once_with(state=snap.snap_lib.SnapState.Present, channel="edge")
 
 
+@pytest.mark.usefixtures("block_refresh")
 @mock.patch("snap._parse_management_arguments")
 @mock.patch("snap.snap_lib.install_local")
 @mock.patch("snap.snap_lib.SnapCache")
