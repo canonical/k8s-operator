@@ -85,6 +85,14 @@ parts:
       rm -rf $CRAFT_PRIME/lib $CRAFT_PRIME/templates
       mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
       mv $CRAFT_PRIME/k8s/templates $CRAFT_PRIME/templates
+actions:
+  pre-upgrade-check:
+    description: Run necessary pre-upgrade checks before executing a charm upgrade.
+
+peers:
+  upgrade:
+    interface: upgrade
+
 
 provides:
   cos-agent:
