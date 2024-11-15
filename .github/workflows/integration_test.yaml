@@ -2,8 +2,7 @@
 name: Integration tests
 
 on:
-  workflow_dispatch:
-#  pull_request:
+  pull_request:
 
 jobs:
   extra-args:
