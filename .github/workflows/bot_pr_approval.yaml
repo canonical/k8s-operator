@@ -1,7 +1,8 @@
 name: Provide approval for bot PRs
 
 on:
-  pull_request:
+#  pull_request:
+  workflow_dispatch:
 
 jobs:
   bot_pr_approval:

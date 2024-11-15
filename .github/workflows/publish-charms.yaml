@@ -2,10 +2,10 @@ name: Publish Charms to 1.xx/edge
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - release-*
+#  push:
+#    branches:
+#      - main
+#      - release-*
 
 jobs:
   configure-channel:

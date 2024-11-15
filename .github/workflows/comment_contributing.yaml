@@ -1,11 +1,12 @@
 name: Comment on the pull request
 
 on:
-  pull_request:
-    types:
-      - opened
-    branches:
-      - 'track/**'
+  workflow_dispatch:
+#  pull_request:
+#    types:
+#      - opened
+#    branches:
+#      - 'track/**'
 
 jobs:
   comment-on-pr:
