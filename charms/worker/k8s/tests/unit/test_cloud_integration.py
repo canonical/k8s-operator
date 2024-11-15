@@ -1,4 +1,7 @@
-import unittest.mock as mock
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""Unit tests cloud-integration module."""
 from pathlib import Path
 from unittest import mock
 
@@ -13,11 +16,11 @@ from ops.interface_gcp.requires import GCPIntegrationRequires
 
 @pytest.fixture(autouse=True)
 def vendor_name():
+    """Mock the ExternalCloudProvider name property."""
     with mock.patch(
         "charms.interface_external_cloud_provider.ExternalCloudProvider.name",
         new_callable=mock.PropertyMock,
     ) as mock_vendor_name:
-        mock_vendor_name.return_value = "aws"
         yield mock_vendor_name
 
 
@@ -36,7 +39,8 @@ def harness(request):
     harness.charm.is_worker = request.param == "worker"
     with mock.patch.object(harness.charm, "get_cloud_name"):
         with mock.patch.object(harness.charm, "get_cluster_name", return_value="my-cluster"):
-            yield harness
+            with mock.patch.object(harness.charm.reconciler, "reconcile"):
+                yield harness
     harness.cleanup()
 
 
@@ -50,8 +54,15 @@ def harness(request):
     ],
     ids=["aws", "gce", "azure", "unknown"],
 )
-def test_cloud_detection(harness, cloud_name, cloud_relation, vendor_name):
-    # Test that the cloud property returns the correct integration requires object
+def test_cloud_detection(harness, cloud_name, cloud_relation):
+    """Test that the cloud property returns the correct integration requires object.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+        cloud_name (str): The name of the cloud
+        cloud_relation (str): The name of the relation
+        vendor_name (mock.PropertyMock): The mock for the ExternalCloudProvider name property
+    """
     harness.charm.get_cloud_name.return_value = cloud_name
     integration = harness.charm.cloud_integration
     assert integration.cloud is None
@@ -61,9 +72,12 @@ def test_cloud_detection(harness, cloud_name, cloud_relation, vendor_name):
 
 
 def test_cloud_aws(harness):
-    # Test that the cloud property returns the correct integration requires object
+    """Test that the cloud property returns the correct integration requires object.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
     harness.charm.get_cloud_name.return_value = "aws"
-    # with mock.patch.object(harness.charm.cloud_integration, "cloud", callable=mock.PropertyMock) as mock_cloud:
     with mock.patch(
         "cloud_integration.CloudIntegration.cloud",
         new_callable=mock.PropertyMock,
@@ -111,7 +125,11 @@ def test_cloud_aws(harness):
 
 
 def test_cloud_gce(harness):
-    # Test that the cloud property returns the correct integration requires object
+    """Test that the cloud property returns the correct integration requires object.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
     harness.charm.get_cloud_name.return_value = "gce"
     with mock.patch(
         "cloud_integration.CloudIntegration.cloud",
@@ -147,7 +165,11 @@ def test_cloud_gce(harness):
 
 
 def test_cloud_azure(harness):
-    # Test that the cloud property returns the correct integration requires object
+    """Test that the cloud property returns the correct integration requires object.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
     harness.charm.get_cloud_name.return_value = "azure"
     with mock.patch(
         "cloud_integration.CloudIntegration.cloud",
@@ -184,7 +206,11 @@ def test_cloud_azure(harness):
 
 
 def test_cloud_unknown(harness):
-    # Test that the cloud property returns the correct integration requires object
+    """Test that the cloud property returns the correct integration requires object.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
     harness.charm.get_cloud_name.return_value = "unknown"
     with mock.patch(
         "cloud_integration.CloudIntegration.cloud",

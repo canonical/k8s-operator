@@ -986,4 +986,4 @@ class K8sCharm(ops.CharmBase):
 
 
 if __name__ == "__main__":  # pragma: nocover
-    ops.main.main(K8sCharm)
+    ops.main(K8sCharm)
