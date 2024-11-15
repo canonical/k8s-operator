@@ -1,3 +1,6 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 """Tests for the inspector module."""
 
 import unittest
@@ -27,7 +30,10 @@ class TestClusterInspector(unittest.TestCase):
                     {
                         "items": [
                             {
-                                "metadata": {"name": "test-node", "labels": {"role": "master"}},
+                                "metadata": {
+                                    "name": "test-node",
+                                    "labels": {"role": "control-plane"},
+                                },
                                 "status": {"conditions": [{"type": "Ready"}]},
                             }
                         ]
@@ -37,7 +43,7 @@ class TestClusterInspector(unittest.TestCase):
             ),
         ]
 
-        nodes = self.inspector.get_nodes({"role": "master"})
+        nodes = self.inspector.get_nodes({"role": "control-plane"})
 
         self.assertEqual(len(nodes), 1)
         self.assertEqual(nodes[0].name, "test-node")

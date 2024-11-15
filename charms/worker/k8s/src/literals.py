@@ -1,3 +1,6 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 """Literals for the charm."""
 
 DEPENDENCIES = {

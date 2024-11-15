@@ -1,3 +1,6 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 """A module for inspecting a Kubernetes cluster."""
 
 import json
