@@ -66,3 +66,7 @@ def configure(charm: K8sCharmProtocol):
             kubelet_token=str(),
             proxy_token=str(),
         )
+
+    for user, _ in charm.kube_control.closed_auth_creds():
+        log.info("TODO: Revoke auth-token for '%s'", user)
+        # charm.api_manager.remove_auth_token(cred.client_token.get_secret_value())
