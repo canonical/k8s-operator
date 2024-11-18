@@ -163,7 +163,6 @@ config:
         change or shrink the address range after deployment.
     local-storage-enabled:
       type: boolean
-      default: true
       description: |
         Enable local storage provisioning. This will create a storage class
         named "local-storage" that uses the hostPath provisioner. This is
@@ -186,7 +185,6 @@ config:
         be retained when the PersistentVolumeClaim is deleted.
     gateway-enabled:
       type: boolean
-      default: false
       description: |
         Enable/Disable the gateway feature on the cluster.
 
