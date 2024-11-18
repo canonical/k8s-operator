@@ -163,6 +163,7 @@ config:
         change or shrink the address range after deployment.
     local-storage-enabled:
       type: boolean
+      default: true
       description: |
         Enable local storage provisioning. This will create a storage class
         named "local-storage" that uses the hostPath provisioner. This is
@@ -185,8 +186,25 @@ config:
         be retained when the PersistentVolumeClaim is deleted.
     gateway-enabled:
       type: boolean
+      default: false
       description: |
         Enable/Disable the gateway feature on the cluster.
+    load-balancer-enabled:
+      type: boolean
+    load-balancer-cidrs:
+      type: string
+    load-balancer-l2-mode:
+      type: bool
+    load-balancer-l2-interfaces:
+      type: string
+    load-balancer-bgp-mode:
+      type: bool
+    load-balancer-bgp-local-asn:
+      type: int
+    load-balancer-bgp-peer-address:
+      type: string
+    load-balancer-bgp-peer-port:
+      type: int
 
 actions:
   get-kubeconfig:
