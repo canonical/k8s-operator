@@ -4,10 +4,13 @@
 """Tests for the inspector module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from typing import List
+from unittest.mock import MagicMock
 
-from charms.interface_external_cloud_provider import json
 from inspector import ClusterInspector
+from lightkube.core.exceptions import ApiError
+from lightkube.resources.core_v1 import Node, Pod
 
 
 class TestClusterInspector(unittest.TestCase):
@@ -15,95 +18,84 @@ class TestClusterInspector(unittest.TestCase):
 
     def setUp(self):
         """Set up common test fixtures."""
-        self.inspector = ClusterInspector("/path/to/kubeconfig")
+        self.inspector = ClusterInspector(Path("/path/to/kubeconfig"))
+        self.mock_client = MagicMock()
+        self.inspector.client = self.mock_client
 
-    @patch("inspector.time")
-    @patch("inspector.run")
-    def test_get_nodes_retries_on_failure(self, mock_run, mock_time):
-        """Test that get_nodes retries on failure."""
-        mock_time.time.side_effect = [0, 1, 2]
-        mock_run.side_effect = [
-            MagicMock(returncode=1, stderr=b"first failure"),
-            MagicMock(
-                returncode=0,
-                stdout=json.dumps(
-                    {
-                        "items": [
-                            {
-                                "metadata": {
-                                    "name": "test-node",
-                                    "labels": {"role": "control-plane"},
-                                },
-                                "status": {"conditions": [{"type": "Ready"}]},
-                            }
-                        ]
-                    }
-                ).encode(),
-                stderr=b"",
-            ),
-        ]
+    def test_get_nodes_returns_unready(self):
+        """Test that get_nodes returns unready nodes."""
+        mock_node1 = MagicMock(spec=Node)
+        mock_node1.status = "Ready"
+        mock_node1.metadata.name = "node1"
 
-        nodes = self.inspector.get_nodes({"role": "control-plane"})
+        mock_node2 = MagicMock(spec=Node)
+        mock_node2.status = "NotReady"
+        mock_node2.metadata.name = "node2"
 
+        self.mock_client.list.return_value = [mock_node1, mock_node2]
+
+        nodes: List[Node] = self.inspector.get_nodes({"role": "control-plane"})
+
+        self.mock_client.list.assert_called_once_with(Node, labels={"role": "control-plane"})
         self.assertEqual(len(nodes), 1)
-        self.assertEqual(nodes[0].name, "test-node")
-        self.assertEqual(mock_run.call_count, 2)
+        # pylint: disable=unsubscriptable-object
+        self.assertEqual(nodes[0].metadata.name, "node2")  # type: ignore
 
-    @patch("inspector.time")
-    @patch("inspector.run")
-    def test_verify_pods_running_retries_on_failure(self, mock_run, mock_time):
-        """Test that verify_pods_running retries on failure."""
-        mock_time.time.side_effect = [0, 1, 2]
-        mock_run.side_effect = [
-            MagicMock(returncode=1, stderr=b"first failure"),
-            MagicMock(
-                returncode=0,
-                stdout=json.dumps(
-                    {"items": [{"metadata": {"name": "test-pod"}, "status": {"phase": "Failed"}}]}
-                ).encode(),
-                stderr=b"",
-            ),
-        ]
+    def test_get_nodes_api_error(self):
+        """Test get_nodes handles API errors."""
+        self.mock_client.list.side_effect = ApiError(response=MagicMock())
+        with self.assertRaises(ClusterInspector.ClusterInspectorError):
+            self.inspector.get_nodes({"role": "control-plane"})
 
-        result = self.inspector.verify_pods_running(["default"])
+    def test_verify_pods_running_failed_pods(self):
+        """Test verify_pods_running when some pods are not running."""
+        mock_pod = MagicMock(spec=Pod)
+        mock_pod.status.phase = "Running"
+        mock_pod.metadata.name = "pod1"
 
-        self.assertEqual(result, "default/test-pod")
-        self.assertEqual(mock_run.call_count, 2)
+        mock_pod2 = MagicMock(spec=Pod)
+        mock_pod2.status.phase = "Failed"
+        mock_pod2.metadata.name = "pod2"
 
-    @patch("inspector.run")
-    def test_verify_pods_running_multiple_namespaces(self, mock_run):
-        """Test that verify_pods_running can check multiple namespaces."""
-        mock_run.side_effect = [
-            MagicMock(
-                returncode=0,
-                stdout=json.dumps(
-                    {"items": [{"metadata": {"name": "pod1"}, "status": {"phase": "Running"}}]}
-                ).encode(),
-            ),
-            MagicMock(
-                returncode=0,
-                stdout=json.dumps(
-                    {"items": [{"metadata": {"name": "pod2"}, "status": {"phase": "Failed"}}]}
-                ).encode(),
-            ),
-        ]
+        self.mock_client.list.return_value = [mock_pod, mock_pod2]
+
+        result = self.inspector.verify_pods_running(["kube-system"])
+
+        self.assertEqual(result, "kube-system/pod2")
+        self.mock_client.list.assert_called_once_with(Pod, namespace="kube-system")
+
+    def test_verify_pods_running_multiple_namespaces(self):
+        """Test verify_pods_running with multiple namespaces."""
+
+        def mock_list_pods(_, namespace):
+            """Mock the list method to return pods in different states.
+
+            Args:
+                namespace: The namespace to list pods from.
+
+            Returns:
+                A list of pods in different states.
+            """
+            if namespace == "ns1":
+                mock_pod = MagicMock(spec=Pod)
+                mock_pod.status.phase = "Running"
+                mock_pod.metadata.name = "pod1"
+                return [mock_pod]
+            mock_pod = MagicMock(spec=Pod)
+            mock_pod.status.phase = "Failed"
+            mock_pod.metadata.name = "pod2"
+            return [mock_pod]
+
+        self.mock_client.list.side_effect = mock_list_pods
 
         result = self.inspector.verify_pods_running(["ns1", "ns2"])
+
         self.assertEqual(result, "ns2/pod2")
-        self.assertEqual(mock_run.call_count, 2)
+        self.assertEqual(self.mock_client.list.call_count, 2)
 
-    @patch("inspector.run")
-    def test_verify_pods_running_mixed_status(self, mock_run):
-        """Test that verify_pods_running returns the failed pod."""
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = json.dumps(
-            {
-                "items": [
-                    {"metadata": {"name": "pod1"}, "status": {"phase": "Running"}},
-                    {"metadata": {"name": "pod2"}, "status": {"phase": "Failed"}},
-                ]
-            }
-        ).encode()
+    def test_verify_pods_running_api_error(self):
+        """Test verify_pods_running handles API errors."""
+        self.mock_client.list.side_effect = ApiError(response=MagicMock())
 
-        result = self.inspector.verify_pods_running(["default"])
-        self.assertEqual(result, "default/pod2")
+        with self.assertRaises(ClusterInspector.ClusterInspectorError):
+            self.inspector.verify_pods_running(["default"])

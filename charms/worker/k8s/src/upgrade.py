@@ -51,30 +51,31 @@ class K8sUpgrade(DataUpgrade):
         """
         try:
             nodes = self.node_manager.get_nodes(
-                label_selector={"juju-charm": "k8s-worker" if self.charm.is_worker else "k8s"}
+                labels={"juju-charm": "k8s-worker" if self.charm.is_worker else "k8s"}
             )
         except ClusterInspector.ClusterInspectorError as e:
             raise ClusterNotReadyError(
-                "Cluster is not ready",
-                str(e),
-                "API server may not be ready",
+                message="Cluster is not ready for an upgrade",
+                cause=str(e),
+                resolution="""API server may not be reachable.
+                Please check that the API server is up and running.""",
             ) from e
 
-        nodes = nodes or []
-        unready_nodes = [node.name for node in nodes if node.status != "Ready"]
+        unready_nodes = nodes or []
 
         if unready_nodes:
             raise ClusterNotReadyError(
-                "Cluster is not ready",
-                f"Nodes not ready: {', '.join(unready_nodes)}",
-                "Node(s) may be in a bad state",
+                message="Cluster is not ready for an upgrade",
+                cause=f"Nodes not ready: {', '.join(unready_nodes)}",
+                resolution="""Node(s) may be in a bad state.
+                    Please check the node(s) for more information.""",
             )
 
-        if failing_pods := self.node_manager.verify_pods_running(["kube-system"], timeout=60):
+        if failing_pods := self.node_manager.verify_pods_running(["kube-system"]):
             raise ClusterNotReadyError(
-                "Cluster is not ready",
-                f"Pods not running in namespace(s): {failing_pods}",
-                "Pods may be in a bad state",
+                message="Cluster is not ready",
+                cause=f"Pods not running in namespace(s): {failing_pods}",
+                resolution="Check the logs for the failing pods.",
             )
 
     def build_upgrade_stack(self) -> List[int]:

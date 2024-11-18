@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
-from inspector import ClusterInspector, Node
+from inspector import ClusterInspector
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
 
@@ -44,47 +44,35 @@ class TestK8sUpgrade(unittest.TestCase):
     def test_pre_upgrade_check_worker_success(self):
         """Test pre_upgrade_check succeeds for worker nodes."""
         self.charm.is_worker = True
-        self.node_manager.get_nodes.return_value = [
-            Node(name="worker-1", status="Ready", roles=["worker"], labels={})
-        ]
+        self.node_manager.get_nodes.return_value = []
         self.node_manager.verify_pods_running.return_value = None
 
         self.upgrade.pre_upgrade_check()
 
-        self.node_manager.get_nodes.assert_called_once_with(
-            label_selector={"juju-charm": "k8s-worker"}
-        )
-        self.node_manager.verify_pods_running.assert_called_once_with(["kube-system"], timeout=60)
+        self.node_manager.get_nodes.assert_called_once_with(labels={"juju-charm": "k8s-worker"})
+        self.node_manager.verify_pods_running.assert_called_once_with(["kube-system"])
 
     def test_pre_upgrade_check_control_plane_success(self):
         """Test pre_upgrade_check succeeds for control plane nodes."""
         self.charm.is_worker = False
-        self.node_manager.get_nodes.return_value = [
-            Node(name="node-1", status="Ready", roles=["control-plane"], labels={})
-        ]
+        self.node_manager.get_nodes.return_value = []
         self.node_manager.verify_pods_running.return_value = None
 
         self.upgrade.pre_upgrade_check()
 
-        self.node_manager.get_nodes.assert_called_once_with(label_selector={"juju-charm": "k8s"})
+        self.node_manager.get_nodes.assert_called_once_with(labels={"juju-charm": "k8s"})
 
     def test_pre_upgrade_check_unready_nodes(self):
         """Test pre_upgrade_check fails when nodes are not ready."""
         self.charm.is_worker = True
         self.node_manager.get_nodes.return_value = [
-            Node(name="worker-1", status="NotReady", roles=["worker"], labels={})
+            "worker-1",
+            "worker-2",
+            "worker-3",
         ]
 
         with self.assertRaises(ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
-
-    def test_pre_upgrade_check_no_nodes(self):
-        """Test pre_upgrade_check handles empty node list."""
-        self.charm.is_worker = True
-        self.node_manager.get_nodes.return_value = None
-        self.node_manager.verify_pods_running.return_value = None
-
-        self.upgrade.pre_upgrade_check()
 
     def test_pre_upgrade_check_cluster_inspector_error(self):
         """Test pre_upgrade_check handles ClusterInspectorError."""
@@ -98,9 +86,7 @@ class TestK8sUpgrade(unittest.TestCase):
     def test_pre_upgrade_check_pods_not_ready(self):
         """Test pre_upgrade_check fails when pods are not ready."""
         self.charm.is_worker = True
-        self.node_manager.get_nodes.return_value = [
-            Node(name="worker-1", status="Ready", roles=["worker"], labels={})
-        ]
+        self.node_manager.get_nodes.return_value = None
         self.node_manager.verify_pods_running.return_value = "kube-system/pod-1"
 
         with self.assertRaises(ClusterNotReadyError):
