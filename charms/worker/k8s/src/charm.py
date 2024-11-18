@@ -148,7 +148,7 @@ class K8sCharm(ops.CharmBase):
         self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
-        self._stored.set_default(is_dying=False, cluster_name=str(), annotations={})
+        self._stored.set_default(is_dying=False, cluster_name=str(), cluster_config={})
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -321,7 +321,7 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
-        self._configure_annotations(bootstrap_config)
+        self._configure_cluster_config(bootstrap_config)
         bootstrap_config.service_cidr = str(self.config["service-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
@@ -400,40 +400,58 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _configure_annotations(self, config: BootstrapConfig):
-        """Configure the annotations for the Canonical Kubernetes cluster.
+    def _get_cluster_config_from_charm_config(self) -> UserFacingClusterConfig:
+        """Retrieve the cluster config from charm configuration.
+
+        Returns:
+            UserFacingClusterConfig: The expected cluster configuration.
+        """
+        local_storage = LocalStorageConfig(
+            enabled=self.config.get("local_storage_enabled"),
+            local_path=self.config.get("local_storage_local_path"),
+            reclaim_policy=self.config.get("local_storage_reclaim_policy"),
+            set_default=self.config.get("local_storage_set_default"),
+        )
+
+        return UserFacingClusterConfig(
+            local_storage=local_storage,
+            annotations=self._get_valid_annotations(),
+        )
+
+    def _configure_cluster_config(self, config: BootstrapConfig):
+        """Configure the cluster config for the Canonical Kubernetes cluster.
 
         Args:
             config (BootstrapConfig): Configuration object to bootstrap the cluster.
         """
-        annotations = self._get_valid_annotations()
-        if annotations is None:
-            return
-
         if not config.cluster_config:
-            config.cluster_config = UserFacingClusterConfig(annotations=annotations)
+            config.cluster_config = self._get_cluster_config_from_charm_config()
         else:
-            config.cluster_config.annotations = annotations
+            charm_cluster_config = self._get_cluster_config_from_charm_config()
+            # Merge the charm and user cluster configurations
+            # The existing configuration takes precedence over the charm configuration as
+            # this information is retrieved elsewhere (e.g. cloud-provider).
+            merged_data = {**charm_cluster_config.dict(), **config.cluster_config.dict()}
+            config.cluster_config = UserFacingClusterConfig(**merged_data)
 
     @status.on_error(
-        ops.BlockedStatus("Invalid Annotations"),
+        ops.BlockedStatus("Invalid Cluster configuration"),
         AssertionError,
     )
-    def _update_annotations(self):
-        """Update the annotations for the Canonical Kubernetes cluster."""
-        annotations = self._get_valid_annotations()
-        if annotations is None:
+    def _update_cluster_config(self):
+        """Update the cluster configuration for the Canonical Kubernetes cluster."""
+        status.add(ops.MaintenanceStatus("Updating cluster configuration"))
+        log.info("Updating cluster configuration")
+
+        cluster_config = self._get_cluster_config_from_charm_config()
+
+        if self._stored.cluster_config == cluster_config:
             return
 
-        status.add(ops.MaintenanceStatus("Updating Annotations"))
-        log.info("Updating Annotations")
-
-        if self._stored.annotations == annotations:
-            return
-
-        config = UserFacingClusterConfig(annotations=annotations)
-        update_request = UpdateClusterConfigRequest(config=config)
+        update_request = UpdateClusterConfigRequest(config=cluster_config)
         self.api_manager.update_cluster_config(update_request)
+
+        self._stored.cluster_config = cluster_config
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
@@ -792,7 +810,7 @@ class K8sCharm(ops.CharmBase):
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
             self._enable_functionalities()
-            self._update_annotations()
+            self._update_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
