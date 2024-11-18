@@ -58,8 +58,8 @@ from charms.reconciler import Reconciler
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from inspector import ClusterInspector
-from literals import DEPENDENCIES
 from kube_control import configure as configure_kube_control
+from literals import DEPENDENCIES
 from ops.interface_kube_control import KubeControlProvides
 from snap import management as snap_management
 from snap import version as snap_version
@@ -709,29 +709,45 @@ class K8sCharm(ops.CharmBase):
         InvalidResponseError,
         K8sdConnectionError,
     )
-    def _join_cluster(self):
-        """Retrieve the join token from secret databag and join the cluster."""
+    def _join_cluster(self, event: ops.EventBase):
+        """Retrieve the join token from secret databag and join the cluster.
+
+        Args:
+            event (ops.EventBase): event triggering the join
+        """
         if not (relation := self.model.get_relation("cluster")):
             status.add(ops.BlockedStatus("Missing cluster integration"))
-            assert False, "Missing cluster integration"  # nosec
+            raise ReconcilerError("Missing cluster integration")
 
-        if self.get_cluster_name():
+        if local_cluster := self.get_cluster_name():
+            self.cloud_integration.integrate(local_cluster, event)
             return
 
         status.add(ops.MaintenanceStatus("Joining cluster"))
         with self.collector.recover_token(relation) as token:
-            binding = self.model.get_binding(relation.name)
-            address = binding and binding.network.ingress_address
-            node_name = self.get_node_name()
-            cluster_addr = f"{address}:{K8SD_PORT}"
-            log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_addr)
-            request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
-            if self.is_control_plane:
-                request.config = ControlPlaneNodeJoinConfig()
-                request.config.extra_sans = [_get_public_address()]
+            remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
+            self.cloud_integration.integrate(remote_cluster, event)
+            self._join_with_token(relation, token)
 
-            self.api_manager.join_cluster(request)
-            log.info("Joined %s(%s)", self.unit, node_name)
+    def _join_with_token(self, relation: ops.Relation, token: str):
+        """Join the cluster with the given token.
+
+        Args:
+            relation (ops.Relation): The relation to use for the token.
+            token (str): The token to use for joining the cluster.
+        """
+        binding = self.model.get_binding(relation.name)
+        address = binding and binding.network.ingress_address
+        node_name = self.get_node_name()
+        cluster_addr = f"{address}:{K8SD_PORT}"
+        log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_addr)
+        request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
+        if self.is_control_plane:
+            request.config = ControlPlaneNodeJoinConfig()
+            request.config.extra_sans = [_get_public_address()]
+
+        self.api_manager.join_cluster(request)
+        log.info("Joined %s(%s)", self.unit, node_name)
 
     @on_error(WaitingStatus("Awaiting cluster removal"))
     def _death_handler(self, event: ops.EventBase):
@@ -783,7 +799,7 @@ class K8sCharm(ops.CharmBase):
             self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
             self._announce_kubernetes_version()
-        self._join_cluster()
+        self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
         self._update_status()
@@ -791,7 +807,6 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             self._copy_internal_kubeconfig()
             self._expose_ports()
-        self.cloud_integration.integrate(event)
 
     def _update_status(self):
         """Check k8s snap status."""

@@ -13,6 +13,8 @@ from ops.interface_aws.requires import AWSIntegrationRequires
 from ops.interface_azure.requires import AzureIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
 
+TEST_CLUSTER_NAME = "my-cluster"
+
 
 @pytest.fixture(autouse=True)
 def vendor_name():
@@ -38,9 +40,8 @@ def harness(request):
     harness.begin()
     harness.charm.is_worker = request.param == "worker"
     with mock.patch.object(harness.charm, "get_cloud_name"):
-        with mock.patch.object(harness.charm, "get_cluster_name", return_value="my-cluster"):
-            with mock.patch.object(harness.charm.reconciler, "reconcile"):
-                yield harness
+        with mock.patch.object(harness.charm.reconciler, "reconcile"):
+            yield harness
     harness.cleanup()
 
 
@@ -86,7 +87,7 @@ def test_cloud_aws(harness):
         mock_cloud = mock_property()
         mock_cloud.evaluate_relation.return_value = None
         event = mock.MagicMock()
-        harness.charm.cloud_integration.integrate(event)
+        harness.charm.cloud_integration.integrate(TEST_CLUSTER_NAME, event)
         if harness.charm.is_worker:
             mock_cloud.tag_instance.assert_called_once_with(
                 {"kubernetes.io/cluster/my-cluster": "owned"}
@@ -139,7 +140,7 @@ def test_cloud_gce(harness):
         mock_cloud = mock_property()
         mock_cloud.evaluate_relation.return_value = None
         event = mock.MagicMock()
-        harness.charm.cloud_integration.integrate(event)
+        harness.charm.cloud_integration.integrate(TEST_CLUSTER_NAME, event)
 
         if harness.charm.is_worker:
             mock_cloud.tag_instance.assert_called_once_with({"k8s-io-cluster-name": "my-cluster"})
@@ -179,7 +180,7 @@ def test_cloud_azure(harness):
         mock_cloud = mock_property()
         mock_cloud.evaluate_relation.return_value = None
         event = mock.MagicMock()
-        harness.charm.cloud_integration.integrate(event)
+        harness.charm.cloud_integration.integrate(TEST_CLUSTER_NAME, event)
         if harness.charm.is_worker:
             mock_cloud.tag_instance.assert_called_once_with({"k8s-io-cluster-name": "my-cluster"})
         else:
@@ -218,5 +219,5 @@ def test_cloud_unknown(harness):
         return_value=None,
     ) as mock_property:
         event = mock.MagicMock()
-        harness.charm.cloud_integration.integrate(event)
+        harness.charm.cloud_integration.integrate(TEST_CLUSTER_NAME, event)
         assert mock_property.called

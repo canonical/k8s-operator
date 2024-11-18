@@ -834,6 +834,16 @@ class K8sdAPIManager:
         auth_response = self._send_request(endpoint, "POST", AuthTokenResponse, body)
         return auth_response.metadata.token
 
+    def revoke_auth_token(self, token: str) -> None:
+        """Revoke a Kubernetes authentication token.
+
+        Args:
+            token (str): The authentication token.
+        """
+        endpoint = "/1.0/kubernetes/auth/tokens"
+        body = {"token": token}
+        self._send_request(endpoint, "DELETE", EmptyResponse, body)
+
     def get_kubeconfig(self, server: Optional[str]) -> str:
         """Request a Kubernetes admin config.
 
