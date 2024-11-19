@@ -148,7 +148,7 @@ class K8sCharm(ops.CharmBase):
         self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
-        self._stored.set_default(is_dying=False, cluster_name=str(), cluster_config={})
+        self._stored.set_default(is_dying=False, cluster_name=str())
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -407,10 +407,11 @@ class K8sCharm(ops.CharmBase):
             UserFacingClusterConfig: The expected cluster configuration.
         """
         local_storage = LocalStorageConfig(
-            enabled=self.config.get("local_storage_enabled"),
-            local_path=self.config.get("local_storage_local_path"),
-            reclaim_policy=self.config.get("local_storage_reclaim_policy"),
-            set_default=self.config.get("local_storage_set_default"),
+            enabled=self.config.get("local-storage-enabled"),
+            local_path=self.config.get("local-storage-local-path"),
+            reclaim_policy=self.config.get("local-storage-reclaim-policy"),
+            # Note(ben): set_default is intentionally omitted, see:
+            # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
         return UserFacingClusterConfig(
@@ -443,15 +444,19 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Updating cluster configuration"))
         log.info("Updating cluster configuration")
 
-        cluster_config = self._get_cluster_config_from_charm_config()
+        charm_cluster_config = self._get_cluster_config_from_charm_config()
+        snap_cluster_config = self.api_manager.get_cluster_status().metadata.status.config
 
-        if self._stored.cluster_config == cluster_config:
+        if snap_cluster_config == charm_cluster_config:
             return
 
-        update_request = UpdateClusterConfigRequest(config=cluster_config)
+        log.info(
+            "Snap config %s different from charm config %s. Updating snap config...",
+            snap_cluster_config,
+            charm_cluster_config,
+        )
+        update_request = UpdateClusterConfigRequest(config=charm_cluster_config)
         self.api_manager.update_cluster_config(update_request)
-
-        self._stored.cluster_config = cluster_config
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
