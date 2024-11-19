@@ -56,10 +56,13 @@ from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
+from inspector import ClusterInspector
+from literals import DEPENDENCIES
 from snap import management as snap_management
 from snap import version as snap_version
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 from typing_extensions import Literal
+from upgrade import K8sDependenciesModel, K8sUpgrade
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -158,6 +161,14 @@ class K8sCharm(ops.CharmBase):
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.xcp = ExternalCloudProvider(self, xcp_relation)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=KUBECONFIG)
+        self.upgrade = K8sUpgrade(
+            self,
+            node_manager=self.cluster_inspector,
+            relation_name="upgrade",
+            substrate="vm",
+            dependency_model=K8sDependenciesModel(**DEPENDENCIES),
+        )
         self.cos = COSIntegration(self)
         self.active_status = DynamicActiveStatus()
         self.reconciler = Reconciler(self, self._reconcile, exit_status=self.active_status)
@@ -326,7 +337,7 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
 
-        bootstrap_config = BootstrapConfig()
+        bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
         self._configure_cloud_provider(bootstrap_config)
         self._configure_annotations(bootstrap_config)
@@ -643,6 +654,7 @@ class K8sCharm(ops.CharmBase):
         """
         relation = self.model.get_relation("cluster")
         if not relation:
+            status.add(ops.BlockedStatus("Missing cluster integration"))
             raise ReconcilerError("Missing cluster integration")
         version, _ = snap_version("k8s")
         if version:

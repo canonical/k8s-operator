@@ -35,9 +35,20 @@ class K8sCharm(Protocol):
         unit (ops.Unit): The unit object.
     """
 
-    app: ops.Application
-    model: ops.Model
-    unit: ops.Unit
+    @property
+    def app(self) -> ops.Application:
+        """The application object."""
+        ...  # pylint: disable=unnecessary-ellipsis
+
+    @property
+    def model(self) -> ops.Model:
+        """The model object."""
+        ...  # pylint: disable=unnecessary-ellipsis
+
+    @property
+    def unit(self) -> ops.Unit:
+        """The unit object."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
     def get_cluster_name(self) -> str:
         """Get the cluster name."""

@@ -184,6 +184,9 @@ actions:
       server:
         description: Override the server endpoint with this field
         type: string
+  pre-upgrade-check:
+    description: Run necessary pre-upgrade checks before executing a charm upgrade.
+
 
 parts:
   charm:
@@ -195,6 +198,8 @@ peers:
     interface: k8s-cluster
   cos-tokens:
     interface: cos-k8s-tokens
+  upgrade:
+    interface: upgrade
 
 provides:
   cos-agent:
