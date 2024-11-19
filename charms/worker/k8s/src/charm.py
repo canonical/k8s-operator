@@ -129,10 +129,10 @@ class K8sCharm(ops.CharmBase):
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.node_manager = ClusterInspector(kubeconfig_path=KUBECONFIG)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=KUBECONFIG)
         self.upgrade = K8sUpgrade(
             self,
-            node_manager=self.node_manager,
+            node_manager=self.cluster_inspector,
             relation_name="upgrade",
             substrate="vm",
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
