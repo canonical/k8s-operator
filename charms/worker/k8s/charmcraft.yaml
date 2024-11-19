@@ -184,6 +184,11 @@ config:
         "Retain". If set to "Delete", the storage will be deleted when the
         PersistentVolumeClaim is deleted. If set to "Retain", the storage will
         be retained when the PersistentVolumeClaim is deleted.
+    gateway-enabled:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable the gateway feature on the cluster.
 
 actions:
   get-kubeconfig:
