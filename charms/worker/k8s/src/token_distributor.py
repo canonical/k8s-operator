@@ -7,7 +7,7 @@ import contextlib
 import logging
 import re
 from enum import Enum, auto
-from typing import Dict, Optional, Protocol, Union
+from typing import Dict, Generator, Optional, Union
 
 import charms.contextual_status as status
 import ops
@@ -17,6 +17,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdAPIManager,
     K8sdConnectionError,
 )
+from protocols import K8sCharmProtocol
 from pydantic import SecretStr
 
 log = logging.getLogger(__name__)
@@ -24,35 +25,6 @@ log = logging.getLogger(__name__)
 SECRET_ID = "{0}-secret-id"  # nosec
 
 UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
-
-
-class K8sCharm(Protocol):
-    """Typing for the K8sCharm.
-
-    Attributes:
-        app (ops.Application): The application object.
-        model (ops.Model): The model object.
-        unit (ops.Unit): The unit object.
-    """
-
-    @property
-    def app(self) -> ops.Application:
-        """The application object."""
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    @property
-    def model(self) -> ops.Model:
-        """The model object."""
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    @property
-    def unit(self) -> ops.Unit:
-        """The unit object."""
-        ...  # pylint: disable=unnecessary-ellipsis
-
-    def get_cluster_name(self) -> str:
-        """Get the cluster name."""
-        ...  # pylint: disable=unnecessary-ellipsis
 
 
 class TokenStrategy(Enum):
@@ -115,12 +87,13 @@ class ClusterTokenManager:
         worker = token_type == ClusterTokenType.WORKER
         return self.api_manager.create_join_token(name, worker=worker)
 
-    def revoke(self, name: str, ignore_errors: bool):
+    def revoke(self, name: str, _secret: Optional[ops.Secret], ignore_errors: bool):
         """Remove a cluster token.
 
         Args:
-            name (str): The name of the node.
-            ignore_errors (bool): Whether or not errors can be ignored
+            name (str):                     The name of the node.
+            _secret (Optional[ops.Secret]): The secret to revoke
+            ignore_errors (bool):           Whether or not errors can be ignored
 
         Raises:
             K8sdConnectionError: reraises cluster token revoke failures
@@ -128,7 +101,7 @@ class ClusterTokenManager:
         try:
             self.api_manager.remove_node(name)
         except (K8sdConnectionError, InvalidResponseError) as e:
-            if ignore_errors or e.code == ErrorCodes.STATUS_NODE_UNAVAILABLE:
+            if ignore_errors or getattr(e, "code") == ErrorCodes.STATUS_NODE_UNAVAILABLE:
                 # Let's just ignore some of these expected errors:
                 # "Remote end closed connection without response"
                 # "Failed to check if node is control-plane"
@@ -174,19 +147,38 @@ class CosTokenManager:
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
-    def revoke(self, name: str, ignore_errors: bool):
+    def revoke(self, _name: str, secret: Optional[ops.Secret], ignore_errors: bool):
         """Remove a COS token intentionally left unimplemented.
 
         Args:
-            name (str): The name of the node.
-            ignore_errors (bool): Whether or not errors can be ignored
+            _name (str):                   The name of the node.
+            secret (Optional[ops.Secret]): The secret to revoke
+            ignore_errors (bool):          Whether or not errors can be ignored
+
+        Raises:
+            K8sdConnectionError: reraises cluster token revoke failures
         """
+        # pylint: disable=unused-argument
+        if not secret:
+            return
+        content = secret.get_content(refresh=True)
+        try:
+            self.api_manager.revoke_auth_token(content["token"])
+        except (K8sdConnectionError, InvalidResponseError) as e:
+            if ignore_errors or getattr(e, "code") == ErrorCodes.STATUS_NODE_UNAVAILABLE:
+                # Let's just ignore some of these expected errors:
+                # "Remote end closed connection without response"
+                # "Failed to check if node is control-plane"
+                # Removing a node that doesn't exist
+                log.warning("Revoke_Auth_Token %s: but with an expected error: %s", _name, e)
+            else:
+                raise
 
 
 class TokenCollector:
     """Helper class for collecting tokens for units in a relation."""
 
-    def __init__(self, charm: K8sCharm, node_name: str):
+    def __init__(self, charm: K8sCharmProtocol, node_name: str):
         """Initialize a TokenCollector instance.
 
         Args:
@@ -235,7 +227,7 @@ class TokenCollector:
         return cluster_name or ""
 
     @contextlib.contextmanager
-    def recover_token(self, relation: ops.Relation):
+    def recover_token(self, relation: ops.Relation) -> Generator[str, None, None]:
         """Request, recover token, and acknowledge token once used.
 
         Args:
@@ -271,7 +263,7 @@ class TokenCollector:
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
-    def __init__(self, charm: K8sCharm, node_name: str, api_manager: K8sdAPIManager):
+    def __init__(self, charm: K8sCharmProtocol, node_name: str, api_manager: K8sdAPIManager):
         """Initialize a TokenDistributor instance.
 
         Args:
@@ -286,7 +278,7 @@ class TokenDistributor:
             TokenStrategy.COS: CosTokenManager(api_manager),
         }
 
-    def _get_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> Optional[str]:
+    def _get_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> Optional[ops.Secret]:
         """Lookup juju secret offered to a unit on this relation.
 
         Args:
@@ -294,9 +286,12 @@ class TokenDistributor:
             unit (ops.Unit): The unit the secret is intended for
 
         Returns:
-            secret_id (None | str) if on the relation
+            secret_id (None | ops.Secret) if on the relation
         """
-        return relation.data[self.charm.unit].get(SECRET_ID.format(unit.name))
+        secret_id = SECRET_ID.format(unit.name)
+        if juju_secret := relation.data[self.charm.unit].get(secret_id):
+            return self.charm.model.get_secret(id=juju_secret)
+        return None
 
     def _revoke_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> None:
         """Revoke and remove juju secret offered to a unit on this relation.
@@ -517,7 +512,9 @@ class TokenDistributor:
                 ignore_errors |= state == "pending"  # on pending tokens
                 # if cluster doesn't match
                 ignore_errors |= self.charm.get_cluster_name() != joined_cluster(relation, unit)
-                self.token_strategies[token_strategy].revoke(node, ignore_errors)
+                self.token_strategies[token_strategy].revoke(
+                    node, self._get_juju_secret(relation, unit), ignore_errors
+                )
                 self.drop_node(relation, unit)
                 self._revoke_juju_secret(relation, unit)
 
