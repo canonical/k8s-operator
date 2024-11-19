@@ -39,7 +39,11 @@ jobs:
         run: |
           set -eux -o pipefail
 
+          # tox required for running the unit tests with coverage:
           sudo python3 -m pip install tox
+
+          # required by TICSServer:
+          sudo python3 -m pip install pylint flake8
 
       - name: Install Go for Cobertura Coverage Converter
         uses: actions/setup-go@v5
