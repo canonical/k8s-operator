@@ -60,6 +60,7 @@ def mock_reconciler_handlers(harness):
         handler_names |= {
             "_bootstrap_k8s_snap",
             "_enable_functionalities",
+            "_update_cluster_config",
             "_create_cluster_tokens",
             "_create_cos_tokens",
             "_apply_cos_requirements",
