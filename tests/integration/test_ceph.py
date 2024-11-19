@@ -12,8 +12,7 @@ from juju import model, unit
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
 pytestmark = [
-    pytest.mark.bundle_file("test-bundle-ceph.yaml"),
-    pytest.mark.ignore_blocked,
+    pytest.mark.bundle_file("test-bundle-ceph.yaml")
 ]
 
 
