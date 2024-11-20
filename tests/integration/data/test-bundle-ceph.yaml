@@ -11,6 +11,8 @@ applications:
     channel: latest/edge
     constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
+    options:
+      bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
   k8s-worker:
     charm: k8s-worker
     channel: latest/edge

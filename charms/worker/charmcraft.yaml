@@ -59,7 +59,7 @@ bases:
       architectures: [arm64]
 config:
   options:
-    labels:
+    node-labels:
       default: ""
       type: string
       description: |

@@ -48,7 +48,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     testname: str = request.node.name
     k8s: application.Application = kubernetes_cluster.applications["k8s"]
     worker: application.Application = kubernetes_cluster.applications["k8s-worker"]
-    label_config = {"labels": f"{testname}="}
+    label_config = {"node-labels": f"{testname}="}
     await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
     await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
 
