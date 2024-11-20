@@ -10,9 +10,9 @@
 
 import logging
 import re
-import shlex
 import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 
@@ -24,6 +24,27 @@ from typing_extensions import Annotated
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
+
+
+def _yaml_read(path: Path) -> dict:
+    """Read a yaml file into a dictionary.
+
+    Args:
+        path: The path to the yaml file
+    """
+    with path.open(mode="r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _yaml_write(path: Path, content: dict) -> None:
+    """Write a dictionary to a yaml file.
+
+    Args:
+        path: The path to the yaml file
+        content: The dictionary to write
+    """
+    with path.open(mode="w", encoding="utf-8") as f:
+        yaml.safe_dump(content, f)
 
 
 class SnapFileArgument(BaseModel):
@@ -129,8 +150,7 @@ def _normalize_paths(snap_installation):
         snap_installation: The path to the snap_installation manifest
     """
     snap_installation = snap_installation.resolve()
-    content = yaml.safe_load(snap_installation.read_text(encoding="utf-8"))
-    updated = False
+    content, updated = _yaml_read(snap_installation), False
     for arch, snaps in content.items():
         for idx, snap in enumerate(snaps):
             if snap.get("filename"):
@@ -139,7 +159,7 @@ def _normalize_paths(snap_installation):
                 content[arch][idx]["filename"] = str(resolved)
                 updated = True
     if updated:
-        yaml.safe_dump(content, snap_installation.open(mode="w", encoding="utf-8"))
+        _yaml_write(snap_installation, content)
 
 
 def _select_snap_installation(charm: ops.CharmBase) -> Path:
@@ -170,37 +190,36 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
 
     # Unpack the snap-installation resource
     unpack_path.mkdir(parents=True, exist_ok=True)
-    command = f"tar -xzvf {resource_path} -C {unpack_path} --no-same-owner"
     try:
-        subprocess.check_call(shlex.split(command))
-    except subprocess.CalledProcessError as e:
+        with tarfile.open(resource_path, "r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name.endswith("snap_installation.yaml"):
+                    log.info("Found snap_installation manifest")
+                    tar.extract(member, path=unpack_path)
+                    snap_installation = unpack_path / member.name
+                    _normalize_paths(snap_installation)
+                    return snap_installation
+                if member.name.endswith(".snap"):
+                    log.info("Found snap_installation snap: %s", member.name)
+                    tar.extract(member, path=unpack_path)
+                    arch = _local_arch()
+                    manifest = {
+                        arch: [
+                            {
+                                "install-type": "file",
+                                "name": "k8s",
+                                "filename": str(unpack_path / member.name),
+                                "classic": True,
+                                "dangerous": True,
+                            }
+                        ]
+                    }
+                    snap_installation = unpack_path / "snap_installation.yaml"
+                    _yaml_write(snap_installation, manifest)
+                    return snap_installation
+    except tarfile.TarError as e:
         log.error("Failed to extract 'snap-installation:'")
         raise snap_lib.SnapError("Invalid snap-installation resource") from e
-
-    # Find the snap_installation manifest
-    snap_installation = unpack_path / "snap_installation.yaml"
-    if snap_installation.exists():
-        log.info("Found snap_installation manifest")
-        _normalize_paths(snap_installation)
-        return snap_installation
-
-    snap_path = list(unpack_path.glob("*.snap"))
-    if len(snap_path) == 1:
-        log.info("Found snap_installation snap: %s", snap_path[0])
-        arch = _local_arch()
-        manifest = {
-            arch: [
-                {
-                    "install-type": "file",
-                    "name": "k8s",
-                    "filename": str(snap_path[0]),
-                    "classic": True,
-                    "dangerous": True,
-                }
-            ]
-        }
-        yaml.safe_dump(manifest, snap_installation.open("w"))
-        return snap_installation
 
     log.error("Failed to find a snap file in snap_installation resource")
     raise snap_lib.SnapError("Failed to find snap_installation manifest")
@@ -222,7 +241,7 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
     if not revision.exists():
         raise snap_lib.SnapError(f"Failed to find file={revision}")
     try:
-        body = yaml.safe_load(revision.read_text(encoding="utf-8"))
+        body = _yaml_read(revision)
     except yaml.YAMLError as e:
         log.error("Failed to load file=%s, %s", revision, e)
         raise snap_lib.SnapError(f"Failed to load file={revision}")

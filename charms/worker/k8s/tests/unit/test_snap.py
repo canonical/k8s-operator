@@ -53,7 +53,8 @@ def snap_installation():
     with mock.patch("snap._default_snap_installation") as mocked:
         mock_path = mocked.return_value
         mock_path.exists.return_value = True
-        yield mock_path
+        mock_stream = mock_path.open.return_value.__enter__
+        yield mock_stream
     mocked.assert_called_once_with()
 
 
@@ -151,7 +152,7 @@ def test_parse_no_file(harness):
 
 def test_parse_invalid_file(snap_installation, harness):
     """Test file is invalid."""
-    snap_installation.read_text.return_value = "example: ="
+    snap_installation.return_value = io.BytesIO(b"example: =")
     with pytest.raises(snap.snap_lib.SnapError):
         snap._parse_management_arguments(harness.charm)
 
@@ -159,7 +160,7 @@ def test_parse_invalid_file(snap_installation, harness):
 @mock.patch("subprocess.check_output")
 def test_parse_invalid_arch(mock_checkoutput, snap_installation, harness):
     """Test file has invalid arch."""
-    snap_installation.read_text.return_value = "{}"
+    snap_installation.return_value = io.BytesIO(b"{}")
     mock_checkoutput().decode.return_value = "amd64"
     with pytest.raises(snap.snap_lib.SnapError):
         snap._parse_management_arguments(harness.charm)
@@ -168,7 +169,7 @@ def test_parse_invalid_arch(mock_checkoutput, snap_installation, harness):
 @mock.patch("subprocess.check_output")
 def test_parse_validation_error(mock_checkoutput, snap_installation, harness):
     """Test file cannot be parsed."""
-    snap_installation.read_text.return_value = "amd64:\n- {}"
+    snap_installation.return_value = io.BytesIO(b"amd64:\n- {}")
     mock_checkoutput().decode.return_value = "amd64"
     with pytest.raises(snap.snap_lib.SnapError):
         snap._parse_management_arguments(harness.charm)
@@ -267,13 +268,13 @@ def test_resource_supplied_snap(harness, resource_snap_installation):
 @mock.patch("subprocess.check_output")
 def test_parse_valid_store(mock_checkoutput, snap_installation, harness):
     """Test file parses as store content."""
-    content = """
+    content = b"""
 amd64:
 - install-type: store
   name: k8s
   channel: edge
 """
-    snap_installation.read_text.return_value = content
+    snap_installation.return_value = io.BytesIO(content)
     mock_checkoutput().decode.return_value = "amd64"
     args = snap._parse_management_arguments(harness.charm)
     assert args == [
@@ -284,13 +285,13 @@ amd64:
 @mock.patch("subprocess.check_output")
 def test_parse_valid_file(mock_checkoutput, snap_installation, harness):
     """Test file parses as file content."""
-    content = """
+    content = b"""
 amd64:
 - install-type: file
   name: k8s
   filename: path/to/thing
 """
-    snap_installation.read_text.return_value = content
+    snap_installation.return_value = io.BytesIO(content)
     mock_checkoutput().decode.return_value = "amd64"
     args = snap._parse_management_arguments(harness.charm)
     assert args == [
