@@ -150,17 +150,36 @@ config:
         https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
     bootstrap-pod-cidr:
       type: string
-      default: 10.1.0.0/16
+      default: "10.1.0.0/16"
       description: |
-        CIDR to use for Kubernetes pods. It is not possible to
-        change the address range after deployment.
+        Comma-separated CIDR blocks for IP addresses that can be assigned
+        to pods within the cluster. Can contain at most 2 blocks, one for IPv4 
+        and one for IPv6.
+
+        After deployment it is not possible to change the size of 
+        the IP range.
+
+        Examples: 
+          - "192.0.2.0/24"
+          - "2001:db8::/32"
+          - "192.0.2.0/24,2001:db8::/32"
+          - "2001:db8::/32,192.0.2.0/24"
     bootstrap-service-cidr:
       type: string
       default: 10.152.183.0/24
       description: |
-        CIDR to use for Kubernetes services. After deployment it is
-        only possible to increase the size of the IP range. It is not possible to
-        change or shrink the address range after deployment.
+        Comma-separated CIDR blocks for IP addresses that can be assigned
+        to services within the cluster. Can contain at most 2 blocks, one for IPv4 
+        and one for IPv6.
+
+        After deployment it is not possible to change the size of 
+        the IP range.
+
+        Examples: 
+          - "192.0.2.0/24"
+          - "2001:db8::/32"
+          - "192.0.2.0/24,2001:db8::/32"
+          - "2001:db8::/32,192.0.2.0/24"
     gateway-enabled:
       type: boolean
       default: false
