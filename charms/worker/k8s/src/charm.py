@@ -41,6 +41,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
     DNSConfig,
+    GatewayConfig,
     InvalidResponseError,
     JoinClusterRequest,
     K8sdAPIManager,
@@ -413,12 +414,17 @@ class K8sCharm(ops.CharmBase):
             # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
+        gateway = GatewayConfig(
+            enabled=self.config.get("gateway-enabled"),
+        )
+
         cloud_provider = None
         if self.xcp.has_xcp:
             cloud_provider = "external"
 
         return UserFacingClusterConfig(
             local_storage=local_storage,
+            gateway=gateway,
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
         )
