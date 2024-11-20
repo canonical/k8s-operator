@@ -46,6 +46,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
+    LoadBalancerConfig,
     LocalStorageConfig,
     NetworkConfig,
     UnixSocketConnectionFactory,
@@ -418,6 +419,18 @@ class K8sCharm(ops.CharmBase):
             enabled=self.config.get("gateway-enabled"),
         )
 
+        load_balancer = LoadBalancerConfig(
+            enabled=self.config.get("load-balancer-enabled"),
+            cidrs=str(self.config.get("load-balancer-cidrs")).split(),
+            l2_mode=self.config.get("load-balancer-l2-mode"),
+            l2_interfaces=str(self.config.get("load-balancer-l2-interfaces")).split(),
+            bgp_mode=self.config.get("load-balancer-bgp-mode"),
+            bgp_local_asn=self.config.get("load-balancer-bgp-local-asn"),
+            bgp_peer_address=self.config.get("load-balancer-bgp-peer-address"),
+            bgp_peer_asn=self.config.get("load-balancer-bgp-peer-asn"),
+            bgp_peer_port=self.config.get("load-balancer-bgp-peer-port"),
+        )
+
         cloud_provider = None
         if self.xcp.has_xcp:
             cloud_provider = "external"
@@ -427,6 +440,7 @@ class K8sCharm(ops.CharmBase):
             gateway=gateway,
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
+            load_balancer=load_balancer,
         )
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
