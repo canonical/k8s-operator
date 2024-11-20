@@ -320,8 +320,7 @@ class K8sCharm(ops.CharmBase):
 
         bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
-        self._configure_cloud_provider(bootstrap_config)
-        self._configure_cluster_config(bootstrap_config)
+        bootstrap_config.cluster_config = self._assemble_cluster_config()
         bootstrap_config.service_cidr = str(self.config["service-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
@@ -400,8 +399,8 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _get_cluster_config_from_charm_config(self) -> UserFacingClusterConfig:
-        """Retrieve the cluster config from charm configuration.
+    def _assemble_cluster_config(self) -> UserFacingClusterConfig:
+        """Retrieve the cluster config from charm configuration and charm relations.
 
         Returns:
             UserFacingClusterConfig: The expected cluster configuration.
@@ -414,49 +413,15 @@ class K8sCharm(ops.CharmBase):
             # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
+        cloud_provider = None
+        if self.xcp.has_xcp:
+            cloud_provider = "external"
+
         return UserFacingClusterConfig(
             local_storage=local_storage,
             annotations=self._get_valid_annotations(),
+            cloud_provider=cloud_provider,
         )
-
-    def _configure_cluster_config(self, config: BootstrapConfig):
-        """Configure the cluster config for the Canonical Kubernetes cluster.
-
-        Args:
-            config (BootstrapConfig): Configuration object to bootstrap the cluster.
-        """
-        if not config.cluster_config:
-            config.cluster_config = self._get_cluster_config_from_charm_config()
-        else:
-            charm_cluster_config = self._get_cluster_config_from_charm_config()
-            # Merge the charm and user cluster configurations
-            # The existing configuration takes precedence over the charm configuration as
-            # this information is retrieved elsewhere (e.g. cloud-provider).
-            merged_data = {**charm_cluster_config.dict(), **config.cluster_config.dict()}
-            config.cluster_config = UserFacingClusterConfig(**merged_data)
-
-    @status.on_error(
-        ops.BlockedStatus("Invalid Cluster configuration"),
-        AssertionError,
-    )
-    def _update_cluster_config(self):
-        """Update the cluster configuration for the Canonical Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Updating cluster configuration"))
-        log.info("Updating cluster configuration")
-
-        charm_cluster_config = self._get_cluster_config_from_charm_config()
-        snap_cluster_config = self.api_manager.get_cluster_status().metadata.status.config
-
-        if snap_cluster_config == charm_cluster_config:
-            return
-
-        log.info(
-            "Snap config %s different from charm config %s. Updating snap config...",
-            snap_cluster_config,
-            charm_cluster_config,
-        )
-        update_request = UpdateClusterConfigRequest(config=charm_cluster_config)
-        self.api_manager.update_cluster_config(update_request)
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
@@ -503,27 +468,6 @@ class K8sCharm(ops.CharmBase):
 
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
-
-    def _configure_cloud_provider(
-        self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]
-    ):
-        """Configure the cloud-provider for the Kubernetes cluster.
-
-        Args:
-            config (BootstrapConfig): The bootstrap configuration object for
-                the Kubernetes cluster that is being configured. This object
-                will be modified in-place.
-        """
-        if self.xcp.has_xcp:
-            log.info("Using external as cloud-provider")
-            if isinstance(config, BootstrapConfig):
-                if not (ufcg := config.cluster_config):
-                    ufcg = config.cluster_config = UserFacingClusterConfig()
-            elif isinstance(config, UpdateClusterConfigRequest):
-                if not (ufcg := config.config):
-                    ufcg = config.config = UserFacingClusterConfig()
-
-            ufcg.cloud_provider = "external"
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
@@ -636,7 +580,7 @@ class K8sCharm(ops.CharmBase):
         update_request = UpdateClusterConfigRequest()
 
         self._configure_datastore(update_request)
-        self._configure_cloud_provider(update_request)
+        update_request.config = self._assemble_cluster_config()
         configure_kube_control(self)
         self.api_manager.update_cluster_config(update_request)
 
@@ -815,7 +759,6 @@ class K8sCharm(ops.CharmBase):
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
             self._enable_functionalities()
-            self._update_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
