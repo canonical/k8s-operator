@@ -194,7 +194,7 @@ class ClusterMember(BaseModel):
     datastore_role: Optional[str] = Field(default=None, alias="datastore-role")
 
 
-class DNSConfig(BaseModel):
+class DNSConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the DNS settings of the cluster.
 
     Attributes:
@@ -210,7 +210,7 @@ class DNSConfig(BaseModel):
     upstream_nameservers: Optional[List[str]] = Field(default=None, alias="upstream-nameservers")
 
 
-class IngressConfig(BaseModel):
+class IngressConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the ingress settings of the cluster.
 
     Attributes:
@@ -224,7 +224,7 @@ class IngressConfig(BaseModel):
     enable_proxy_protocol: Optional[bool] = Field(default=None, alias="enable-proxy-protocol")
 
 
-class LoadBalancerConfig(BaseModel):
+class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the load balancer settings of the cluster.
 
     Attributes:
@@ -250,7 +250,7 @@ class LoadBalancerConfig(BaseModel):
     bgp_peer_port: Optional[int] = Field(default=None, alias="bgp-peer-port")
 
 
-class LocalStorageConfig(BaseModel):
+class LocalStorageConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the local storage settings of the cluster.
 
     Attributes:
@@ -266,7 +266,7 @@ class LocalStorageConfig(BaseModel):
     set_default: Optional[bool] = Field(default=None, alias="set-default")
 
 
-class NetworkConfig(BaseModel):
+class NetworkConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the network settings of the cluster.
 
     Attributes:
@@ -276,7 +276,7 @@ class NetworkConfig(BaseModel):
     enabled: Optional[bool] = Field(default=None)
 
 
-class GatewayConfig(BaseModel):
+class GatewayConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the gateway settings of the cluster.
 
     Attributes:
@@ -286,7 +286,7 @@ class GatewayConfig(BaseModel):
     enabled: Optional[bool] = Field(default=None)
 
 
-class MetricsServerConfig(BaseModel):
+class MetricsServerConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the metrics server settings of the cluster.
 
     Attributes:
