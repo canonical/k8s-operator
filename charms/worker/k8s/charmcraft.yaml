@@ -140,7 +140,7 @@ config:
       type: string
       description: |
         Labels can be used to organize and to select subsets of nodes in the
-        cluster. Declare node labels in key=value format, separated by spaces.      
+        cluster. Declare node labels in key=value format, separated by spaces.
     register-with-taints:
       type: string
       default: ""
@@ -161,6 +161,29 @@ config:
         CIDR to use for Kubernetes services. After deployment it is
         only possible to increase the size of the IP range. It is not possible to
         change or shrink the address range after deployment.
+    local-storage-enabled:
+      type: boolean
+      default: true
+      description: |
+        Enable local storage provisioning. This will create a storage class
+        named "local-storage" that uses the hostPath provisioner. This is
+        useful for development and testing purposes. It is not recommended for
+        production use.
+    local-storage-local-path:
+      type: string
+      default: "/var/snap/k8s/common/rawfile-storage"
+      description: |
+        The path on the host where local storage will be provisioned. This
+        path must be writable by the kubelet. This is only used if
+        local-storage.enabled is set to true.
+    local-storage-reclaim-policy:
+      type: string
+      default: Delete
+      description: |
+        The reclaim policy for local storage. This can be either "Delete" or
+        "Retain". If set to "Delete", the storage will be deleted when the
+        PersistentVolumeClaim is deleted. If set to "Retain", the storage will
+        be retained when the PersistentVolumeClaim is deleted.
 
 actions:
   get-kubeconfig:
