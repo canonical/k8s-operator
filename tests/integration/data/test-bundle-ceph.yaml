@@ -35,9 +35,9 @@ applications:
     charm: ceph-osd
     channel: quincy/stable
     constraints: cores=2 mem=4G root-disk=16G
-    num_units: 1
+    num_units: 3
     storage:
-      osd-devices: 1G,2
+      osd-devices: 1G,1
       osd-journals: 1G,1
 relations:
   - [k8s, k8s-worker:cluster]
