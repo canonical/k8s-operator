@@ -48,6 +48,8 @@ plugins = "pydantic.mypy"
 disable = "wrong-import-order,redefined-outer-name,too-many-instance-attributes,too-few-public-methods,no-self-argument,fixme,protected-access"
 # Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
 extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
+# Modules can be bigger than 1000 lines
+max-module-lines = 1500
 
 [tool.pylint.typecheck]
 # Ignore typechecking on pylxd manager classes

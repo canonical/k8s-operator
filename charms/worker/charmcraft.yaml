@@ -116,6 +116,10 @@ provides:
     interface: cos_agent
 
 requires:
+  aws:
+    interface: aws-integration
+  azure:
+    interface: azure-integration
   cluster:
     interface: k8s-cluster
     # interface to connect with the k8s charm to provide
@@ -126,3 +130,5 @@ requires:
     interface: cos-k8s-tokens
   containerd:
     interface: containerd
+  gcp:
+    interface: gcp-integration
