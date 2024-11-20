@@ -15,12 +15,12 @@ optional cloud-providers, optional schedulers, external backing stores, and exte
 certificate storage.
 """
 
+import hashlib
 import logging
 import os
 import shlex
 import socket
 import subprocess
-import uuid
 from functools import cached_property
 from pathlib import Path
 from time import sleep
@@ -41,6 +41,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
     DNSConfig,
+    GatewayConfig,
     InvalidResponseError,
     JoinClusterRequest,
     K8sdAPIManager,
@@ -55,11 +56,17 @@ from charms.k8s.v0.k8sd_api_manager import (
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
+from inspector import ClusterInspector
+from kube_control import configure as configure_kube_control
+from literals import DEPENDENCIES
+from ops.interface_kube_control import KubeControlProvides
 from snap import management as snap_management
 from snap import version as snap_version
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 from typing_extensions import Literal
+from upgrade import K8sDependenciesModel, K8sUpgrade
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -125,7 +132,16 @@ class K8sCharm(ops.CharmBase):
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
+        self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=KUBECONFIG)
+        self.upgrade = K8sUpgrade(
+            self,
+            node_manager=self.cluster_inspector,
+            relation_name="upgrade",
+            substrate="vm",
+            dependency_model=K8sDependenciesModel(**DEPENDENCIES),
+        )
         self.cos = COSIntegration(self)
         self.reconciler = Reconciler(self, self._reconcile)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
@@ -133,7 +149,7 @@ class K8sCharm(ops.CharmBase):
         self.labeller = LabelMaker(
             self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
         )
-        self._stored.set_default(is_dying=False, cluster_name=str(), annotations={})
+        self._stored.set_default(is_dying=False, cluster_name=str())
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -151,6 +167,7 @@ class K8sCharm(ops.CharmBase):
         self.framework.observe(self.on.update_status, self._on_update_status)
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
+            self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
 
     def _k8s_info(self, event: ops.EventBase):
@@ -212,6 +229,16 @@ class K8sCharm(ops.CharmBase):
             with open("/etc/environment", mode="w", encoding="utf-8") as file:
                 file.write("\n".join([f"{k}={v}" for k, v in current_env.items()]))
 
+    def _generate_unique_cluster_name(self) -> str:
+        """Use a stable input to generate a unique cluster name.
+
+        Returns:
+            str: The unique cluster name.
+        """
+        stable_input = f"{self.app.name}-{self.model.uuid}"
+        hashed = hashlib.sha256(stable_input.encode()).hexdigest()[:32]
+        return f"k8s-{hashed}"
+
     def get_cluster_name(self) -> str:
         """Craft a unique name for the cluster once joined or bootstrapped.
 
@@ -222,8 +249,7 @@ class K8sCharm(ops.CharmBase):
         """
         if self._stored.cluster_name == "":
             if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
-                # TODO: replace with API call once available from the snap
-                self._stored.cluster_name = str(uuid.uuid4())
+                self._stored.cluster_name = self._generate_unique_cluster_name()
             elif not (relation := self.model.get_relation("cluster")):
                 pass
             elif any(
@@ -293,13 +319,15 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
 
-        bootstrap_config = BootstrapConfig()
+        bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
-        self._configure_cloud_provider(bootstrap_config)
-        self._configure_annotations(bootstrap_config)
+        bootstrap_config.cluster_config = self._assemble_cluster_config()
         bootstrap_config.service_cidr = str(self.config["service-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
+        bootstrap_config.extra_node_kube_controller_manager_args = {
+            "--cluster-name": self._generate_unique_cluster_name()
+        }
 
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
@@ -372,40 +400,34 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _configure_annotations(self, config: BootstrapConfig):
-        """Configure the annotations for the Canonical Kubernetes cluster.
+    def _assemble_cluster_config(self) -> UserFacingClusterConfig:
+        """Retrieve the cluster config from charm configuration and charm relations.
 
-        Args:
-            config (BootstrapConfig): Configuration object to bootstrap the cluster.
+        Returns:
+            UserFacingClusterConfig: The expected cluster configuration.
         """
-        annotations = self._get_valid_annotations()
-        if annotations is None:
-            return
+        local_storage = LocalStorageConfig(
+            enabled=self.config.get("local-storage-enabled"),
+            local_path=self.config.get("local-storage-local-path"),
+            reclaim_policy=self.config.get("local-storage-reclaim-policy"),
+            # Note(ben): set_default is intentionally omitted, see:
+            # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
+        )
 
-        if not config.cluster_config:
-            config.cluster_config = UserFacingClusterConfig(annotations=annotations)
-        else:
-            config.cluster_config.annotations = annotations
+        gateway = GatewayConfig(
+            enabled=self.config.get("gateway-enabled"),
+        )
 
-    @status.on_error(
-        ops.BlockedStatus("Invalid Annotations"),
-        AssertionError,
-    )
-    def _update_annotations(self):
-        """Update the annotations for the Canonical Kubernetes cluster."""
-        annotations = self._get_valid_annotations()
-        if annotations is None:
-            return
+        cloud_provider = None
+        if self.xcp.has_xcp:
+            cloud_provider = "external"
 
-        status.add(ops.MaintenanceStatus("Updating Annotations"))
-        log.info("Updating Annotations")
-
-        if self._stored.annotations == annotations:
-            return
-
-        config = UserFacingClusterConfig(annotations=annotations)
-        update_request = UpdateClusterConfigRequest(config=config)
-        self.api_manager.update_cluster_config(update_request)
+        return UserFacingClusterConfig(
+            local_storage=local_storage,
+            gateway=gateway,
+            annotations=self._get_valid_annotations(),
+            cloud_provider=cloud_provider,
+        )
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
@@ -442,29 +464,16 @@ class K8sCharm(ops.CharmBase):
                 config.datastore_servers = self.etcd.get_connection_string().split(",")
                 log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
-                config.datastore = UserFacingDatastoreConfig(
-                    type="external",
-                    servers=self.etcd.get_connection_string().split(","),
-                    ca_crt=etcd_config.get("client_ca", ""),
-                    client_crt=etcd_config.get("client_cert", ""),
-                    client_key=etcd_config.get("client_key", ""),
-                )
+                config.datastore = UserFacingDatastoreConfig()
+                config.datastore.type = "external"
+                config.datastore.servers = self.etcd.get_connection_string().split(",")
+                config.datastore.ca_crt = etcd_config.get("client_ca", "")
+                config.datastore.client_crt = etcd_config.get("client_cert", "")
+                config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
 
         elif datastore == "dqlite":
             log.info("Using dqlite as datastore")
-
-    def _configure_cloud_provider(self, config: BootstrapConfig):
-        """Configure the cloud-provider for the Kubernetes cluster.
-
-        Args:
-            config (BootstrapConfig): The bootstrap configuration object for
-                the Kubernetes cluster that is being configured. This object
-                will be modified in-place.
-        """
-        if self.xcp.has_xcp:
-            log.info("Using external as cloud-provider")
-            config.cloud_provider = "external"
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
@@ -577,6 +586,8 @@ class K8sCharm(ops.CharmBase):
         update_request = UpdateClusterConfigRequest()
 
         self._configure_datastore(update_request)
+        update_request.config = self._assemble_cluster_config()
+        configure_kube_control(self)
         self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
@@ -610,6 +621,7 @@ class K8sCharm(ops.CharmBase):
         """
         relation = self.model.get_relation("cluster")
         if not relation:
+            status.add(ops.BlockedStatus("Missing cluster integration"))
             raise ReconcilerError("Missing cluster integration")
         if version := snap_version("k8s"):
             relation.data[self.unit]["version"] = version
@@ -670,29 +682,45 @@ class K8sCharm(ops.CharmBase):
         InvalidResponseError,
         K8sdConnectionError,
     )
-    def _join_cluster(self):
-        """Retrieve the join token from secret databag and join the cluster."""
+    def _join_cluster(self, event: ops.EventBase):
+        """Retrieve the join token from secret databag and join the cluster.
+
+        Args:
+            event (ops.EventBase): event triggering the join
+        """
         if not (relation := self.model.get_relation("cluster")):
             status.add(ops.BlockedStatus("Missing cluster integration"))
-            assert False, "Missing cluster integration"  # nosec
+            raise ReconcilerError("Missing cluster integration")
 
-        if self.get_cluster_name():
+        if local_cluster := self.get_cluster_name():
+            self.cloud_integration.integrate(local_cluster, event)
             return
 
         status.add(ops.MaintenanceStatus("Joining cluster"))
         with self.collector.recover_token(relation) as token:
-            binding = self.model.get_binding(relation.name)
-            address = binding and binding.network.ingress_address
-            node_name = self.get_node_name()
-            cluster_addr = f"{address}:{K8SD_PORT}"
-            log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_addr)
-            request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
-            if self.is_control_plane:
-                request.config = ControlPlaneNodeJoinConfig()
-                request.config.extra_sans = [_get_public_address()]
+            remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
+            self.cloud_integration.integrate(remote_cluster, event)
+            self._join_with_token(relation, token)
 
-            self.api_manager.join_cluster(request)
-            log.info("Joined %s(%s)", self.unit, node_name)
+    def _join_with_token(self, relation: ops.Relation, token: str):
+        """Join the cluster with the given token.
+
+        Args:
+            relation (ops.Relation): The relation to use for the token.
+            token (str): The token to use for joining the cluster.
+        """
+        binding = self.model.get_binding(relation.name)
+        address = binding and binding.network.ingress_address
+        node_name = self.get_node_name()
+        cluster_addr = f"{address}:{K8SD_PORT}"
+        log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_addr)
+        request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
+        if self.is_control_plane:
+            request.config = ControlPlaneNodeJoinConfig()
+            request.config.extra_sans = [_get_public_address()]
+
+        self.api_manager.join_cluster(request)
+        log.info("Joined %s(%s)", self.unit, node_name)
 
     @on_error(WaitingStatus("Awaiting cluster removal"))
     def _death_handler(self, event: ops.EventBase):
@@ -737,14 +765,13 @@ class K8sCharm(ops.CharmBase):
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
             self._enable_functionalities()
-            self._update_annotations()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._ensure_cluster_config()
             self._announce_kubernetes_version()
-        self._join_cluster()
+        self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
         self._update_status()
@@ -946,4 +973,4 @@ class K8sCharm(ops.CharmBase):
 
 
 if __name__ == "__main__":  # pragma: nocover
-    ops.main.main(K8sCharm)
+    ops.main(K8sCharm)

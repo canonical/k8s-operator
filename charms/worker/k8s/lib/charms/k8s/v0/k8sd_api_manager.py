@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 logger = logging.getLogger(__name__)
 
@@ -190,11 +190,11 @@ class ClusterMember(BaseModel):
 
     name: str
     address: str
-    cluster_role: Optional[str] = Field(None, alias="cluster-role")
-    datastore_role: Optional[str] = Field(None, alias="datastore-role")
+    cluster_role: Optional[str] = Field(default=None, alias="cluster-role")
+    datastore_role: Optional[str] = Field(default=None, alias="datastore-role")
 
 
-class DNSConfig(BaseModel):
+class DNSConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the DNS settings of the cluster.
 
     Attributes:
@@ -204,13 +204,13 @@ class DNSConfig(BaseModel):
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    enabled: Optional[bool] = Field(None)
-    cluster_domain: Optional[str] = Field(None, alias="cluster-domain")
-    service_ip: Optional[str] = Field(None, alias="service-ip")
-    upstream_nameservers: Optional[List[str]] = Field(None, alias="upstream-nameservers")
+    enabled: Optional[bool] = Field(default=None)
+    cluster_domain: Optional[str] = Field(default=None, alias="cluster-domain")
+    service_ip: Optional[str] = Field(default=None, alias="service-ip")
+    upstream_nameservers: Optional[List[str]] = Field(default=None, alias="upstream-nameservers")
 
 
-class IngressConfig(BaseModel):
+class IngressConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the ingress settings of the cluster.
 
     Attributes:
@@ -219,12 +219,12 @@ class IngressConfig(BaseModel):
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
-    enabled: Optional[bool] = Field(None)
-    default_tls_secret: Optional[str] = Field(None, alias="default-tls-secret")
-    enable_proxy_protocol: Optional[bool] = Field(None, alias="enable-proxy-protocol")
+    enabled: Optional[bool] = Field(default=None)
+    default_tls_secret: Optional[str] = Field(default=None, alias="default-tls-secret")
+    enable_proxy_protocol: Optional[bool] = Field(default=None, alias="enable-proxy-protocol")
 
 
-class LoadBalancerConfig(BaseModel):
+class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the load balancer settings of the cluster.
 
     Attributes:
@@ -239,18 +239,18 @@ class LoadBalancerConfig(BaseModel):
         bgp_peer_port: The port for BGP peering.
     """
 
-    enabled: Optional[bool] = Field(None)
-    cidrs: Optional[List[str]] = Field(None)
-    l2_enabled: Optional[bool] = Field(None, alias="l2-enabled")
-    l2_interfaces: Optional[List[str]] = Field(None, alias="l2-interfaces")
-    bgp_enabled: Optional[bool] = Field(None, alias="bgp-enabled")
-    bgp_local_asn: Optional[int] = Field(None, alias="bgp-local-asn")
-    bgp_peer_address: Optional[str] = Field(None, alias="bgp-peer-address")
-    bgp_peer_asn: Optional[int] = Field(None, alias="bgp-peer-asn")
-    bgp_peer_port: Optional[int] = Field(None, alias="bgp-peer-port")
+    enabled: Optional[bool] = Field(default=None)
+    cidrs: Optional[List[str]] = Field(default=None)
+    l2_enabled: Optional[bool] = Field(default=None, alias="l2-enabled")
+    l2_interfaces: Optional[List[str]] = Field(default=None, alias="l2-interfaces")
+    bgp_enabled: Optional[bool] = Field(default=None, alias="bgp-enabled")
+    bgp_local_asn: Optional[int] = Field(default=None, alias="bgp-local-asn")
+    bgp_peer_address: Optional[str] = Field(default=None, alias="bgp-peer-address")
+    bgp_peer_asn: Optional[int] = Field(default=None, alias="bgp-peer-asn")
+    bgp_peer_port: Optional[int] = Field(default=None, alias="bgp-peer-port")
 
 
-class LocalStorageConfig(BaseModel):
+class LocalStorageConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the local storage settings of the cluster.
 
     Attributes:
@@ -260,40 +260,40 @@ class LocalStorageConfig(BaseModel):
         set_default: Optional flag to set this as the default storage option.
     """
 
-    enabled: Optional[bool] = Field(None)
-    local_path: Optional[str] = Field(None, alias="local-path")
-    reclaim_policy: Optional[str] = Field(None, alias="reclaim-policy")
-    set_default: Optional[bool] = Field(None, alias="set-default")
+    enabled: Optional[bool] = Field(default=None)
+    local_path: Optional[str] = Field(default=None, alias="local-path")
+    reclaim_policy: Optional[str] = Field(default=None, alias="reclaim-policy")
+    set_default: Optional[bool] = Field(default=None, alias="set-default")
 
 
-class NetworkConfig(BaseModel):
+class NetworkConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the network settings of the cluster.
 
     Attributes:
         enabled: Optional flag which represents the status of Network.
     """
 
-    enabled: Optional[bool] = Field(None)
+    enabled: Optional[bool] = Field(default=None)
 
 
-class GatewayConfig(BaseModel):
+class GatewayConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the gateway settings of the cluster.
 
     Attributes:
         enabled: Optional flag which represents the status of Gateway.
     """
 
-    enabled: Optional[bool] = Field(None)
+    enabled: Optional[bool] = Field(default=None)
 
 
-class MetricsServerConfig(BaseModel):
+class MetricsServerConfig(BaseModel, allow_population_by_field_name=True):
     """Configuration for the metrics server settings of the cluster.
 
     Attributes:
         enabled: Optional flag which represents the status of MetricsServer.
     """
 
-    enabled: Optional[bool] = Field(None)
+    enabled: Optional[bool] = Field(default=None)
 
 
 class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
@@ -311,15 +311,15 @@ class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
         annotations: Dictionary that can be used to store arbitrary metadata configuration.
     """
 
-    network: Optional[NetworkConfig] = Field(None)
-    dns: Optional[DNSConfig] = Field(None)
-    ingress: Optional[IngressConfig] = Field(None)
-    load_balancer: Optional[LoadBalancerConfig] = Field(None, alias="load-balancer")
-    local_storage: Optional[LocalStorageConfig] = Field(None, alias="local-storage")
-    gateway: Optional[GatewayConfig] = Field(None)
-    metrics_server: Optional[MetricsServerConfig] = Field(None, alias="metrics-server")
-    cloud_provider: Optional[str] = Field(None, alias="cloud-provider")
-    annotations: Optional[Dict[str, str]] = Field(None)
+    network: Optional[NetworkConfig] = Field(default=None)
+    dns: Optional[DNSConfig] = Field(default=None)
+    ingress: Optional[IngressConfig] = Field(default=None)
+    load_balancer: Optional[LoadBalancerConfig] = Field(default=None, alias="load-balancer")
+    local_storage: Optional[LocalStorageConfig] = Field(default=None, alias="local-storage")
+    gateway: Optional[GatewayConfig] = Field(default=None)
+    metrics_server: Optional[MetricsServerConfig] = Field(default=None, alias="metrics-server")
+    cloud_provider: Optional[str] = Field(default=None, alias="cloud-provider")
+    annotations: Optional[Dict[str, str]] = Field(default=None)
 
 
 class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
@@ -333,11 +333,11 @@ class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
         client_key: client key of the external datastore cluster in PEM format.
     """
 
-    type: Optional[str] = Field(None)
-    servers: Optional[List[str]] = Field(None)
-    ca_crt: Optional[str] = Field(None, alias="ca-crt")
-    client_crt: Optional[str] = Field(None, alias="client-crt")
-    client_key: Optional[str] = Field(None, alias="client-key")
+    type: Optional[str] = Field(default=None)
+    servers: Optional[List[str]] = Field(default=None)
+    ca_crt: Optional[str] = Field(default=None, alias="ca-crt")
+    client_crt: Optional[str] = Field(default=None, alias="client-crt")
+    client_key: Optional[str] = Field(default=None, alias="client-key")
 
 
 class BootstrapConfig(BaseModel):
@@ -357,21 +357,25 @@ class BootstrapConfig(BaseModel):
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
+        extra_node_kube_controller_manager_args ([Dict[str,str]]): key-value service args
     """
 
-    cluster_config: Optional[UserFacingClusterConfig] = Field(None, alias="cluster-config")
-    control_plane_taints: Optional[List[str]] = Field(None, alias="control-plane-taints")
-    pod_cidr: Optional[str] = Field(None, alias="pod-cidr")
-    service_cidr: Optional[str] = Field(None, alias="service-cidr")
-    disable_rbac: Optional[bool] = Field(None, alias="disable-rbac")
-    secure_port: Optional[int] = Field(None, alias="secure-port")
-    k8s_dqlite_port: Optional[int] = Field(None, alias="k8s-dqlite-port")
-    datastore_type: Optional[str] = Field(None, alias="datastore-type")
-    datastore_servers: Optional[List[AnyHttpUrl]] = Field(None, alias="datastore-servers")
-    datastore_ca_cert: Optional[str] = Field(None, alias="datastore-ca-crt")
-    datastore_client_cert: Optional[str] = Field(None, alias="datastore-client-crt")
-    datastore_client_key: Optional[str] = Field(None, alias="datastore-client-key")
-    extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
+    cluster_config: Optional[UserFacingClusterConfig] = Field(default=None, alias="cluster-config")
+    control_plane_taints: Optional[List[str]] = Field(default=None, alias="control-plane-taints")
+    pod_cidr: Optional[str] = Field(default=None, alias="pod-cidr")
+    service_cidr: Optional[str] = Field(default=None, alias="service-cidr")
+    disable_rbac: Optional[bool] = Field(default=None, alias="disable-rbac")
+    secure_port: Optional[int] = Field(default=None, alias="secure-port")
+    k8s_dqlite_port: Optional[int] = Field(default=None, alias="k8s-dqlite-port")
+    datastore_type: Optional[str] = Field(default=None, alias="datastore-type")
+    datastore_servers: Optional[List[AnyHttpUrl]] = Field(default=None, alias="datastore-servers")
+    datastore_ca_cert: Optional[str] = Field(default=None, alias="datastore-ca-crt")
+    datastore_client_cert: Optional[str] = Field(default=None, alias="datastore-client-crt")
+    datastore_client_key: Optional[str] = Field(default=None, alias="datastore-client-key")
+    extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
+    extra_node_kube_controller_manager_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-controller-manager-args"
+    )
 
 
 class CreateClusterRequest(BaseModel):
@@ -396,8 +400,8 @@ class UpdateClusterConfigRequest(BaseModel):
         datastore (Optional[UserFacingDatastoreConfig]): The clusters datastore configuration.
     """
 
-    config: Optional[UserFacingClusterConfig] = Field(None)
-    datastore: Optional[UserFacingDatastoreConfig] = Field(None)
+    config: Optional[UserFacingClusterConfig] = Field(default=None)
+    datastore: Optional[UserFacingDatastoreConfig] = Field(default=None)
 
 
 class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
@@ -408,8 +412,8 @@ class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
         kubelet_key (str): node's certificate key
     """
 
-    kubelet_crt: Optional[str] = Field(None, alias="kubelet-crt")
-    kubelet_key: Optional[str] = Field(None, alias="kubelet-key")
+    kubelet_crt: Optional[str] = Field(default=None, alias="kubelet-crt")
+    kubelet_key: Optional[str] = Field(default=None, alias="kubelet-key")
 
 
 class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
@@ -423,12 +427,12 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
         front_proxy_client_key (str): front-proxy certificate key
     """
 
-    extra_sans: Optional[List[str]] = Field(None, alias="extra-sans")
+    extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
 
-    apiserver_crt: Optional[str] = Field(None, alias="apiserver-crt")
-    apiserver_client_key: Optional[str] = Field(None, alias="apiserver-key")
-    front_proxy_client_crt: Optional[str] = Field(None, alias="front-proxy-client-crt")
-    front_proxy_client_key: Optional[str] = Field(None, alias="front-proxy-client-key")
+    apiserver_crt: Optional[str] = Field(default=None, alias="apiserver-crt")
+    apiserver_client_key: Optional[str] = Field(default=None, alias="apiserver-key")
+    front_proxy_client_crt: Optional[str] = Field(default=None, alias="front-proxy-client-crt")
+    front_proxy_client_key: Optional[str] = Field(default=None, alias="front-proxy-client-key")
 
 
 class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
@@ -444,7 +448,7 @@ class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
     name: str
     address: str
     token: SecretStr
-    config: Optional[NodeJoinConfig] = Field(None)
+    config: Optional[NodeJoinConfig] = Field(default=None)
 
     def dict(self, **kwds) -> Dict[Any, Any]:
         """Render object into a dict.
@@ -470,8 +474,8 @@ class DatastoreStatus(BaseModel):
         servers: (List(str)): list of server addresses of the external datastore cluster.
     """
 
-    datastore_type: Optional[str] = Field(None, alias="type")
-    servers: Optional[List[str]] = Field(None, alias="servers")
+    datastore_type: Optional[str] = Field(default=None, alias="type")
+    servers: Optional[List[str]] = Field(default=None, alias="servers")
 
 
 class ClusterStatus(BaseModel):
@@ -485,9 +489,9 @@ class ClusterStatus(BaseModel):
     """
 
     ready: bool = Field(False)
-    members: Optional[List[ClusterMember]] = Field(None)
-    config: Optional[UserFacingClusterConfig] = Field(None)
-    datastore: Optional[DatastoreStatus] = Field(None)
+    members: Optional[List[ClusterMember]] = Field(default=None)
+    config: Optional[UserFacingClusterConfig] = Field(default=None)
+    datastore: Optional[DatastoreStatus] = Field(default=None)
 
 
 class ClusterMetadata(BaseModel):
@@ -508,7 +512,7 @@ class GetClusterStatusResponse(BaseRequestModel):
                                     Can be None if the status is not available.
     """
 
-    metadata: Optional[ClusterMetadata] = Field(None)
+    metadata: Optional[ClusterMetadata] = Field(default=None)
 
 
 class KubeConfigMetadata(BaseModel):
@@ -829,6 +833,16 @@ class K8sdAPIManager:
         body = {"username": username, "groups": groups}
         auth_response = self._send_request(endpoint, "POST", AuthTokenResponse, body)
         return auth_response.metadata.token
+
+    def revoke_auth_token(self, token: str) -> None:
+        """Revoke a Kubernetes authentication token.
+
+        Args:
+            token (str): The authentication token.
+        """
+        endpoint = "/1.0/kubernetes/auth/tokens"
+        body = {"token": token}
+        self._send_request(endpoint, "DELETE", EmptyResponse, body)
 
     def get_kubeconfig(self, server: Optional[str]) -> str:
         """Request a Kubernetes admin config.
