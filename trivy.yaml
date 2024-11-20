@@ -1,3 +1,5 @@
 timeout: 20m
 scan:
   offline-scan: true
+ignorePaths:
+- snap-installation.tar.gz

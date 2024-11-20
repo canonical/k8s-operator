@@ -30,7 +30,7 @@ from .helpers import get_unit_cidrs, is_deployed
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
-DEFAULT_RESOURCES = {"snap-installation": str(DEFAULT_SNAP_INSTALLATION.resolve())}
+DEFAULT_RESOURCES = {"snap-installation": None}
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -43,6 +43,9 @@ def pytest_addoption(parser: pytest.Parser):
         parser: Pytest parser.
     """
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
+    parser.addoption(
+        "--snap-installation-resource", default=str(DEFAULT_SNAP_INSTALLATION.resolve())
+    )
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
     parser.addoption(
         "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
@@ -427,6 +430,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
     charms = [Charm(ops_test, bundle.arch, Path("charms") / p) for p in ("worker/k8s", "worker")]
     charm_files_args = request.config.option.charm_files
+    DEFAULT_RESOURCES["snap-installation"] = request.config.option.snap_installation_resource
     charm_files = await asyncio.gather(*[charm.resolve(charm_files_args) for charm in charms])
     switch_to_path = {}
     for path, charm in zip(charm_files, charms):
