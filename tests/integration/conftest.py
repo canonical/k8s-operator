@@ -386,7 +386,7 @@ async def deploy_model(
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
                 status="active",
-                timeout=30 * 60,
+                timeout=60 * 60,
             )
         try:
             yield the_model
