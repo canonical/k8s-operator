@@ -7,13 +7,14 @@
 import ipaddress
 import json
 import logging
+import shlex
 from pathlib import Path
 from typing import List
 
 import yaml
 from juju import unit
 from juju.model import Model
-from tenacity import AsyncRetrying, retry, stop_after_attempt, wait_fixed
+from tenacity import AsyncRetrying, before_sleep_log, retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
 
@@ -125,10 +126,10 @@ async def ready_nodes(k8s, expected_count):
 async def wait_pod_phase(
     k8s: unit.Unit,
     name: str,
-    phase: str,
+    *phase: str,
     namespace: str = "default",
     retry_times: int = 30,
-    retry_delay_s: int = 5,
+    retry_delay_s: int = 15,
 ):
     """Wait for the pod to reach the specified phase (e.g. Succeeded).
 
@@ -142,23 +143,34 @@ async def wait_pod_phase(
 
     """
     async for attempt in AsyncRetrying(
-        stop=stop_after_attempt(retry_times), wait=wait_fixed(retry_delay_s)
+        stop=stop_after_attempt(retry_times),
+        wait=wait_fixed(retry_delay_s),
+        before_sleep=before_sleep_log(log, logging.WARNING),
     ):
         with attempt:
-            cmd = " ".join(
+            cmd = shlex.join(
                 [
-                    "k8s kubectl wait",
-                    f"--namespace {namespace}",
-                    "--for=jsonpath='{.status.phase}'=" + phase,
+                    "k8s",
+                    "kubectl",
+                    "get",
+                    "--namespace",
+                    namespace,
+                    "-o",
+                    "jsonpath={.status.phase}",
                     f"pod/{name}",
-                    "--timeout 1s",
                 ]
             )
             action = await k8s.run(cmd)
             result = await action.wait()
-            assert (
-                result.results["return-code"] == 0
-            ), f"Failed waiting for pod to reach {phase} phase."
+            stdout, stderr = (
+                result.results.get(field, "").strip() for field in ["stdout", "stderr"]
+            )
+            assert result.results["return-code"] == 0, (
+                f"\nPod hasn't reached phase: {phase}\n"
+                f"\tstdout: '{stdout}'\n"
+                f"\tstderr: '{stderr}'"
+            )
+            assert stdout in phase, f"Pod {name} not yet in phase {phase} ({stdout})"
 
 
 async def get_pod_logs(
