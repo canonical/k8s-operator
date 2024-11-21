@@ -31,7 +31,6 @@ import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
 import containerd
 import ops
-import reschedule
 import yaml
 from charms.contextual_status import ReconcilerError, WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -59,6 +58,7 @@ from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
+from events import update_status
 from inspector import ClusterInspector
 from kube_control import configure as configure_kube_control
 from literals import DEPENDENCIES
@@ -144,7 +144,10 @@ class K8sCharm(ops.CharmBase):
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
         )
         self.cos = COSIntegration(self)
-        self.reconciler = Reconciler(self, self._reconcile)
+        self.update_status = update_status.Handler(self)
+        self.reconciler = Reconciler(
+            self, self._reconcile, exit_status=self.update_status.active_status
+        )
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -165,7 +168,6 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
-        self.framework.observe(self.on.update_status, self._on_update_status)
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
@@ -287,7 +289,7 @@ class K8sCharm(ops.CharmBase):
     def _install_snaps(self):
         """Install snap packages."""
         status.add(ops.MaintenanceStatus("Ensuring snap installation"))
-        snap_management()
+        snap_management(self)
 
     @on_error(WaitingStatus("Waiting to apply snap requirements"), subprocess.CalledProcessError)
     def _apply_snap_requirements(self):
@@ -637,7 +639,8 @@ class K8sCharm(ops.CharmBase):
         if not relation:
             status.add(ops.BlockedStatus("Missing cluster integration"))
             raise ReconcilerError("Missing cluster integration")
-        if version := snap_version("k8s"):
+        version, _ = snap_version("k8s")
+        if version:
             relation.data[self.unit]["version"] = version
 
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
@@ -650,7 +653,8 @@ class K8sCharm(ops.CharmBase):
             ReconcilerError: If the k8s snap is not installed, the version is missing,
                 or the version does not match the local version.
         """
-        if not (local_version := snap_version("k8s")):
+        local_version, _ = snap_version("k8s")
+        if not local_version:
             raise ReconcilerError("k8s-snap is not installed")
 
         peer = self.model.get_relation("cluster")
@@ -748,7 +752,7 @@ class K8sCharm(ops.CharmBase):
         """
         if self.lead_control_plane:
             self._revoke_cluster_tokens(event)
-        self._update_status()
+        self.update_status.run()
         self._last_gasp()
 
         relation = self.model.get_relation("cluster")
@@ -788,27 +792,11 @@ class K8sCharm(ops.CharmBase):
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
-        self._update_status()
+        self.update_status.run()
         self._apply_node_labels()
         if self.is_control_plane:
             self._copy_internal_kubeconfig()
             self._expose_ports()
-
-    def _update_status(self):
-        """Check k8s snap status."""
-        if version := snap_version("k8s"):
-            self.unit.set_workload_version(version)
-
-        if not self.get_cluster_name():
-            status.add(ops.WaitingStatus("Node not Clustered"))
-            return
-
-        trigger = reschedule.PeriodicEvent(self)
-        if not self._is_node_ready():
-            status.add(ops.WaitingStatus("Node not Ready"))
-            trigger.create(reschedule.Period(seconds=30))
-            return
-        trigger.cancel()
 
     def _evaluate_removal(self, event: ops.EventBase) -> bool:
         """Determine if my unit is being removed.
@@ -904,17 +892,6 @@ class K8sCharm(ops.CharmBase):
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)
-
-    def _on_update_status(self, _event: ops.UpdateStatusEvent):
-        """Handle update-status event."""
-        if not self.reconciler.stored.reconciled:
-            return
-
-        try:
-            with status.context(self.unit):
-                self._update_status()
-        except status.ReconcilerError:
-            log.exception("Can't update_status")
 
     def kubectl(self, *args) -> str:
         """Run kubectl command.

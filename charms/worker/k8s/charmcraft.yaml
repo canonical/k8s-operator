@@ -238,6 +238,21 @@ config:
         Port of the BGP peer for the load balancer. This is only used if
         load-balancer-bgp-mode is set to true.
 
+resources:
+  snap-installation:
+    type: file
+    filename: snap-installation.tar.gz
+    description: |
+      Override charm defined snap installation script
+
+      This charm is designed to operate with a specific revision of snaps, overriding 
+      with anything will indicate that the charm is running an unsupported configuration.
+
+      Content Options:
+      0-byte resource (Default) -- Use the charm defined snap installation script
+      ./snap-installation.yaml  -- Overrides the charm defined snap-installation.yaml
+      ./k8s_XXXX.snap           -- Overrides the charm with a specific snap file installed dangerously
+
 actions:
   get-kubeconfig:
     description: Retrieve Public Kubernetes cluster config, including credentials
