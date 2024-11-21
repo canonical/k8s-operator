@@ -420,6 +420,10 @@ class K8sCharm(ops.CharmBase):
             enabled=self.config.get("gateway-enabled"),
         )
 
+        network = NetworkConfig(
+            enabled=self.config.get("network-enabled"),
+        )
+
         cloud_provider = None
         if self.xcp.has_xcp:
             cloud_provider = "external"
@@ -427,6 +431,7 @@ class K8sCharm(ops.CharmBase):
         return UserFacingClusterConfig(
             local_storage=local_storage,
             gateway=gateway,
+            network=network,
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
         )
