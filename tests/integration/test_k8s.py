@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from juju import application, model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -139,7 +140,7 @@ async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):
     await ready_nodes(follower, expected_nodes)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture()
 async def override_snap_on_k8s(kubernetes_cluster: model.Model, request):
     """
     Override the snap resource on a Kubernetes cluster application and revert it after the test.
