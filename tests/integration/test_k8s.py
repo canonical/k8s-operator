@@ -7,8 +7,10 @@
 
 import asyncio
 import logging
+from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from juju import application, model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -19,7 +21,7 @@ from .prometheus import Prometheus
 log = logging.getLogger(__name__)
 
 
-async def get_leader(app):
+async def get_leader(app) -> int:
     """Find leader unit of an application.
 
     Args:
@@ -27,11 +29,15 @@ async def get_leader(app):
 
     Returns:
         int: index to leader unit
+
+    Raises:
+        ValueError: No leader found
     """
     is_leader = await asyncio.gather(*(u.is_leader_from_status() for u in app.units))
     for idx, flag in enumerate(is_leader):
         if flag:
             return idx
+    raise ValueError("No leader found")
 
 
 @pytest.mark.abort_on_fail
@@ -132,6 +138,52 @@ async def test_remove_leader_control_plane(kubernetes_cluster: model.Model):
     await k8s.add_unit()
     await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     await ready_nodes(follower, expected_nodes)
+
+
+@pytest_asyncio.fixture()
+async def override_snap_on_k8s(kubernetes_cluster: model.Model, request):
+    """
+    Override the snap resource on a Kubernetes cluster application and revert it after the test.
+
+    This coroutine function overrides the snap resource of the "k8s" application in the given
+    Kubernetes cluster with a specified override file, waits for the cluster to become idle,
+    and then reverts the snap resource back to its original state after the test.
+
+    Args:
+        kubernetes_cluster (model.Model): The Kubernetes cluster model.
+        request: The pytest request object containing test configuration options.
+
+    Yields:
+        The "k8s" application object after the snap resource has been overridden.
+
+    Raises:
+        AssertionError: If the "k8s" application is not found in the Kubernetes cluster.
+    """
+    k8s = kubernetes_cluster.applications["k8s"]
+    assert k8s, "k8s application not found"
+    # Override snap resource
+    revert = Path(request.config.option.snap_installation_resource)
+    override = Path(__file__).parent / "data" / "override-latest-edge.tar.gz"
+
+    with override.open("rb") as obj:
+        k8s.attach_resource("snap-installation", override, obj)
+        await kubernetes_cluster.wait_for_idle(status="active", timeout=1 * 60)
+
+    yield k8s
+
+    with revert.open("rb") as obj:
+        k8s.attach_resource("snap-installation", revert, obj)
+        await kubernetes_cluster.wait_for_idle(status="active", timeout=1 * 60)
+
+
+@pytest.mark.abort_on_fail
+async def test_override_snap_resource(override_snap_on_k8s: application.Application):
+    """Override snap resource."""
+    k8s = override_snap_on_k8s
+    assert k8s, "k8s application not found"
+
+    for unit in k8s.units:
+        assert "Override" in unit.workload_status_message
 
 
 @pytest.mark.cos
