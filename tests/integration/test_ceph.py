@@ -37,29 +37,35 @@ async def test_ceph_sc(kubernetes_cluster: model.Model):
     assert "rbd.csi.ceph.com" in stdout, f"No ceph provisioner found in: {stdout}"
 
     # Copy pod definitions.
-    for fname in ["ceph-xfs-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"]:
+    definitions = ["ceph-xfs-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"]
+    for fname in definitions:
         await k8s.scp_to(_get_data_file_path(fname), f"/tmp/{fname}")
 
-    # Create "ceph-xfs" PVC.
-    event = await k8s.run("k8s kubectl apply -f /tmp/ceph-xfs-pvc.yaml")
-    result = await event.wait()
-    assert result.results["return-code"] == 0, "Failed to create pvc."
+    try:
+        # Create "ceph-xfs" PVC.
+        event = await k8s.run("k8s kubectl apply -f /tmp/ceph-xfs-pvc.yaml")
+        result = await event.wait()
+        assert result.results["return-code"] == 0, "Failed to create pvc."
 
-    # Create a pod that writes to the Ceph PV.
-    event = await k8s.run("k8s kubectl apply -f /tmp/pv-writer-pod.yaml")
-    result = await event.wait()
-    assert result.results["return-code"] == 0, "Failed to create writer pod."
+        # Create a pod that writes to the Ceph PV.
+        event = await k8s.run("k8s kubectl apply -f /tmp/pv-writer-pod.yaml")
+        result = await event.wait()
+        assert result.results["return-code"] == 0, "Failed to create writer pod."
 
-    # Wait for the pod to exit successfully.
-    await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
+        # Wait for the pod to exit successfully.
+        await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
 
-    # Create a pod that reads the PV data and writes it to the log.
-    event = await k8s.run("k8s kubectl apply -f /tmp/pv-reader-pod.yaml")
-    result = await event.wait()
-    assert result.results["return-code"] == 0, "Failed to create reader pod."
+        # Create a pod that reads the PV data and writes it to the log.
+        event = await k8s.run("k8s kubectl apply -f /tmp/pv-reader-pod.yaml")
+        result = await event.wait()
+        assert result.results["return-code"] == 0, "Failed to create reader pod."
 
-    await helpers.wait_pod_phase(k8s, "pv-reader-test", "Succeeded")
+        await helpers.wait_pod_phase(k8s, "pv-reader-test", "Succeeded")
 
-    # Check the logged PV data.
-    logs = await helpers.get_pod_logs(k8s, "pv-reader-test")
-    assert "PVC test data" in logs
+        # Check the logged PV data.
+        logs = await helpers.get_pod_logs(k8s, "pv-reader-test")
+        assert "PVC test data" in logs
+    finally:
+        # Cleanup
+        for fname in definitions:
+            await k8s.run(f"k8s kubectl delete -f /tmp/{fname}")
