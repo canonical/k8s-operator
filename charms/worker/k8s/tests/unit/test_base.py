@@ -52,7 +52,6 @@ def mock_reconciler_handlers(harness):
         "_check_k8sd_ready",
         "_join_cluster",
         "_configure_cos_integration",
-        "_update_status",
         "_apply_node_labels",
         "_update_kubernetes_version",
     }
@@ -70,9 +69,11 @@ def mock_reconciler_handlers(harness):
             "_announce_kubernetes_version",
         }
 
-    handlers = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
-    yield dict(zip(handler_names, (h.start() for h in handlers)))
-    for handler in handlers:
+    mocked = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
+    handlers = dict(zip(handler_names, (m.start() for m in mocked)))
+    handlers["_update_status"] = mock.patch.object(harness.charm.update_status, "run").start()
+    yield handlers
+    for handler in handlers.values():
         handler.stop()
 
 
