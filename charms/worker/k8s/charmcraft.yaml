@@ -189,6 +189,11 @@ config:
       default: false
       description: |
         Enable/Disable the gateway feature on the cluster.
+    network-enabled:
+      type: boolean
+      default: true
+      description: |
+        Enables or disables the network feature.
 
 actions:
   get-kubeconfig:
