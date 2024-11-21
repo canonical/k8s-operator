@@ -129,7 +129,7 @@ async def wait_pod_phase(
     *phase: str,
     namespace: str = "default",
     retry_times: int = 30,
-    retry_delay_s: int = 5,
+    retry_delay_s: int = 15,
 ):
     """Wait for the pod to reach the specified phase (e.g. Succeeded).
 
@@ -170,7 +170,7 @@ async def wait_pod_phase(
                 f"\tstdout: '{stdout}'\n"
                 f"\tstderr: '{stderr}'"
             )
-            assert stdout in phase, f"Pod phase not yet in {phase} (currently: {stdout})"
+            assert stdout in phase, f"Pod {name} not yet in phase {phase} ({stdout})"
 
 
 async def get_pod_logs(

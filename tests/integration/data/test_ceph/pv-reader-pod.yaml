@@ -14,7 +14,7 @@ spec:
       claimName: raw-block-pvc
   containers:
   - name: pv-reader
-    image: busybox
+    image: rocks.canonical.com/cdk/busybox:1.36
     command: ["/bin/sh", "-c", "cat /pvc/test_file"]
     volumeMounts:
     - name: pvc-test

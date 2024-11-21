@@ -67,5 +67,6 @@ async def test_ceph_sc(kubernetes_cluster: model.Model):
         assert "PVC test data" in logs
     finally:
         # Cleanup
-        for fname in definitions:
-            await k8s.run(f"k8s kubectl delete -f /tmp/{fname}")
+        for fname in reversed(definitions):
+            event = await k8s.run(f"k8s kubectl delete -f /tmp/{fname}")
+            result = await event.wait()
