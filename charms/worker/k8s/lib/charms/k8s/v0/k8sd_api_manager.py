@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +357,11 @@ class BootstrapConfig(BaseModel):
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
+        extra_node_kube_apiserver_args ([Dict[str,str]]): key-value service args
         extra_node_kube_controller_manager_args ([Dict[str,str]]): key-value service args
+        extra_node_kube_scheduler_args ([Dict[str,str]]): key-value service args
+        extra_node_kube_proxy_args ([Dict[str,str]]): key-value service args
+        extra_node_kubelet_args ([Dict[str,str]]): key-value service args
     """
 
     cluster_config: Optional[UserFacingClusterConfig] = Field(default=None, alias="cluster-config")
@@ -373,8 +377,20 @@ class BootstrapConfig(BaseModel):
     datastore_client_cert: Optional[str] = Field(default=None, alias="datastore-client-crt")
     datastore_client_key: Optional[str] = Field(default=None, alias="datastore-client-key")
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
+    extra_node_kube_apiserver_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-apiserver-args"
+    )
     extra_node_kube_controller_manager_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
+    )
+    extra_node_kube_scheduler_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-scheduler-args"
+    )
+    extra_node_kube_proxy_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-proxy-args"
+    )
+    extra_node_kubelet_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kubelet-args"
     )
 
 
@@ -410,10 +426,18 @@ class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
     Attributes:
         kubelet_crt (str): node's certificate
         kubelet_key (str): node's certificate key
+        extra_node_kube_proxy_args (Dict[str, str]): key-value service args
+        extra_node_kubelet_args (Dict[str, str]): key-value service args
     """
 
     kubelet_crt: Optional[str] = Field(default=None, alias="kubelet-crt")
     kubelet_key: Optional[str] = Field(default=None, alias="kubelet-key")
+    extra_node_kube_proxy_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-proxy-args"
+    )
+    extra_node_kubelet_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kubelet-args"
+    )
 
 
 class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
@@ -425,6 +449,9 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
         apiserver_client_key (str): apiserver certificate key
         front_proxy_client_crt (str): front-proxy certificate
         front_proxy_client_key (str): front-proxy certificate key
+        extra_node_kube_apiserver_args (Dict[str, str]): key-value service args
+        extra_node_kube_controller_manager_args (Dict[str, str]): key-value service args
+        extra_node_kube_scheduler_args (Dict[str, str]): key-value service args
     """
 
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
@@ -433,6 +460,15 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     apiserver_client_key: Optional[str] = Field(default=None, alias="apiserver-key")
     front_proxy_client_crt: Optional[str] = Field(default=None, alias="front-proxy-client-crt")
     front_proxy_client_key: Optional[str] = Field(default=None, alias="front-proxy-client-key")
+    extra_node_kube_apiserver_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-apiserver-args"
+    )
+    extra_node_kube_controller_manager_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-controller-manager-args"
+    )
+    extra_node_kube_scheduler_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-kube-scheduler-args"
+    )
 
 
 class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
