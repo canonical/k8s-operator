@@ -41,6 +41,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     CreateClusterRequest,
     DNSConfig,
     GatewayConfig,
+    IngressConfig,
     InvalidResponseError,
     JoinClusterRequest,
     K8sdAPIManager,
@@ -532,6 +533,11 @@ class K8sCharm(ops.CharmBase):
             enabled=self.config.get("network-enabled"),
         )
 
+        ingress = IngressConfig(
+            enabled=self.config.get("ingress-enabled"),
+            enable_proxy_protocol=self.config.get("ingress-enable-proxy-protocol"),
+        )
+
         metrics_server = MetricsServerConfig(enabled=self.config.get("metrics-server-enabled"))
 
         load_balancer = LoadBalancerConfig(
@@ -555,6 +561,7 @@ class K8sCharm(ops.CharmBase):
             cloud_provider=cloud_provider,
             dns_config=dns_config,
             gateway=gateway,
+            ingress=ingress,
             local_storage=local_storage,
             load_balancer=load_balancer,
             metrics_server=metrics_server,
