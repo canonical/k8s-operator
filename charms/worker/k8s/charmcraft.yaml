@@ -185,6 +185,54 @@ config:
       default: false
       description: |
         Enable/Disable the gateway feature on the cluster.
+    load-balancer-enabled:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable the load balancer feature on the cluster.
+    load-balancer-cidrs:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of CIDRs to use for the load balancer. This is
+        only used if load-balancer-enabled is set to true.
+    load-balancer-l2-mode:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable L2 mode for the load balancer. This is only used if
+        load-balancer-enabled is set to true.
+    load-balancer-l2-interfaces:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of interfaces to use for the load balancer. This
+        is only used if load-balancer-l2-mode is set to true. if unset, all
+        interfaces will be used.
+    load-balancer-bgp-mode:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable BGP mode for the load balancer. This is only used if
+        load-balancer-enabled is set to true.
+    load-balancer-bgp-local-asn:
+      type: int
+      default: 64512
+      description: |
+        Local ASN for the load balancer. This is only used if load-balancer-bgp-mode
+        is set to true.
+    load-balancer-bgp-peer-address:
+      type: string
+      default: ""
+      description: |
+        Address of the BGP peer for the load balancer. This is only used if
+        load-balancer-bgp-mode is set to true.
+    load-balancer-bgp-peer-port:
+      type: int
+      default: 179
+      description: |
+        Port of the BGP peer for the load balancer. This is only used if
+        load-balancer-bgp-mode is set to true.
     local-storage-enabled:
       type: boolean
       default: true
