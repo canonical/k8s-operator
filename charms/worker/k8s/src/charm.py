@@ -430,7 +430,6 @@ class K8sCharm(ops.CharmBase):
 
         ingress = IngressConfig(
             enabled=self.config.get("ingress-enabled"),
-            default_tls_secret=self.config.get("ingress-default-tls-secret"),
             enable_proxy_protocol=self.config.get("ingress-enable-proxy-protocol"),
         )
 

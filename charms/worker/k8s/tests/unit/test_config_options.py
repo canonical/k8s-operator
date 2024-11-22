@@ -65,13 +65,10 @@ def test_configure_ingress_options(harness):
 
     enabled = True
     proxy_protocol_enabled = True
-    default_tls_secret = "my-secret"
 
     harness.update_config({"ingress-enabled": enabled})
     harness.update_config({"ingress-enable-proxy-protocol": proxy_protocol_enabled})
-    harness.update_config({"ingress-default-tls-secret": default_tls_secret})
 
     ufcg = harness.charm._assemble_cluster_config()
     assert ufcg.ingress.enabled == enabled
     assert ufcg.ingress.enable_proxy_protocol == proxy_protocol_enabled
-    assert ufcg.ingress.default_tls_secret == default_tls_secret
