@@ -57,14 +57,27 @@ class ClusterInspector:
             ClusterInspectorError: If the nodes cannot be retrieved.
         """
         client = self._get_client()
-        unready_nodes = []
         try:
-            for node in client.list(Node, labels=labels):
-                if node.status != "Ready":
-                    unready_nodes.append(node)
+
+            def is_node_not_ready(node: Node) -> bool:
+                """Check if a node is not ready.
+
+                Args:
+                    node: The node to check.
+
+                Returns:
+                    True if the node is not ready, False otherwise.
+                """
+                if not node.status or not node.status.conditions:
+                    return True
+                return any(
+                    condition.type == "Ready" and condition.status != "True"
+                    for condition in node.status.conditions
+                )
+
+            return [node for node in client.list(Node, labels=labels) if is_node_not_ready(node)]
         except ApiError as e:
             raise ClusterInspector.ClusterInspectorError(f"Failed to get nodes: {e}") from e
-        return unready_nodes or None
 
     def verify_pods_running(self, namespaces: List[str]) -> Optional[str]:
         """Verify that all pods in the specified namespaces are running.

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 from inspector import ClusterInspector
 from lightkube.core.exceptions import ApiError
+from lightkube.models.core_v1 import NodeCondition
 from lightkube.resources.core_v1 import Node, Pod
 
 
@@ -25,11 +26,11 @@ class TestClusterInspector(unittest.TestCase):
     def test_get_nodes_returns_unready(self):
         """Test that get_nodes returns unready nodes."""
         mock_node1 = MagicMock(spec=Node)
-        mock_node1.status = "Ready"
+        mock_node1.status.conditions = [NodeCondition(type="Ready", status="True")]
         mock_node1.metadata.name = "node1"
 
         mock_node2 = MagicMock(spec=Node)
-        mock_node2.status = "NotReady"
+        mock_node2.status.conditions = [NodeCondition(type="Ready", status="False")]
         mock_node2.metadata.name = "node2"
 
         self.mock_client.list.return_value = [mock_node1, mock_node2]

@@ -2,15 +2,19 @@
 # See LICENSE file for licensing details.
 """Additions to tools missing from juju library."""
 
+# pylint: disable=too-many-arguments,too-many-positional-arguments
+
 import ipaddress
 import json
 import logging
+import shlex
 from pathlib import Path
 from typing import List
 
 import yaml
+from juju import unit
 from juju.model import Model
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import AsyncRetrying, before_sleep_log, retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
 
@@ -117,3 +121,75 @@ async def ready_nodes(k8s, expected_count):
     for node, ready in ready_nodes.items():
         log.info("Node %s is %s..", node, "ready" if ready else "not ready")
         assert ready, f"Node not yet ready: {node}."
+
+
+async def wait_pod_phase(
+    k8s: unit.Unit,
+    name: str,
+    *phase: str,
+    namespace: str = "default",
+    retry_times: int = 30,
+    retry_delay_s: int = 15,
+):
+    """Wait for the pod to reach the specified phase (e.g. Succeeded).
+
+    Args:
+        k8s: k8s unit
+        name: the pod name
+        phase: expected phase
+        namespace: pod namespace
+        retry_times: the number of retries
+        retry_delay_s: retry interval
+
+    """
+    async for attempt in AsyncRetrying(
+        stop=stop_after_attempt(retry_times),
+        wait=wait_fixed(retry_delay_s),
+        before_sleep=before_sleep_log(log, logging.WARNING),
+    ):
+        with attempt:
+            cmd = shlex.join(
+                [
+                    "k8s",
+                    "kubectl",
+                    "get",
+                    "--namespace",
+                    namespace,
+                    "-o",
+                    "jsonpath={.status.phase}",
+                    f"pod/{name}",
+                ]
+            )
+            action = await k8s.run(cmd)
+            result = await action.wait()
+            stdout, stderr = (
+                result.results.get(field, "").strip() for field in ["stdout", "stderr"]
+            )
+            assert result.results["return-code"] == 0, (
+                f"\nPod hasn't reached phase: {phase}\n"
+                f"\tstdout: '{stdout}'\n"
+                f"\tstderr: '{stderr}'"
+            )
+            assert stdout in phase, f"Pod {name} not yet in phase {phase} ({stdout})"
+
+
+async def get_pod_logs(
+    k8s: unit.Unit,
+    name: str,
+    namespace: str = "default",
+) -> str:
+    """Retrieve pod logs.
+
+    Args:
+        k8s: k8s unit
+        name: pod name
+        namespace: pod namespace
+
+    Returns:
+        the pod logs as string.
+    """
+    cmd = " ".join(["k8s kubectl logs", f"--namespace {namespace}", f"pod/{name}"])
+    action = await k8s.run(cmd)
+    result = await action.wait()
+    assert result.results["return-code"] == 0, f"Failed to retrieve pod {name} logs."
+    return result.results["stdout"]

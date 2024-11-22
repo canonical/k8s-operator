@@ -57,9 +57,10 @@ bases:
     - name: ubuntu
       channel: "24.04"
       architectures: [arm64]
+
 config:
   options:
-    labels:
+    node-labels:
       default: ""
       type: string
       description: |
@@ -68,6 +69,22 @@ config:
         
         Note: Due to NodeRestriction, workers are limited to how they can label themselves
         https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#noderestriction
+
+resources:
+  snap-installation:
+    type: file
+    filename: snap-installation.tar.gz
+    description: |
+      Override charm defined snap installation script
+
+      This charm is designed to operate with a specific revision of snaps, overriding 
+      with anything will indicate that the charm is running an unsupported configuration.
+
+      Content Options:
+      0-byte resource (Default) -- Use the charm defined snap installation script
+      ./snap-installation.yaml  -- Overrides the charm defined snap-installation.yaml
+      ./k8s_XXXX.snap           -- Overrides the charm with a specific snap file installed dangerously
+
 parts:
   charm:
     plugin: charm
@@ -97,6 +114,7 @@ peers:
 provides:
   cos-agent:
     interface: cos_agent
+
 requires:
   aws:
     interface: aws-integration

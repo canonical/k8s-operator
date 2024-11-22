@@ -81,7 +81,59 @@ config:
 
         Example:
           e.g.: key1=value1 key2=value2
-    containerd_custom_registries:
+    bootstrap-datastore:
+      default: dqlite
+      type: string
+      description: |
+        The datastore to use in Canonical Kubernetes. This cannot be changed
+        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
+        chosen, the charm should be integrated with the etcd charm.
+    bootstrap-node-taints:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of taints to apply to this node at registration time.
+
+        This config is only used at bootstrap time when Kubelet first registers the
+        node with Kubernetes. To change node taints after deploy time, use kubectl
+        instead.
+
+        For more information, see the upstream Kubernetes documentation about
+        taints:
+        https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+    bootstrap-pod-cidr:
+      type: string
+      default: "10.1.0.0/16"
+      description: |
+        Comma-separated CIDR blocks for IP addresses that can be assigned
+        to pods within the cluster. Can contain at most 2 blocks, one for IPv4
+        and one for IPv6.
+
+        After deployment it is not possible to change the size of
+        the IP range.
+
+        Examples:
+          - "192.0.2.0/24"
+          - "2001:db8::/32"
+          - "192.0.2.0/24,2001:db8::/32"
+          - "2001:db8::/32,192.0.2.0/24"
+    bootstrap-service-cidr:
+      type: string
+      default: 10.152.183.0/24
+      description: |
+        Comma-separated CIDR blocks for IP addresses that can be assigned
+        to services within the cluster. Can contain at most 2 blocks, one for IPv4
+        and one for IPv6.
+
+        After deployment it is not possible to change the size of
+        the IP range.
+
+        Examples:
+          - "192.0.2.0/24"
+          - "2001:db8::/32"
+          - "192.0.2.0/24,2001:db8::/32"
+          - "2001:db8::/32,192.0.2.0/24"
+    containerd-custom-registries:
       type: string
       default: "[]"
       description: |
@@ -127,40 +179,85 @@ config:
             "cert_file": "'"$(base64 -w 0 < ~/my.custom.cert.pem)"'",
             "key_file": "'"$(base64 -w 0 < ~/my.custom.key.pem)"'",
         }]'
-
-    datastore:
-      default: dqlite
-      type: string
+    dns-enabled:
+      type: boolean
+      default: true
       description: |
-        The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
-        chosen, the charm should be integrated with the etcd charm.
-    labels:
-      default: ""
+        Enable/Disable the DNS feature on the cluster.
+    dns-cluster-domain:
       type: string
+      default: "cluster.local"
       description: |
-        Labels can be used to organize and to select subsets of nodes in the
-        cluster. Declare node labels in key=value format, separated by spaces.
-    register-with-taints:
+        Sets the local domain of the cluster
+    dns-service-ip:
       type: string
       default: ""
       description: |
-        Space-separated list of taints to apply to this node at registration time.
-
-        This config is only used at deploy time when Kubelet first registers the
-        node with Kubernetes. To change node taints after deploy time, use kubectl
-        instead.
-
-        For more information, see the upstream Kubernetes documentation about
-        taints:
-        https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-    service-cidr:
+        Sets the IP address of the dns service. If omitted defaults to the IP address
+        of the Kubernetes service created by the feature.
+        
+        Can be used to point to an external dns server when feature is disabled.
+    dns-upstream-nameservers:
       type: string
-      default: 10.152.183.0/24
+      default: ""
       description: |
-        CIDR to use for Kubernetes services. After deployment it is
-        only possible to increase the size of the IP range. It is not possible to
-        change or shrink the address range after deployment.
+        Space-separated list of upstream nameservers used to forward queries for out-of-cluster
+        endpoints.
+        
+        If omitted defaults to `/etc/resolv.conf` and uses the nameservers on each node.
+    gateway-enabled:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable the gateway feature on the cluster.
+    load-balancer-enabled:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable the load balancer feature on the cluster.
+    load-balancer-cidrs:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of CIDRs to use for the load balancer. This is
+        only used if load-balancer-enabled is set to true.
+    load-balancer-l2-mode:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable L2 mode for the load balancer. This is only used if
+        load-balancer-enabled is set to true.
+    load-balancer-l2-interfaces:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of interfaces to use for the load balancer. This
+        is only used if load-balancer-l2-mode is set to true. if unset, all
+        interfaces will be used.
+    load-balancer-bgp-mode:
+      type: boolean
+      default: false
+      description: |
+        Enable/Disable BGP mode for the load balancer. This is only used if
+        load-balancer-enabled is set to true.
+    load-balancer-bgp-local-asn:
+      type: int
+      default: 64512
+      description: |
+        Local ASN for the load balancer. This is only used if load-balancer-bgp-mode
+        is set to true.
+    load-balancer-bgp-peer-address:
+      type: string
+      default: ""
+      description: |
+        Address of the BGP peer for the load balancer. This is only used if
+        load-balancer-bgp-mode is set to true.
+    load-balancer-bgp-peer-port:
+      type: int
+      default: 179
+      description: |
+        Port of the BGP peer for the load balancer. This is only used if
+        load-balancer-bgp-mode is set to true.
     local-storage-enabled:
       type: boolean
       default: true
@@ -184,11 +281,47 @@ config:
         "Retain". If set to "Delete", the storage will be deleted when the
         PersistentVolumeClaim is deleted. If set to "Retain", the storage will
         be retained when the PersistentVolumeClaim is deleted.
-    gateway-enabled:
+    metrics-server-enabled:
+      type: boolean
+      default: true
+      description: |
+        Enable/Disable the metrics-server feature on the cluster.
+    network-enabled:
+      type: boolean
+      default: true
+      description: |
+        Enables or disables the network feature.
+    ingress-enabled:
       type: boolean
       default: false
       description: |
-        Enable/Disable the gateway feature on the cluster.
+        Determines if the ingress feature should be enabled.
+    ingress-enable-proxy-protocol:
+      type: boolean
+      default: false
+      description: |
+        Determines if the proxy protocol should be enabled for ingresses.
+    node-labels:
+      default: ""
+      type: string
+      description: |
+        Labels can be used to organize and to select subsets of nodes in the
+        cluster. Declare node labels in key=value format, separated by spaces.      
+
+resources:
+  snap-installation:
+    type: file
+    filename: snap-installation.tar.gz
+    description: |
+      Override charm defined snap installation script
+
+      This charm is designed to operate with a specific revision of snaps, overriding 
+      with anything will indicate that the charm is running an unsupported configuration.
+
+      Content Options:
+      0-byte resource (Default) -- Use the charm defined snap installation script
+      ./snap-installation.yaml  -- Overrides the charm defined snap-installation.yaml
+      ./k8s_XXXX.snap           -- Overrides the charm with a specific snap file installed dangerously
 
 actions:
   get-kubeconfig:
