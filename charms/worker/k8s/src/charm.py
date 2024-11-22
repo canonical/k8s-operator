@@ -45,7 +45,9 @@ from charms.k8s.v0.k8sd_api_manager import (
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
+    LoadBalancerConfig,
     LocalStorageConfig,
+    MetricsServerConfig,
     NetworkConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
@@ -150,7 +152,11 @@ class K8sCharm(ops.CharmBase):
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
-            self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
+            self,
+            kubeconfig_path=self._internal_kubeconfig,
+            kubectl=KUBECTL_PATH,
+            user_label_key="node-labels",
+            timeout=15,
         )
         self._stored.set_default(is_dying=False, cluster_name=str())
 
@@ -187,7 +193,6 @@ class K8sCharm(ops.CharmBase):
     @status.on_error(
         ops.WaitingStatus("Installing COS requirements"),
         subprocess.CalledProcessError,
-        AssertionError,
     )
     def _apply_cos_requirements(self):
         """Apply COS requirements for integration.
@@ -311,7 +316,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
-        AssertionError,
+        ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
     )
@@ -324,8 +329,9 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config["service-cidr"])
-        bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
+        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
+        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
+        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
         bootstrap_config.extra_node_kube_controller_manager_args = {
             "--cluster-name": self._generate_unique_cluster_name()
@@ -354,7 +360,7 @@ class K8sCharm(ops.CharmBase):
         registries, config = [], ""
         containerd_relation = self.model.get_relation("containerd")
         if self.is_control_plane:
-            config = str(self.config["containerd_custom_registries"])
+            config = str(self.config["containerd-custom-registries"])
             registries = containerd.parse_registries(config)
         else:
             registries = containerd.recover(containerd_relation)
@@ -382,7 +388,7 @@ class K8sCharm(ops.CharmBase):
             dict: The parsed annotations if valid, otherwise None.
 
         Raises:
-            AssertionError: If any annotation is invalid.
+            ReconcilerError: If any annotation is invalid.
         """
         raw_annotations = self.config.get("annotations")
         if not raw_annotations:
@@ -393,9 +399,10 @@ class K8sCharm(ops.CharmBase):
         annotations = {}
         try:
             for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
-                assert key and value, "Invalid Annotation"  # nosec
+                if not key or not value:
+                    raise ReconcilerError("Invalid Annotation")
                 annotations[key] = value
-        except AssertionError:
+        except ReconcilerError:
             log.exception("Invalid annotations: %s", raw_annotations)
             status.add(ops.BlockedStatus("Invalid Annotations"))
             raise
@@ -416,8 +423,34 @@ class K8sCharm(ops.CharmBase):
             # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
-        gateway = GatewayConfig(
-            enabled=self.config.get("gateway-enabled"),
+        dns_config = DNSConfig(
+            enabled=self.config.get("dns-enabled"),
+        )
+        if cfg := self.config.get("dns-cluster-domain"):
+            dns_config.cluster_domain = str(cfg)
+        if cfg := self.config.get("dns-service-ip"):
+            dns_config.service_ip = str(cfg)
+        if cfg := self.config.get("dns-upstream-nameservers"):
+            dns_config.upstream_nameservers = str(cfg).split()
+
+        gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
+
+        network = NetworkConfig(
+            enabled=self.config.get("network-enabled"),
+        )
+
+        metrics_server = MetricsServerConfig(enabled=self.config.get("metrics-server-enabled"))
+
+        load_balancer = LoadBalancerConfig(
+            enabled=self.config.get("load-balancer-enabled"),
+            cidrs=str(self.config.get("load-balancer-cidrs")).split(),
+            l2_mode=self.config.get("load-balancer-l2-mode"),
+            l2_interfaces=str(self.config.get("load-balancer-l2-interfaces")).split(),
+            bgp_mode=self.config.get("load-balancer-bgp-mode"),
+            bgp_local_asn=self.config.get("load-balancer-bgp-local-asn"),
+            bgp_peer_address=self.config.get("load-balancer-bgp-peer-address"),
+            bgp_peer_asn=self.config.get("load-balancer-bgp-peer-asn"),
+            bgp_peer_port=self.config.get("load-balancer-bgp-peer-port"),
         )
 
         cloud_provider = None
@@ -425,10 +458,14 @@ class K8sCharm(ops.CharmBase):
             cloud_provider = "external"
 
         return UserFacingClusterConfig(
-            local_storage=local_storage,
-            gateway=gateway,
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
+            dns_config=dns_config,
+            gateway=gateway,
+            local_storage=local_storage,
+            load_balancer=load_balancer,
+            metrics_server=metrics_server,
+            network=network,
         )
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
@@ -439,7 +476,7 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = self.config.get("datastore")
+        datastore = self.config.get("bootstrap-datastore")
 
         if datastore not in SUPPORTED_DATASTORES:
             log.error(
@@ -448,14 +485,18 @@ class K8sCharm(ops.CharmBase):
                 ", ".join(SUPPORTED_DATASTORES),
             )
             status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-        assert datastore in SUPPORTED_DATASTORES  # nosec
+        if datastore not in SUPPORTED_DATASTORES:
+            raise ReconcilerError(f"Invalid datastore: {datastore}")
 
         if datastore == "etcd":
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation("etcd")
 
-            assert etcd_relation, "Missing etcd relation"  # nosec
-            assert self.etcd.is_ready, "etcd is not ready"  # nosec
+            if not etcd_relation:
+                raise ReconcilerError("Missing etcd relation")
+
+            if not self.etcd.is_ready:
+                raise ReconcilerError("etcd is not ready")
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
@@ -552,27 +593,8 @@ class K8sCharm(ops.CharmBase):
             )
 
     @on_error(
-        WaitingStatus("Waiting to enable features"),
-        InvalidResponseError,
-        K8sdConnectionError,
-    )
-    def _enable_functionalities(self):
-        """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Updating K8s features"))
-        log.info("Enabling K8s features")
-        dns_config = DNSConfig(enabled=True)
-        network_config = NetworkConfig(enabled=True)
-        local_storage_config = LocalStorageConfig(enabled=True)
-        user_cluster_config = UserFacingClusterConfig(
-            dns=dns_config, network=network_config, local_storage=local_storage_config
-        )
-        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
-
-        self.api_manager.update_cluster_config(update_request)
-
-    @on_error(
         WaitingStatus("Ensure that the cluster configuration is up-to-date"),
-        AssertionError,
+        ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
     )
@@ -610,7 +632,7 @@ class K8sCharm(ops.CharmBase):
                 return self.cos.get_metrics_endpoints(
                     self.get_node_name(), token, self.is_control_plane
                 )
-        except AssertionError:
+        except ReconcilerError:
             log.exception("Failed to get COS token.")
         return []
 
@@ -682,7 +704,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         WaitingStatus("Waiting for Cluster token"),
-        AssertionError,
+        ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
     )
@@ -768,12 +790,11 @@ class K8sCharm(ops.CharmBase):
         if self.lead_control_plane:
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
-            self._enable_functionalities()
+            self._ensure_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
-            self._ensure_cluster_config()
             self._announce_kubernetes_version()
         self._join_cluster(event)
         self._config_containerd_registries()
