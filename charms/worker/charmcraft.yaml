@@ -60,7 +60,7 @@ bases:
 
 config:
   options:
-    labels:
+    node-labels:
       default: ""
       type: string
       description: |

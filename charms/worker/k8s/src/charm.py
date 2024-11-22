@@ -151,7 +151,11 @@ class K8sCharm(ops.CharmBase):
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
-            self, kubeconfig_path=self._internal_kubeconfig, kubectl=KUBECTL_PATH
+            self,
+            kubeconfig_path=self._internal_kubeconfig,
+            kubectl=KUBECTL_PATH,
+            user_label_key="node-labels",
+            timeout=15,
         )
         self._stored.set_default(is_dying=False, cluster_name=str())
 
@@ -325,8 +329,9 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config["service-cidr"])
-        bootstrap_config.control_plane_taints = str(self.config["register-with-taints"]).split()
+        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
+        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
+        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
         bootstrap_config.extra_sans = [_get_public_address()]
         bootstrap_config.extra_node_kube_controller_manager_args = {
             "--cluster-name": self._generate_unique_cluster_name()
@@ -355,7 +360,7 @@ class K8sCharm(ops.CharmBase):
         registries, config = [], ""
         containerd_relation = self.model.get_relation("containerd")
         if self.is_control_plane:
-            config = str(self.config["containerd_custom_registries"])
+            config = str(self.config["containerd-custom-registries"])
             registries = containerd.parse_registries(config)
         else:
             registries = containerd.recover(containerd_relation)
@@ -417,8 +422,10 @@ class K8sCharm(ops.CharmBase):
             # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
-        gateway = GatewayConfig(
-            enabled=self.config.get("gateway-enabled"),
+        gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
+
+        network = NetworkConfig(
+            enabled=self.config.get("network-enabled"),
         )
 
         load_balancer = LoadBalancerConfig(
@@ -440,6 +447,7 @@ class K8sCharm(ops.CharmBase):
         return UserFacingClusterConfig(
             local_storage=local_storage,
             gateway=gateway,
+            network=network,
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
             load_balancer=load_balancer,
@@ -453,7 +461,7 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = self.config.get("datastore")
+        datastore = self.config.get("bootstrap-datastore")
 
         if datastore not in SUPPORTED_DATASTORES:
             log.error(

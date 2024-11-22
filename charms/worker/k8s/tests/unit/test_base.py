@@ -144,7 +144,7 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
 
     harness.disable_hooks()
     bs_config = BootstrapConfig()
-    harness.update_config({"datastore": "etcd"})
+    harness.update_config({"bootstrap-datastore": "etcd"})
     harness.add_relation("etcd", "etcd")
     with mock.patch.object(harness.charm, "etcd") as mock_etcd:
         mock_etcd.is_ready = True
@@ -182,7 +182,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
         pytest.skip("Not applicable on workers")
 
     harness.disable_hooks()
-    harness.update_config({"datastore": "etcd"})
+    harness.update_config({"bootstrap-datastore": "etcd"})
     harness.add_relation("etcd", "etcd")
     with mock.patch.object(harness.charm, "etcd") as mock_etcd:
         mock_etcd.is_ready = True
@@ -190,6 +190,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
         mock_etcd.get_connection_string.return_value = "foo:1234,bar:1234"
         uccr_config = UpdateClusterConfigRequest()
         harness.charm._configure_datastore(uccr_config)
+    assert uccr_config.datastore
     assert uccr_config.datastore.ca_crt == ""
     assert uccr_config.datastore.client_crt == ""
     assert uccr_config.datastore.client_key == ""
