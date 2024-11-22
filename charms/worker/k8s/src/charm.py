@@ -192,7 +192,6 @@ class K8sCharm(ops.CharmBase):
     @status.on_error(
         ops.WaitingStatus("Installing COS requirements"),
         subprocess.CalledProcessError,
-        AssertionError,
     )
     def _apply_cos_requirements(self):
         """Apply COS requirements for integration.
@@ -316,7 +315,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
-        AssertionError,
+        ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
     )
@@ -388,7 +387,7 @@ class K8sCharm(ops.CharmBase):
             dict: The parsed annotations if valid, otherwise None.
 
         Raises:
-            AssertionError: If any annotation is invalid.
+            ReconcilerError: If any annotation is invalid.
         """
         raw_annotations = self.config.get("annotations")
         if not raw_annotations:
@@ -399,9 +398,10 @@ class K8sCharm(ops.CharmBase):
         annotations = {}
         try:
             for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
-                assert key and value, "Invalid Annotation"  # nosec
+                if not key or not value:
+                    raise ReconcilerError("Invalid Annotation")
                 annotations[key] = value
-        except AssertionError:
+        except ReconcilerError:
             log.exception("Invalid annotations: %s", raw_annotations)
             status.add(ops.BlockedStatus("Invalid Annotations"))
             raise
@@ -470,14 +470,18 @@ class K8sCharm(ops.CharmBase):
                 ", ".join(SUPPORTED_DATASTORES),
             )
             status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-        assert datastore in SUPPORTED_DATASTORES  # nosec
+        if datastore not in SUPPORTED_DATASTORES:
+            raise ReconcilerError(f"Invalid datastore: {datastore}")
 
         if datastore == "etcd":
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation("etcd")
 
-            assert etcd_relation, "Missing etcd relation"  # nosec
-            assert self.etcd.is_ready, "etcd is not ready"  # nosec
+            if not etcd_relation:
+                raise ReconcilerError("Missing etcd relation")
+
+            if not self.etcd.is_ready:
+                raise ReconcilerError("etcd is not ready")
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
@@ -594,7 +598,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         WaitingStatus("Ensure that the cluster configuration is up-to-date"),
-        AssertionError,
+        ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
     )
@@ -632,7 +636,7 @@ class K8sCharm(ops.CharmBase):
                 return self.cos.get_metrics_endpoints(
                     self.get_node_name(), token, self.is_control_plane
                 )
-        except AssertionError:
+        except ReconcilerError:
             log.exception("Failed to get COS token.")
         return []
 
@@ -704,7 +708,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(
         WaitingStatus("Waiting for Cluster token"),
-        AssertionError,
+        ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
     )

@@ -11,6 +11,7 @@ from typing import Dict, Generator, Optional, Union
 
 import charms.contextual_status as status
 import ops
+from charms.contextual_status import ReconcilerError
 from charms.k8s.v0.k8sd_api_manager import (
     ErrorCodes,
     InvalidResponseError,
@@ -209,6 +210,9 @@ class TokenCollector:
 
         Returns:
             the recovered cluster name from existing relations
+
+        Raises:
+            ReconcilerError: If fails to find 1 relation-name:cluster-name.
         """
         cluster_name: Optional[str] = ""
         if not local:
@@ -218,7 +222,8 @@ class TokenCollector:
                 if value := relation.data[unit].get("cluster-name"):
                     values |= {value}
             if values:
-                assert len(values) == 1, f"Failed to find 1 {relation.name}:cluster-name"  # nosec
+                if len(values) != 1:
+                    raise ReconcilerError(f"Failed to find 1 {relation.name}:cluster-name")
                 (cluster_name,) = values
         elif not (cluster_name := relation.data[self.charm.unit].get("joined")):
             # joined_cluster_name
@@ -235,6 +240,12 @@ class TokenCollector:
 
         Yields:
             str: extracted token content
+
+        Raises:
+            ReconcilerError:
+                - If fails to find 1 relation-name:secret-id.
+                - If relation-name:secret-key is not valid.
+                - If relation-name:token is not valid.
         """
         self.request(relation)
 
@@ -246,14 +257,17 @@ class TokenCollector:
             if (secret_id := relation.data[unit].get(secret_key))
         }
 
-        assert len(secret_ids) == 1, f"Failed to find 1 {relation.name}:{secret_key}"  # nosec
+        if len(secret_ids) != 1:
+            raise ReconcilerError(f"Failed to find 1 {relation.name}:{secret_key}")
         (secret_id,) = secret_ids
-        assert secret_id, f"{relation.name}:{secret_key} is not valid"  # nosec
+        if not secret_id:
+            raise ReconcilerError(f"{relation.name}:{secret_key} is not valid")
         secret = self.charm.model.get_secret(id=secret_id)
 
         # Get the content from the secret
         content = secret.get_content(refresh=True)
-        assert content["token"], f"{relation.name}:token not valid"  # nosec
+        if not content.get("token"):
+            raise ReconcilerError(f"{relation.name}:token not valid")
         yield content["token"]
 
         # signal that the relation is joined, the token is used
@@ -343,7 +357,7 @@ class TokenDistributor:
         """
         relation.data[self.charm.app][unit.name] = state
 
-    def allocate_tokens(
+    def allocate_tokens(  # noqa: C901
         self,
         relation: ops.Relation,
         token_strategy: TokenStrategy,
@@ -356,16 +370,23 @@ class TokenDistributor:
             token_strategy (TokenStrategy): The strategy of token creation.
             token_type (ClusterTokenType): The type of cluster token.
                 Defaults to ClusterTokenType.NONE.
+
+        Raises:
+            ReconcilerError:
+                - If token_strategy is valid.
+                - If remote application doesn't exist on relation.
         """
         units = relation.units
         if self.charm.app == relation.app:
             # include self in peer relations
             units |= {self.charm.unit}
-        assert relation.app, f"Remote application doesn't exist on {relation.name}"  # nosec
+        if not relation.app:
+            raise ReconcilerError(f"Remote application doesn't exist on {relation.name}")
 
         # Select the appropriate token creation strategy
         tokenizer = self.token_strategies.get(token_strategy)
-        assert tokenizer, f"Invalid token_strategy: {token_strategy}"  # nosec
+        if not tokenizer:
+            raise ReconcilerError(f"Invalid token_strategy: {token_strategy}")
 
         log.info("Allocating %s %s tokens", token_type.name.title(), token_strategy.name.title())
         status.add(
