@@ -291,6 +291,16 @@ config:
       default: true
       description: |
         Enables or disables the network feature.
+    ingress-enabled:
+      type: boolean
+      default: false
+      description: |
+        Determines if the ingress feature should be enabled.
+    ingress-enable-proxy-protocol:
+      type: boolean
+      default: false
+      description: |
+        Determines if the proxy protocol should be enabled for ingresses.
     node-labels:
       default: ""
       type: string
