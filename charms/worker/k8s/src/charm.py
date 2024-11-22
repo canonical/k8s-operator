@@ -46,6 +46,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdAPIManager,
     K8sdConnectionError,
     LocalStorageConfig,
+    MetricsServerConfig,
     NetworkConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
@@ -421,22 +422,36 @@ class K8sCharm(ops.CharmBase):
             # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
+        dns_config = DNSConfig(
+            enabled=self.config.get("dns-enabled"),
+        )
+        if cfg := self.config.get("dns-cluster-domain"):
+            dns_config.cluster_domain = str(cfg)
+        if cfg := self.config.get("dns-service-ip"):
+            dns_config.service_ip = str(cfg)
+        if cfg := self.config.get("dns-upstream-nameservers"):
+            dns_config.upstream_nameservers = str(cfg).split()
+
         gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
 
         network = NetworkConfig(
             enabled=self.config.get("network-enabled"),
         )
 
+        metrics_server = MetricsServerConfig(enabled=self.config.get("metrics-server-enabled"))
+
         cloud_provider = None
         if self.xcp.has_xcp:
             cloud_provider = "external"
 
         return UserFacingClusterConfig(
-            local_storage=local_storage,
-            gateway=gateway,
-            network=network,
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
+            dns_config=dns_config,
+            gateway=gateway,
+            local_storage=local_storage,
+            metrics_server=metrics_server,
+            network=network,
         )
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
@@ -562,25 +577,6 @@ class K8sCharm(ops.CharmBase):
                 token_strategy=TokenStrategy.COS,
                 token_type=ClusterTokenType.WORKER,
             )
-
-    @on_error(
-        WaitingStatus("Waiting to enable features"),
-        InvalidResponseError,
-        K8sdConnectionError,
-    )
-    def _enable_functionalities(self):
-        """Enable necessary components for the Kubernetes cluster."""
-        status.add(ops.MaintenanceStatus("Updating K8s features"))
-        log.info("Enabling K8s features")
-        dns_config = DNSConfig(enabled=True)
-        network_config = NetworkConfig(enabled=True)
-        local_storage_config = LocalStorageConfig(enabled=True)
-        user_cluster_config = UserFacingClusterConfig(
-            dns=dns_config, network=network_config, local_storage=local_storage_config
-        )
-        update_request = UpdateClusterConfigRequest(config=user_cluster_config)
-
-        self.api_manager.update_cluster_config(update_request)
 
     @on_error(
         WaitingStatus("Ensure that the cluster configuration is up-to-date"),
@@ -780,12 +776,11 @@ class K8sCharm(ops.CharmBase):
         if self.lead_control_plane:
             self._k8s_info(event)
             self._bootstrap_k8s_snap()
-            self._enable_functionalities()
+            self._ensure_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
-            self._ensure_cluster_config()
             self._announce_kubernetes_version()
         self._join_cluster(event)
         self._config_containerd_registries()
