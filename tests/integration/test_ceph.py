@@ -15,10 +15,7 @@ from . import helpers
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
-pytestmark = [
-    pytest.mark.bundle_file("test-bundle-ceph.yaml"),
-    pytest.mark.ignore_blocked,
-]
+pytestmark = [pytest.mark.bundle_file("test-bundle-ceph.yaml")]
 
 
 def _get_data_file_path(name) -> str:
