@@ -213,6 +213,25 @@ config:
       default: true
       description: |
         Enables or disables the network feature.
+    ingress-enabled:
+      type: boolean
+      default: false
+      description: |
+        Determines if the ingress feature should be enabled.
+    ingress-default-tls-secret:
+      type: string
+      default: ""
+      description: |
+        Sets the name of the kubernetes secret to be used for providing default encryption to
+        ingresses.
+        This secret should be in the `kube-system` namespace.
+        Ingresses can specify another TLS secret in their resource definitions,
+        in which case the default secret won't be used.
+    ingress-enable-proxy-protocol:
+      type: boolean
+      default: false
+      description: |
+        Determines if the proxy protocol should be enabled for ingresses.
     node-labels:
       default: ""
       type: string
