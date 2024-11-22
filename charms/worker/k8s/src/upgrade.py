@@ -66,7 +66,7 @@ class K8sUpgrade(DataUpgrade):
         if unready_nodes:
             raise ClusterNotReadyError(
                 message="Cluster is not ready for an upgrade",
-                cause=f"Nodes not ready: {', '.join(unready_nodes)}",
+                cause=f"Nodes not ready: {', '.join(node.metadata.name for node in unready_nodes)}",
                 resolution="""Node(s) may be in a bad state.
                     Please check the node(s) for more information.""",
             )

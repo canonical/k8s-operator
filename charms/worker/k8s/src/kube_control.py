@@ -25,8 +25,8 @@ def configure(charm: K8sCharmProtocol):
 
     status.add(ops.MaintenanceStatus("Configuring Kube Control"))
     ca_cert, endpoints = "", [f"https://{binding.network.bind_address}:6443"]
-    labels = str(charm.model.config["labels"])
-    taints = str(charm.model.config["register-with-taints"])
+    labels = str(charm.model.config["node-labels"])
+    taints = str(charm.model.config["bootstrap-node-taints"])
     if charm._internal_kubeconfig.exists():
         kubeconfig = yaml.safe_load(charm._internal_kubeconfig.read_text())
         cluster = kubeconfig["clusters"][0]["cluster"]

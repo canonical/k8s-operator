@@ -230,9 +230,9 @@ class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
     Attributes:
         enabled: Optional flag which represents the status of LoadBalancer.
         cidrs: List of CIDR blocks for the load balancer.
-        l2_enabled: Optional flag to enable or disable layer 2 functionality.
+        l2_mode: Optional flag to enable or disable layer 2 mode.
         l2_interfaces: List of layer 2 interfaces for the load balancer.
-        bgp_enabled: Optional flag to enable or disable BGP.
+        bgp_mode: Optional flag to enable or disable BGP.
         bgp_local_asn: The local ASN for BGP configuration.
         bgp_peer_address: The peer address for BGP configuration.
         bgp_peer_asn: The peer ASN for BGP configuration.
@@ -241,9 +241,9 @@ class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
 
     enabled: Optional[bool] = Field(default=None)
     cidrs: Optional[List[str]] = Field(default=None)
-    l2_enabled: Optional[bool] = Field(default=None, alias="l2-enabled")
+    l2_mode: Optional[bool] = Field(default=None, alias="l2-mode")
     l2_interfaces: Optional[List[str]] = Field(default=None, alias="l2-interfaces")
-    bgp_enabled: Optional[bool] = Field(default=None, alias="bgp-enabled")
+    bgp_mode: Optional[bool] = Field(default=None, alias="bgp-mode")
     bgp_local_asn: Optional[int] = Field(default=None, alias="bgp-local-asn")
     bgp_peer_address: Optional[str] = Field(default=None, alias="bgp-peer-address")
     bgp_peer_asn: Optional[int] = Field(default=None, alias="bgp-peer-asn")

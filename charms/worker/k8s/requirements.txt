@@ -1,6 +1,6 @@
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@255dd4a23defc16dcdac832306e5f460a0f1200c
 charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e1c5fc69e98100a7d43c0ad5a7969bba1ecbcd40
-charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@9b212854e768f13c26cc907bed51444e97e51b50#subdirectory=ops
+charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@a14d685237302711113ac651920476437b3b9785#subdirectory=ops
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502
 ops-interface-kube-control @ git+https://github.com/charmed-kubernetes/interface-kube-control.git@main#subdirectory=ops
 ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops

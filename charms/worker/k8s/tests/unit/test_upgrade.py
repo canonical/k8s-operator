@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 
 from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
 from inspector import ClusterInspector
+from lightkube.models.core_v1 import Node
+from lightkube.models.meta_v1 import ObjectMeta
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
 
@@ -66,9 +68,9 @@ class TestK8sUpgrade(unittest.TestCase):
         """Test pre_upgrade_check fails when nodes are not ready."""
         self.charm.is_worker = True
         self.node_manager.get_nodes.return_value = [
-            "worker-1",
-            "worker-2",
-            "worker-3",
+            Node(metadata=ObjectMeta(name="worker-1")),
+            Node(metadata=ObjectMeta(name="worker-2")),
+            Node(metadata=ObjectMeta(name="worker-3")),
         ]
 
         with self.assertRaises(ClusterNotReadyError):
