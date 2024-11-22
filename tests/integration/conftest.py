@@ -241,7 +241,9 @@ class Bundle:
         Raises:
             ValueError: if both path and channel are provided, or neither are provided
         """
-        app = self.applications[name]
+        app = self.applications.get(name)
+        if not app:
+            return  # Skip if the application is not in the bundle
         if (not path and not channel) or (path and channel):
             raise ValueError("channel and path are mutually exclusive")
         if path:
