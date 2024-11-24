@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 
 import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
+import config.extra_args
 import containerd
 import ops
 import yaml
@@ -109,58 +110,6 @@ def _cluster_departing_unit(event: ops.EventBase) -> Union[Literal[False], ops.U
         and event.departing_unit
         or False
     )
-
-
-class ArgsMapping:
-    """A class to map string key,val pairs to be used as cmd args.
-
-    Attributes:
-        base_args: the base args to be used
-        extra_args: additional args to be used
-    """
-
-    def __init__(self, *_, **kwargs: str):
-        """Initialise the ArgsMapping class.
-
-        Args:
-            kwargs: the base args to be used
-        """
-        self.base_args = {k.lstrip("-"): v for k, v in kwargs.items()}
-        self.extra_args: Dict[str, str] = {}
-
-    def dict(self) -> Dict[str, str]:
-        """Return an args based representative view.
-
-        Returns:
-            Dict[str, str]: the args as a dictionary
-        """
-        args = {**self.base_args, **self.extra_args}
-        return {f"--{k}": v for k, v in args.items() if v is not None}
-
-    def parse(self, as_str: str):
-        """Parse the given string into extra_args.
-
-        Args:
-            as_str (str): the extra args to be added
-        """
-        elements = as_str.split()
-        args = {}
-
-        for element in elements:
-            if "=" in element:
-                key, _, value = element.partition("=")
-                args[key] = value
-            else:
-                args[element] = "true"
-        self.update(**args)
-
-    def update(self, *_, **kwargs: str):
-        """Update the extra_args with the given kwargs.
-
-        Args:
-            kwargs: the extra args to be added
-        """
-        self.extra_args.update({k.lstrip("-"): v for k, v in kwargs.items()})
 
 
 class NodeRemovedError(Exception):
@@ -368,47 +317,21 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
-    def _extra_arguments(
-        self, config: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, NodeJoinConfig]
-    ):
-        """Set extra arguments for Kubernetes components based on the provided configuration.
+    def _assemble_bootstrap_config(self):
+        """Assemble the bootstrap configuration for the Kubernetes cluster.
 
-        Updates the following attributes of the `config` object:
-            - extra_node_kube_apiserver_args: arguments for kube-apiserver.
-            - extra_node_kube_controller_manager_args: arguments for kube-controller-manager.
-            - extra_node_kube_scheduler_args: arguments for kube-scheduler.
-            - extra_node_kube_proxy_args: arguments for kube-proxy.
-            - extra_node_kubelet_args: arguments for kubelet.
-
-        Args:
-            config (Union[BootstrapConfig, ControlPlaneNodeJoinConfig, NodeJoinConfig]):
-                The configuration object to be updated with extra arguments.
+        Returns:
+            BootstrapConfig: The bootstrap configuration object.
         """
-        if isinstance(config, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
-            kube_api_server_args = ArgsMapping()
-            kube_api_server_args.parse(str(self.config["kube-apiserver-extra-args"]))
-            config.extra_node_kube_apiserver_args = kube_api_server_args.dict()
-
-            kube_controller_manager_args = ArgsMapping()
-            kube_controller_manager_args.parse(
-                str(self.config["kube-controller-manager-extra-args"])
-            )
-            kube_controller_manager_args.update(
-                **{"cluster-name": self._generate_unique_cluster_name()}
-            )
-            config.extra_node_kube_controller_manager_args = kube_controller_manager_args.dict()
-
-            kube_scheduler_args = ArgsMapping()
-            kube_scheduler_args.parse(str(self.config["kube-scheduler-extra-args"]))
-            config.extra_node_kube_scheduler_args = kube_scheduler_args.dict()
-
-        kube_proxy_args = ArgsMapping()
-        kube_proxy_args.parse(str(self.config["kube-proxy-extra-args"]))
-        config.extra_node_kube_proxy_args = kube_proxy_args.dict()
-
-        kubelet_args = ArgsMapping()
-        kubelet_args.parse(str(self.config["kubelet-extra-args"]))
-        config.extra_node_kubelet_args = kubelet_args.dict()
+        bootstrap_config = BootstrapConfig.construct()
+        self._configure_datastore(bootstrap_config)
+        bootstrap_config.cluster_config = self._assemble_cluster_config()
+        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
+        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
+        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
+        bootstrap_config.extra_sans = [_get_public_address()]
+        config.extra_args.craft(self, bootstrap_config)
+        return bootstrap_config
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
@@ -422,22 +345,15 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
 
-        bootstrap_config = BootstrapConfig.construct()
-        self._configure_datastore(bootstrap_config)
-        bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
-        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
-        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
-        bootstrap_config.extra_sans = [_get_public_address()]
-        self._extra_arguments(bootstrap_config)
-
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
         binding = self.model.get_binding("cluster")
         address = binding and binding.network.ingress_address
         node_name = self.get_node_name()
         payload = CreateClusterRequest(
-            name=node_name, address=f"{address}:{K8SD_PORT}", config=bootstrap_config
+            name=node_name,
+            address=f"{address}:{K8SD_PORT}",
+            config=self._assemble_bootstrap_config(),
         )
 
         # TODO: Make port (and address) configurable.
@@ -844,10 +760,10 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = [_get_public_address()]
-            self._extra_arguments(request.config)
+            config.extra_args.craft(self, request.config)
         else:
             request.config = NodeJoinConfig()
-            self._extra_arguments(request.config)
+            config.extra_args.craft(self, request.config)
 
         self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)
