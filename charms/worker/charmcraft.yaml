@@ -69,6 +69,34 @@ config:
         
         Note: Due to NodeRestriction, workers are limited to how they can label themselves
         https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#noderestriction
+    kube-proxy-extra-args:
+      type: string
+      default: ""
+      description: |
+        Space separated list of flags and key=value pairs that will be passed as arguments to
+        kube-proxy.
+
+        Notes:
+          Options may only be set on charm deployment
+
+        For example a value like this:
+          runtime-config=batch/v2alpha1=true profiling=true
+        will result in kube-proxy being run with the following options:
+          --runtime-config=batch/v2alpha1=true --profiling=true
+    kubelet-extra-args:
+      type: string
+      default: ""
+      description: |
+        Space separated list of flags and key=value pairs that will be passed as arguments to
+        kubelet.
+
+        Notes:
+          Options may only be set on charm deployment
+
+        For example a value like this:
+          runtime-config=batch/v2alpha1=true profiling=true
+        will result in kubelet being run with the following options:
+          --runtime-config=batch/v2alpha1=true --profiling=true
 
 resources:
   snap-installation:

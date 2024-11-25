@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 
 import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
+import config.extra_args
 import containerd
 import ops
 import yaml
@@ -50,6 +51,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     LocalStorageConfig,
     MetricsServerConfig,
     NetworkConfig,
+    NodeJoinConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
     UserFacingClusterConfig,
@@ -315,6 +317,23 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
+    def _assemble_bootstrap_config(self):
+        """Assemble the bootstrap configuration for the Kubernetes cluster.
+
+        Returns:
+            BootstrapConfig: The bootstrap configuration object.
+        """
+        bootstrap_config = BootstrapConfig.construct()
+        self._configure_datastore(bootstrap_config)
+        bootstrap_config.cluster_config = self._assemble_cluster_config()
+        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
+        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
+        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
+        bootstrap_config.extra_sans = [_get_public_address()]
+        cluster_name = self.get_cluster_name()
+        config.extra_args.craft(self.config, bootstrap_config, cluster_name)
+        return bootstrap_config
+
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
         ReconcilerError,
@@ -327,24 +346,15 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
 
-        bootstrap_config = BootstrapConfig.construct()
-        self._configure_datastore(bootstrap_config)
-        bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
-        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
-        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
-        bootstrap_config.extra_sans = [_get_public_address()]
-        bootstrap_config.extra_node_kube_controller_manager_args = {
-            "--cluster-name": self._generate_unique_cluster_name()
-        }
-
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
 
         binding = self.model.get_binding("cluster")
         address = binding and binding.network.ingress_address
         node_name = self.get_node_name()
         payload = CreateClusterRequest(
-            name=node_name, address=f"{address}:{K8SD_PORT}", config=bootstrap_config
+            name=node_name,
+            address=f"{address}:{K8SD_PORT}",
+            config=self._assemble_bootstrap_config(),
         )
 
         # TODO: Make port (and address) configurable.
@@ -733,24 +743,29 @@ class K8sCharm(ops.CharmBase):
         with self.collector.recover_token(relation) as token:
             remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
             self.cloud_integration.integrate(remote_cluster, event)
-            self._join_with_token(relation, token)
+            self._join_with_token(relation, token, remote_cluster)
 
-    def _join_with_token(self, relation: ops.Relation, token: str):
+    def _join_with_token(self, relation: ops.Relation, token: str, cluster_name: str):
         """Join the cluster with the given token.
 
         Args:
             relation (ops.Relation): The relation to use for the token.
             token (str): The token to use for joining the cluster.
+            cluster_name (str): The name of the cluster to join.
         """
         binding = self.model.get_binding(relation.name)
         address = binding and binding.network.ingress_address
         node_name = self.get_node_name()
         cluster_addr = f"{address}:{K8SD_PORT}"
-        log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_addr)
+        log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_name)
         request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = [_get_public_address()]
+            config.extra_args.craft(self.config, request.config, cluster_name)
+        else:
+            request.config = NodeJoinConfig()
+            config.extra_args.craft(self.config, request.config, cluster_name)
 
         self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)

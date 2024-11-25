@@ -176,6 +176,24 @@ async def override_snap_on_k8s(kubernetes_cluster: model.Model, request):
         await kubernetes_cluster.wait_for_idle(status="active", timeout=1 * 60)
 
 
+async def test_verbose_config(kubernetes_cluster: model.Model):
+    """Test verbose config."""
+    k8s = kubernetes_cluster.applications["k8s"]
+    worker = kubernetes_cluster.applications["k8s-worker"]
+    all_units = k8s.units + worker.units
+
+    unit_events = await asyncio.gather(*(u.run("ps axf | grep kube") for u in all_units))
+    unit_runs = await asyncio.gather(*(u.wait() for u in unit_events))
+    for idx, unit_run in enumerate(unit_runs):
+        rc, stdout, stderr = (
+            unit_run.results["return-code"],
+            unit_run.results.get("stdout") or "",
+            unit_run.results.get("stderr") or "",
+        )
+        assert rc == 0, f"Failed to run 'ps axf' on {all_units[idx].name}: {stderr}"
+        assert all("--v=3" for line in stdout.splitlines() if " /snap/k8s" in line)
+
+
 @pytest.mark.abort_on_fail
 async def test_override_snap_resource(override_snap_on_k8s: application.Application):
     """Override snap resource."""
