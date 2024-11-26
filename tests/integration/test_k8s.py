@@ -193,6 +193,7 @@ async def test_verbose_config(kubernetes_cluster: model.Model):
         assert rc == 0, f"Failed to run 'ps axf' on {all_units[idx].name}: {stderr}"
         assert all("--v=3" for line in stdout.splitlines() if " /snap/k8s" in line)
 
+
 @pytest.mark.skip(reason="Flaky test")
 @pytest.mark.abort_on_fail
 async def test_override_snap_resource(override_snap_on_k8s: application.Application):
