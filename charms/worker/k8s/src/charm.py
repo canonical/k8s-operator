@@ -434,15 +434,15 @@ class K8sCharm(ops.CharmBase):
             # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
         )
 
-        dns_config = DNSConfig(
+        dns = DNSConfig(
             enabled=self.config.get("dns-enabled"),
         )
         if cfg := self.config.get("dns-cluster-domain"):
-            dns_config.cluster_domain = str(cfg)
+            dns.cluster_domain = str(cfg)
         if cfg := self.config.get("dns-service-ip"):
-            dns_config.service_ip = str(cfg)
+            dns.service_ip = str(cfg)
         if cfg := self.config.get("dns-upstream-nameservers"):
-            dns_config.upstream_nameservers = str(cfg).split()
+            dns.upstream_nameservers = str(cfg).split()
 
         gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
 
@@ -476,7 +476,7 @@ class K8sCharm(ops.CharmBase):
         return UserFacingClusterConfig(
             annotations=self._get_valid_annotations(),
             cloud_provider=cloud_provider,
-            dns_config=dns_config,
+            dns=dns,
             gateway=gateway,
             ingress=ingress,
             local_storage=local_storage,
