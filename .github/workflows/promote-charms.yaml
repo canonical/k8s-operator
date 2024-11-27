@@ -21,6 +21,8 @@ on:
         type: choice
         description: 'Destination Channel'
         options:
+        - beta
+        - candidate
         - stable
 
 jobs:
