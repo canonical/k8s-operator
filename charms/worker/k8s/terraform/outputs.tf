@@ -10,15 +10,19 @@ output "requires" {
   value = {
     aws         = "aws-integration"
     azure       = "azure-integration"
-    cluster     = "k8s-cluster"
-    cos_tokens  = "cos-k8s-tokens"
-    containerd  = "containerd"
+    etcd        = "etcd"
+    external_cloud_provider = "external_cloud_provider"
     gcp         = "gcp-integration"
   }
 }
 
 output "provides" {
   value = {
-    cos_agent   = "cos_agent"
+    cos_agent         = "cos_agent"
+    cos_worker_tokens = "cos-k8s-tokens"
+    containerd        = "containerd"
+    ceph_k8s_info     = "kubernetes-info"
+    k8s_cluster       = "k8s-cluster"
+    kube_contro       = "kube-control"
   }
 }
