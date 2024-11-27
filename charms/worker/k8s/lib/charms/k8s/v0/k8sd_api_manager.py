@@ -215,12 +215,10 @@ class IngressConfig(BaseModel, allow_population_by_field_name=True):
 
     Attributes:
         enabled: Optional flag which represents the status of Ingress.
-        default_tls_secret: The default TLS secret for ingress.
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
     enabled: Optional[bool] = Field(default=None)
-    default_tls_secret: Optional[str] = Field(default=None, alias="default-tls-secret")
     enable_proxy_protocol: Optional[bool] = Field(default=None, alias="enable-proxy-protocol")
 
 
