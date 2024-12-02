@@ -30,7 +30,7 @@ from .helpers import get_unit_cidrs, is_deployed
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
-DEFAULT_RESOURCES = {"snap-installation": None}
+DEFAULT_RESOURCES = {"snap-installation": ""}
 
 
 def pytest_addoption(parser: pytest.Parser):
