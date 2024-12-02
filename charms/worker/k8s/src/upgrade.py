@@ -4,7 +4,6 @@
 """A module for upgrading the k8s and k8s-worker charms."""
 
 import logging
-from functools import wraps
 from typing import List, Union
 
 import charms.contextual_status as status
@@ -27,35 +26,6 @@ from snap import start, stop
 from snap import version as snap_version
 
 log = logging.getLogger(__name__)
-
-
-def reset_snap_upgrade(method):
-    """Decorate a method to reset the snap upgrade status.
-
-    Args:
-        method: The method to decorate.
-
-    Returns:
-        The decorated method.
-    """
-
-    @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        """Reset the snap upgrade status.
-
-        Args:
-            args: Additional arguments.
-            kwargs: Additional keyword arguments.
-
-        Returns:
-            The method result.
-        """
-        try:
-            return method(self, *args, **kwargs)
-        finally:
-            self.charm.reset_upgrade()
-
-    return wrapper
 
 
 class K8sDependenciesModel(BaseModel):
@@ -143,27 +113,31 @@ class K8sUpgrade(DataUpgrade):
                 resolution="Check the logs for the failing pods.",
             )
 
-    def _verify_worker_version(self, current_version: str) -> bool:
+    def _verify_worker_version(self) -> bool:
         """Verify the worker version.
 
-        Args:
-            current_version: The current version of the k8s snap.
-
         Returns:
-            True if the worker version meets the requirements; False otherwise.
+            True if all the worker versions meet the requirements, otherwise False.
         """
-        worker_version = self.charm.get_worker_version()
+        worker_version = self.charm.get_worker_versions()
         if not worker_version:
             return True
         dependency_model: DependencyModel = getattr(self.dependency_model, "k8s_service")
 
-        if not verify_requirements(version=current_version, requirement=worker_version):
+        incompatible = {
+            version: units
+            for version, units in worker_version.items()
+            if not verify_requirements(
+                version=version, requirement=dependency_model.dependencies["k8s-worker"]
+            )
+        }
+
+        if incompatible:
+            units_str = "\n".join(
+                f"[{v}]: {', '.join(u.name for u in units)}" for v, units in incompatible.items()
+            )
             log.error(
-                """The k8s worker charm version does not meet the requirements.
-                Version installed: %s, Supported versions: %s
-                """,
-                worker_version,
-                dependency_model.dependencies["k8s-worker"],
+                "k8s worker charm version requirements not met. Incompatible units: %s", units_str
             )
             return False
 
@@ -175,11 +149,11 @@ class K8sUpgrade(DataUpgrade):
         Args:
             services: The services to stop and start during the upgrade.
         """
-        self.charm.unit.status = ops.MaintenanceStatus("Stopping k8s Services.")
+        status.add(ops.MaintenanceStatus("Stopping k8s Services."))
         stop(SNAP_NAME, services=services)
-        self.charm.unit.status = ops.MaintenanceStatus("Upgrading the k8s snap.")
+        status.add(ops.MaintenanceStatus("Upgrading the k8s snap."))
         snap_management(self.charm)
-        self.charm.unit.status = ops.MaintenanceStatus("Starting k8s Services.")
+        status.add(ops.MaintenanceStatus("Restarting k8s Services."))
         start(SNAP_NAME, services=services)
 
     def _on_upgrade_granted(self, event: UpgradeGrantedEvent) -> None:
@@ -191,21 +165,22 @@ class K8sUpgrade(DataUpgrade):
         with status.context(self.charm.unit, exit_status=ops.ActiveStatus("Ready")):
             self._upgrade(event)
 
-    @reset_snap_upgrade
     def _upgrade(self, event: Union[ops.EventBase, ops.HookEvent]) -> None:
         """Upgrade the snap workload."""
         trigger = reschedule.PeriodicEvent(self.charm)
         current_version, _ = snap_version("k8s")
 
+        status.add(ops.MaintenanceStatus("Verifying the cluster is ready for an upgrade."))
         if not current_version:
             log.error("Failed to get the version of the k8s snap.")
             self.set_unit_failed(cause="Failed to get the version of the k8s snap.")
+            status.add(ops.BlockedStatus("Failed to get the version of the k8s snap."))
             return
 
-        self.charm.unit.status = ops.MaintenanceStatus("Upgrading the charm.")
+        status.add(ops.MaintenanceStatus("Upgrading the charm."))
 
         if self.charm.lead_control_plane:
-            if not self._verify_worker_version(current_version):
+            if not self._verify_worker_version():
                 self.set_unit_failed(
                     cause="The k8s worker charm version does not meet the requirements."
                 )

@@ -6,6 +6,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+import ops
 from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
@@ -34,7 +35,7 @@ class TestK8sUpgrade(unittest.TestCase):
                         "version": "100",
                     },
                     "k8s_service": {
-                        "dependencies": {"k8s-worker": "^3"},
+                        "dependencies": {"k8s-worker": "^1.30, < 1.32"},
                         "name": "k8s",
                         "upgrade_supported": ">=0.8",
                         "version": "1.31.1",
@@ -119,3 +120,15 @@ class TestK8sUpgrade(unittest.TestCase):
 
         self.assertEqual(sorted(result), [0, 1, 2])
         self.charm.model.get_relation.assert_called_once_with("cluster")
+
+    def test_verify_worker_version_compatible(self):
+        """Test _verify_worker_version returns True when worker version is compatible."""
+        unit_1 = MagicMock(spec=ops.Unit)
+        unit_1.name = "k8s-worker/0"
+        unit_2 = MagicMock(spec=ops.Unit)
+        unit_2.name = "k8s-worker/1"
+        self.charm.get_worker_versions.return_value = {"1.32.0": [unit_1], "1.31.5": [unit_2]}
+
+        result = self.upgrade._verify_worker_version()
+
+        self.assertTrue(not result)

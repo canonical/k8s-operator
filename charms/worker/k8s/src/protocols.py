@@ -3,6 +3,8 @@
 
 """Protocol definitions module."""
 
+from typing import Dict, List
+
 import ops
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import K8sdAPIManager
@@ -27,6 +29,9 @@ class K8sCharmProtocol(ops.CharmBase):
     kube_control: KubeControlProvides
     xcp: ExternalCloudProvider
     reconciler: Reconciler
+    is_upgrade_granted: bool
+    lead_control_plane: bool
+    is_control_plane: bool
 
     def get_cluster_name(self) -> str:
         """Get the cluster name.
@@ -60,35 +65,8 @@ class K8sCharmProtocol(ops.CharmBase):
         """
         raise NotImplementedError
 
-    @property
-    def is_upgrade_granted(self) -> bool:
-        """Check if the upgrade is granted.
-
-        Raises:
-            NotImplementedError: If the method is not implemented.
-        """
-        raise NotImplementedError
-
-    @property
-    def lead_control_plane(self) -> bool:
-        """Check if the charm is the lead control plane.
-
-        Raises:
-            NotImplementedError: If the method is not implemented.
-        """
-        raise NotImplementedError
-
-    @property
-    def is_control_plane(self) -> bool:
-        """Check if the charm is the control plane.
-
-        Raises:
-            NotImplementedError: If the method is not implemented.
-        """
-        raise NotImplementedError
-
-    def get_worker_version(self) -> str:
-        """Get the worker version.
+    def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
+        """Get the worker versions.
 
         Raises:
             NotImplementedError: If the method is not implemented.

@@ -21,10 +21,11 @@ import os
 import shlex
 import socket
 import subprocess
+from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -162,6 +163,7 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
+        self._upgrade_snap = False
         self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
 
         self.cos_agent = COSAgentProvider(
@@ -228,32 +230,29 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
 
-    def get_worker_version(self) -> Optional[str]:
-        """Retrieve the worker version from the k8s-cluster relation.
+    def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
+        """Get the versions of the worker units.
 
         Returns:
-            Optional[str]: The worker version if available, otherwise None.
+            Dict[str, List[ops.Unit]]: A dictionary of versions and the units that have them.
         """
         if not (relation := self.model.get_relation("k8s-cluster")):
-            return None
+            return {}
 
+        versions = defaultdict(list)
         for unit in relation.units:
-            if unit.name == self.unit.name:
-                return relation.data[unit].get("version")
-        return None
+            if version := relation.data[unit].get("version"):
+                versions[version].append(unit)
+        return versions
 
     def grant_upgrade(self):
         """Grant the upgrade to the charm."""
-        self._stored.upgrade_granted = True
-
-    def reset_upgrade(self):
-        """Reset the upgrade status."""
-        self._stored.upgrade_granted = False
+        self._upgrade_snap = True
 
     @property
     def is_upgrade_granted(self) -> bool:
         """Check if the upgrade has been granted."""
-        return bool(self._stored.upgrade_granted)
+        return self._upgrade_snap
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
