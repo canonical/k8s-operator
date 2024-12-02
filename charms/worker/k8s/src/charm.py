@@ -123,6 +123,7 @@ class K8sCharm(ops.CharmBase):
         is_worker: true if this is a worker unit
         is_control_plane: true if this is a control-plane unit
         lead_control_plane: true if this is a control-plane unit and its the leader
+        is_upgrade_granted: true if the upgrade has been granted
     """
 
     _stored = ops.StoredState()
@@ -139,7 +140,7 @@ class K8sCharm(ops.CharmBase):
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.cluster_inspector = ClusterInspector(kubeconfig_path=KUBECONFIG)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
         self.upgrade = K8sUpgrade(
             self,
             node_manager=self.cluster_inspector,
@@ -148,7 +149,7 @@ class K8sCharm(ops.CharmBase):
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
         )
         self.cos = COSIntegration(self)
-        self.update_status = update_status.Handler(self)
+        self.update_status = update_status.Handler(self, self.upgrade)
         self.reconciler = Reconciler(
             self, self._reconcile, exit_status=self.update_status.active_status
         )
@@ -161,7 +162,7 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._stored.set_default(is_dying=False, cluster_name=str())
+        self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -226,6 +227,33 @@ class K8sCharm(ops.CharmBase):
     def is_worker(self) -> bool:
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
+
+    def get_worker_version(self) -> Optional[str]:
+        """Retrieve the worker version from the k8s-cluster relation.
+
+        Returns:
+            Optional[str]: The worker version if available, otherwise None.
+        """
+        if not (relation := self.model.get_relation("k8s-cluster")):
+            return None
+
+        for unit in relation.units:
+            if unit.name == self.unit.name:
+                return relation.data[unit].get("version")
+        return None
+
+    def grant_upgrade(self):
+        """Grant the upgrade to the charm."""
+        self._stored.upgrade_granted = True
+
+    def reset_upgrade(self):
+        """Reset the upgrade status."""
+        self._stored.upgrade_granted = False
+
+    @property
+    def is_upgrade_granted(self) -> bool:
+        """Check if the upgrade has been granted."""
+        return bool(self._stored.upgrade_granted)
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
@@ -694,8 +722,9 @@ class K8sCharm(ops.CharmBase):
                 if not unit_version:
                     raise ReconcilerError(f"Waiting for version from {unit.name}")
                 if unit_version != local_version:
-                    status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
-                    raise ReconcilerError(f"Version mismatch with {unit.name}")
+                    # NOTE: Add a check to validate if we are doing an upgrade
+                    status.add(ops.WaitingStatus("Upgrading the cluster"))
+                    return
             relation.data[self.app]["version"] = local_version
 
     def _get_proxy_env(self) -> Dict[str, str]:

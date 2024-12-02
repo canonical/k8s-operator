@@ -18,6 +18,9 @@ class K8sCharmProtocol(ops.CharmBase):
         kube_control (KubeControlProvides): The kube-control interface.
         xcp (ExternalCloudProvider): The external cloud provider interface.
         reconciler (Reconciler): The reconciler for the charm
+        is_upgrade_granted (bool): Whether the upgrade is granted.
+        lead_control_plane (bool): Whether the charm is the lead control plane.
+        is_control_plane (bool): Whether the charm is a control plane.
     """
 
     api_manager: K8sdAPIManager
@@ -27,6 +30,14 @@ class K8sCharmProtocol(ops.CharmBase):
 
     def get_cluster_name(self) -> str:
         """Get the cluster name.
+
+        Raises:
+            NotImplementedError: If the method is not implemented.
+        """
+        raise NotImplementedError
+
+    def grant_upgrade(self) -> None:
+        """Grant the upgrade.
 
         Raises:
             NotImplementedError: If the method is not implemented.
@@ -43,6 +54,41 @@ class K8sCharmProtocol(ops.CharmBase):
 
     def _is_node_ready(self) -> bool:
         """Check if the node is ready.
+
+        Raises:
+            NotImplementedError: If the method is not implemented.
+        """
+        raise NotImplementedError
+
+    @property
+    def is_upgrade_granted(self) -> bool:
+        """Check if the upgrade is granted.
+
+        Raises:
+            NotImplementedError: If the method is not implemented.
+        """
+        raise NotImplementedError
+
+    @property
+    def lead_control_plane(self) -> bool:
+        """Check if the charm is the lead control plane.
+
+        Raises:
+            NotImplementedError: If the method is not implemented.
+        """
+        raise NotImplementedError
+
+    @property
+    def is_control_plane(self) -> bool:
+        """Check if the charm is the control plane.
+
+        Raises:
+            NotImplementedError: If the method is not implemented.
+        """
+        raise NotImplementedError
+
+    def get_worker_version(self) -> str:
+        """Get the worker version.
 
         Raises:
             NotImplementedError: If the method is not implemented.
