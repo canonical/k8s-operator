@@ -15,7 +15,7 @@ The module offers the following configurable inputs:
 | `app_name`| string | Application name | False |
 | `channel`| string | Channel that the charm is deployed from | False |
 | `config`| map(string) | Map of the charm configuration options | False |
-| `constriants` | string | Juju constraits to apply for this aplication | False |
+| `constraints` | string | Juju constraints to apply for this application | False |
 | `model`| string | Name of the model that the charm is deployed on | True |
 | `resources`| map(string) | Map of the charm resources | False |
 | `revision`| number | Revision number of the charm name | False |
