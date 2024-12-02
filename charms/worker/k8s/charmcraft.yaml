@@ -224,6 +224,17 @@ config:
           runtime-config=batch/v2alpha1=true profiling=true
         will result in kube-apiserver being run with the following options:
           --runtime-config=batch/v2alpha1=true --profiling=true
+    kube-apiserver-extra-sans:
+      type: string
+      default: ""
+      description: |
+        Space separated list of extra Subject Alternative Names for the kube-apiserver
+        self-signed certificates.
+
+        Examples:
+          - "kubernetes"
+          - "kubernetes.default.svc"
+          - "kubernetes.default.svc.cluster.local"
     kube-controller-manager-extra-args:
       type: string
       default: ""
