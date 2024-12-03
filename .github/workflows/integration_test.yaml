@@ -39,8 +39,8 @@ jobs:
     strategy:
       matrix:
         arch:
-        - {id: amd64, builder-label: jammy, tester-arch: AMD64, size: large}
-        - {id: arm64, builder-label: jammy, tester-arch: ARM64, size: large}
+        - {id: amd64, builder-label: [amd64, jammy], tester-arch: amd64, size: large}
+        - {id: arm64, builder-label: [arm64, jammy], tester-arch: ARM64, size: large}
         suite: [k8s, etcd, ceph]
         exclude:
         - {arch: {id: arm64}, suite: ceph}
