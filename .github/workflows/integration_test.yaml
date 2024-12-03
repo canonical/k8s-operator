@@ -39,8 +39,8 @@ jobs:
     strategy:
       matrix:
         arch:
-        - {id: amd64, builder-label: [amd64, jammy], tester-arch: amd64, size: large}
-        - {id: arm64, builder-label: [arm64, jammy], tester-arch: ARM64, size: large}
+        - {id: amd64, builder-label: self-hosted-linux-amd64-jammy-large, tester-arch: AMD64, tester-size: large}
+        - {id: arm64, builder-label: self-hosted-linux-arm64-jammy-large, tester-arch: ARM64, tester-size: large}
         suite: [k8s, etcd, ceph]
         exclude:
         - {arch: {id: arm64}, suite: ceph}
@@ -56,7 +56,7 @@ jobs:
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
-      self-hosted-runner-label: ${{ matrix.arch.size }}
+      self-hosted-runner-label: ${{ matrix.arch.tester-size }}
       test-timeout: 120
       test-tox-env: integration-${{ matrix.suite }}
       trivy-fs-enabled: false
