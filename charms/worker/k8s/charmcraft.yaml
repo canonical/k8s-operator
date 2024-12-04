@@ -68,11 +68,11 @@ bases:
       architectures: [arm64]
 config:
   options:
-    annotations:
+    cluster-annotations:
       type: string
       default: ""
       description: |
-        Annotations is a space separated list of (key/value) pairs)  that can be
+        Space-separated list of (key/value) pairs) that can be
         used to add arbitrary metadata configuration to the Canonical
         Kubernetes cluster. For more information, see the upstream Canonical
         Kubernetes documentation about annotations:

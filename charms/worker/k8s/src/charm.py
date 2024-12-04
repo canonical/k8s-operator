@@ -398,7 +398,7 @@ class K8sCharm(ops.CharmBase):
             self.collector.request(relation)
 
     def _get_valid_annotations(self) -> Optional[dict]:
-        """Fetch and validate annotations from charm configuration.
+        """Fetch and validate cluster-annotations from charm configuration.
 
         The values are expected to be a space-separated string of key-value pairs.
 
@@ -408,7 +408,7 @@ class K8sCharm(ops.CharmBase):
         Raises:
             ReconcilerError: If any annotation is invalid.
         """
-        raw_annotations = self.config.get("annotations")
+        raw_annotations = self.config.get("cluster-annotations")
         if not raw_annotations:
             return None
 
