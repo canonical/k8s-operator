@@ -10,7 +10,7 @@ output "requires" {
   value = {
     aws         = "aws"
     azure       = "azure"
-    cluster     = "k8s"
+    cluster     = "cluster"
     cos_tokens  = "cos-tokens"
     containerd  = "containerd"
     gcp         = "gcp"
