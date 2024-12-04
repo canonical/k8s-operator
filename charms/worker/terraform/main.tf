@@ -9,7 +9,7 @@ resource "juju_application" "k8s_worker" {
     name     = "k8s-worker"
     channel  = var.channel
     revision = var.revision
-    series   = var.series
+    base   = var.base
   }
 
   config      = var.config

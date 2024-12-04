@@ -43,14 +43,14 @@ variable "revision" {
   default     = null
 }
 
-variable "series" {
-  description = "Ubuntu series to deploy the charm onto"
+variable "base" {
+  description = "Ubuntu bases to deploy the charm onto"
   type        = string
   default     = "24.04"
 
   validation {
-    condition     = contains(["20.04", "22.04", "24.04"], var.series)
-    error_message = "Series must be one of 20.04, 22.04, 24.04"
+    condition     = contains(["20.04", "22.04", "24.04"], var.base)
+    error_message = "Base must be one of 20.04, 22.04, 24.04"
   }
 }
 
