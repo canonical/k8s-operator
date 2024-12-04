@@ -8,21 +8,21 @@ output "app_name" {
 
 output "requires" {
   value = {
-    aws         = "aws-integration"
-    azure       = "azure-integration"
-    etcd        = "etcd"
-    external_cloud_provider = "external_cloud_provider"
-    gcp         = "gcp-integration"
+    aws                     = "aws"
+    azure                   = "azure"
+    etcd                    = "etcd"
+    external_cloud_provider = "external-cloud-provider"
+    gcp                     = "gcp"
   }
 }
 
 output "provides" {
   value = {
-    cos_agent         = "cos_agent"
-    cos_worker_tokens = "cos-k8s-tokens"
+    cos_agent         = "cos-agent"
+    cos_worker_tokens = "cos-worker-tokens"
     containerd        = "containerd"
-    ceph_k8s_info     = "kubernetes-info"
+    ceph_k8s_info     = "ceph-k8s-info"
     k8s_cluster       = "k8s-cluster"
-    kube_contro       = "kube-control"
+    kube_control      = "kube-control"
   }
 }
