@@ -49,7 +49,7 @@ module "k8s" {
 ```
 
 ### Define a `data` source
-Define a `data` source and pass to the `model_name` input a reference to the `data.juju_model` resource's name. This will enable Terraform to look for a `juju_model` resource with a name attribute equal to the one provided, and apply only if this is present. Otherwise, it will fail before applying anything.
+Define a `data` source and pass a reference to the `model_name` input to the `data.juju_model` resource's name. Terraform will look for a `juju_model` resource with a matching model name and only apply resources if the names match.
 ```
 data "juju_model" "testing" {
   name = var.model_name
