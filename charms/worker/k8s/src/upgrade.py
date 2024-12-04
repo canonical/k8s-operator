@@ -18,7 +18,13 @@ from charms.data_platform_libs.v0.upgrade import (
 )
 from charms.operator_libs_linux.v2.snap import SnapError
 from inspector import ClusterInspector
-from literals import K8S_COMMON_SERVICES, K8S_CONTROL_PLANE_SERVICES, SNAP_NAME
+from literals import (
+    K8S_COMMON_SERVICES,
+    K8S_CONTROL_PLANE_SERVICES,
+    K8S_DQLITE_SERVICE,
+    K8S_WORKER_SERVICES,
+    SNAP_NAME,
+)
 from protocols import K8sCharmProtocol
 from pydantic import BaseModel
 from snap import management as snap_management
@@ -43,17 +49,17 @@ class K8sDependenciesModel(BaseModel):
 class K8sUpgrade(DataUpgrade):
     """A helper class for upgrading the k8s and k8s-worker charms."""
 
-    def __init__(self, charm: K8sCharmProtocol, node_manager: ClusterInspector, **kwargs):
+    def __init__(self, charm: K8sCharmProtocol, cluster_inspector: ClusterInspector, **kwargs):
         """Initialize the K8sUpgrade.
 
         Args:
             charm: The charm instance.
-            node_manager: The ClusterInspector instance.
+            cluster_inspector: The ClusterInspector instance.
             kwargs: Additional keyword arguments.
         """
         super().__init__(charm, **kwargs)
         self.charm = charm
-        self.node_manager = node_manager
+        self.cluster_inspector = cluster_inspector
 
     def set_upgrade_status(self, event: ops.UpdateStatusEvent) -> None:
         """Set the Juju upgrade status.
@@ -84,10 +90,10 @@ class K8sUpgrade(DataUpgrade):
             ClusterNotReadyError: If the cluster is not ready for an upgrade.
         """
         try:
-            nodes = self.node_manager.get_nodes(
+            nodes = self.cluster_inspector.get_nodes(
                 labels={"juju-charm": "k8s-worker" if self.charm.is_worker else "k8s"}
             )
-            failing_pods = self.node_manager.verify_pods_running(["kube-system"])
+            failing_pods = self.cluster_inspector.verify_pods_running(["kube-system"])
         except ClusterInspector.ClusterInspectorError as e:
             raise ClusterNotReadyError(
                 message="Cluster is not ready for an upgrade",
@@ -113,20 +119,23 @@ class K8sUpgrade(DataUpgrade):
                 resolution="Check the logs for the failing pods.",
             )
 
-    def _verify_worker_version(self) -> bool:
-        """Verify the worker version.
+    def _verify_worker_versions(self) -> bool:
+        """Verify that the k8s-worker charm versions meet the requirements.
+
+        This method verifies that all applications related to the cluster relation
+        satisfy the requirements of the k8s-worker charm.
 
         Returns:
-            True if all the worker versions meet the requirements, otherwise False.
+            bool: True if all worker versions meet the requirements, False otherwise.
         """
-        worker_version = self.charm.get_worker_versions()
-        if not worker_version:
+        worker_versions = self.charm.get_worker_versions()
+        if not worker_versions:
             return True
         dependency_model: DependencyModel = getattr(self.dependency_model, "k8s_service")
 
         incompatible = {
             version: units
-            for version, units in worker_version.items()
+            for version, units in worker_versions.items()
             if not verify_requirements(
                 version=version, requirement=dependency_model.dependencies["k8s-worker"]
             )
@@ -149,12 +158,12 @@ class K8sUpgrade(DataUpgrade):
         Args:
             services: The services to stop and start during the upgrade.
         """
-        status.add(ops.MaintenanceStatus("Stopping k8s Services."))
-        stop(SNAP_NAME, services=services)
+        status.add(ops.MaintenanceStatus("Stopping the K8s services"))
+        stop(SNAP_NAME, services)
         status.add(ops.MaintenanceStatus("Upgrading the k8s snap."))
         snap_management(self.charm)
-        status.add(ops.MaintenanceStatus("Restarting k8s Services."))
-        start(SNAP_NAME, services=services)
+        status.add(ops.MaintenanceStatus("Starting the K8s services"))
+        start(SNAP_NAME, services)
 
     def _on_upgrade_granted(self, event: UpgradeGrantedEvent) -> None:
         """Handle the upgrade granted event.
@@ -180,7 +189,7 @@ class K8sUpgrade(DataUpgrade):
         status.add(ops.MaintenanceStatus("Upgrading the charm."))
 
         if self.charm.lead_control_plane:
-            if not self._verify_worker_version():
+            if not self._verify_worker_versions():
                 self.set_unit_failed(
                     cause="The k8s worker charm version does not meet the requirements."
                 )
@@ -192,8 +201,11 @@ class K8sUpgrade(DataUpgrade):
         services = (
             K8S_CONTROL_PLANE_SERVICES + K8S_COMMON_SERVICES
             if self.charm.is_control_plane
-            else K8S_COMMON_SERVICES
+            else K8S_COMMON_SERVICES + K8S_WORKER_SERVICES
         )
+
+        if K8S_DQLITE_SERVICE in services and self.charm.datastore == "dqlite":
+            services.remove(K8S_DQLITE_SERVICE)
 
         try:
             self._perform_upgrade(services=services)

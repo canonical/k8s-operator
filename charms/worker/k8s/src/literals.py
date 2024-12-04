@@ -11,10 +11,17 @@ K8S_COMMON_SERVICES = [
     "k8sd",
 ]
 
+K8S_DQLITE_SERVICE = "k8s-dqlite"
+
 K8S_CONTROL_PLANE_SERVICES = [
     "kube-apiserver",
+    K8S_DQLITE_SERVICE,
     "kube-controller-manager",
     "kube-scheduler",
+]
+
+K8S_WORKER_SERVICES = [
+    "k8s-apiserver-proxy",
 ]
 
 DEPENDENCIES = {

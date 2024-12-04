@@ -23,6 +23,8 @@ class K8sCharmProtocol(ops.CharmBase):
         is_upgrade_granted (bool): Whether the upgrade is granted.
         lead_control_plane (bool): Whether the charm is the lead control plane.
         is_control_plane (bool): Whether the charm is a control plane.
+        is_worker (bool): Whether the charm is a worker.
+        datastore (str): The datastore for Kubernetes.
     """
 
     api_manager: K8sdAPIManager
@@ -32,6 +34,8 @@ class K8sCharmProtocol(ops.CharmBase):
     is_upgrade_granted: bool
     lead_control_plane: bool
     is_control_plane: bool
+    is_worker: bool
+    datastore: str
 
     def get_cluster_name(self) -> str:
         """Get the cluster name.

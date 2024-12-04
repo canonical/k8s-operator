@@ -125,6 +125,7 @@ class K8sCharm(ops.CharmBase):
         is_control_plane: true if this is a control-plane unit
         lead_control_plane: true if this is a control-plane unit and its the leader
         is_upgrade_granted: true if the upgrade has been granted
+        datastore: the datastore used for Kubernetes
     """
 
     _stored = ops.StoredState()
@@ -144,7 +145,7 @@ class K8sCharm(ops.CharmBase):
         self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
         self.upgrade = K8sUpgrade(
             self,
-            node_manager=self.cluster_inspector,
+            cluster_inspector=self.cluster_inspector,
             relation_name="upgrade",
             substrate="vm",
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
@@ -229,6 +230,11 @@ class K8sCharm(ops.CharmBase):
     def is_worker(self) -> bool:
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
+
+    @property
+    def datastore(self) -> str:
+        """Return the datastore type."""
+        return str(self.config.get("bootstrap-datastore"))
 
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
