@@ -21,10 +21,11 @@ import os
 import shlex
 import socket
 import subprocess
+from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -123,6 +124,8 @@ class K8sCharm(ops.CharmBase):
         is_worker: true if this is a worker unit
         is_control_plane: true if this is a control-plane unit
         lead_control_plane: true if this is a control-plane unit and its the leader
+        is_upgrade_granted: true if the upgrade has been granted
+        datastore: the datastore used for Kubernetes
     """
 
     _stored = ops.StoredState()
@@ -139,16 +142,16 @@ class K8sCharm(ops.CharmBase):
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.cluster_inspector = ClusterInspector(kubeconfig_path=KUBECONFIG)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
         self.upgrade = K8sUpgrade(
             self,
-            node_manager=self.cluster_inspector,
+            cluster_inspector=self.cluster_inspector,
             relation_name="upgrade",
             substrate="vm",
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
         )
         self.cos = COSIntegration(self)
-        self.update_status = update_status.Handler(self)
+        self.update_status = update_status.Handler(self, self.upgrade)
         self.reconciler = Reconciler(
             self, self._reconcile, exit_status=self.update_status.active_status
         )
@@ -161,7 +164,8 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._stored.set_default(is_dying=False, cluster_name=str())
+        self._upgrade_snap = False
+        self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -226,6 +230,35 @@ class K8sCharm(ops.CharmBase):
     def is_worker(self) -> bool:
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
+
+    @property
+    def datastore(self) -> str:
+        """Return the datastore type."""
+        return str(self.config.get("bootstrap-datastore"))
+
+    def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
+        """Get the versions of the worker units.
+
+        Returns:
+            Dict[str, List[ops.Unit]]: A dictionary of versions and the units that have them.
+        """
+        if not (relation := self.model.get_relation("k8s-cluster")):
+            return {}
+
+        versions = defaultdict(list)
+        for unit in relation.units:
+            if version := relation.data[unit].get("version"):
+                versions[version].append(unit)
+        return versions
+
+    def grant_upgrade(self):
+        """Grant the upgrade to the charm."""
+        self._upgrade_snap = True
+
+    @property
+    def is_upgrade_granted(self) -> bool:
+        """Check if the upgrade has been granted."""
+        return self._upgrade_snap
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
@@ -694,8 +727,9 @@ class K8sCharm(ops.CharmBase):
                 if not unit_version:
                     raise ReconcilerError(f"Waiting for version from {unit.name}")
                 if unit_version != local_version:
-                    status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
-                    raise ReconcilerError(f"Version mismatch with {unit.name}")
+                    # NOTE: Add a check to validate if we are doing an upgrade
+                    status.add(ops.WaitingStatus("Upgrading the cluster"))
+                    return
             relation.data[self.app]["version"] = local_version
 
     def _get_proxy_env(self) -> Dict[str, str]:
