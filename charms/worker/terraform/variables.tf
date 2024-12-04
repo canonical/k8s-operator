@@ -49,8 +49,8 @@ variable "base" {
   default     = "24.04"
 
   validation {
-    condition     = contains(["20.04", "22.04", "24.04"], var.base)
-    error_message = "Base must be one of 20.04, 22.04, 24.04"
+    condition     = contains(["ubuntu@20.04", "ubuntu@22.04", "ubuntu@24.04"], var.base)
+    error_message = "Base must be one of ubuntu@20.04, ubuntu@22.04, ubuntu@24.04"
   }
 }
 
