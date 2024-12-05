@@ -19,7 +19,7 @@ from charms.data_platform_libs.v0.upgrade import (
 from charms.operator_libs_linux.v2.snap import SnapError
 from inspector import ClusterInspector
 from literals import (
-    K8S_COMMON_SERVICES,
+    CLUSTER_RELATION,
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
     K8S_WORKER_SERVICES,
@@ -199,12 +199,10 @@ class K8sUpgrade(DataUpgrade):
         self.charm.grant_upgrade()
 
         services = (
-            K8S_CONTROL_PLANE_SERVICES + K8S_COMMON_SERVICES
-            if self.charm.is_control_plane
-            else K8S_COMMON_SERVICES + K8S_WORKER_SERVICES
+            K8S_CONTROL_PLANE_SERVICES if self.charm.is_control_plane else K8S_WORKER_SERVICES
         )
 
-        if K8S_DQLITE_SERVICE in services and self.charm.datastore == "dqlite":
+        if K8S_DQLITE_SERVICE in services and self.charm.datastore != "dqlite":
             services.remove(K8S_DQLITE_SERVICE)
 
         try:
@@ -227,7 +225,7 @@ class K8sUpgrade(DataUpgrade):
         Returns:
             A list of unit numbers to upgrade in order.
         """
-        relation = self.charm.model.get_relation("cluster")
+        relation = self.charm.model.get_relation(CLUSTER_RELATION)
         if not relation:
             return [int(self.charm.unit.name.split("/")[-1])]
 
