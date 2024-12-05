@@ -350,6 +350,13 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
+    def _get_extra_sans(self):
+        """Retrieve the certificate extra SANs."""
+        extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
+        configured_sans = {san for san in extra_sans_str.strip().split() if san}
+        all_sans = configured_sans | set([_get_public_address()])
+        return sorted(all_sans)
+
     def _assemble_bootstrap_config(self):
         """Assemble the bootstrap configuration for the Kubernetes cluster.
 
@@ -362,7 +369,7 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
         bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
-        bootstrap_config.extra_sans = [_get_public_address()]
+        bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
         return bootstrap_config
@@ -795,7 +802,7 @@ class K8sCharm(ops.CharmBase):
         request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
-            request.config.extra_sans = [_get_public_address()]
+            request.config.extra_sans = self._get_extra_sans()
             config.extra_args.craft(self.config, request.config, cluster_name)
         else:
             request.config = NodeJoinConfig()
