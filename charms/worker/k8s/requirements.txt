@@ -10,7 +10,7 @@ cosl==0.0.43
 ops==2.17.1
 pydantic==1.10.19
 PyYAML==6.0.2
-tomli ==2.1.0
+tomli ==2.2.1
 tomli-w == 1.0.0
 typing_extensions==4.12.2
 websocket-client==1.8.0
