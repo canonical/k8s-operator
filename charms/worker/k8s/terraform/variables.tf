@@ -7,6 +7,17 @@ variable "app_name" {
   default     = "k8s"
 }
 
+variable "base" {
+  description = "Ubuntu base to deploy the charm onto"
+  type        = string
+  default     = "ubuntu@24.04"
+
+  validation {
+    condition     = contains(["ubuntu@20.04", "ubuntu@22.04", "ubuntu@24.04"], var.base)
+    error_message = "Base must be one of ubuntu@20.04, ubuntu@22.04, ubuntu@24.04"
+  }
+}
+
 variable "channel" {
   description = "The channel to use when deploying a charm."
   type        = string
@@ -28,7 +39,6 @@ variable "constraints" {
 variable "model" {
   description = "Reference to a `juju_model`."
   type        = string
-  default     = ""
 }
 
 variable "resources" {
@@ -41,17 +51,6 @@ variable "revision" {
   description = "Revision number of the charm"
   type        = number
   default     = null
-}
-
-variable "base" {
-  description = "Ubuntu base to deploy the charm onto"
-  type        = string
-  default     = "24.04"
-
-  validation {
-    condition     = contains(["ubuntu@20.04", "ubuntu@22.04", "ubuntu@24.04"], var.base)
-    error_message = "Base must be one of ubuntu@20.04, ubuntu@22.04, ubuntu@24.04"
-  }
 }
 
 variable "units" {
