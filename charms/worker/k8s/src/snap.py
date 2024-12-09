@@ -19,6 +19,7 @@ from typing import List, Literal, Optional, Tuple, Union
 import charms.operator_libs_linux.v2.snap as snap_lib
 import ops
 import yaml
+from protocols import K8sCharmProtocol
 from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
 
@@ -263,7 +264,7 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
     return args
 
 
-def management(charm: ops.CharmBase) -> None:
+def management(charm: K8sCharmProtocol) -> None:
     """Manage snap installations on this machine.
 
     Arguments:
@@ -272,7 +273,7 @@ def management(charm: ops.CharmBase) -> None:
     cache = snap_lib.SnapCache()
     for args in _parse_management_arguments(charm):
         which = cache[args.name]
-        if block_refresh(which, args):
+        if block_refresh(which, args, charm.is_upgrade_granted):
             continue
         install_args = args.dict(exclude_none=True)
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
@@ -287,12 +288,13 @@ def management(charm: ops.CharmBase) -> None:
             which.ensure(**install_args)
 
 
-def block_refresh(which: snap_lib.Snap, args: SnapArgument) -> bool:
+def block_refresh(which: snap_lib.Snap, args: SnapArgument, upgrade_granted: bool = False) -> bool:
     """Block snap refreshes if the snap is in a specific state.
 
     Arguments:
         which: The snap to check
         args: The snap arguments
+        upgrade_granted: If the upgrade is granted
 
     Returns:
         bool: True if the snap should be blocked from refreshing
@@ -302,6 +304,9 @@ def block_refresh(which: snap_lib.Snap, args: SnapArgument) -> bool:
         return False
     if _overridden_snap_installation().exists():
         log.info("Allowing %s snap refresh due to snap installation override", args.name)
+        return False
+    if upgrade_granted:
+        log.info("Allowing %s snap refresh due to upgrade-granted", args.name)
         return False
     if isinstance(args, SnapStoreArgument) and args.revision:
         if block := which.revision != args.revision:
@@ -342,3 +347,41 @@ def version(snap: str) -> Tuple[Optional[str], bool]:
 
     log.info("Snap k8s not found or no version available.")
     return None, overridden
+
+
+def stop(snap_name: str, services: List[str]) -> None:
+    """Stop the services of the snap on this machine.
+
+    Arguments:
+        snap_name: The name of the snap
+        services: The services to stop
+
+    Raises:
+        SnapError: If the snap isn't installed
+    """
+    cache = snap_lib.SnapCache()
+    if snap_name not in cache:
+        message = f"Snap '{snap_name}' not installed"
+        log.error(message)
+        raise snap_lib.SnapError(message)
+    snap = cache[snap_name]
+    snap.stop(services=services)
+
+
+def start(snap_name: str, services: List[str]) -> None:
+    """Start the services of the snap on this machine.
+
+    Arguments:
+        snap_name: The name of the snap
+        services: The services to start
+
+    Raises:
+        SnapError: If the snap isn't installed
+    """
+    cache = snap_lib.SnapCache()
+    if snap_name not in cache:
+        message = f"Snap '{snap_name}' not installed"
+        log.error(message)
+        raise snap_lib.SnapError(message)
+    snap = cache[snap_name]
+    snap.start(services=services)

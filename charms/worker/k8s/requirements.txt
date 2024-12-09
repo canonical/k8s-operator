@@ -7,7 +7,7 @@ ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-inte
 ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
 ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
 cosl==0.0.43
-ops==2.17.0
+ops==2.17.1
 pydantic==1.10.19
 PyYAML==6.0.2
 tomli ==2.1.0
@@ -16,3 +16,4 @@ typing_extensions==4.12.2
 websocket-client==1.8.0
 poetry-core==1.9.1
 lightkube==0.15.5
+httpx==0.27.2

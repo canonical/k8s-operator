@@ -195,3 +195,28 @@ def test_configure_datastore_runtime_config_etcd(harness):
     assert uccr_config.datastore.client_key == ""
     assert uccr_config.datastore.servers == ["foo:1234", "bar:1234"]
     assert uccr_config.datastore.type == "external"
+
+
+def test_configure_boostrap_extra_sans(harness):
+    """Test configuring kube-apiserver-extra-sans on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    cfg_extra_sans = ["mykubernetes", "mykubernetes.local"]
+    public_addr = "11.12.13.14"
+    harness.update_config({"kube-apiserver-extra-sans": " ".join(cfg_extra_sans)})
+
+    with mock.patch("charm._get_public_address") as mock_get_public_addr:
+        mock_get_public_addr.return_value = public_addr
+
+        bs_config = harness.charm._assemble_bootstrap_config()
+
+    # We expect the resulting SANs to include the configured addresses as well
+    # as the unit address.
+    exp_extra_sans = cfg_extra_sans + [public_addr]
+    for san in exp_extra_sans:
+        assert san in bs_config.extra_sans

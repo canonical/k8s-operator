@@ -6,10 +6,12 @@
 import unittest
 from unittest.mock import MagicMock
 
+import ops
 from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
+from literals import CLUSTER_RELATION
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
 
@@ -22,7 +24,7 @@ class TestK8sUpgrade(unittest.TestCase):
         self.node_manager = MagicMock(spec=ClusterInspector)
         self.upgrade = K8sUpgrade(
             self.charm,
-            node_manager=self.node_manager,
+            cluster_inspector=self.node_manager,
             relation_name="upgrade",
             substrate="vm",
             dependency_model=K8sDependenciesModel(
@@ -34,9 +36,9 @@ class TestK8sUpgrade(unittest.TestCase):
                         "version": "100",
                     },
                     "k8s_service": {
-                        "dependencies": {"k8s-worker": "^3"},
+                        "dependencies": {"k8s-worker": "^1.30, < 1.32"},
                         "name": "k8s",
-                        "upgrade_supported": ">=0.8",
+                        "upgrade_supported": "^1.30, < 1.32",
                         "version": "1.31.1",
                     },
                 }
@@ -102,7 +104,7 @@ class TestK8sUpgrade(unittest.TestCase):
         result = self.upgrade.build_upgrade_stack()
 
         self.assertEqual(result, [0])
-        self.charm.model.get_relation.assert_called_once_with("cluster")
+        self.charm.model.get_relation.assert_called_once_with(CLUSTER_RELATION)
 
     def test_build_upgrade_stack_with_relation(self):
         """Test build_upgrade_stack with cluster relation."""
@@ -118,4 +120,28 @@ class TestK8sUpgrade(unittest.TestCase):
         result = self.upgrade.build_upgrade_stack()
 
         self.assertEqual(sorted(result), [0, 1, 2])
-        self.charm.model.get_relation.assert_called_once_with("cluster")
+        self.charm.model.get_relation.assert_called_once_with(CLUSTER_RELATION)
+
+    def test_verify_worker_versions_compatible(self):
+        """Test _verify_worker_versions returns True when worker versions is compatible."""
+        unit_1 = MagicMock(spec=ops.Unit)
+        unit_1.name = "k8s-worker/0"
+        unit_2 = MagicMock(spec=ops.Unit)
+        unit_2.name = "k8s-worker/1"
+        self.charm.get_worker_versions.return_value = {"1.31.0": [unit_1], "1.31.5": [unit_2]}
+
+        result = self.upgrade._verify_worker_versions()
+
+        self.assertTrue(result)
+
+    def test_verify_worker_versions_incompatible(self):
+        """Test _verify_worker_versions returns False when worker versions is incompatible."""
+        unit_1 = MagicMock(spec=ops.Unit)
+        unit_1.name = "k8s-worker/0"
+        unit_2 = MagicMock(spec=ops.Unit)
+        unit_2.name = "k8s-worker/1"
+        self.charm.get_worker_versions.return_value = {"1.32.0": [unit_1], "1.33.0": [unit_2]}
+
+        result = self.upgrade._verify_worker_versions()
+
+        self.assertFalse(result)

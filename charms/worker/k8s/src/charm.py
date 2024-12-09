@@ -21,10 +21,11 @@ import os
 import shlex
 import socket
 import subprocess
+from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import charms.contextual_status as status
@@ -65,7 +66,22 @@ from cos_integration import COSIntegration
 from events import update_status
 from inspector import ClusterInspector
 from kube_control import configure as configure_kube_control
-from literals import DEPENDENCIES
+from literals import (
+    CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
+    CONTAINERD_RELATION,
+    COS_RELATION,
+    COS_TOKENS_RELATION,
+    COS_TOKENS_WORKER_RELATION,
+    DEPENDENCIES,
+    ETC_KUBERNETES,
+    ETCD_RELATION,
+    K8SD_PORT,
+    K8SD_SNAP_SOCKET,
+    KUBECONFIG,
+    KUBECTL_PATH,
+    SUPPORTED_DATASTORES,
+)
 from ops.interface_kube_control import KubeControlProvides
 from snap import management as snap_management
 from snap import version as snap_version
@@ -75,14 +91,6 @@ from upgrade import K8sDependenciesModel, K8sUpgrade
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
-
-VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
-K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
-KUBECONFIG = Path.home() / ".kube/config"
-ETC_KUBERNETES = Path("/etc/kubernetes")
-KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
-K8SD_PORT = 6400
-SUPPORTED_DATASTORES = ["dqlite", "etcd"]
 
 
 def _get_public_address() -> str:
@@ -123,6 +131,8 @@ class K8sCharm(ops.CharmBase):
         is_worker: true if this is a worker unit
         is_control_plane: true if this is a control-plane unit
         lead_control_plane: true if this is a control-plane unit and its the leader
+        is_upgrade_granted: true if the upgrade has been granted
+        datastore: the datastore used for Kubernetes
     """
 
     _stored = ops.StoredState()
@@ -139,16 +149,16 @@ class K8sCharm(ops.CharmBase):
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.cluster_inspector = ClusterInspector(kubeconfig_path=KUBECONFIG)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
         self.upgrade = K8sUpgrade(
             self,
-            node_manager=self.cluster_inspector,
+            cluster_inspector=self.cluster_inspector,
             relation_name="upgrade",
             substrate="vm",
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
         )
         self.cos = COSIntegration(self)
-        self.update_status = update_status.Handler(self)
+        self.update_status = update_status.Handler(self, self.upgrade)
         self.reconciler = Reconciler(
             self, self._reconcile, exit_status=self.update_status.active_status
         )
@@ -161,7 +171,8 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._stored.set_default(is_dying=False, cluster_name=str())
+        self._upgrade_snap = False
+        self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -204,7 +215,7 @@ class K8sCharm(ops.CharmBase):
         Integration by applying the manifests for COS Cluster Roles and
         kube-state-metrics (K-S-M).
         """
-        if not self.model.get_relation("cos-agent"):
+        if not self.model.get_relation(COS_RELATION):
             return
 
         log.info("Apply COS Integrations")
@@ -226,6 +237,35 @@ class K8sCharm(ops.CharmBase):
     def is_worker(self) -> bool:
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
+
+    @property
+    def datastore(self) -> str:
+        """Return the datastore type."""
+        return str(self.config.get("bootstrap-datastore"))
+
+    def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
+        """Get the versions of the worker units.
+
+        Returns:
+            Dict[str, List[ops.Unit]]: A dictionary of versions and the units that have them.
+        """
+        if not (relation := self.model.get_relation(CLUSTER_WORKER_RELATION)):
+            return {}
+
+        versions = defaultdict(list)
+        for unit in relation.units:
+            if version := relation.data[unit].get("version"):
+                versions[version].append(unit)
+        return versions
+
+    def grant_upgrade(self):
+        """Grant the upgrade to the charm."""
+        self._upgrade_snap = True
+
+    @property
+    def is_upgrade_granted(self) -> bool:
+        """Check if the upgrade has been granted."""
+        return self._upgrade_snap
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
@@ -260,7 +300,7 @@ class K8sCharm(ops.CharmBase):
         if self._stored.cluster_name == "":
             if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
                 self._stored.cluster_name = self._generate_unique_cluster_name()
-            elif not (relation := self.model.get_relation("cluster")):
+            elif not (relation := self.model.get_relation(CLUSTER_RELATION)):
                 pass
             elif any(
                 [
@@ -317,6 +357,13 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
+    def _get_extra_sans(self):
+        """Retrieve the certificate extra SANs."""
+        extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
+        configured_sans = {san for san in extra_sans_str.strip().split() if san}
+        all_sans = configured_sans | set([_get_public_address()])
+        return sorted(all_sans)
+
     def _assemble_bootstrap_config(self):
         """Assemble the bootstrap configuration for the Kubernetes cluster.
 
@@ -329,7 +376,7 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
         bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
-        bootstrap_config.extra_sans = [_get_public_address()]
+        bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
         return bootstrap_config
@@ -369,7 +416,7 @@ class K8sCharm(ops.CharmBase):
     def _config_containerd_registries(self):
         """Apply containerd custom registries."""
         registries, config = [], ""
-        containerd_relation = self.model.get_relation("containerd")
+        containerd_relation = self.model.get_relation(CONTAINERD_RELATION)
         if self.is_control_plane:
             config = str(self.config["containerd-custom-registries"])
             registries = containerd.parse_registries(config)
@@ -382,16 +429,16 @@ class K8sCharm(ops.CharmBase):
 
     def _configure_cos_integration(self):
         """Retrieve the join token from secret databag and join the cluster."""
-        if not self.model.get_relation("cos-agent"):
+        if not self.model.get_relation(COS_RELATION):
             return
 
         status.add(ops.MaintenanceStatus("Updating COS integrations"))
         log.info("Updating COS integration")
-        if relation := self.model.get_relation("cos-tokens"):
+        if relation := self.model.get_relation(COS_TOKENS_RELATION):
             self.collector.request(relation)
 
     def _get_valid_annotations(self) -> Optional[dict]:
-        """Fetch and validate annotations from charm configuration.
+        """Fetch and validate cluster-annotations from charm configuration.
 
         The values are expected to be a space-separated string of key-value pairs.
 
@@ -401,7 +448,7 @@ class K8sCharm(ops.CharmBase):
         Raises:
             ReconcilerError: If any annotation is invalid.
         """
-        raw_annotations = self.config.get("annotations")
+        raw_annotations = self.config.get("cluster-annotations")
         if not raw_annotations:
             return None
 
@@ -507,7 +554,7 @@ class K8sCharm(ops.CharmBase):
 
         if datastore == "etcd":
             log.info("Using etcd as external datastore")
-            etcd_relation = self.model.get_relation("etcd")
+            etcd_relation = self.model.get_relation(ETCD_RELATION)
 
             if not etcd_relation:
                 raise ReconcilerError("Missing etcd relation")
@@ -552,7 +599,7 @@ class K8sCharm(ops.CharmBase):
         elif unit := _cluster_departing_unit(event):
             to_remove = unit
 
-        if peer := self.model.get_relation("cluster"):
+        if peer := self.model.get_relation(CLUSTER_RELATION):
             self.distributor.revoke_tokens(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
@@ -560,7 +607,7 @@ class K8sCharm(ops.CharmBase):
                 to_remove=to_remove,
             )
 
-        if workers := self.model.get_relation("k8s-cluster"):
+        if workers := self.model.get_relation(CLUSTER_WORKER_RELATION):
             self.distributor.revoke_tokens(
                 relation=workers,
                 token_strategy=TokenStrategy.CLUSTER,
@@ -571,14 +618,14 @@ class K8sCharm(ops.CharmBase):
     def _create_cluster_tokens(self):
         """Create tokens for the units in the cluster and k8s-cluster relations."""
         log.info("Prepare clustering")
-        if peer := self.model.get_relation("cluster"):
+        if peer := self.model.get_relation(CLUSTER_RELATION):
             self.distributor.allocate_tokens(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.CONTROL_PLANE,
             )
 
-        if workers := self.model.get_relation("k8s-cluster"):
+        if workers := self.model.get_relation(CLUSTER_WORKER_RELATION):
             self.distributor.allocate_tokens(
                 relation=workers,
                 token_strategy=TokenStrategy.CLUSTER,
@@ -591,18 +638,18 @@ class K8sCharm(ops.CharmBase):
         This method creates COS tokens and distributes them to peers and workers
         if relations exist.
         """
-        if not self.model.get_relation("cos-agent"):
+        if not self.model.get_relation(COS_RELATION):
             return
 
         log.info("Prepare cos tokens")
-        if rel := self.model.get_relation("cos-tokens"):
+        if rel := self.model.get_relation(COS_TOKENS_RELATION):
             self.distributor.allocate_tokens(
                 relation=rel,
                 token_strategy=TokenStrategy.COS,
                 token_type=ClusterTokenType.CONTROL_PLANE,
             )
 
-        if rel := self.model.get_relation("cos-worker-tokens"):
+        if rel := self.model.get_relation(COS_TOKENS_WORKER_RELATION):
             self.distributor.allocate_tokens(
                 relation=rel,
                 token_strategy=TokenStrategy.COS,
@@ -639,7 +686,7 @@ class K8sCharm(ops.CharmBase):
             Returns an empty list if the token cannot be retrieved or if the
             "cos-tokens" relation does not exist.
         """
-        relation = self.model.get_relation("cos-tokens")
+        relation = self.model.get_relation(COS_TOKENS_RELATION)
         if not relation:
             log.warning("No cos-tokens available")
             return []
@@ -660,7 +707,7 @@ class K8sCharm(ops.CharmBase):
         Raises:
             ReconcilerError: If the cluster integration is missing.
         """
-        relation = self.model.get_relation("cluster")
+        relation = self.model.get_relation(CLUSTER_RELATION)
         if not relation:
             status.add(ops.BlockedStatus("Missing cluster integration"))
             raise ReconcilerError("Missing cluster integration")
@@ -682,8 +729,8 @@ class K8sCharm(ops.CharmBase):
         if not local_version:
             raise ReconcilerError("k8s-snap is not installed")
 
-        peer = self.model.get_relation("cluster")
-        worker = self.model.get_relation("k8s-cluster")
+        peer = self.model.get_relation(CLUSTER_RELATION)
+        worker = self.model.get_relation(CLUSTER_WORKER_RELATION)
 
         for relation in (peer, worker):
             if not relation:
@@ -694,8 +741,9 @@ class K8sCharm(ops.CharmBase):
                 if not unit_version:
                     raise ReconcilerError(f"Waiting for version from {unit.name}")
                 if unit_version != local_version:
-                    status.add(ops.BlockedStatus(f"Version mismatch with {unit.name}"))
-                    raise ReconcilerError(f"Version mismatch with {unit.name}")
+                    # NOTE: Add a check to validate if we are doing an upgrade
+                    status.add(ops.WaitingStatus("Upgrading the cluster"))
+                    return
             relation.data[self.app]["version"] = local_version
 
     def _get_proxy_env(self) -> Dict[str, str]:
@@ -731,7 +779,7 @@ class K8sCharm(ops.CharmBase):
         Args:
             event (ops.EventBase): event triggering the join
         """
-        if not (relation := self.model.get_relation("cluster")):
+        if not (relation := self.model.get_relation(CLUSTER_RELATION)):
             status.add(ops.BlockedStatus("Missing cluster integration"))
             raise ReconcilerError("Missing cluster integration")
 
@@ -761,7 +809,7 @@ class K8sCharm(ops.CharmBase):
         request = JoinClusterRequest(name=node_name, address=cluster_addr, token=token)
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
-            request.config.extra_sans = [_get_public_address()]
+            request.config.extra_sans = self._get_extra_sans()
             config.extra_args.craft(self.config, request.config, cluster_name)
         else:
             request.config = NodeJoinConfig()
@@ -785,7 +833,7 @@ class K8sCharm(ops.CharmBase):
         self.update_status.run()
         self._last_gasp()
 
-        relation = self.model.get_relation("cluster")
+        relation = self.model.get_relation(CLUSTER_RELATION)
         local_cluster = self.get_cluster_name()
         remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
         if local_cluster and local_cluster != remote_cluster:
@@ -853,7 +901,7 @@ class K8sCharm(ops.CharmBase):
         elif (
             self.is_worker
             and self.get_cluster_name()
-            and (relation := self.model.get_relation("cluster"))
+            and (relation := self.model.get_relation(CLUSTER_RELATION))
             and not relation.units
         ):
             # If a worker unit has been clustered,

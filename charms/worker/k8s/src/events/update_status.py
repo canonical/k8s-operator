@@ -15,6 +15,7 @@ import ops
 import reschedule
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
+from upgrade import K8sUpgrade
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -64,24 +65,27 @@ class Handler(ops.Object):
             the unit's status during the update process.
     """
 
-    def __init__(self, charm: K8sCharmProtocol):
+    def __init__(self, charm: K8sCharmProtocol, upgrade: K8sUpgrade):
         """Initialize the UpdateStatusEvent.
 
         Args:
             charm: The charm instance that is instantiating this event.
+            upgrade: The upgrade instance that handles the upgrade process.
         """
         super().__init__(charm, "update_status")
         self.charm = charm
+        self.upgrade = upgrade
         self.active_status = DynamicActiveStatus()
         self.charm.framework.observe(self.charm.on.update_status, self._on_update_status)
 
-    def _on_update_status(self, _event: ops.UpdateStatusEvent):
+    def _on_update_status(self, event: ops.UpdateStatusEvent):
         """Handle update-status event."""
         if not self.charm.reconciler.stored.reconciled:
             return
 
         try:
             with status.context(self.charm.unit, exit_status=self.active_status):
+                self.upgrade.set_upgrade_status(event)
                 self.run()
         except status.ReconcilerError:
             log.exception("Can't update_status")
