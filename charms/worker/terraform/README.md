@@ -10,17 +10,17 @@ This module requires a `juju` model to be available. Refer to the [usage section
 ### Inputs
 The module offers the following configurable inputs:
 
-| Name | Type | Description | Required |
-| - | - | - | - |
-| `app_name`| string | Application name | False |
-| `channel`| string | Channel that the charm is deployed from | False |
-| `config`| map(string) | Map of the charm configuration options | False |
-| `constraints` | string | Juju constraints to apply for this application | False |
-| `model`| string | Name of the model that the charm is deployed on | True |
-| `resources`| map(string) | Map of the charm resources | False |
-| `revision`| number | Revision number of the charm name | False |
-| `series` | string | Ubuntu series to deploy the carm onto | False |
-| `units` | number | Number of units to deploy | False |
+| Name | Type | Description | Required | Default |
+| - | - | - | - | - |
+| `app_name`| string | Application name | False | k8s-worker | 
+| `base` | string | Ubuntu base to deploy the carm onto | False | ubuntu@24.04 |
+| `channel`| string | Channel that the charm is deployed from | False | 1.30/edge |
+| `config`| map(string) | Map of the charm configuration options | False | {} |
+| `constraints` | string | Juju constraints to apply for this application | False | arch=amd64 |
+| `model`| string | Name of the model that the charm is deployed on | True | - |
+| `resources`| map(string) | Map of the charm resources | False | {} |
+| `revision`| number | Revision number of the charm name | False | null |
+| `units` | number | Number of units to deploy | False | 1 |
 
 ### Outputs
 Upon applied, the module exports the following outputs:
