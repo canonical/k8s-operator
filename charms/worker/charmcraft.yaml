@@ -60,6 +60,19 @@ bases:
 
 config:
   options:
+    bootstrap-node-taints:
+      type: string
+      default: ""
+      description: |
+        Space-separated list of taints to apply to this node at registration time.
+
+        This config is only used at bootstrap time when Kubelet first registers the
+        node with Kubernetes. To change node taints after deploy time, use kubectl
+        instead.
+
+        For more information, see the upstream Kubernetes documentation about
+        taints:
+        https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
     node-labels:
       default: ""
       type: string

@@ -70,3 +70,13 @@ def craft(
 
     cmd = _parse(src["kubelet-extra-args"])
     dest.extra_node_kubelet_args = cmd
+
+    is_worker_node = isinstance(dest, NodeJoinConfig) and not isinstance(
+        dest, ControlPlaneNodeJoinConfig
+    )
+    if is_worker_node:
+        # We'll only do this for worker nodes, control plane nodes are handled
+        # separately.
+        taints = str(src["bootstrap-node-taints"] or "").strip().split()
+        if taints:
+            dest.extra_node_kubelet_args["--register-with-taints"] = ",".join(taints)
