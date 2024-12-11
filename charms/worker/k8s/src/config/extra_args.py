@@ -4,7 +4,7 @@
 # Learn more at: https://juju.is/docs/sdk
 
 """Parse extra arguments for Kubernetes components."""
-from typing import Dict, Union
+from typing import Dict, List, Union
 
 import ops
 from charms.k8s.v0.k8sd_api_manager import (
@@ -71,12 +71,17 @@ def craft(
     cmd = _parse(src["kubelet-extra-args"])
     dest.extra_node_kubelet_args = cmd
 
-    is_worker_node = isinstance(dest, NodeJoinConfig) and not isinstance(
-        dest, ControlPlaneNodeJoinConfig
-    )
-    if is_worker_node:
-        # We'll only do this for worker nodes, control plane nodes are handled
-        # separately.
-        taints = str(src["bootstrap-node-taints"] or "").strip().split()
-        if taints:
-            dest.extra_node_kubelet_args["--register-with-taints"] = ",".join(taints)
+
+def taint_worker(dest: NodeJoinConfig, taints: List[str]):
+    """Apply the specified list of taints to the node join configuration.
+
+    Updates the following attributes of the `config` object:
+        - extra_node_kubelet_args: arguments for kubelet.
+
+    Args:
+        dest (NodeJoinConfig):
+            The configuration object to be updated with extra arguments.
+        taints (List[str]):
+            The list of taints to apply.
+    """
+    dest.extra_node_kubelet_args["--register-with-taints"] = ",".join(taints)
