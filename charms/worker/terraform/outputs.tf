@@ -8,17 +8,17 @@ output "app_name" {
 
 output "requires" {
   value = {
-    aws         = "aws"
-    azure       = "azure"
-    cluster     = "cluster"
-    cos_tokens  = "cos-tokens"
-    containerd  = "containerd"
-    gcp         = "gcp"
+    aws        = "aws"
+    azure      = "azure"
+    cluster    = "cluster"
+    cos_tokens = "cos-tokens"
+    containerd = "containerd"
+    gcp        = "gcp"
   }
 }
 
 output "provides" {
   value = {
-    cos_agent   = "cos-agent"
+    cos_agent = "cos-agent"
   }
 }
