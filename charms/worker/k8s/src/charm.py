@@ -759,7 +759,7 @@ class K8sCharm(ops.CharmBase):
         }
 
         waiting_parts = [
-            f"{count} {role_names[role]}{"s" if count > 1 else ""}"
+            f"{count} {role_names[role]}{'s' if count > 1 else ''}"
             for role, count in waiting_units.items()
             if count
         ]
