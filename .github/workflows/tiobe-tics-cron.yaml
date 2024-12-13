@@ -85,3 +85,17 @@ jobs:
           cd $GITHUB_WORKSPACE
           TICSQServer -project k8s-operator -tmpdir /tmp/tics -branchdir "$GITHUB_WORKSPACE"
 
+      - name: Print TICSQServer Logs
+        if: always()
+        run: |
+          set -eux -o pipefail
+
+          TICS_TEMP_DIR="/tmp/tics/ticstmpdir"
+
+          if [ -d "$TICS_TEMP_DIR" ]; then
+            for file in "$TICS_TEMP_DIR"/*; do
+              echo "### cat $file"
+              cat "$file"
+              echo
+            done
+          fi
