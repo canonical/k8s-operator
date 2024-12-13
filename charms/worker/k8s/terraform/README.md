@@ -56,6 +56,6 @@ data "juju_model" "testing" {
 }
 module "k8s" {
   source = "<path-to-this-directory>"
-  model_name = data.juju_model.testing.name
+  model = data.juju_model.testing.name
 }
 ```
