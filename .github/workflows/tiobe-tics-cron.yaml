@@ -67,9 +67,9 @@ jobs:
           GENERATED_COVERAGE_XML="$GITHUB_WORKSPACE/charms/worker/k8s/coverage.xml"
           cat "$GENERATED_COVERAGE_XML"
 
-          # TiCS expects the report to be under a "$(pwd)/.coverage" directory.
-          mkdir -p "$GITHUB_WORKSPACE/.coverage"
-          mv "$GENERATED_COVERAGE_XML" .coverage/coverage.xml
+          # TiCS expects the report to be under a "$(pwd)/cover" directory.
+          mkdir -p "$GITHUB_WORKSPACE/cover"
+          mv "$GENERATED_COVERAGE_XML" cover/coverage.xml
 
       - name: Run TiCS
         run: |
