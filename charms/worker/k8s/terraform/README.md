@@ -44,7 +44,7 @@ resource "juju_model" "testing" {
 }
 module "k8s" {
   source = "<path-to-this-directory>"
-  model_name = juju_model.testing.name
+  model = juju_model.testing.name
 }
 ```
 
