@@ -15,29 +15,15 @@ from juju import application, model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .grafana import Grafana
-from .helpers import get_nodes, ready_nodes
+from .helpers import get_leader, get_nodes, ready_nodes
 from .prometheus import Prometheus
 
 log = logging.getLogger(__name__)
 
 
-async def get_leader(app) -> int:
-    """Find leader unit of an application.
-
-    Args:
-        app: Juju application
-
-    Returns:
-        int: index to leader unit
-
-    Raises:
-        ValueError: No leader found
-    """
-    is_leader = await asyncio.gather(*(u.is_leader_from_status() for u in app.units))
-    for idx, flag in enumerate(is_leader):
-        if flag:
-            return idx
-    raise ValueError("No leader found")
+pytestmark = [
+    pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
+]
 
 
 @pytest.mark.abort_on_fail
