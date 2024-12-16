@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from functools import cache, cached_property
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Set, Tuple
 
 import yaml
 from juju import unit
@@ -267,13 +267,19 @@ class CharmUrl:
             name = m.group("charm")
         return cls(name, series, arch)
 
-    def __str__(self) -> str:
-        """Return the charm URL.
+    @staticmethod
+    def representer(dumper: yaml.Dumper, data: "CharmUrl") -> yaml.ScalarNode:
+        """Yaml representer for the CharmUrl object.
+
+        Args:
+            dumper: yaml dumper
+            data: CharmUrl object
 
         Returns:
-            string: charm URL
+            yaml.ScalarNode: yaml node
         """
-        return f"ch:{self.arch}/{self.series}/{self.name}"
+        as_str = f"ch:{data.arch}/{data.series}/{data.name}"
+        return dumper.represent_scalar("tag:yaml.org,2002:str", as_str)
 
 
 @dataclass
@@ -423,7 +429,7 @@ class Bundle:
             loaded = yaml.safe_load(self.path.read_bytes())
             series = loaded.get("series", "focal")
             for app in loaded["applications"].values():
-                app["charm"] = CharmUrl(app["charm"], series=series, arch=self.arch)
+                app["charm"] = CharmUrl.craft(app["charm"], series=series, arch=self.arch)
             self._content = loaded
         return self._content
 
@@ -544,7 +550,7 @@ class Bundle:
         """
         target = tmp_path / "bundles" / self.path.name
         target.parent.mkdir(exist_ok=True, parents=True)
-        yaml.safe_dump(self.content, target.open("w"))
+        yaml.dump(self.content, target.open("w"))
         return target
 
 
@@ -560,11 +566,11 @@ async def cloud_arch(ops_test: OpsTest) -> str:
     assert ops_test.model, "Model must be present"
     controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
-    arch = set(
+    arch: Set[str] = {
         machine.safe_data["hardware-characteristics"]["arch"]
         for machine in controller_model.machines.values()
-    )
-    return arch.pop()
+    }
+    return arch.pop().strip()
 
 
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
@@ -586,3 +592,6 @@ async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
     if _type == "lxd":
         vms = not ops_test.request.config.getoption("--lxd-containers")
     return _type, vms
+
+
+yaml.add_representer(CharmUrl, CharmUrl.representer)
