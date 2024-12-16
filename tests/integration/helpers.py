@@ -87,22 +87,29 @@ async def get_unit_cidrs(model: Model, app_name: str, unit_num: int) -> List[str
     return list(sorted(local_cidrs))
 
 
-async def get_nodes(k8s):
-    """Return Node list
+async def get_rsc(k8s, resource, namespace=None, labels=None):
+    """Return Pod list
 
     Args:
         k8s: any k8s unit
+        resource: string resource type
+        namespace: string namespace
+        labels: dict of labels
 
     Returns:
-        list of nodes
+        list of pods
     """
-    action = await k8s.run("k8s kubectl get nodes -o json")
+    namespaced = f"-n {namespace}" if namespace else ""
+    labeled = " ".join(f"-l {k}={v}" for k, v in labels.items()) if labels else ""
+    cmd = f"k8s kubectl get {resource} {labeled} {namespaced} -o json"
+
+    action = await k8s.run(cmd)
     result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to get nodes with kubectl"
-    log.info("Parsing node list...")
-    node_list = json.loads(result.results["stdout"])
-    assert node_list["kind"] == "List", "Should have found a list of nodes"
-    return node_list["items"]
+    assert result.results["return-code"] == 0, f"Failed to get {resource} with kubectl"
+    log.info("Parsing %s list...", resource)
+    resource_list = json.loads(result.results["stdout"])
+    assert resource_list["kind"] == "List", f"Should have found a list of {resource}"
+    return resource_list["items"]
 
 
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(15))
@@ -114,7 +121,7 @@ async def ready_nodes(k8s, expected_count):
         expected_count: number of expected nodes
     """
     log.info("Finding all nodes...")
-    nodes = await get_nodes(k8s)
+    nodes = await get_rsc(k8s, "nodes")
     ready_nodes = {
         node["metadata"]["name"]: all(
             condition["status"] == "False"

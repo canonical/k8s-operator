@@ -13,6 +13,7 @@ import logging
 import charms.contextual_status as status
 import ops
 import reschedule
+from inspector import ClusterInspector
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
 from upgrade import K8sUpgrade
@@ -107,4 +108,17 @@ class Handler(ops.Object):
             status.add(ops.WaitingStatus("Node not Ready"))
             trigger.create(reschedule.Period(seconds=30))
             return
+
+        if self.charm.is_control_plane:
+            inspect = self.charm.cluster_inspector
+            try:
+                if failing_pods := inspect.verify_pods_running(["kube-system"]):
+                    status.add(ops.WaitingStatus(f"Unready kube-system Pods: {failing_pods}"))
+            except ClusterInspector.ClusterInspectorError as e:
+                log.exception("Failed to verify pods: %s", e)
+                status.add(ops.WaitingStatus("Waiting for API Server"))
+            finally:
+                trigger.create(reschedule.Period(seconds=30))
+            return
+
         trigger.cancel()

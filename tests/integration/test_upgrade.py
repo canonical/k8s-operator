@@ -14,8 +14,9 @@ import juju.unit
 import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
+from tenacity import before_sleep_log, retry, stop_after_attempt, wait_fixed
 
-from .helpers import Bundle, get_leader
+from .helpers import Bundle, get_leader, get_rsc
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # deploying charms from the edge channels, then upgrading them to the built charm.
@@ -43,6 +44,19 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
     }
     bundle, _ = await Bundle.create(ops_test)
     charms = await bundle.discover_charm_files(ops_test)
+    k8s: juju.application.Application = kubernetes_cluster.applications["k8s"]
+
+    @retry(
+        stop=stop_after_attempt(6),
+        wait=wait_fixed(10),
+        before_sleep=before_sleep_log(log, logging.WARNING),
+    )
+    async def _wait_for_idle():
+        """Wait for the model to become idle."""
+        kube_system_pods = await get_rsc(k8s.units[0], "pods", namespace="kube-system")
+        assert all(
+            p["status"]["phase"] == "Running" for p in kube_system_pods
+        ), "Kube-system not yet ready"
 
     async def _refresh(app_name: str):
         """Refresh the application.
@@ -58,7 +72,7 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         leader: juju.unit.Unit = app.units[leader_idx]
         action = await leader.run_action("pre-upgrade-check")
         await action.wait()
-        with_fault = f"Pre-upgrade of {app_name} failed with {yaml.safe_dump(action.results)}"
+        with_fault = f"Pre-upgrade of '{app_name}' failed with {yaml.safe_dump(action.results)}"
         if app_name == "k8s":
             # The k8s charm has a pre-upgrade-check action that works, k8s-worker does not.
             assert action.status == "completed", with_fault
@@ -70,5 +84,6 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
             timeout=30 * 60,
         )
 
+    await _wait_for_idle()
     for app in charms:
         await _refresh(app)
