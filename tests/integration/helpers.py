@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from functools import cache, cached_property
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import yaml
 from juju import unit
@@ -326,6 +326,7 @@ class Charm:
         """
         if charmcraft := CHARMCRAFT_DIRS.get(name):
             return cls(charmcraft)
+        return None
 
     async def resolve(self, ops_test: OpsTest, arch: str) -> "Charm":
         """Build or find the charm with ops_test.
@@ -440,7 +441,6 @@ class Bundle:
 
         Args:
             ops_test: Instance of the pytest-operator plugin
-            arch: Cloud architecture
 
         Returns:
             Mapping: application name to Charm object
@@ -457,6 +457,7 @@ class Bundle:
 
         Args:
             ops_test: Instance of the pytest-operator plugin
+            markings: Markings from the test
         """
         _type, _vms = await cloud_type(ops_test)
         if _type == "lxd" and not _vms:
@@ -496,7 +497,7 @@ class Bundle:
             resources (dict): Optional resources to add
 
         Raises:
-            ValueError: if both path and channel are provided, or neither are provided
+            FileNotFoundError: if the local charm file is not found
         """
         app = self.applications.get(name)
         if not app:

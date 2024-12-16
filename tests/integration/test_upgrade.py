@@ -15,7 +15,7 @@ import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
 
-from .helpers import Bundle, Charm, get_leader
+from .helpers import Bundle, get_leader
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # deploying charms from the edge channels, then upgrading them to the built charm.
@@ -53,7 +53,7 @@ async def test_k8s_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTe
         app: Optional[juju.application.Application] = kubernetes_cluster.applications[app_name]
         assert app is not None, f"Application {app_name} not found"
 
-        log.info(f"Refreshing {app_name}")
+        log.info("Refreshing %s", app_name)
         leader_idx: int = await get_leader(app)
         leader: juju.unit.Unit = app.units[leader_idx]
         action = await leader.run_action("pre-upgrade-check")

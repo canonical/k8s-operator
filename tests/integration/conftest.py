@@ -20,7 +20,7 @@ from kubernetes.client import Configuration
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import Bundle, Charm, cloud_type, get_unit_cidrs, is_deployed
+from .helpers import Bundle, CharmUrl, cloud_type, get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -72,7 +72,8 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "cos: mark COS integration tests.")
     config.addinivalue_line(
         "markers",
-        "bundle(file='', apps_local={}, apps_channel={}, apps_resources={}): specify a YAML bundle file for a test.",
+        "bundle(file='', apps_local={}, apps_channel={}, apps_resources={}): "
+        "specify a YAML bundle file for a test.",
     )
 
 
@@ -202,7 +203,7 @@ async def grafana_agent(kubernetes_cluster: Model):
     machine_series = juju.utils.get_version_series(data["base"].split("@")[1])
 
     await kubernetes_cluster.deploy(
-        Charm.craft_url("grafana-agent", machine_series, machine_arch),
+        str(CharmUrl.craft("grafana-agent", machine_series, machine_arch)),
         channel="stable",
         series=machine_series,
     )
