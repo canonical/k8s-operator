@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 
 @pytest.mark.abort_on_fail
-async def test_k8s_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
+async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
     """Upgrade the model with the provided charms.
 
     Args:

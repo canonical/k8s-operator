@@ -41,9 +41,10 @@ jobs:
         arch:
         - {id: amd64, builder-label: ubuntu-22.04, tester-arch: AMD64}  # built on azure
         - {id: arm64, builder-label: ARM64,        tester-arch: ARM64}  # built on self-hosted
-        suite: [k8s, etcd, ceph]
+        suite: [k8s, etcd, ceph, upgrade]
         exclude:
         - {arch: {id: arm64}, suite: ceph}
+        - {arch: {id: arm64}, suite: upgrade}
     with:
       identifier: ${{ matrix.arch.id }}-${{ matrix.suite }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
