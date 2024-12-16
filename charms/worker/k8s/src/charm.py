@@ -729,22 +729,44 @@ class K8sCharm(ops.CharmBase):
         if not local_version:
             raise ReconcilerError("k8s-snap is not installed")
 
-        peer = self.model.get_relation(CLUSTER_RELATION)
-        worker = self.model.get_relation(CLUSTER_WORKER_RELATION)
+        relation_config = {
+            "peer": self.model.get_relation(CLUSTER_RELATION),
+            "worker": self.model.get_relation(CLUSTER_WORKER_RELATION),
+        }
 
-        for relation in (peer, worker):
+        waiting_units = {role: 0 for role in relation_config}
+
+        for role, relation in relation_config.items():
             if not relation:
                 continue
+
             units = (unit for unit in relation.units if unit.name != self.unit.name)
             for unit in units:
                 unit_version = relation.data[unit].get("version")
                 if not unit_version:
                     raise ReconcilerError(f"Waiting for version from {unit.name}")
                 if unit_version != local_version:
-                    # NOTE: Add a check to validate if we are doing an upgrade
-                    status.add(ops.WaitingStatus("Upgrading the cluster"))
-                    return
+                    waiting_units[role] += 1
+
             relation.data[self.app]["version"] = local_version
+
+        if not any(waiting_units.values()):
+            return
+
+        role_names = {
+            "peer": "Control Plane",
+            "worker": "Worker",
+        }
+
+        waiting_parts = [
+            f"{count} {role_names[role]}{'s' if count > 1 else ''}"
+            for role, count in waiting_units.items()
+            if count
+        ]
+
+        status_msg = f"Waiting for {', '.join(waiting_parts)} to upgrade"
+        status.add(ops.WaitingStatus(status_msg))
+        raise ReconcilerError(status_msg)
 
     def _get_proxy_env(self) -> Dict[str, str]:
         """Retrieve the Juju model config proxy values.
