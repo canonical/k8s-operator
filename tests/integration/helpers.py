@@ -410,8 +410,6 @@ class Bundle:
         assert arch, "Architecture must be known before customizing the bundle"
 
         bundle = cls(path=path, arch=arch)
-        bundle.add_constraints({"arch": arch})
-
         assert not all(
             _ in kwargs for _ in ("apps_local", "apps_channel")
         ), "Cannot use both apps_local and apps_channel"
@@ -548,6 +546,7 @@ class Bundle:
         Returns:
             Path to the written bundle
         """
+        self.add_constraints({"arch": self.arch})
         target = tmp_path / "bundles" / self.path.name
         target.parent.mkdir(exist_ok=True, parents=True)
         yaml.dump(self.content, target.open("w"))
