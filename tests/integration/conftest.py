@@ -45,6 +45,7 @@ def pytest_addoption(parser: pytest.Parser):
     Args:
         parser: Pytest parser.
     """
+    parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
     parser.addoption(
         "--snap-installation-resource", default=str(DEFAULT_SNAP_INSTALLATION.resolve())

@@ -445,8 +445,9 @@ class Bundle:
         empty_resource = {
             "snap-installation": ops_test.request.config.option.snap_installation_resource
         }
-        if markings.series:
-            self.content["series"] = self.series = markings.series
+
+        if series := ops_test.request.config.option.series or markings.series:
+            self.content["series"] = self.series = series
 
         for app in markings.apps_local:
             assert app in charms, f"App={app} doesn't have a local charm"

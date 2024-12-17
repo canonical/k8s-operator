@@ -51,7 +51,7 @@ jobs:
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
         ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
-        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers' || '' }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=focal' || '' }}
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
