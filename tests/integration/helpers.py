@@ -88,16 +88,16 @@ async def get_unit_cidrs(model: Model, app_name: str, unit_num: int) -> List[str
 
 
 async def get_rsc(k8s, resource, namespace=None, labels=None):
-    """Return Pod list
+    """Get Resource list optionally filtered by namespace and labels.
 
     Args:
         k8s: any k8s unit
-        resource: string resource type
+        resource: string resource type (e.g. pods, services, nodes)
         namespace: string namespace
-        labels: dict of labels
+        labels: dict of labels to use for filtering
 
     Returns:
-        list of pods
+        list of resources
     """
     namespaced = f"-n {namespace}" if namespace else ""
     labeled = " ".join(f"-l {k}={v}" for k, v in labels.items()) if labels else ""

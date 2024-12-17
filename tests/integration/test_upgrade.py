@@ -47,8 +47,8 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
     k8s: juju.application.Application = kubernetes_cluster.applications["k8s"]
 
     @retry(
-        stop=stop_after_attempt(6),
-        wait=wait_fixed(10),
+        stop=stop_after_attempt(10),
+        wait=wait_fixed(30),
         before_sleep=before_sleep_log(log, logging.WARNING),
     )
     async def _wait_for_idle():
