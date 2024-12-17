@@ -8,17 +8,17 @@ import asyncio
 import ipaddress
 import json
 import logging
-import re
 import shlex
 from dataclasses import dataclass, field
-from functools import cache, cached_property
+from functools import cached_property
 from itertools import chain
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 import yaml
 from juju import unit
 from juju.model import Model
+from juju.url import URL
 from pytest_operator.plugin import OpsTest
 from tenacity import AsyncRetrying, before_sleep_log, retry, stop_after_attempt, wait_fixed
 
@@ -233,60 +233,16 @@ class Markings:
     """Test markings for the bundle.
 
     Attrs:
+        series: Series for Machines in the bundle
         apps_local: List of application names needing local files to replace charm urls
         apps_channel: Mapping of application names to channels
         apps_resources: Mapping of application names to resources
     """
 
+    series: Optional[str] = None
     apps_local: List[str] = field(default_factory=list)
     apps_channel: Mapping = field(default_factory=dict)
     apps_resources: Mapping = field(default_factory=dict)
-
-
-@dataclass
-class CharmUrl:
-    """Represents a charm URL.
-
-    Attrs:
-        name:       Name of the charm in the store
-        series:     Cloud series
-        arch:       Cloud architecture
-    """
-
-    name: str
-    series: str
-    arch: str
-    _URL_RE = re.compile(r"ch:(?P<arch>\w+)/(?P<series>\w+)/(?P<charm>.+)")
-
-    @classmethod
-    def craft(cls, name: str, series: str, arch: str) -> "CharmUrl":
-        """Parse a charm URL.
-
-        Args:
-            name:   Name or URL of the charm
-            series: Cloud series
-            arch:   Cloud architecture
-
-        Returns:
-            CharmUrl object
-        """
-        if m := cls._URL_RE.match(name):
-            name = m.group("charm")
-        return cls(name, series, arch)
-
-    @staticmethod
-    def representer(dumper: yaml.Dumper, data: "CharmUrl") -> yaml.ScalarNode:
-        """Yaml representer for the CharmUrl object.
-
-        Args:
-            dumper: yaml dumper
-            data: CharmUrl object
-
-        Returns:
-            yaml.ScalarNode: yaml node
-        """
-        as_str = f"ch:{data.arch}/{data.series}/{data.name}"
-        return dumper.represent_scalar("tag:yaml.org,2002:str", as_str)
 
 
 @dataclass
@@ -295,12 +251,14 @@ class Charm:
 
     Attrs:
         path:       Path to the charmcraft file
+        url:        Charm URL
         metadata:   Charm's metadata
         name:       Name of the charm from the metadata
         local_path: Path to the built charm file
     """
 
     path: Path
+    url: URL
     _charmfile: Optional[Path] = None
 
     @cached_property
@@ -327,18 +285,18 @@ class Charm:
         return self._charmfile
 
     @classmethod
-    @cache
-    def find(cls, name: str) -> Optional["Charm"]:
-        """Find a charm by name.
+    def find(cls, url: Union[URL, str]) -> Optional["Charm"]:
+        """Find a charm managed in this repo based on its name.
 
         Args:
-            name: Name of the charm
+            url: Charm url or charm name
 
         Returns:
             Charm object or None
         """
-        if charmcraft := CHARMCRAFT_DIRS.get(name):
-            return cls(charmcraft)
+        url = url if isinstance(url, URL) else URL.parse(url)
+        if charmcraft := CHARMCRAFT_DIRS.get(url.name):
+            return cls(charmcraft, url)
         return None
 
     async def resolve(self, ops_test: OpsTest, arch: str) -> "Charm":
@@ -384,13 +342,15 @@ class Bundle:
     Attrs:
         path:            Path to the bundle file
         arch:            Cloud Architecture
+        series:          Series for Machines in the bundle
         content:         Loaded content from the path
         applications:    Mapping of applications in the bundle.
     """
 
     path: Path
     arch: str
-    _content: Mapping = field(default_factory=dict)
+    series: Optional[str] = None
+    _content: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     async def create(cls, ops_test) -> Tuple["Bundle", Markings]:
@@ -424,17 +384,19 @@ class Bundle:
         return bundle, Markings(**kwargs)
 
     @property
-    def content(self) -> Mapping:
+    def content(self) -> Dict[str, Any]:
         """Yaml content of the bundle loaded into a dict
 
         Returns:
-            Mapping: bundle content
+            Dict: bundle content
         """
         if not self._content:
             loaded = yaml.safe_load(self.path.read_bytes())
-            series = loaded.get("series", "focal")
+            self.series = loaded.get("series")
             for app in loaded["applications"].values():
-                app["charm"] = CharmUrl.craft(app["charm"], series=series, arch=self.arch)
+                url = URL.parse(app["charm"])
+                url.architecture = self.arch
+                app["charm"] = url
             self._content = loaded
         return self._content
 
@@ -458,7 +420,7 @@ class Bundle:
         """
         app_to_charm = {}
         for app in self.applications.values():
-            if charm := Charm.find(app["charm"].name):
+            if charm := Charm.find(app["charm"]):
                 await charm.resolve(ops_test, self.arch)
                 app_to_charm[charm.name] = charm
         return app_to_charm
@@ -483,6 +445,9 @@ class Bundle:
         empty_resource = {
             "snap-installation": ops_test.request.config.option.snap_installation_resource
         }
+        if markings.series:
+            self.content["series"] = self.series = markings.series
+
         for app in markings.apps_local:
             assert app in charms, f"App={app} doesn't have a local charm"
             rsc = markings.apps_resources.get(app) or empty_resource
@@ -516,7 +481,7 @@ class Bundle:
         if not charm.local_path and not channel:
             raise FileNotFoundError(f"Charm={charm.name} for App={app} not found")
         if channel:
-            app["charm"] = charm.name
+            app["charm"] = charm.url.with_series(self.series)
             app["channel"] = channel
         else:
             app["charm"] = str(charm.local_path.resolve())
@@ -600,4 +565,17 @@ async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
     return _type, vms
 
 
-yaml.add_representer(CharmUrl, CharmUrl.representer)
+def url_representer(dumper: yaml.Dumper, data: URL) -> yaml.ScalarNode:
+    """Yaml representer for the Charm URL object.
+
+    Args:
+        dumper: yaml dumper
+        data: URL object
+
+    Returns:
+        yaml.ScalarNode: yaml node
+    """
+    return dumper.represent_scalar("tag:yaml.org,2002:str", str(data))
+
+
+yaml.add_representer(URL, url_representer)

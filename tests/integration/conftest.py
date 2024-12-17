@@ -15,12 +15,13 @@ import pytest_asyncio
 import yaml
 from juju.model import Model
 from juju.tag import untag
+from juju.url import URL
 from kubernetes import config as k8s_config
 from kubernetes.client import Configuration
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import Bundle, CharmUrl, cloud_type, get_unit_cidrs, is_deployed
+from .helpers import Bundle, cloud_type, get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -72,7 +73,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "cos: mark COS integration tests.")
     config.addinivalue_line(
         "markers",
-        "bundle(file='', apps_local={}, apps_channel={}, apps_resources={}): "
+        "bundle(file='', series='', apps_local={}, apps_channel={}, apps_resources={}): "
         "specify a YAML bundle file for a test.",
     )
 
@@ -199,14 +200,11 @@ async def grafana_agent(kubernetes_cluster: Model):
     """Deploy Grafana Agent."""
     primary = kubernetes_cluster.applications["k8s"]
     data = primary.units[0].machine.safe_data
-    machine_arch = data["hardware-characteristics"]["arch"]
-    machine_series = juju.utils.get_version_series(data["base"].split("@")[1])
+    arch = data["hardware-characteristics"]["arch"]
+    series = juju.utils.get_version_series(data["base"].split("@")[1])
+    url = URL("ch", name="grafana-agent", series=series, architecture=arch)
 
-    await kubernetes_cluster.deploy(
-        str(CharmUrl.craft("grafana-agent", machine_series, machine_arch)),
-        channel="stable",
-        series=machine_series,
-    )
+    await kubernetes_cluster.deploy(url, channel="stable", series=series)
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
     await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")

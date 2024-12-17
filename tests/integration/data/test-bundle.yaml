@@ -27,3 +27,4 @@ applications:
       kubelet-extra-args: "v=3"
 relations:
   - [k8s, k8s-worker:cluster]
+  - [k8s, k8s-worker:containerd]
