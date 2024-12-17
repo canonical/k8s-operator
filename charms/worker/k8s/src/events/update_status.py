@@ -9,6 +9,7 @@ This handler is responsible for updating the unit's workload version and status
 """
 
 import logging
+from typing import Optional
 
 import charms.contextual_status as status
 import ops
@@ -91,6 +92,27 @@ class Handler(ops.Object):
         except status.ReconcilerError:
             log.exception("Can't update_status")
 
+    def kube_system_pods_waiting(self) -> Optional[ops.WaitingStatus]:
+        """Check if kube-system pods are waiting.
+
+        Returns:
+            WaitingStatus: waiting status if kube-system pods are not ready.
+        """
+        if self.charm.is_worker:
+            # Worker nodes don't need to check the kube-system pods
+            return None
+
+        waiting, inspect = None, self.charm.cluster_inspector
+
+        try:
+            if failing_pods := inspect.verify_pods_running(["kube-system"]):
+                waiting = ops.WaitingStatus(f"Unready Pods: {failing_pods}")
+        except ClusterInspector.ClusterInspectorError as e:
+            log.exception("Failed to verify pods: %s", e)
+            waiting = ops.WaitingStatus("Waiting for API Server")
+
+        return waiting
+
     def run(self):
         """Check k8s snap status."""
         version, overridden = snap_version("k8s")
@@ -109,16 +131,8 @@ class Handler(ops.Object):
             trigger.create(reschedule.Period(seconds=30))
             return
 
-        if self.charm.is_control_plane:
-            inspect = self.charm.cluster_inspector
-            try:
-                if failing_pods := inspect.verify_pods_running(["kube-system"]):
-                    status.add(ops.WaitingStatus(f"Unready kube-system Pods: {failing_pods}"))
-            except ClusterInspector.ClusterInspectorError as e:
-                log.exception("Failed to verify pods: %s", e)
-                status.add(ops.WaitingStatus("Waiting for API Server"))
-            finally:
-                trigger.create(reschedule.Period(seconds=30))
+        if waiting := self.kube_system_pods_waiting():
+            status.add(waiting)
+            trigger.create(reschedule.Period(seconds=30))
             return
-
         trigger.cancel()
