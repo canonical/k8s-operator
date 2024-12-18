@@ -19,6 +19,9 @@ K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
 
+# Features
+SUPPORT_SNAP_INSTALLATION_OVERRIDE = False
+
 # Relations
 CLUSTER_RELATION = "cluster"
 CLUSTER_WORKER_RELATION = "k8s-cluster"

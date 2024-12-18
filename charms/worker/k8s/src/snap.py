@@ -19,6 +19,7 @@ from typing import List, Literal, Optional, Tuple, Union
 import charms.operator_libs_linux.v2.snap as snap_lib
 import ops
 import yaml
+from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE
 from protocols import K8sCharmProtocol
 from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
@@ -184,6 +185,11 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
     Raises:
         SnapError: when the management issue cannot be resolved
     """
+
+    if not SUPPORT_SNAP_INSTALLATION_OVERRIDE:
+        log.error("Unavailable feature: overriding 'snap-installation' resource.")
+        return _default_snap_installation()
+
     try:
         resource_path = charm.model.resources.fetch("snap-installation")
     except (ops.ModelError, NameError):
