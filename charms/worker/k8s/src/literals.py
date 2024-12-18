@@ -27,6 +27,7 @@ COS_TOKENS_RELATION = "cos-tokens"
 COS_TOKENS_WORKER_RELATION = "cos-worker-tokens"
 COS_RELATION = "cos-agent"
 ETCD_RELATION = "etcd"
+UPGRADE_RELATION = "upgrade"
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [
