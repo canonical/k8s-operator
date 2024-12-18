@@ -339,12 +339,7 @@ def test_management_installs_store_from_revision(cache, install_local, args, rev
     args.return_value = [snap.SnapStoreArgument(name="k8s", revision=123)]
     snap.management(harness.charm)
     install_local.assert_not_called()
-    if revision == "123":
-        k8s_snap.ensure.assert_not_called()
-    else:
-        k8s_snap.ensure.assert_called_once_with(
-            state=snap.snap_lib.SnapState.Present, revision="123"
-        )
+    k8s_snap.ensure.assert_called_once_with(state=snap.snap_lib.SnapState.Present, revision="123")
 
 
 @mock.patch("subprocess.check_output")

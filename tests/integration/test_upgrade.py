@@ -22,7 +22,7 @@ from .helpers import Bundle, get_leader, get_rsc
 # deploying charms from the edge channels, then upgrading them to the built charm.
 pytestmark = [
     pytest.mark.bundle(
-        file="test-bundle.yaml", apps_channel={"k8s": "edge", "k8s-worker": "edge"}
+        file="test-bundle.yaml", apps_channel={"k8s": "1.32/beta", "k8s-worker": "1.32/beta"}
     ),
 ]
 

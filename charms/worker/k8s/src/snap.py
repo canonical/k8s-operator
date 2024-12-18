@@ -279,10 +279,9 @@ def management(charm: K8sCharmProtocol) -> None:
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
             snap_lib.install_local(**install_args)
         elif isinstance(args, SnapStoreArgument) and args.revision:
-            if which.revision != args.revision:
-                log.info("Ensuring %s snap revision=%s", args.name, args.revision)
-                which.ensure(**install_args)
-                which.hold()
+            log.info("Ensuring %s snap revision=%s", args.name, args.revision)
+            which.ensure(**install_args)
+            which.hold()
         elif isinstance(args, SnapStoreArgument):
             log.info("Ensuring %s snap channel=%s", args.name, args.channel)
             which.ensure(**install_args)
