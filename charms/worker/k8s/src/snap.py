@@ -110,6 +110,15 @@ class SnapStoreArgument(BaseModel):
             raise ValueError(f"Revision is not an integer: {value}")
         return value
 
+    def __str__(self):
+        """Represent the snap store argument as a string.
+
+        Returns:
+            str: The string representation
+        """
+        _type = type(self).__name__
+        return f"<{_type}: {self.name}-{self.revision}.{self.channel} -- {self.state}>"
+
 
 SnapArgument = Annotated[
     Union[SnapFileArgument, SnapStoreArgument], Field(discriminator="install_type")
@@ -269,22 +278,28 @@ def management(charm: K8sCharmProtocol) -> None:
 
     Arguments:
         charm: The charm instance
+
+    Raises:
+        SnapError: when the management issue cannot be resolved
     """
     cache = snap_lib.SnapCache()
     for args in _parse_management_arguments(charm):
-        which = cache[args.name]
+        which: snap_lib.Snap = cache[args.name]
         if block_refresh(which, args, charm.is_upgrade_granted):
             continue
         install_args = args.dict(exclude_none=True)
         if isinstance(args, SnapFileArgument) and which.revision != "x1":
             snap_lib.install_local(**install_args)
-        elif isinstance(args, SnapStoreArgument) and args.revision:
-            log.info("Ensuring %s snap revision=%s", args.name, args.revision)
-            which.ensure(**install_args)
-            which.hold()
         elif isinstance(args, SnapStoreArgument):
-            log.info("Ensuring %s snap channel=%s", args.name, args.channel)
-            which.ensure(**install_args)
+            log.info("Ensuring args=%s current=%s", str(args), str(which))
+            new_rev = bool(args.revision) and which.revision != args.revision
+            new_channel = bool(args.channel) and which.channel != args.channel
+            new_state = which.state not in (snap_lib.SnapState.Present, snap_lib.SnapState.Latest)
+            if any([new_rev, new_channel, new_state]):
+                which.ensure(**install_args)
+                which.hold()
+        else:
+            raise snap_lib.SnapError(f"Unsupported snap argument: {args}")
 
 
 def block_refresh(which: snap_lib.Snap, args: SnapArgument, upgrade_granted: bool = False) -> bool:
