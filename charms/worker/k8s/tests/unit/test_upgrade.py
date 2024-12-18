@@ -21,6 +21,7 @@ class TestK8sUpgrade(unittest.TestCase):
     def setUp(self):
         """Set up common test fixtures."""
         self.charm = MagicMock()
+        self.charm.is_worker = False
         self.node_manager = MagicMock(spec=ClusterInspector)
         self.upgrade = K8sUpgrade(
             self.charm,
@@ -53,8 +54,8 @@ class TestK8sUpgrade(unittest.TestCase):
 
         self.upgrade.pre_upgrade_check()
 
-        self.node_manager.get_nodes.assert_called_once_with(labels={"juju-charm": "k8s-worker"})
-        self.node_manager.verify_pods_running.assert_called_once_with(["kube-system"])
+        self.node_manager.get_nodes.assert_not_called()
+        self.node_manager.verify_pods_running.assert_not_called()
 
     def test_pre_upgrade_check_control_plane_success(self):
         """Test pre_upgrade_check succeeds for control plane nodes."""
@@ -64,15 +65,14 @@ class TestK8sUpgrade(unittest.TestCase):
 
         self.upgrade.pre_upgrade_check()
 
-        self.node_manager.get_nodes.assert_called_once_with(labels={"juju-charm": "k8s"})
+        self.node_manager.get_nodes.assert_called_once_with()
 
     def test_pre_upgrade_check_unready_nodes(self):
         """Test pre_upgrade_check fails when nodes are not ready."""
-        self.charm.is_worker = True
         self.node_manager.get_nodes.return_value = [
-            Node(metadata=ObjectMeta(name="worker-1")),
-            Node(metadata=ObjectMeta(name="worker-2")),
-            Node(metadata=ObjectMeta(name="worker-3")),
+            Node(metadata=ObjectMeta(name="k8s-1")),
+            Node(metadata=ObjectMeta(name="k8s-2")),
+            Node(metadata=ObjectMeta(name="k8s-3")),
         ]
 
         with self.assertRaises(ClusterNotReadyError):
@@ -89,7 +89,6 @@ class TestK8sUpgrade(unittest.TestCase):
 
     def test_pre_upgrade_check_pods_not_ready(self):
         """Test pre_upgrade_check fails when pods are not ready."""
-        self.charm.is_worker = True
         self.node_manager.get_nodes.return_value = None
         self.node_manager.verify_pods_running.return_value = "kube-system/pod-1"
 

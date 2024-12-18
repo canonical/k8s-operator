@@ -14,9 +14,7 @@ from .helpers import ready_nodes
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with etcd, for all the test within this module.
-pytestmark = [
-    pytest.mark.bundle_file("test-bundle-etcd.yaml"),
-]
+pytestmark = [pytest.mark.bundle(file="test-bundle-etcd.yaml", apps_local=["k8s", "k8s-worker"])]
 
 
 @pytest.mark.abort_on_fail

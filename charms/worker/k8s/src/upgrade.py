@@ -89,10 +89,11 @@ class K8sUpgrade(DataUpgrade):
         Raises:
             ClusterNotReadyError: If the cluster is not ready for an upgrade.
         """
+        if self.charm.is_worker:
+            log.info("TODO: Find some pre-upgrade checks for worker application.")
+            return
         try:
-            nodes = self.cluster_inspector.get_nodes(
-                labels={"juju-charm": "k8s-worker" if self.charm.is_worker else "k8s"}
-            )
+            nodes = self.cluster_inspector.get_nodes()
             failing_pods = self.cluster_inspector.verify_pods_running(["kube-system"])
         except ClusterInspector.ClusterInspectorError as e:
             raise ClusterNotReadyError(

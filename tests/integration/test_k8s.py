@@ -15,29 +15,15 @@ from juju import application, model
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .grafana import Grafana
-from .helpers import get_nodes, ready_nodes
+from .helpers import get_leader, get_rsc, ready_nodes
 from .prometheus import Prometheus
 
 log = logging.getLogger(__name__)
 
 
-async def get_leader(app) -> int:
-    """Find leader unit of an application.
-
-    Args:
-        app: Juju application
-
-    Returns:
-        int: index to leader unit
-
-    Raises:
-        ValueError: No leader found
-    """
-    is_leader = await asyncio.gather(*(u.is_leader_from_status() for u in app.units))
-    for idx, flag in enumerate(is_leader):
-        if flag:
-            return idx
-    raise ValueError("No leader found")
+pytestmark = [
+    pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
+]
 
 
 @pytest.mark.abort_on_fail
@@ -59,7 +45,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
     await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
 
     try:
-        nodes = await get_nodes(k8s.units[0])
+        nodes = await get_rsc(k8s.units[0], "nodes")
         labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
         juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
         assert len(k8s.units + worker.units) == len(
@@ -74,7 +60,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
         )
 
     await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
-    nodes = await get_nodes(k8s.units[0])
+    nodes = await get_rsc(k8s.units[0], "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
     assert 0 == len(labelled), "Not all nodes labelled with custom-label"

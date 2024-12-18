@@ -44,7 +44,7 @@ class ClusterInspector:
             self.client = Client(config=config.get())
         return self.client
 
-    def get_nodes(self, labels: LabelSelector) -> Optional[List[Node]]:
+    def get_nodes(self, labels: Optional[LabelSelector] = None) -> Optional[List[Node]]:
         """Get nodes from the cluster.
 
         Args:
@@ -56,6 +56,7 @@ class ClusterInspector:
         Raises:
             ClusterInspectorError: If the nodes cannot be retrieved.
         """
+        labels = labels or {}
         client = self._get_client()
         try:
 

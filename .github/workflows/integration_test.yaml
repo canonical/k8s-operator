@@ -39,24 +39,25 @@ jobs:
     strategy:
       matrix:
         arch:
-        - {id: amd64, builder-label: ubuntu-22.04, tester-arch: AMD64}  # built on azure
-        - {id: arm64, builder-label: ARM64,        tester-arch: ARM64}  # built on self-hosted
-        suite: [k8s, etcd, ceph]
+        - {id: amd64, builder-label: ubuntu-22.04, tester-arch: AMD64, tester-size: xlarge}  # built on azure, test on self-hosted
+        - {id: arm64, builder-label: ARM64,        tester-arch: ARM64, tester-size: large }  # built and test on on self-hosted
+        suite: [k8s, etcd, ceph, upgrade]
         exclude:
         - {arch: {id: arm64}, suite: ceph}
+        - {arch: {id: arm64}, suite: upgrade}
     with:
       identifier: ${{ matrix.arch.id }}-${{ matrix.suite }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
         ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
-        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers' || '' }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=focal' || '' }}
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
-      self-hosted-runner-label: large
+      self-hosted-runner-label: ${{ matrix.arch.tester-size }}
       test-timeout: 120
       test-tox-env: integration-${{ matrix.suite }}
       trivy-fs-enabled: false

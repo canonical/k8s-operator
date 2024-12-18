@@ -4,7 +4,7 @@
 name: integration-test-etcd
 description: |-
   Used to deploy or refresh within an integration test model
-series: focal
+series: jammy
 applications:
   easyrsa:
     charm: easyrsa
@@ -18,7 +18,6 @@ applications:
     num_units: 1
   k8s:
     charm: k8s
-    channel: latest/edge
     num_units: 1
     constraints: cores=2 mem=8G root-disk=16G
     options:
@@ -26,10 +25,10 @@ applications:
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
   k8s-worker:
     charm: k8s-worker
-    channel: latest/edge
     constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
 relations:
   - [k8s, k8s-worker:cluster]
+  - [k8s, k8s-worker:containerd]
   - [etcd, easyrsa:client]
   - [etcd, k8s:etcd]

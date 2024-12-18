@@ -9,10 +9,12 @@ This handler is responsible for updating the unit's workload version and status
 """
 
 import logging
+from typing import Optional
 
 import charms.contextual_status as status
 import ops
 import reschedule
+from inspector import ClusterInspector
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
 from upgrade import K8sUpgrade
@@ -90,6 +92,27 @@ class Handler(ops.Object):
         except status.ReconcilerError:
             log.exception("Can't update_status")
 
+    def kube_system_pods_waiting(self) -> Optional[ops.WaitingStatus]:
+        """Check if kube-system pods are waiting.
+
+        Returns:
+            WaitingStatus: waiting status if kube-system pods are not ready.
+        """
+        if self.charm.is_worker:
+            # Worker nodes don't need to check the kube-system pods
+            return None
+
+        waiting, inspect = None, self.charm.cluster_inspector
+
+        try:
+            if failing_pods := inspect.verify_pods_running(["kube-system"]):
+                waiting = ops.WaitingStatus(f"Unready Pods: {failing_pods}")
+        except ClusterInspector.ClusterInspectorError as e:
+            log.exception("Failed to verify pods: %s", e)
+            waiting = ops.WaitingStatus("Waiting for API Server")
+
+        return waiting
+
     def run(self):
         """Check k8s snap status."""
         version, overridden = snap_version("k8s")
@@ -105,6 +128,11 @@ class Handler(ops.Object):
         trigger = reschedule.PeriodicEvent(self.charm)
         if not self.charm._is_node_ready():
             status.add(ops.WaitingStatus("Node not Ready"))
+            trigger.create(reschedule.Period(seconds=30))
+            return
+
+        if waiting := self.kube_system_pods_waiting():
+            status.add(waiting)
             trigger.create(reschedule.Period(seconds=30))
             return
         trigger.cancel()
