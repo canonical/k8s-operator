@@ -19,11 +19,11 @@ from charms.data_platform_libs.v0.upgrade import (
 from charms.operator_libs_linux.v2.snap import SnapError
 from inspector import ClusterInspector
 from literals import (
-    CLUSTER_RELATION,
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
     K8S_WORKER_SERVICES,
     SNAP_NAME,
+    UPGRADE_RELATION,
 )
 from protocols import K8sCharmProtocol
 from pydantic import BaseModel
@@ -226,7 +226,7 @@ class K8sUpgrade(DataUpgrade):
         Returns:
             A list of unit numbers to upgrade in order.
         """
-        relation = self.charm.model.get_relation(CLUSTER_RELATION)
+        relation = self.charm.model.get_relation(UPGRADE_RELATION)
         if not relation:
             return [int(self.charm.unit.name.split("/")[-1])]
 
