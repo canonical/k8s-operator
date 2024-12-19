@@ -181,7 +181,6 @@ async def test_verbose_config(kubernetes_cluster: model.Model):
 
 
 @pytest.mark.abort_on_fail
-@pytest.mark.skip("Currently broken feature")
 async def test_override_snap_resource(override_snap_on_k8s: application.Application):
     """Override snap resource."""
     k8s = override_snap_on_k8s
