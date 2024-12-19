@@ -11,7 +11,7 @@ from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
-from literals import CLUSTER_RELATION
+from literals import UPGRADE_RELATION
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
 
@@ -103,7 +103,7 @@ class TestK8sUpgrade(unittest.TestCase):
         result = self.upgrade.build_upgrade_stack()
 
         self.assertEqual(result, [0])
-        self.charm.model.get_relation.assert_called_once_with(CLUSTER_RELATION)
+        self.charm.model.get_relation.assert_called_once_with(UPGRADE_RELATION)
 
     def test_build_upgrade_stack_with_relation(self):
         """Test build_upgrade_stack with cluster relation."""
@@ -119,7 +119,7 @@ class TestK8sUpgrade(unittest.TestCase):
         result = self.upgrade.build_upgrade_stack()
 
         self.assertEqual(sorted(result), [0, 1, 2])
-        self.charm.model.get_relation.assert_called_once_with(CLUSTER_RELATION)
+        self.charm.model.get_relation.assert_called_once_with(UPGRADE_RELATION)
 
     def test_verify_worker_versions_compatible(self):
         """Test _verify_worker_versions returns True when worker versions is compatible."""
