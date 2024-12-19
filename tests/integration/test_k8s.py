@@ -208,8 +208,8 @@ async def test_override_snap_resource(override_snap_on_k8s: application.Applicat
     k8s = override_snap_on_k8s
     assert k8s, "k8s application not found"
 
-    for unit in k8s.units:
-        assert "Override" in unit.workload_status_message
+    for _unit in k8s.units:
+        assert "Override" in _unit.workload_status_message
 
 
 @pytest.mark.cos
