@@ -185,7 +185,6 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
     Raises:
         SnapError: when the management issue cannot be resolved
     """
-
     if not SUPPORT_SNAP_INSTALLATION_OVERRIDE:
         log.error("Unavailable feature: overriding 'snap-installation' resource.")
         return _default_snap_installation()
