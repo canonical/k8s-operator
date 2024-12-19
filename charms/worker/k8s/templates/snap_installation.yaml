@@ -4,10 +4,10 @@
 amd64:
   - name: k8s
     install-type: store
-    channel: edge
     classic: true
+    channel: latest/edge
 arm64:
   - name: k8s
     install-type: store
-    channel: edge
     classic: true
+    channel: latest/edge
