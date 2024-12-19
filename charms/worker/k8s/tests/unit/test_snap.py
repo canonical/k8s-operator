@@ -212,6 +212,7 @@ def _create_gzip_tar_string(file_data_dict):
     return gzip_buffer.getvalue()
 
 
+@mock.patch("snap.SUPPORT_SNAP_INSTALLATION_OVERRIDE", True)
 def test_resource_supplied_installation_by_channel(harness):
     """Test resource installs by store channel."""
     arch = snap._local_arch()
@@ -226,6 +227,7 @@ def test_resource_supplied_installation_by_channel(harness):
     assert args[0].install_type == "store"
 
 
+@mock.patch("snap.SUPPORT_SNAP_INSTALLATION_OVERRIDE", True)
 def test_resource_supplied_installation_by_filename(harness, resource_snap_installation):
     """Test resource installs by included filename."""
     arch = snap._local_arch()
@@ -251,6 +253,7 @@ def test_resource_supplied_installation_by_filename(harness, resource_snap_insta
     assert args[0].classic
 
 
+@mock.patch("snap.SUPPORT_SNAP_INSTALLATION_OVERRIDE", True)
 def test_resource_supplied_snap(harness, resource_snap_installation):
     """Test resource installs by snap only."""
     file_data = {"./k8s_xxxx.snap": ""}
@@ -339,12 +342,7 @@ def test_management_installs_store_from_revision(cache, install_local, args, rev
     args.return_value = [snap.SnapStoreArgument(name="k8s", revision=123)]
     snap.management(harness.charm)
     install_local.assert_not_called()
-    if revision == "123":
-        k8s_snap.ensure.assert_not_called()
-    else:
-        k8s_snap.ensure.assert_called_once_with(
-            state=snap.snap_lib.SnapState.Present, revision="123"
-        )
+    k8s_snap.ensure.assert_called_once_with(state=snap.snap_lib.SnapState.Present, revision="123")
 
 
 @mock.patch("subprocess.check_output")
