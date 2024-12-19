@@ -15,5 +15,5 @@ tomli-w == 1.0.0
 typing_extensions==4.12.2
 websocket-client==1.8.0
 poetry-core==1.9.1
-lightkube==0.15.7
+lightkube==0.16.0
 httpx==0.27.2
