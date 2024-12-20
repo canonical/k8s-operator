@@ -58,24 +58,25 @@ jobs:
         run: |
           echo "Determines which charms were chosen from $CHOICE"
           if [[ "${CHOICE}" == "all" ]]; then
-            echo "charms=[\"charms/worker\", \"charms/worker/k8s\"]" >> "$GITHUB_OUTPUT"
+            echo 'charms=[{"name": "k8s-worker", "path": "charms/worker"}, {"name": "k8s", "path": "charms/worker/k8s"}]' >> "$GITHUB_OUTPUT"
           elif [[ "${CHOICE}" == "k8s" ]]; then
-            echo "charms=[\"charms/worker/k8s\"]" >> "$GITHUB_OUTPUT"
+            echo 'charms=[{"name": "k8s", "path": "charms/worker/k8s"}]' >> "$GITHUB_OUTPUT"
           else
-            echo "charms=[\"charms/worker\"]" >> "$GITHUB_OUTPUT"
+            echo 'charms=[{"name": "k8s-worker", "path": "charms/worker"}]' >> "$GITHUB_OUTPUT"
           fi
   promote-charm:
     needs: [configure-track, select-charms]
     strategy:
       matrix:
-        charm-directory: ${{ fromJson(needs.select-charms.outputs.charms) }}
+        charm: ${{ fromJson(needs.select-charms.outputs.charms) }}
         arch:
         - amd64
         - arm64
     uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@main
     with:
       base-architecture: ${{ matrix.arch }}
-      charm-directory: ${{ matrix.charm-directory }}
+      charm-directory: ${{ matrix.charm.path }}
       destination-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.destination-risk }}
       origin-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.origin-risk }}
+      tag-prefix: ${{ matrix.charm.name }}
     secrets: inherit
