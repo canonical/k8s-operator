@@ -84,7 +84,7 @@ LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 9
 
 
 # Regex to locate 7-bit C1 ANSI sequences
@@ -787,7 +787,7 @@ class SnapClient:
             status = response["status"]
             if status == "Done":
                 return response.get("data")
-            if status == "Doing":
+            if status == "Doing" or status == "Do":
                 time.sleep(0.1)
                 continue
             if status == "Wait":
