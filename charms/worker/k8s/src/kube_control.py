@@ -8,10 +8,29 @@ from base64 import b64decode
 import charms.contextual_status as status
 import ops
 import yaml
+from charms.contextual_status import BlockedStatus, on_error
 from protocols import K8sCharmProtocol
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
+
+
+@on_error(
+    BlockedStatus("Invalid config on node-labels or bootstrap-node-taints"),
+    ValueError,
+    TypeError,
+)
+def _share_labels_and_taints(charm: K8sCharmProtocol):
+    """Share labels and taints with the kube-control interface.
+
+    Args:
+        charm (K8sCharmProtocol): The charm instance.
+    """
+    labels = str(charm.model.config["node-labels"])
+    taints = str(charm.model.config["bootstrap-node-taints"])
+
+    charm.kube_control.set_labels(labels.split())
+    charm.kube_control.set_taints(taints.split())
 
 
 def configure(charm: K8sCharmProtocol):
@@ -25,8 +44,6 @@ def configure(charm: K8sCharmProtocol):
 
     status.add(ops.MaintenanceStatus("Configuring Kube Control"))
     ca_cert, endpoints = "", [f"https://{binding.network.bind_address}:6443"]
-    labels = str(charm.model.config["node-labels"])
-    taints = str(charm.model.config["bootstrap-node-taints"])
     if charm._internal_kubeconfig.exists():
         kubeconfig = yaml.safe_load(charm._internal_kubeconfig.read_text())
         cluster = kubeconfig["clusters"][0]["cluster"]
@@ -52,8 +69,7 @@ def configure(charm: K8sCharmProtocol):
 
     charm.kube_control.set_cluster_name(charm.get_cluster_name())
     charm.kube_control.set_has_external_cloud_provider(charm.xcp.has_xcp)
-    charm.kube_control.set_labels(labels.split())
-    charm.kube_control.set_taints(taints.split())
+    _share_labels_and_taints(charm)
 
     for request in charm.kube_control.auth_requests:
         log.info("Signing kube-control request for '%s 'in '%s'", request.user, request.group)
