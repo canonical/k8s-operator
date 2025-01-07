@@ -7,6 +7,7 @@
 
 import datetime
 import logging
+import os
 import subprocess
 from typing import Iterable, Optional, Tuple
 
@@ -16,11 +17,11 @@ import juju.unit
 import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
-from tenacity import before_sleep_log, retry, stop_after_attempt, stop_after_delay, wait_fixed
+from tenacity import before_sleep_log, retry, stop_after_delay
 
-from .helpers import CHARMCRAFT_DIRS, Bundle, get_leader, get_rsc
+from .helpers import CHARMCRAFT_DIRS, Bundle, get_leader, wait_pod_phase
 
-CHARM_UPGRADE_FROM = "1.32/beta"
+CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.32/beta")
 CONTROL_PLANE_APP = "k8s"
 log = logging.getLogger(__name__)
 
@@ -66,7 +67,6 @@ pytestmark = [
 ]
 
 
-@pytest.mark.abort_on_fail
 async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
     """Upgrade the model with the provided charms.
 
@@ -75,24 +75,6 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         ops_test: The test harness
         request: The request object
     """
-    local_resources = {
-        "snap-installation": ops_test.request.config.option.snap_installation_resource
-    }
-    bundle, _ = await Bundle.create(ops_test)
-    charms = await bundle.discover_charm_files(ops_test)
-    k8s: juju.application.Application = kubernetes_cluster.applications[CONTROL_PLANE_APP]
-
-    @retry(
-        stop=stop_after_attempt(10),
-        wait=wait_fixed(30),
-        before_sleep=before_sleep_log(log, logging.WARNING),
-    )
-    async def _wait_for_kube_system_pods():
-        """Wait for the model to become idle."""
-        kube_system_pods = await get_rsc(k8s.units[0], "pods", namespace="kube-system")
-        assert all(
-            p["status"]["phase"] == "Running" for p in kube_system_pods
-        ), "Kube-system not yet ready"
 
     @retry(
         stop=stop_after_delay(datetime.timedelta(minutes=30)),
@@ -124,26 +106,37 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
                 else:
                     assert status == "active", err
 
-    async def _refresh(app_name: str):
+    async def _refresh(model: juju.model.Model, app_name: str):
         """Refresh the application.
 
         Args:
+            model: The model to refresh the application in
             app_name: Name of the application to refresh
         """
-        app: Optional[juju.application.Application] = kubernetes_cluster.applications[app_name]
+        app: Optional[juju.application.Application] = model.applications[app_name]
         assert app is not None, f"Application {app_name} not found"
 
         log.info("Refreshing %s", app_name)
         leader_idx: int = await get_leader(app)
         leader: juju.unit.Unit = app.units[leader_idx]
         action = await leader.run_action("pre-upgrade-check")
+        resources = {"snap-installation": local_resource}
         await action.wait()
         with_fault = f"Pre-upgrade of '{app_name}' failed with {yaml.safe_dump(action.results)}"
         assert action.status == "completed", with_fault
         assert action.results["return-code"] == 0, with_fault
-        await app.refresh(path=charms[app_name].local_path, resources=local_resources)
+        await app.refresh(path=charms[app_name].local_path, resources=resources)
         await _wait_for_upgrade_complete()
 
-    await _wait_for_kube_system_pods()
+    k8s = kubernetes_cluster.applications["k8s"]
+    k8s_leader_idx: int = await get_leader(k8s)
+    k8s_leader: juju.unit.Unit = k8s.units[k8s_leader_idx]
+
+    await wait_pod_phase(k8s_leader, None, "Running", namespace="kube-system")
+
+    local_resource: str = ops_test.request.config.option.snap_installation_resource
+    bundle, _ = await Bundle.create(ops_test)
+    charms = await bundle.discover_charm_files(ops_test)
     for app in charms:
-        await _refresh(app)
+        await _refresh(kubernetes_cluster, app)
+        await wait_pod_phase(k8s_leader, None, "Running", namespace="kube-system")
