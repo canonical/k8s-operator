@@ -13,7 +13,7 @@ The module offers the following configurable inputs:
 | Name | Type | Description | Required | Default |
 | - | - | - | - | - |
 | `app_name`| string | Application name | False | k8s-worker | 
-| `base` | string | Ubuntu base to deploy the carm onto | False | ubuntu@24.04 |
+| `base` | string | Ubuntu base to deploy the charm onto | False | ubuntu@24.04 |
 | `channel`| string | Channel that the charm is deployed from | False | 1.30/edge |
 | `config`| map(string) | Map of the charm configuration options | False | {} |
 | `constraints` | string | Juju constraints to apply for this application | False | arch=amd64 |

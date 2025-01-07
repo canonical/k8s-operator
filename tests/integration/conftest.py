@@ -9,6 +9,7 @@ import shlex
 from pathlib import Path
 from typing import Optional
 
+import juju.controller
 import juju.utils
 import pytest
 import pytest_asyncio
@@ -77,6 +78,10 @@ def pytest_configure(config):
         "bundle(file='', series='', apps_local={}, apps_channel={}, apps_resources={}): "
         "specify a YAML bundle file for a test.",
     )
+    config.addinivalue_line(
+        "markers",
+        "clouds(*args): mark tests to run only on specific clouds.",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -98,14 +103,13 @@ def pytest_collection_modifyitems(config, items):
 async def cloud_proxied(ops_test: OpsTest):
     """Setup a cloud proxy settings if necessary
 
-    Test if ghcr.io is reachable through a proxy, if so,
-    Apply expected proxy config to juju model.
+    If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
 
     Args:
         ops_test (OpsTest): ops_test plugin
     """
     assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
+    controller: juju.controller.Controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
     proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
     proxy_configs = yaml.safe_load(proxy_config_file.read_text())
@@ -130,6 +134,15 @@ async def cloud_profile(ops_test: OpsTest):
         lxd.apply_profile("k8s.profile", profile_name)
     elif _type == "ec2" and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
+
+
+@pytest.fixture(autouse=True)
+async def skip_by_cloud_type(request, ops_test):
+    """Skip tests based on cloud type."""
+    if cloud_markers := request.node.get_closest_marker("clouds"):
+        _type, _ = await cloud_type(ops_test)
+        if _type not in cloud_markers.args:
+            pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
 
 
 @contextlib.asynccontextmanager
@@ -183,9 +196,12 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
     with ops_test.model_context(model) as the_model:
         if await is_deployed(the_model, bundle.path):
-            log.info("Using existing model.")
+            log.info("Using existing model=%s.", the_model.uuid)
             yield ops_test.model
             return
+
+    if request.config.option.no_deploy:
+        pytest.skip("Skipping because of --no-deploy")
 
     log.info("Deploying new cluster using %s bundle.", bundle.path)
     if request.config.option.apply_proxy:

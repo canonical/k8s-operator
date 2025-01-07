@@ -8,16 +8,16 @@ import asyncio
 import ipaddress
 import json
 import logging
-import shlex
 from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
+import juju.application
+import juju.model
+import juju.unit
 import yaml
-from juju import unit
-from juju.model import Model
 from juju.url import URL
 from pytest_operator.plugin import OpsTest
 from tenacity import AsyncRetrying, before_sleep_log, retry, stop_after_attempt, wait_fixed
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 CHARMCRAFT_DIRS = {"k8s": Path("charms/worker/k8s"), "k8s-worker": Path("charms/worker")}
 
 
-async def is_deployed(model: Model, bundle_path: Path) -> bool:
+async def is_deployed(model: juju.model.Model, bundle_path: Path) -> bool:
     """Checks if model has apps defined by the bundle.
     If all apps are deployed, wait for model to be active/idle
 
@@ -60,7 +60,7 @@ async def is_deployed(model: Model, bundle_path: Path) -> bool:
     return True
 
 
-async def get_unit_cidrs(model: Model, app_name: str, unit_num: int) -> List[str]:
+async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
     """Find unit network cidrs on a unit.
 
     Args:
@@ -87,7 +87,7 @@ async def get_unit_cidrs(model: Model, app_name: str, unit_num: int) -> List[str
     return list(sorted(local_cidrs))
 
 
-async def get_rsc(k8s, resource, namespace=None, labels=None):
+async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
     """Get Resource list optionally filtered by namespace and labels.
 
     Args:
@@ -105,11 +105,18 @@ async def get_rsc(k8s, resource, namespace=None, labels=None):
 
     action = await k8s.run(cmd)
     result = await action.wait()
-    assert result.results["return-code"] == 0, f"Failed to get {resource} with kubectl"
+    stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
+    assert result.results["return-code"] == 0, (
+        f"\nFailed to get {resource} with kubectl\n"
+        f"\tstdout: '{stdout}'\n"
+        f"\tstderr: '{stderr}'"
+    )
     log.info("Parsing %s list...", resource)
-    resource_list = json.loads(result.results["stdout"])
-    assert resource_list["kind"] == "List", f"Should have found a list of {resource}"
-    return resource_list["items"]
+    resource_obj = json.loads(stdout)
+    if "/" in resource:
+        return [resource_obj]
+    assert resource_obj["kind"] == "List", f"Should have found a list of {resource}"
+    return resource_obj["items"]
 
 
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(15))
@@ -138,8 +145,8 @@ async def ready_nodes(k8s, expected_count):
 
 
 async def wait_pod_phase(
-    k8s: unit.Unit,
-    name: str,
+    k8s: juju.unit.Unit,
+    name: Optional[str],
     *phase: str,
     namespace: str = "default",
     retry_times: int = 30,
@@ -149,46 +156,27 @@ async def wait_pod_phase(
 
     Args:
         k8s: k8s unit
-        name: the pod name
+        name: the pod name or all pods if None
         phase: expected phase
         namespace: pod namespace
         retry_times: the number of retries
         retry_delay_s: retry interval
 
     """
+    pod_resource = "pod" if name is None else f"pod/{name}"
     async for attempt in AsyncRetrying(
         stop=stop_after_attempt(retry_times),
         wait=wait_fixed(retry_delay_s),
         before_sleep=before_sleep_log(log, logging.WARNING),
     ):
         with attempt:
-            cmd = shlex.join(
-                [
-                    "k8s",
-                    "kubectl",
-                    "get",
-                    "--namespace",
-                    namespace,
-                    "-o",
-                    "jsonpath={.status.phase}",
-                    f"pod/{name}",
-                ]
-            )
-            action = await k8s.run(cmd)
-            result = await action.wait()
-            stdout, stderr = (
-                result.results.get(field, "").strip() for field in ["stdout", "stderr"]
-            )
-            assert result.results["return-code"] == 0, (
-                f"\nPod hasn't reached phase: {phase}\n"
-                f"\tstdout: '{stdout}'\n"
-                f"\tstderr: '{stderr}'"
-            )
-            assert stdout in phase, f"Pod {name} not yet in phase {phase} ({stdout})"
+            for pod in await get_rsc(k8s, pod_resource, namespace=namespace):
+                _phase, _name = pod["status"]["phase"], pod["metadata"]["name"]
+                assert _phase in phase, f"Pod {_name} not yet in phase {phase}"
 
 
 async def get_pod_logs(
-    k8s: unit.Unit,
+    k8s: juju.unit.Unit,
     name: str,
     namespace: str = "default",
 ) -> str:
