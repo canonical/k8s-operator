@@ -18,6 +18,7 @@ certificate storage.
 import hashlib
 import logging
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -68,6 +69,7 @@ from events import update_status
 from inspector import ClusterInspector
 from kube_control import configure as configure_kube_control
 from literals import (
+    APISERVER_PORT,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     CONTAINERD_BASE_PATH,
@@ -78,14 +80,22 @@ from literals import (
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
     DEPENDENCIES,
+    ENDPOINT_HAS_PORT_REGEX,
     ETC_KUBERNETES,
     ETCD_RELATION,
+    EXTERNAL_LOAD_BALANCER_RELATION,
+    EXTERNAL_LOAD_BALANCER_PORT_CONFIG,
+    EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
+    EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
+    HTTP_SCHEME,
+    HTTPS_SCHEME,
     K8SD_PORT,
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
     KUBECTL_PATH,
     SUPPORTED_DATASTORES,
 )
+from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from pydantic import SecretStr
 from snap import management as snap_management
@@ -98,7 +108,7 @@ from upgrade import K8sDependenciesModel, K8sUpgrade
 log = logging.getLogger(__name__)
 
 
-def _get_public_address() -> str:
+def _get_juju_public_address() -> str:
     """Get public address from juju.
 
     Returns:
@@ -196,6 +206,7 @@ class K8sCharm(ops.CharmBase):
             self.etcd = EtcdReactiveRequires(self)
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
+            self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
 
     def _k8s_info(self, event: ops.EventBase):
         """Send cluster information on the kubernetes-info relation.
@@ -378,9 +389,13 @@ class K8sCharm(ops.CharmBase):
     def _get_extra_sans(self):
         """Retrieve the certificate extra SANs."""
         extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
-        configured_sans = {san for san in extra_sans_str.strip().split() if san}
-        all_sans = configured_sans | set([_get_public_address()])
-        return sorted(all_sans)
+        extra_sans = {san for san in extra_sans_str.strip().split() if san}
+        if public_address := self._get_public_address():
+            log.info("Public address %s found, adding it to extra SANs", public_address)
+            extra_sans.add(public_address)
+        else:
+            log.info("No public address found, skipping adding public address to extra SANs")
+        return sorted(extra_sans)
 
     def _assemble_bootstrap_config(self):
         """Assemble the bootstrap configuration for the Kubernetes cluster.
@@ -399,6 +414,64 @@ class K8sCharm(ops.CharmBase):
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
         return bootstrap_config
+
+    @on_error(ops.WaitingStatus("Waiting for external load balancer"), ReconcilerError)
+    def _configure_external_load_balancer(self):
+        """Configure the external load balancer for the application.
+
+        This method checks if the external load balancer is available and then
+        proceeds to configure it by sending a request with the necessary parameters.
+        It waits for a response from the external load balancer and handles any errors that
+        may occur during the process.
+
+        Raises:
+            ReconcilerError: If there is an error configuring the external load balancer
+                            or if a response is not received within the timeout period.
+        """
+        if not self.is_control_plane:
+            log.info("External load balancer is only configured for control-plane units.")
+            return
+
+        if not self.external_load_balancer.is_available:
+            log.info("External load balancer relation is not available. Skipping setup.")
+            return
+
+        status.add(ops.MaintenanceStatus("Configuring external loadBalancer"))
+
+        req = self.external_load_balancer.get_request(EXTERNAL_LOAD_BALANCER_REQUEST_NAME)
+        req.protocol = req.protocols.tcp
+        req.port_mapping = {self.config.get(EXTERNAL_LOAD_BALANCER_PORT_CONFIG): APISERVER_PORT}
+        req.public = True
+        if not req.health_checks:
+            req.add_health_check(protocol=req.protocols.http, port=APISERVER_PORT, path="/livez")
+        self.external_load_balancer.send_request(req)
+
+        # wait for response
+        retry_interval_seconds = 3
+        retries = 10
+        for _ in range(retries):
+            res = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
+            if res is None:
+                log.info(
+                    "Waiting for external load balancer response. Retrying in %s seconds",
+                    retry_interval_seconds,
+                )
+                sleep(retry_interval_seconds)
+                continue
+            if res.error_message:
+                log.error("Error from external load balancer: %s", res.error_message)
+                raise ReconcilerError(
+                    "Failed to configure external load balancer. Check logs for details"
+                )
+
+            log.info("External load balancer response received: %s", res)
+            return
+
+        log.error(
+            "Timed out waiting for external load balancer response after %s seconds",
+            retry_interval_seconds * retries,
+        )
+        raise ReconcilerError("External load balancer response not received")
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
@@ -909,6 +982,7 @@ class K8sCharm(ops.CharmBase):
         self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
+            self._configure_external_load_balancer()
             self._bootstrap_k8s_snap()
             self._ensure_cluster_config()
             self._create_cluster_tokens()
@@ -1081,13 +1155,80 @@ class K8sCharm(ops.CharmBase):
         try:
             server = event.params.get("server")
             if not server:
-                log.info("No server requested, use public-address")
-                server = f"{_get_public_address()}:6443"
+                log.info("No server requested, use public address")
+                server = self._get_public_address()
+                if not server:
+                    log.info("No public address found")
+                else:
+                    log.info("Found public address: %s", server)
+                    port = str(APISERVER_PORT)
+                    if self.is_control_plane and self.external_load_balancer.is_available:
+                        log.info("Using external load balancer port as the public port")
+                        port = str(self.config.get(EXTERNAL_LOAD_BALANCER_PORT_CONFIG))
+                    server = self._format_kube_api_url(server, port)
+                    log.info("Formatted server address: %s", server)
             log.info("Requesting kubeconfig for server=%s", server)
             resp = self.api_manager.get_kubeconfig(server)
             event.set_results({"kubeconfig": resp})
         except (InvalidResponseError, K8sdConnectionError) as e:
             event.fail(f"Failed to retrieve kubeconfig: {e}")
+
+    def _get_public_address(self) -> Optional[str]:
+        """Get public address either from external load balancer or from juju.
+
+        Returns:
+            str: public ip address of the unit
+            None: if the public address is not available
+        """
+        if self.is_control_plane and self.external_load_balancer.is_available:
+            log.info("Using external load balancer address as the public address")
+            return self._get_external_load_balancer_address()
+        log.info("Using juju public address as the public address")
+        return _get_juju_public_address()
+
+    def _get_external_load_balancer_address(self) -> Optional[str]:
+        """Get the external load balancer address.
+
+        Returns:
+            None: If the external load balancer address is not available.
+            str: The external load balancer address.
+        """
+        if not self.is_control_plane:
+            log.error("External load balancer address is only available for control-plane units")
+            return None
+
+        response = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
+
+        if not response:
+            log.error("No response from external load balancer when trying to get address")
+            return None
+        if response.error:
+            log.error(
+                "Error from external load balancer when trying to get address: %s",
+                response.error,
+            )
+            return None
+
+        return response.address
+
+    def _format_kube_api_url(self, addr: str, port: str) -> str:
+        """Format the given Kubernetes API address to ensure it includes the protocol and port.
+
+        Args:
+            addr (str): The Kubernetes API address.
+            port (str): The Kubernetes API port.
+
+        Returns:
+            str: The formatted Kubernetes API address with protocol and port.
+        """
+        addr = addr.lower()
+        if not addr.startswith(HTTPS_SCHEME) and not addr.startswith(HTTP_SCHEME):
+            log.info("Adding %s to addr %s", HTTPS_SCHEME, addr)
+            addr = HTTPS_SCHEME + addr
+        if re.search(ENDPOINT_HAS_PORT_REGEX, addr) is None:
+            log.info("Adding port %s to addr %s", port, addr)
+            addr = f"{addr}:{port}"
+        return addr
 
 
 if __name__ == "__main__":  # pragma: nocover

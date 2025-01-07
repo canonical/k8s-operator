@@ -22,6 +22,13 @@ KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
+HTTP_SCHEME = "http://"
+HTTPS_SCHEME = "https://"
+EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
+EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
+EXTERNAL_LOAD_BALANCER_PORT_CONFIG = "external-load-balancer-port"
+ENDPOINT_HAS_PORT_REGEX = r":\d+$"
+APISERVER_PORT = 6443
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
@@ -35,6 +42,7 @@ COS_TOKENS_WORKER_RELATION = "cos-worker-tokens"
 COS_RELATION = "cos-agent"
 ETCD_RELATION = "etcd"
 UPGRADE_RELATION = "upgrade"
+EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [

@@ -86,7 +86,7 @@ def test_configure_common_extra_args(harness):
     harness.update_config({"kubelet-extra-args": "v=3 foo=bar flag"})
     harness.update_config({"kube-proxy-extra-args": "v=4 foo=baz flog"})
 
-    with mock.patch("charm._get_public_address"):
+    with mock.patch("charm._get_juju_public_address"):
         bootstrap_config = harness.charm._assemble_bootstrap_config()
     assert bootstrap_config.extra_node_kubelet_args == {
         "--v": "3",
@@ -115,7 +115,7 @@ def test_configure_controller_extra_args(harness):
     harness.update_config({"kube-controller-manager-extra-args": "v=4 foo=baz flog"})
     harness.update_config({"kube-scheduler-extra-args": "v=5 foo=bat blog"})
 
-    with mock.patch("charm._get_public_address"):
+    with mock.patch("charm._get_juju_public_address"):
         bootstrap_config = harness.charm._assemble_bootstrap_config()
     assert bootstrap_config.extra_node_kube_apiserver_args == {
         "--v": "3",

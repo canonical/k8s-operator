@@ -57,6 +57,7 @@ def mock_reconciler_handlers(harness):
     }
     if harness.charm.is_control_plane:
         handler_names |= {
+            "_configure_external_load_balancer",
             "_bootstrap_k8s_snap",
             "_create_cluster_tokens",
             "_create_cos_tokens",
@@ -210,8 +211,8 @@ def test_configure_boostrap_extra_sans(harness):
     public_addr = "11.12.13.14"
     harness.update_config({"kube-apiserver-extra-sans": " ".join(cfg_extra_sans)})
 
-    with mock.patch("charm._get_public_address") as mock_get_public_addr:
-        mock_get_public_addr.return_value = public_addr
+    with mock.patch("charm._get_juju_public_address") as mock_get_juju_public_addr:
+        mock_get_juju_public_addr.return_value = public_addr
 
         bs_config = harness.charm._assemble_bootstrap_config()
 

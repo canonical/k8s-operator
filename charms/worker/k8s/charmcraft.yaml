@@ -393,6 +393,12 @@ config:
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.      
+    external-load-balancer-port:
+      description: |
+        Port exposed by the external load balancer to direct traffic to this charm.
+        The external load balancer should be related to this charm on the `external-load-balancer` relation.
+      type: int
+      default: 443
 
 resources:
   snap-installation:
@@ -458,3 +464,5 @@ requires:
     interface: external_cloud_provider
   gcp:
     interface: gcp-integration
+  external-load-balancer:
+    interface: loadbalancer
