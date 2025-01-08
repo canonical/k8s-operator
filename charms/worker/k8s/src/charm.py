@@ -83,8 +83,8 @@ from literals import (
     ENDPOINT_HAS_PORT_REGEX,
     ETC_KUBERNETES,
     ETCD_RELATION,
+    EXTERNAL_LOAD_BALANCER_PORT,
     EXTERNAL_LOAD_BALANCER_RELATION,
-    EXTERNAL_LOAD_BALANCER_PORT_CONFIG,
     EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
     EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
     HTTP_SCHEME,
@@ -440,7 +440,7 @@ class K8sCharm(ops.CharmBase):
 
         req = self.external_load_balancer.get_request(EXTERNAL_LOAD_BALANCER_REQUEST_NAME)
         req.protocol = req.protocols.tcp
-        req.port_mapping = {self.config.get(EXTERNAL_LOAD_BALANCER_PORT_CONFIG): APISERVER_PORT}
+        req.port_mapping = {EXTERNAL_LOAD_BALANCER_PORT: APISERVER_PORT}
         req.public = True
         if not req.health_checks:
             req.add_health_check(protocol=req.protocols.http, port=APISERVER_PORT, path="/livez")
@@ -1164,7 +1164,7 @@ class K8sCharm(ops.CharmBase):
                     port = str(APISERVER_PORT)
                     if self.is_control_plane and self.external_load_balancer.is_available:
                         log.info("Using external load balancer port as the public port")
-                        port = str(self.config.get(EXTERNAL_LOAD_BALANCER_PORT_CONFIG))
+                        port = str(EXTERNAL_LOAD_BALANCER_PORT)
                     server = self._format_kube_api_url(server, port)
                     log.info("Formatted server address: %s", server)
             log.info("Requesting kubeconfig for server=%s", server)
