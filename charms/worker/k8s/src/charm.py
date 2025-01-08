@@ -387,14 +387,18 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.check_k8sd_ready()
 
     def _get_extra_sans(self):
-        """Retrieve the certificate extra SANs."""
+        """Retrieve the certificate extra SANs.
+
+        Raises:
+            ReconcilerError: If the public address cannot be retrieved.
+        """
         extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
         extra_sans = {san for san in extra_sans_str.strip().split() if san}
         if public_address := self._get_public_address():
             log.info("Public address %s found, adding it to extra SANs", public_address)
             extra_sans.add(public_address)
         else:
-            log.info("No public address found, skipping adding public address to extra SANs")
+            raise ReconcilerError("Failed to get public address")
         return sorted(extra_sans)
 
     def _assemble_bootstrap_config(self):
@@ -423,10 +427,6 @@ class K8sCharm(ops.CharmBase):
         proceeds to configure it by sending a request with the necessary parameters.
         It waits for a response from the external load balancer and handles any errors that
         may occur during the process.
-
-        Raises:
-            ReconcilerError: If there is an error configuring the external load balancer
-                            or if a response is not received within the timeout period.
         """
         if not self.is_control_plane:
             log.info("External load balancer is only configured for control-plane units.")
@@ -445,33 +445,7 @@ class K8sCharm(ops.CharmBase):
         if not req.health_checks:
             req.add_health_check(protocol=req.protocols.http, port=APISERVER_PORT, path="/livez")
         self.external_load_balancer.send_request(req)
-
-        # wait for response
-        retry_interval_seconds = 3
-        retries = 10
-        for _ in range(retries):
-            res = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
-            if res is None:
-                log.info(
-                    "Waiting for external load balancer response. Retrying in %s seconds",
-                    retry_interval_seconds,
-                )
-                sleep(retry_interval_seconds)
-                continue
-            if res.error_message:
-                log.error("Error from external load balancer: %s", res.error_message)
-                raise ReconcilerError(
-                    "Failed to configure external load balancer. Check logs for details"
-                )
-
-            log.info("External load balancer response received: %s", res)
-            return
-
-        log.error(
-            "Timed out waiting for external load balancer response after %s seconds",
-            retry_interval_seconds * retries,
-        )
-        raise ReconcilerError("External load balancer response not received")
+        log.info("External load balancer request was sent")
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
@@ -1158,7 +1132,8 @@ class K8sCharm(ops.CharmBase):
                 log.info("No server requested, use public address")
                 server = self._get_public_address()
                 if not server:
-                    log.info("No public address found")
+                    event.fail("Failed to get public address. Check logs for details.")
+                    return
                 else:
                     log.info("Found public address: %s", server)
                     port = str(APISERVER_PORT)
