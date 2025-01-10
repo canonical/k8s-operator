@@ -18,7 +18,6 @@ certificate storage.
 import hashlib
 import logging
 import os
-import re
 import shlex
 import socket
 import subprocess
@@ -65,6 +64,7 @@ from charms.operator_libs_linux.v1 import systemd
 from charms.reconciler import Reconciler
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
+from endpoints import build_url
 from events import update_status
 from inspector import ClusterInspector
 from kube_control import configure as configure_kube_control
@@ -80,15 +80,12 @@ from literals import (
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
     DEPENDENCIES,
-    ENDPOINT_HAS_PORT_REGEX,
     ETC_KUBERNETES,
     ETCD_RELATION,
     EXTERNAL_LOAD_BALANCER_PORT,
     EXTERNAL_LOAD_BALANCER_RELATION,
     EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
     EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
-    HTTP_SCHEME,
-    HTTPS_SCHEME,
     K8SD_PORT,
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
@@ -1134,14 +1131,13 @@ class K8sCharm(ops.CharmBase):
                 if not server:
                     event.fail("Failed to get public address. Check logs for details.")
                     return
-                else:
-                    log.info("Found public address: %s", server)
-                    port = str(APISERVER_PORT)
-                    if self.is_control_plane and self.external_load_balancer.is_available:
-                        log.info("Using external load balancer port as the public port")
-                        port = str(EXTERNAL_LOAD_BALANCER_PORT)
-                    server = self._format_kube_api_url(server, port)
-                    log.info("Formatted server address: %s", server)
+                log.info("Found public address: %s", server)
+                port = str(APISERVER_PORT)
+                if self.is_control_plane and self.external_load_balancer.is_available:
+                    log.info("Using external load balancer port as the public port")
+                    port = str(EXTERNAL_LOAD_BALANCER_PORT)
+                server = build_url(server, port, "https")
+                log.info("Formatted server address: %s", server)
             log.info("Requesting kubeconfig for server=%s", server)
             resp = self.api_manager.get_kubeconfig(server)
             event.set_results({"kubeconfig": resp})
@@ -1185,25 +1181,6 @@ class K8sCharm(ops.CharmBase):
             return None
 
         return response.address
-
-    def _format_kube_api_url(self, addr: str, port: str) -> str:
-        """Format the given Kubernetes API address to ensure it includes the protocol and port.
-
-        Args:
-            addr (str): The Kubernetes API address.
-            port (str): The Kubernetes API port.
-
-        Returns:
-            str: The formatted Kubernetes API address with protocol and port.
-        """
-        addr = addr.lower()
-        if not addr.startswith(HTTPS_SCHEME) and not addr.startswith(HTTP_SCHEME):
-            log.info("Adding %s to addr %s", HTTPS_SCHEME, addr)
-            addr = HTTPS_SCHEME + addr
-        if re.search(ENDPOINT_HAS_PORT_REGEX, addr) is None:
-            log.info("Adding port %s to addr %s", port, addr)
-            addr = f"{addr}:{port}"
-        return addr
 
 
 if __name__ == "__main__":  # pragma: nocover

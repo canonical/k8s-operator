@@ -48,7 +48,8 @@ plugins = "pydantic.mypy"
 [tool.pylint]
 # Ignore too-few-public-methods due to pydantic models
 # Ignore no-self-argument due to pydantic validators
-disable = "wrong-import-order,redefined-outer-name,too-many-instance-attributes,too-few-public-methods,no-self-argument,fixme,protected-access"
+# Ignore logging-fstring-interpolation which instructs to use %s instead of f-strings in logs which is objectively worse.
+disable = "wrong-import-order,redefined-outer-name,too-many-instance-attributes,too-few-public-methods,no-self-argument,fixme,protected-access,logging-fstring-interpolation"
 # Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
 extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
 # Modules can be bigger than 1000 lines
