@@ -48,7 +48,7 @@ def configure(charm: K8sCharmProtocol):
         charm.kube_control.set_dns_port(53)
 
     charm.kube_control.set_default_cni("")
-    charm.kube_control.set_image_registry("rocks.canonical.com")
+    charm.kube_control.set_image_registry("rocks.canonical.com/cdk")
 
     charm.kube_control.set_cluster_name(charm.get_cluster_name())
     charm.kube_control.set_has_external_cloud_provider(charm.xcp.has_xcp)
