@@ -12,7 +12,9 @@ SNAP_NAME = "k8s"
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # Charm
+CONTAINERD_BASE_PATH = Path("/etc/containerd")
 ETC_KUBERNETES = Path("/etc/kubernetes")
+HOSTSD_PATH = CONTAINERD_BASE_PATH / "hosts.d/"
 KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
