@@ -23,9 +23,9 @@ from typing import Any, Dict, List, Optional
 import ops
 import pydantic
 import tomli_w
+from literals import HOSTSD_PATH
 
 log = logging.getLogger(__name__)
-HOSTSD_PATH = Path("/var/snap/k8s/common/etc/containerd/hosts.d/")
 
 
 def _ensure_file(
