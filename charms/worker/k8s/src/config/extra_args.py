@@ -12,6 +12,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     ControlPlaneNodeJoinConfig,
     NodeJoinConfig,
 )
+from literals import CONTAINERD_BASE_PATH
 
 
 def _parse(config_data) -> Dict[str, str]:
@@ -70,6 +71,8 @@ def craft(
 
     cmd = _parse(src["kubelet-extra-args"])
     dest.extra_node_kubelet_args = cmd
+
+    dest.containerd_base_dir = str(CONTAINERD_BASE_PATH)
 
 
 def taint_worker(dest: NodeJoinConfig, taints: List[str]):
