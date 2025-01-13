@@ -35,23 +35,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python Testing Deps
-        run: |
-          set -eux -o pipefail
-
-          # Upgrade pip to be able to read the requirements.txt
-          sudo python3 -m pip install --upgrade pip
-
-          # tox required for running the unit tests with coverage:
-          sudo python3 -m pip install tox
-
-          # Required by TICSQServer:
-          sudo python3 -m pip install pylint flake8
-
-          # Must pre-install dependencies for TICSQServer:
-          sudo python3 -m pip install -r $GITHUB_WORKSPACE/charms/worker/k8s/requirements.txt
-          sudo python3 -m pip install -r $GITHUB_WORKSPACE/test_requirements.txt
-
       - name: Install Go for Cobertura Coverage Converter
         uses: actions/setup-go@v5
         with:
@@ -61,11 +44,13 @@ jobs:
         run: |
           set -eux -o pipefail
 
+          # tox required for running the unit tests with coverage:
+          pip install tox
+
           pushd $GITHUB_WORKSPACE
           tox -e unit,coverage-xml
 
           GENERATED_COVERAGE_XML="$GITHUB_WORKSPACE/charms/worker/k8s/coverage.xml"
-          cat "$GENERATED_COVERAGE_XML"
 
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
           mkdir -p "$GITHUB_WORKSPACE/cover"
@@ -73,10 +58,10 @@ jobs:
 
       - name: Run TiCS
         run: |
+          export TICSAUTHTOKEN=${{ secrets.TICSAUTHTOKEN }}
+
           # NOTE(aznashwan): TiCS install script doesn't define defaults; cannot '-u'
           set -ex -o pipefail
-
-          export TICSAUTHTOKEN=${{ secrets.TICSAUTHTOKEN }}
 
           # Install the TiCS and staticcheck
           go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
@@ -84,18 +69,3 @@ jobs:
 
           cd $GITHUB_WORKSPACE
           TICSQServer -project k8s-operator -tmpdir /tmp/tics -branchdir "$GITHUB_WORKSPACE"
-
-      - name: Print TICSQServer Logs
-        if: always()
-        run: |
-          set -eux -o pipefail
-
-          TICS_TEMP_DIR="/tmp/tics/ticstmpdir"
-
-          if [ -d "$TICS_TEMP_DIR" ]; then
-            for file in "$TICS_TEMP_DIR"/*; do
-              echo "### cat $file"
-              cat "$file"
-              echo
-            done
-          fi
