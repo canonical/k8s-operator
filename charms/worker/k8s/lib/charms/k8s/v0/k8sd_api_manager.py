@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 logger = logging.getLogger(__name__)
 
@@ -360,6 +360,10 @@ class BootstrapConfig(BaseModel):
         extra_node_kube_scheduler_args ([Dict[str,str]]): key-value service args
         extra_node_kube_proxy_args ([Dict[str,str]]): key-value service args
         extra_node_kubelet_args ([Dict[str,str]]): key-value service args
+        extra_node_containerd_args ([Dict[str,str]]): key-value service args
+        extra_node_k8s_dqlite_args ([Dict[str,str]]): key-value service args
+        extra_node_containerd_config ([Dict[str,Any]]): key-value config args
+        containerd_base_dir (str): The base directory for containerd.
     """
 
     cluster_config: Optional[UserFacingClusterConfig] = Field(default=None, alias="cluster-config")
@@ -390,6 +394,16 @@ class BootstrapConfig(BaseModel):
     extra_node_kubelet_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-kubelet-args"
     )
+    extra_node_containerd_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-containerd-args"
+    )
+    extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+        default=None, alias="extra-node-containerd-config"
+    )
+    containerd_base_dir: Optional[str] = Field(default=None, alias="containerd-base-dir")
 
 
 class CreateClusterRequest(BaseModel):
@@ -426,6 +440,10 @@ class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
         kubelet_key (str): node's certificate key
         extra_node_kube_proxy_args (Dict[str, str]): key-value service args
         extra_node_kubelet_args (Dict[str, str]): key-value service args
+        extra_node_containerd_args ([Dict[str,str]]): key-value service args
+        extra_node_containerd_config ([Dict[str,Any]]): key-value config args
+        containerd_base_dir (str): The base directory for containerd.
+
     """
 
     kubelet_crt: Optional[str] = Field(default=None, alias="kubelet-crt")
@@ -436,6 +454,13 @@ class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
     extra_node_kubelet_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-kubelet-args"
     )
+    extra_node_containerd_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-containerd-args"
+    )
+    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+        default=None, alias="extra-node-containerd-config"
+    )
+    containerd_base_dir: Optional[str] = Field(default=None, alias="containerd-base-dir")
 
 
 class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
@@ -450,6 +475,7 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
         extra_node_kube_apiserver_args (Dict[str, str]): key-value service args
         extra_node_kube_controller_manager_args (Dict[str, str]): key-value service args
         extra_node_kube_scheduler_args (Dict[str, str]): key-value service args
+        extra_node_k8s_dqlite_args ([Dict[str,str]]): key-value service args
     """
 
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
@@ -466,6 +492,9 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     )
     extra_node_kube_scheduler_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
+    )
+    extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-k8s-dqlite-args"
     )
 
 
