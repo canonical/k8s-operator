@@ -216,6 +216,32 @@ async def get_leader(app) -> int:
     raise ValueError("No leader found")
 
 
+async def get_kubeconfig(ops_test, module_name: str):
+    """Retrieve kubeconfig from the k8s leader.
+
+    Args:
+        ops_test: pytest-operator plugin
+        module_name: name of the test module
+
+    Returns:
+        path to the kubeconfig file
+    """
+    kubeconfig_path = ops_test.tmp_path / module_name / "kubeconfig"
+    if kubeconfig_path.exists() and kubeconfig_path.stat().st_size:
+        return kubeconfig_path
+    k8s = ops_test.model.applications["k8s"]
+    leader_idx = await get_leader(k8s)
+    leader = k8s.units[leader_idx]
+    action = await leader.run_action("get-kubeconfig")
+    result = await action.wait()
+    completed = result.status == "completed" or result.results["return-code"] == 0
+    assert completed, f"Failed to get kubeconfig {result=}"
+    kubeconfig_path.parent.mkdir(exist_ok=True, parents=True)
+    kubeconfig_path.write_text(result.results["kubeconfig"])
+    assert Path(kubeconfig_path).stat().st_size, "kubeconfig file is 0 bytes"
+    return kubeconfig_path
+
+
 @dataclass
 class Markings:
     """Test markings for the bundle.
