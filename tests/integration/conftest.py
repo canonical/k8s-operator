@@ -5,12 +5,15 @@
 import contextlib
 import json
 import logging
+import random
 import shlex
+import string
 from pathlib import Path
 from typing import Optional
 
 import juju.controller
 import juju.utils
+import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
@@ -18,11 +21,11 @@ from juju.model import Model
 from juju.tag import untag
 from juju.url import URL
 from kubernetes import config as k8s_config
-from kubernetes.client import Configuration
+from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import Bundle, cloud_type, get_unit_cidrs, is_deployed
+from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -98,6 +101,19 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if item.get_closest_marker("cos"):
                 item.add_marker(skip_cos)
+
+
+@pytest.fixture(scope="module")
+def module_name(request) -> str:
+    """Get the module name of the test.
+
+    Args:
+        request: Pytest request object.
+
+    Returns:
+        str: The test module name.
+    """
+    return request.module.__name__
 
 
 async def cloud_proxied(ops_test: OpsTest):
@@ -210,6 +226,45 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     await bundle.apply_marking(ops_test, markings)
     async with deploy_model(ops_test, model, bundle) as the_model:
         yield the_model
+
+
+def valid_namespace_name(s: str) -> str:
+    """Creates a valid kubernetes namespace name.
+
+    Args:
+        s: The string to sanitize.
+
+    Returns:
+        A valid namespace name.
+    """
+    valid_chars = set(string.ascii_lowercase + string.digits + "-")
+    sanitized = "".join("-" if char not in valid_chars else char for char in s)
+    sanitized = sanitized.strip("-")
+    return sanitized[-63:]
+
+
+@pytest.fixture()
+@pytest.mark.usefixtures("kubernetes_cluster")
+async def api_client(ops_test: OpsTest, module_name: str):
+    """Create a k8s API client and namespace for the test.
+
+    Args:
+        ops_test: The pytest-operator plugin.
+        module_name: The name of the module.
+    """
+    rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    namespace = valid_namespace_name(f"{module_name}-{rand_str}")
+    kubeconfig_path = await get_kubeconfig(ops_test, module_name)
+    config = type.__call__(Configuration)
+    k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
+    api_client = ApiClient(configuration=config)
+
+    v1 = CoreV1Api(api_client)
+    v1.create_namespace(
+        body=k8s_models.V1Namespace(metadata=k8s_models.V1ObjectMeta(name=namespace))
+    )
+    yield api_client
+    v1.delete_namespace(name=namespace)
 
 
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")

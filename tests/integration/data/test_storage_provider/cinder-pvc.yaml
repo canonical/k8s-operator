@@ -1,0 +1,16 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: raw-block-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 64Mi
+  storageClassName: csi-cinder-default
