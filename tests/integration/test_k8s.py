@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from juju import application, model
+from juju import application, model, unit
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .grafana import Grafana
@@ -35,35 +35,57 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
-async def test_nodes_labelled(request, kubernetes_cluster: model.Model):
+@pytest.fixture
+async def preserve_charm_config(kubernetes_cluster: model.Model):
+    """Preserve the charm config changes from a test."""
+    k8s: application.Application = kubernetes_cluster.applications["k8s"]
+    worker: application.Application = kubernetes_cluster.applications["k8s-worker"]
+    k8s_config, worker_config = await asyncio.gather(k8s.get_config(), worker.get_config())
+    yield k8s_config, worker_config
+    await asyncio.gather(k8s.set_config(k8s_config), worker.set_config(worker_config))
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+
+
+@pytest.mark.usefixtures("preserve_charm_config")
+async def test_node_labels(request, kubernetes_cluster: model.Model):
     """Test the charms label the nodes appropriately."""
     testname: str = request.node.name
     k8s: application.Application = kubernetes_cluster.applications["k8s"]
     worker: application.Application = kubernetes_cluster.applications["k8s-worker"]
+
+    # Set a VALID node-label on both k8s and worker
     label_config = {"node-labels": f"{testname}="}
     await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
 
-    try:
-        nodes = await get_rsc(k8s.units[0], "nodes")
-        labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
-        juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
-        assert len(k8s.units + worker.units) == len(
-            labelled
-        ), "Not all nodes labelled with custom-label"
-        assert len(k8s.units + worker.units) == len(
-            juju_nodes
-        ), "Not all nodes labelled as juju-charms"
-    finally:
-        await asyncio.gather(
-            k8s.reset_config(list(label_config)), worker.reset_config(list(label_config))
-        )
-
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
     nodes = await get_rsc(k8s.units[0], "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
-    assert 0 == len(labelled), "Not all nodes labelled with custom-label"
+    assert len(k8s.units + worker.units) == len(
+        labelled
+    ), "Not all nodes labelled with custom-label"
+    assert len(k8s.units + worker.units) == len(
+        juju_nodes
+    ), "Not all nodes labelled as juju-charms"
+
+    # Set an INVALID node-label on both k8s and worker
+    label_config = {"node-labels": f"{testname}=invalid="}
+    await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
+    await kubernetes_cluster.wait_for_idle(timeout=5 * 60)
+    leader_idx = await get_leader(k8s)
+    leader: unit.Unit = k8s.units[leader_idx]
+    assert leader.workload_status == "blocked", "Leader not blocked"
+    assert "node-labels" in leader.workload_status_message, "Leader had unexpected warning"
+
+    # Test resetting all label config
+    await asyncio.gather(
+        k8s.reset_config(list(label_config)), worker.reset_config(list(label_config))
+    )
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    nodes = await get_rsc(k8s.units[0], "nodes")
+    labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
+    juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
+    assert 0 == len(labelled), "Not all nodes labelled without custom-label"
 
 
 @pytest.mark.abort_on_fail
@@ -187,8 +209,8 @@ async def test_override_snap_resource(override_snap_on_k8s: application.Applicat
     k8s = override_snap_on_k8s
     assert k8s, "k8s application not found"
 
-    for unit in k8s.units:
-        assert "Override" in unit.workload_status_message
+    for _unit in k8s.units:
+        assert "Override" in _unit.workload_status_message
 
 
 @pytest.mark.cos
