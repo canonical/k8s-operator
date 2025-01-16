@@ -44,7 +44,12 @@ jobs:
           set -eux -o pipefail
 
           # tox required for running the unit tests with coverage:
-          pip install tox
+          # pylint and flake8 are required by TICSQServer
+          # pylint requires the packages to be installed.
+          pip install tox pylint flake8
+          pip install -r charms/worker/k8s/requirements.txt
+          pip install -r test_requirements.txt
+
           tox -e unit,coverage-xml
 
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
