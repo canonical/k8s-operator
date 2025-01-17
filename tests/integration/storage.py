@@ -102,7 +102,7 @@ async def exec_storage_class(definition: StorageProviderTestDefinition):
         await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
 
         # Create a pod that reads the PV data and writes it to the log.
-        event = await k8s.run(f"k8s kubectl apply -f /tmp/{manifests.pv_writer_pod}")
+        event = await k8s.run(f"k8s kubectl apply -f /tmp/{manifests.pv_reader_pod}")
         result = await event.wait()
         assert result.results["return-code"] == 0, "Failed to create reader pod."
 
