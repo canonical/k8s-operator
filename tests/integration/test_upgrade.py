@@ -37,7 +37,7 @@ def charm_channel_missing(charms: Iterable[str], channel: str) -> Tuple[bool, st
         Returns a string with the reason if True
     """
     risk_levels = ["edge", "beta", "candidate", "stable"]
-    track, riskiest = channel.split("/")
+    track, riskiest, *_ = channel.split("/")
     riskiest_level = risk_levels.index(riskiest)
     for app in charms:
         for lookup in risk_levels[riskiest_level:]:
@@ -109,20 +109,20 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         worker_count = sum(len(w.units) for w in worker_apps.values())
         await kubernetes_cluster.wait_for_idle(apps=list(charms.keys()), timeout=30)
 
-        # Check unit status individually, as the k8s leader may be in a different state
+        # Check workload status individually, as the k8s leader may be in a different state
         leader_idx: int = await get_leader(k8s)
         for name, app in k8s_apps.items():
             for idx, unit in enumerate(app.units):
-                err = f"{unit.name} has not completed upgrade: {unit.agent_status_message}"
-                state, message = unit.agent_status, unit.agent_status_message
+                err = f"{unit.name} has not completed upgrade: {unit.workload_status_message}"
+                status, message = unit.workload_status, unit.workload_status_message
                 if name == CONTROL_PLANE_APP and idx == leader_idx and worker_count > 0:
-                    assert state in ["waiting", "active"], err
+                    assert status in ["waiting", "active"], err
                     assert message in [
                         f"Waiting for {worker_count} Workers to upgrade",
                         "Ready",
                     ], err
                 else:
-                    assert "active" == state, err
+                    assert status == "active", err
 
     async def _refresh(app_name: str):
         """Refresh the application.
