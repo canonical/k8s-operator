@@ -103,7 +103,7 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         k8s_apps = {
             k: v
             for k, v in kubernetes_cluster.applications.items()
-            if v.startswith(CONTROL_PLANE_APP)
+            if k.startswith(CONTROL_PLANE_APP)
         }
         worker_apps = {k: v for k, v in k8s_apps.items() if k != CONTROL_PLANE_APP}
         worker_count = sum(len(w.units) for w in worker_apps.values())
