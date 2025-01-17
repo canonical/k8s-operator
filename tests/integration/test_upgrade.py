@@ -117,7 +117,10 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
                 state, message = unit.agent_status, unit.agent_status_message
                 if name == CONTROL_PLANE_APP and idx == leader_idx and worker_count > 0:
                     assert state in ["waiting", "active"], err
-                    assert message in [f"Waiting for {worker_count} Workers to upgrade", "Ready"], err
+                    assert message in [
+                        f"Waiting for {worker_count} Workers to upgrade",
+                        "Ready",
+                    ], err
                 else:
                     assert "active" == state, err
 
