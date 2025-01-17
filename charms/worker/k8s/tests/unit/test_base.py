@@ -67,6 +67,7 @@ def mock_reconciler_handlers(harness):
             "_ensure_cluster_config",
             "_expose_ports",
             "_announce_kubernetes_version",
+            "_ensure_sans",
         }
 
     mocked = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
@@ -198,7 +199,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
     assert uccr_config.datastore.type == "external"
 
 
-def test_configure_boostrap_extra_sans(harness):
+def test_configure_bootstrap_extra_sans(harness):
     """Test configuring kube-apiserver-extra-sans on bootstrap.
 
     Args:

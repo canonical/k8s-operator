@@ -18,3 +18,4 @@ poetry-core==1.9.1
 lightkube==0.17.1
 httpx==0.27.2
 loadbalancer_interface == 1.2.0
+cryptography==44.0.0

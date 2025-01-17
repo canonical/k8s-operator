@@ -94,6 +94,7 @@ from literals import (
 )
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
+from pki import extract_sans_from_cert, get_api_server_cert
 from pydantic import SecretStr
 from snap import management as snap_management
 from snap import version as snap_version
@@ -384,18 +385,29 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.check_k8sd_ready()
 
     def _get_extra_sans(self):
-        """Retrieve the certificate extra SANs.
-
-        Raises:
-            ReconcilerError: If the public address cannot be retrieved.
-        """
+        """Retrieve the certificate extra SANs."""
+        # Get the extra SANs from the configuration
         extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
-        extra_sans = {san for san in extra_sans_str.strip().split() if san}
-        if public_address := self._get_public_address():
-            log.info("Public address %s found, adding it to extra SANs", public_address)
-            extra_sans.add(public_address)
-        else:
-            raise ReconcilerError("Failed to get public address")
+        extra_sans = set(extra_sans_str.strip().split())
+
+        # Add the ingress addresses of all units
+        extra_sans.add(_get_juju_public_address())
+        binding = self.model.get_binding(CLUSTER_RELATION)
+        try:
+            addresses = binding and binding.network.ingress_addresses
+            if addresses:
+                for addr in addresses:
+                    extra_sans.add(str(addr))
+        except ops.RelationNotFoundError as e:
+            log.error(f"Failed to get ingress addresses for extra SANs: {e}")
+
+        # Add the external load balancer address
+        if self.is_control_plane and self.external_load_balancer.is_available:
+            if external_lb_addr := self._get_external_load_balancer_address():
+                extra_sans.add(external_lb_addr)
+            else:
+                log.warning("Failed to get external load balancer address for extra SANs")
+
         return sorted(extra_sans)
 
     def _assemble_bootstrap_config(self):
@@ -969,6 +981,7 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             self._copy_internal_kubeconfig()
             self._expose_ports()
+            self._ensure_sans()
 
     def _evaluate_removal(self, event: ops.EventBase) -> bool:
         """Determine if my unit is being removed.
@@ -1127,15 +1140,18 @@ class K8sCharm(ops.CharmBase):
             server = event.params.get("server")
             if not server:
                 log.info("No server requested, use public address")
+
                 server = self._get_public_address()
                 if not server:
                     event.fail("Failed to get public address. Check logs for details.")
                     return
-                log.info("Found public address: %s", server)
-                port = str(APISERVER_PORT)
-                if self.is_control_plane and self.external_load_balancer.is_available:
-                    log.info("Using external load balancer port as the public port")
-                    port = str(EXTERNAL_LOAD_BALANCER_PORT)
+
+                port = (
+                    str(EXTERNAL_LOAD_BALANCER_PORT)
+                    if self.external_load_balancer.is_available
+                    else str(APISERVER_PORT)
+                )
+
                 server = build_url(server, port, "https")
                 log.info("Formatted server address: %s", server)
             log.info("Requesting kubeconfig for server=%s", server)
@@ -1145,7 +1161,12 @@ class K8sCharm(ops.CharmBase):
             event.fail(f"Failed to retrieve kubeconfig: {e}")
 
     def _get_public_address(self) -> Optional[str]:
-        """Get public address either from external load balancer or from juju.
+        """Get the most public address either from external load balancer or from juju.
+
+        If the external load balancer is available and the unit is a control-plane unit,
+        the external load balancer address will be used. Otherwise, the juju public address
+        will be used.
+        NOTE: Don't ignore the unit's IP in the extra SANs just because there's a load balancer.
 
         Returns:
             str: public ip address of the unit
@@ -1181,6 +1202,38 @@ class K8sCharm(ops.CharmBase):
             return None
 
         return response.address
+
+    @on_error(
+        ops.WaitingStatus("Ensuring SANs are up-to-date"),
+        InvalidResponseError,
+        K8sdConnectionError,
+    )
+    def _ensure_sans(self):
+        """Ensure the extra SANs are up-to-date.
+
+        This method checks if the extra SANs are present in the API server certificate.
+        If they are not, the certificates are refreshed with the new SANs.
+        """
+        if not self.is_control_plane:
+            return
+
+        extra_sans = self._get_extra_sans()
+        if not extra_sans:
+            log.info("No extra SANs to update")
+            return
+
+        dns_sans, ip_addresses = extract_sans_from_cert(get_api_server_cert())
+        ip_addresses = [str(ip) for ip in ip_addresses]
+        all_cert_sans = dns_sans + ip_addresses
+
+        for san in extra_sans:
+            if san not in all_cert_sans:
+                log.info(f"{san} not in cert SANs, refreshing certs with new SANs: {extra_sans}")
+                status.add(ops.MaintenanceStatus("Refreshing Certificates"))
+                self.api_manager.refresh_certs(extra_sans)
+                log.info("Certificates have been refreshed")
+
+        log.info("Extra SANs are up-to-date")
 
 
 if __name__ == "__main__":  # pragma: nocover

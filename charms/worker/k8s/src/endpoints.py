@@ -10,7 +10,7 @@
 import logging
 import re
 from ipaddress import ip_address
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunsplit
 
 log = logging.getLogger(__name__)
 
@@ -89,4 +89,4 @@ def build_url(addr: str, new_port: str, new_scheme: str) -> str:
     if is_ipv6:
         ip = f"[{ip}]"
 
-    return f"{new_scheme}://{ip}:{new_port}"
+    return urlunsplit((new_scheme, f"{ip}:{new_port}", "", "", ""))
