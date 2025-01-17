@@ -23,6 +23,6 @@ async def test_ceph_sc(kubernetes_cluster: model.Model):
         "ceph-xfs-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"
     )
     definition = storage.StorageProviderTestDefinition(
-        "ceph", "ceph-xfs", "rdb.csi.ceph.com", kubernetes_cluster, manifests
+        "ceph", "ceph-xfs", "rbd.csi.ceph.com", kubernetes_cluster, manifests
     )
     await storage.exec_storage_class(definition)
