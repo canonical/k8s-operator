@@ -14,6 +14,8 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 # Charm
 CONTAINERD_BASE_PATH = Path("/etc/containerd")
 ETC_KUBERNETES = Path("/etc/kubernetes")
+PKI_DIR = ETC_KUBERNETES / "pki"
+APISERVER_CERT = PKI_DIR / "apiserver.crt"
 HOSTSD_PATH = CONTAINERD_BASE_PATH / "hosts.d/"
 KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
