@@ -5,6 +5,7 @@
 
 """Upgrade Integration tests."""
 
+import datetime
 import logging
 import subprocess
 from typing import Iterable, Optional, Tuple
@@ -15,7 +16,7 @@ import juju.unit
 import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
-from tenacity import before_sleep_log, retry, stop_after_attempt, wait_fixed
+from tenacity import before_sleep_log, retry, stop_after_attempt, stop_after_delay, wait_fixed
 
 from .helpers import CHARMCRAFT_DIRS, Bundle, get_leader, get_rsc
 
@@ -94,8 +95,7 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         ), "Kube-system not yet ready"
 
     @retry(
-        stop=stop_after_attempt(10),
-        wait=wait_fixed(30),
+        stop=stop_after_delay(datetime.timedelta(minutes=30)),
         before_sleep=before_sleep_log(log, logging.WARNING),
     )
     async def _wait_for_upgrade_complete():
@@ -107,7 +107,7 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         }
         worker_apps = {k: v for k, v in k8s_apps.items() if k != CONTROL_PLANE_APP}
         worker_count = sum(len(w.units) for w in worker_apps.values())
-        await kubernetes_cluster.wait_for_idle(apps=list(charms.keys()), timeout=60)
+        await kubernetes_cluster.wait_for_idle(apps=list(charms.keys()), timeout=30)
 
         # Check unit status individually, as the k8s leader may be in a different state
         leader_idx: int = await get_leader(k8s)
