@@ -68,6 +68,7 @@ from events import update_status
 from inspector import ClusterInspector
 from kube_control import configure as configure_kube_control
 from literals import (
+    APISERVER_CERT,
     APISERVER_PORT,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
@@ -91,7 +92,7 @@ from literals import (
 )
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
-from pki import extract_sans_from_cert, get_api_server_cert
+from pki import get_certificate_sans
 from pydantic import SecretStr
 from snap import management as snap_management
 from snap import version as snap_version
@@ -387,7 +388,7 @@ class K8sCharm(ops.CharmBase):
             log.error(f"Failed to get ingress addresses for extra SANs: {e}")
 
         # Add the external load balancer address
-        if self.is_control_plane and self.external_load_balancer.is_available:
+        if self.external_load_balancer.is_available:
             if external_lb_addr := self._get_external_load_balancer_address():
                 extra_sans.add(external_lb_addr)
             else:
@@ -1202,7 +1203,7 @@ class K8sCharm(ops.CharmBase):
             log.info("No extra SANs to update")
             return
 
-        dns_sans, ip_addresses = extract_sans_from_cert(get_api_server_cert())
+        dns_sans, ip_addresses = get_certificate_sans(APISERVER_CERT)
         ip_addresses = [str(ip) for ip in ip_addresses]
         all_cert_sans = dns_sans + ip_addresses
 
