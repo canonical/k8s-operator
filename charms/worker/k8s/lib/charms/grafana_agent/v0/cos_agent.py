@@ -252,7 +252,7 @@ if TYPE_CHECKING:
 
 LIBID = "dc15fa84cef84ce58155fb84f6c6213a"
 LIBAPI = 0
-LIBPATCH = 12
+LIBPATCH = 14
 
 PYDEPS = ["cosl", "pydantic"]
 
@@ -316,7 +316,11 @@ class NotReadyError(TracingError):
     """Raised by the provider wrapper if a requirer hasn't published the required data (yet)."""
 
 
-class ProtocolNotRequestedError(TracingError):
+class ProtocolNotFoundError(TracingError):
+    """Raised if the user doesn't receive an endpoint for a protocol it requested."""
+
+
+class ProtocolNotRequestedError(ProtocolNotFoundError):
     """Raised if the user attempts to obtain an endpoint for a protocol it did not request."""
 
 
@@ -578,7 +582,7 @@ class Receiver(pydantic.BaseModel):
     """Specification of an active receiver."""
 
     protocol: ProtocolType = pydantic.Field(..., description="Receiver protocol name and type.")
-    url: str = pydantic.Field(
+    url: Optional[str] = pydantic.Field(
         ...,
         description="""URL at which the receiver is reachable. If there's an ingress, it would be the external URL.
         Otherwise, it would be the service's fqdn or internal IP.
@@ -767,7 +771,7 @@ class COSAgentProvider(Object):
         """Is this endpoint ready?"""
         relation = relation or self._relation
         if not relation:
-            logger.debug(f"no relation on {self._relation_name !r}: tracing not ready")
+            logger.debug(f"no relation on {self._relation_name!r}: tracing not ready")
             return False
         if relation.data is None:
             logger.error(f"relation data is None for {relation}")
@@ -801,29 +805,48 @@ class COSAgentProvider(Object):
 
     def _get_tracing_endpoint(
         self, relation: Optional[Relation], protocol: ReceiverProtocol
-    ) -> Optional[str]:
+    ) -> str:
+        """Return a tracing endpoint URL if it is available or raise a ProtocolNotFoundError."""
         unit_data = self.get_all_endpoints(relation)
         if not unit_data:
-            return None
+            # we didn't find the protocol because the remote end didn't publish any data yet
+            # it might also mean that grafana-agent doesn't have a relation to the tracing backend
+            raise ProtocolNotFoundError(protocol)
         receivers: List[Receiver] = [i for i in unit_data.receivers if i.protocol.name == protocol]
         if not receivers:
-            logger.error(f"no receiver found with protocol={protocol!r}")
-            return None
+            # we didn't find the protocol because grafana-agent didn't return us the protocol that we requested
+            # the caller might want to verify that we did indeed request this protocol
+            raise ProtocolNotFoundError(protocol)
         if len(receivers) > 1:
-            logger.error(
+            logger.warning(
                 f"too many receivers with protocol={protocol!r}; using first one. Found: {receivers}"
             )
-            return None
 
         receiver = receivers[0]
+        if not receiver.url:
+            # grafana-agent isn't connected to the tracing backend yet
+            raise ProtocolNotFoundError(protocol)
         return receiver.url
 
     def get_tracing_endpoint(
         self, protocol: ReceiverProtocol, relation: Optional[Relation] = None
-    ) -> Optional[str]:
-        """Receiver endpoint for the given protocol."""
-        endpoint = self._get_tracing_endpoint(relation or self._relation, protocol=protocol)
-        if not endpoint:
+    ) -> str:
+        """Receiver endpoint for the given protocol.
+
+        It could happen that this function gets called before the provider publishes the endpoints.
+        In such a scenario, if a non-leader unit calls this function, a permission denied exception will be raised due to
+        restricted access. To prevent this, this function needs to be guarded by the `is_ready` check.
+
+        Raises:
+        ProtocolNotRequestedError:
+            If the charm unit is the leader unit and attempts to obtain an endpoint for a protocol it did not request.
+        ProtocolNotFoundError:
+            If the charm attempts to obtain an endpoint when grafana-agent isn't related to a tracing backend.
+        """
+        try:
+            return self._get_tracing_endpoint(relation or self._relation, protocol=protocol)
+        except ProtocolNotFoundError:
+            # let's see if we didn't find it because we didn't request the endpoint
             requested_protocols = set()
             relations = [relation] if relation else self.relations
             for relation in relations:
@@ -838,8 +861,7 @@ class COSAgentProvider(Object):
             if protocol not in requested_protocols:
                 raise ProtocolNotRequestedError(protocol, relation)
 
-            return None
-        return endpoint
+            raise
 
 
 class COSAgentDataChanged(EventBase):
@@ -987,7 +1009,16 @@ class COSAgentRequirer(Object):
                 CosAgentRequirerUnitData(
                     receivers=[
                         Receiver(
-                            url=f"{self._get_tracing_receiver_url(protocol)}",
+                            # if tracing isn't ready, we don't want the wrong receiver URLs present in the databag.
+                            # however, because of the backwards compatibility requirements, we need to still provide
+                            # the protocols list so that the charm with older cos_agent version doesn't error its hooks.
+                            # before this change was added, the charm with old cos_agent version threw exceptions with
+                            # connections to grafana-agent timing out. After the change, the charm will fail validating
+                            # databag contents (as it expects a string in URL) but that won't cause any errors as
+                            # tracing endpoints are the only content in the grafana-agent's side of the databag.
+                            url=f"{self._get_tracing_receiver_url(protocol)}"
+                            if self._charm.tracing.is_ready()  # type: ignore
+                            else None,
                             protocol=ProtocolType(
                                 name=protocol,
                                 type=receiver_protocol_to_transport_protocol[protocol],
@@ -1029,8 +1060,7 @@ class COSAgentRequirer(Object):
         if len(units) > 1:
             # should never happen
             raise ValueError(
-                f"unexpected error: subordinate relation {relation} "
-                f"should have exactly one unit"
+                f"unexpected error: subordinate relation {relation} should have exactly one unit"
             )
 
         unit = next(iter(units), None)
@@ -1313,44 +1343,32 @@ def charm_tracing_config(
     If https endpoint is provided but cert_path is not found on disk:
      disable charm tracing.
     If https endpoint is provided and cert_path is None:
-     ERROR
+     raise TracingError
     Else:
      proceed with charm tracing (with or without tls, as appropriate)
 
     Usage:
-      If you are using charm_tracing >= v1.9:
-    >>> from lib.charms.tempo_k8s.v1.charm_tracing import trace_charm
-    >>> from lib.charms.tempo_k8s.v0.cos_agent import charm_tracing_config
+    >>> from lib.charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
+    >>> from lib.charms.tempo_coordinator_k8s.v0.tracing import charm_tracing_config
     >>> @trace_charm(tracing_endpoint="my_endpoint", cert_path="cert_path")
     >>> class MyCharm(...):
     >>>     _cert_path = "/path/to/cert/on/charm/container.crt"
     >>>     def __init__(self, ...):
-    >>>         self.cos_agent = COSAgentProvider(...)
+    >>>         self.tracing = TracingEndpointRequirer(...)
     >>>         self.my_endpoint, self.cert_path = charm_tracing_config(
-    ...             self.cos_agent, self._cert_path)
-
-      If you are using charm_tracing < v1.9:
-    >>> from lib.charms.tempo_k8s.v1.charm_tracing import trace_charm
-    >>> from lib.charms.tempo_k8s.v2.tracing import charm_tracing_config
-    >>> @trace_charm(tracing_endpoint="my_endpoint", cert_path="cert_path")
-    >>> class MyCharm(...):
-    >>>     _cert_path = "/path/to/cert/on/charm/container.crt"
-    >>>     def __init__(self, ...):
-    >>>         self.cos_agent = COSAgentProvider(...)
-    >>>         self.my_endpoint, self.cert_path = charm_tracing_config(
-    ...             self.cos_agent, self._cert_path)
-    >>>     @property
-    >>>     def my_endpoint(self):
-    >>>         return self._my_endpoint
-    >>>     @property
-    >>>     def cert_path(self):
-    >>>         return self._cert_path
-
+    ...             self.tracing, self._cert_path)
     """
     if not endpoint_requirer.is_ready():
         return None, None
 
-    endpoint = endpoint_requirer.get_tracing_endpoint("otlp_http")
+    try:
+        endpoint = endpoint_requirer.get_tracing_endpoint("otlp_http")
+    except ProtocolNotFoundError:
+        logger.warn(
+            "Endpoint for tracing wasn't provided as tracing backend isn't ready yet. If grafana-agent isn't connected to a tracing backend, integrate it. Otherwise this issue should resolve itself in a few events."
+        )
+        return None, None
+
     if not endpoint:
         return None, None
 
