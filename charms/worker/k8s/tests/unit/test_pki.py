@@ -5,14 +5,32 @@
 
 """Unit tests for pki module."""
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.x509 import load_pem_x509_certificate
-from pki import extract_sans_from_cert
+import os
+import tempfile
+
+from pki import get_certificate_sans
 
 
-def test_extract_sans_from_cert():
-    """Test extract_sans_from_cert function."""
-    cert_data = b"""-----BEGIN CERTIFICATE-----
+def test_get_certificate_sans():
+    """Test get_certificate_sans function."""
+    exp_dns_sans = [
+        "kubernetes",
+        "kubernetes.default",
+        "kubernetes.default.svc",
+        "kubernetes.default.svc.cluster",
+        "kubernetes.default.svc.cluster.local",
+    ]
+    exp_ip_sans = [
+        "10.152.183.1",
+        "127.0.0.1",
+        "10.97.72.214",
+        "::1",
+        "fe80::216:3eff:fed6:9e71",
+    ]
+
+    with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as cert_file:
+        cert_path = cert_file.name
+        cert_content = """-----BEGIN CERTIFICATE-----
 MIID6DCCAtCgAwIBAgIRAJ5lxXXSPlQqLz6uJzreDF0wDQYJKoZIhvcNAQELBQAw
 GDEWMBQGA1UEAxMNa3ViZXJuZXRlcy1jYTAeFw0yNTAxMTcwODIwMTVaFw00NTAx
 MTcwODIwMTVaMBkxFzAVBgNVBAMTDmt1YmUtYXBpc2VydmVyMIIBIjANBgkqhkiG
@@ -35,30 +53,16 @@ jqaO1we99UxeuhkRh6W8t8ARY9BasQRloe53c/+bDw6WtftaWuHlXbb4s4gUh0Un
 GMLPA6dh7pJFo4uolAtbYc4oE0FRUySPxoZzw5p/Mzt9Kj8omPgmP4Hb3D+Uml8P
 Kryj6dPJQjiDEqlfZC/n0aR98onWgb1O4Xdkm4HT20/R4gUNTS0rM/k4wTY=
 -----END CERTIFICATE-----"""
+        cert_file.write(cert_content.encode())
 
-    cert = load_pem_x509_certificate(cert_data, default_backend())
-    dns_names, ip_addresses = extract_sans_from_cert(cert)
+    try:
+        dns_sans, ip_sans = get_certificate_sans(cert_path)
 
-    exp_dns_names = [
-        "kubernetes",
-        "kubernetes.default",
-        "kubernetes.default.svc",
-        "kubernetes.default.svc.cluster",
-        "kubernetes.default.svc.cluster.local",
-    ]
-    exp_ip_addrs = [
-        "10.97.72.214",
-        "10.152.183.1",
-        "127.0.0.1",
-        "10.97.72.214",
-        "::1",
-        "fe80::216:3eff:fed6:9e71",
-    ]
-
-    assert len(dns_names) == len(exp_dns_names)
-    assert len(ip_addresses) == len(exp_ip_addrs)
-
-    for dns_name in dns_names:
-        assert dns_name in exp_dns_names
-    for ip_addr in ip_addresses:
-        assert str(ip_addr) in exp_ip_addrs
+        assert len(dns_sans) == len(set(dns_sans))
+        assert len(ip_sans) == len(set(ip_sans))
+        assert len(dns_sans) == len(exp_dns_sans)
+        assert len(ip_sans) == len(exp_ip_sans)
+        assert all(dns_name in exp_dns_sans for dns_name in dns_sans)
+        assert all(ip_addr in exp_ip_sans for ip_addr in ip_sans)
+    finally:
+        os.remove(cert_path)

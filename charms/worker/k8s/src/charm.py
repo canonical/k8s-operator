@@ -69,6 +69,7 @@ from events import update_status
 from inspector import ClusterInspector
 from kube_control import configure as configure_kube_control
 from literals import (
+    APISERVER_CERT,
     APISERVER_PORT,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
@@ -94,7 +95,7 @@ from literals import (
 )
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
-from pki import extract_sans_from_cert, get_api_server_cert
+from pki import get_certificate_sans
 from pydantic import SecretStr
 from snap import management as snap_management
 from snap import version as snap_version
@@ -393,16 +394,12 @@ class K8sCharm(ops.CharmBase):
         # Add the ingress addresses of all units
         extra_sans.add(_get_juju_public_address())
         binding = self.model.get_binding(CLUSTER_RELATION)
-        try:
-            addresses = binding and binding.network.ingress_addresses
-            if addresses:
-                for addr in addresses:
-                    extra_sans.add(str(addr))
-        except ops.RelationNotFoundError as e:
-            log.error(f"Failed to get ingress addresses for extra SANs: {e}")
+        addresses = binding and binding.network.ingress_addresses
+        if addresses:
+            extra_sans |= {str(addr) for addr in addresses}
 
         # Add the external load balancer address
-        if self.is_control_plane and self.external_load_balancer.is_available:
+        if self.external_load_balancer.is_available:
             if external_lb_addr := self._get_external_load_balancer_address():
                 extra_sans.add(external_lb_addr)
             else:
@@ -981,7 +978,7 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             self._copy_internal_kubeconfig()
             self._expose_ports()
-            self._ensure_sans()
+            self._ensure_cert_sans()
 
     def _evaluate_removal(self, event: ops.EventBase) -> bool:
         """Determine if my unit is being removed.
@@ -1169,8 +1166,8 @@ class K8sCharm(ops.CharmBase):
         NOTE: Don't ignore the unit's IP in the extra SANs just because there's a load balancer.
 
         Returns:
-            str: public ip address of the unit
-            None: if the public address is not available
+            Optional[str]: The public ip address of the unit, or None if the public address
+            is not available.
         """
         if self.is_control_plane and self.external_load_balancer.is_available:
             log.info("Using external load balancer address as the public address")
@@ -1182,8 +1179,8 @@ class K8sCharm(ops.CharmBase):
         """Get the external load balancer address.
 
         Returns:
-            None: If the external load balancer address is not available.
-            str: The external load balancer address.
+            Optional[str]: The external load balancer IP address, or None if it's
+            not available.
         """
         if not self.is_control_plane:
             log.error("External load balancer address is only available for control-plane units")
@@ -1192,7 +1189,7 @@ class K8sCharm(ops.CharmBase):
         response = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
 
         if not response:
-            log.error("No response from external load balancer when trying to get address")
+            log.info("Response from external load balancer is not yet available.")
             return None
         if response.error:
             log.error(
@@ -1208,10 +1205,10 @@ class K8sCharm(ops.CharmBase):
         InvalidResponseError,
         K8sdConnectionError,
     )
-    def _ensure_sans(self):
-        """Ensure the extra SANs are up-to-date.
+    def _ensure_cert_sans(self):
+        """Ensure the certificate SANs are up-to-date.
 
-        This method checks if the extra SANs are present in the API server certificate.
+        This method checks if the certificate SANs match the required extra SANs.
         If they are not, the certificates are refreshed with the new SANs.
         """
         if not self.is_control_plane:
@@ -1222,18 +1219,20 @@ class K8sCharm(ops.CharmBase):
             log.info("No extra SANs to update")
             return
 
-        dns_sans, ip_addresses = extract_sans_from_cert(get_api_server_cert())
-        ip_addresses = [str(ip) for ip in ip_addresses]
-        all_cert_sans = dns_sans + ip_addresses
+        dns_sans, ip_sans = get_certificate_sans(APISERVER_CERT)
+        ip_sans = [str(ip) for ip in ip_sans]
+        all_cert_sans = dns_sans + ip_sans
 
-        for san in extra_sans:
-            if san not in all_cert_sans:
-                log.info(f"{san} not in cert SANs, refreshing certs with new SANs: {extra_sans}")
-                status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-                self.api_manager.refresh_certs(extra_sans)
-                log.info("Certificates have been refreshed")
+        missing_sans = [san for san in extra_sans if san not in all_cert_sans]
+        if missing_sans:
+            log.info(
+                "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, extra_sans
+            )
+            status.add(ops.MaintenanceStatus("Refreshing Certificates"))
+            self.api_manager.refresh_certs(extra_sans)
+            log.info("Certificates have been refreshed")
 
-        log.info("Extra SANs are up-to-date")
+        log.info("Certificate SANs are up-to-date")
 
 
 if __name__ == "__main__":  # pragma: nocover

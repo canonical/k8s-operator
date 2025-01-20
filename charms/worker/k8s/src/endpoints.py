@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
@@ -61,9 +59,11 @@ def parse_endpoint(ep: str) -> tuple:
     try:
         ipa = ip_address(ip)
         if (ipa.version == 6) != is_ipv6:
-            log.warning(f"IP version mismatch for {ip}, {ipa.version=}, {is_ipv6=}")
+            log.warning(
+                "IP version mismatch for %s, ipa.version=%s, is_ipv6=%s", ip, ipa.version, is_ipv6
+            )
     except Exception as e:  # pylint: disable=broad-exception-caught
-        log.warning(f"failed to validate {ip}: {e}")
+        log.warning("failed to validate %s: %s", ip, e)
 
     return scheme, ip, port, is_ipv6
 
@@ -83,9 +83,11 @@ def build_url(addr: str, new_port: str, new_scheme: str) -> str:
     scheme, ip, port, is_ipv6 = parse_endpoint(addr)
 
     if scheme:
-        log.info(f"replacing already available scheme {scheme} in {addr=} with {new_scheme}")
+        log.info(
+            "replacing already available scheme %s in addr=%s with %s", scheme, addr, new_scheme
+        )
     if port:
-        log.info(f"replacing already available port {port} in {addr=} with {new_port}")
+        log.info("replacing already available port %s in addr=%s with %s", port, addr, new_port)
     if is_ipv6:
         ip = f"[{ip}]"
 

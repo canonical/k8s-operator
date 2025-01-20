@@ -67,7 +67,7 @@ def mock_reconciler_handlers(harness):
             "_ensure_cluster_config",
             "_expose_ports",
             "_announce_kubernetes_version",
-            "_ensure_sans",
+            "_ensure_cert_sans",
         }
 
     mocked = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
@@ -210,11 +210,11 @@ def test_configure_bootstrap_extra_sans(harness):
 
     cfg_extra_sans = ["mykubernetes", "mykubernetes.local"]
     public_addr = "11.12.13.14"
+    harness.add_relation("cluster", "remote", unit_data={"ingress-address": public_addr})
     harness.update_config({"kube-apiserver-extra-sans": " ".join(cfg_extra_sans)})
 
-    with mock.patch("charm._get_juju_public_address") as mock_get_juju_public_addr:
-        mock_get_juju_public_addr.return_value = public_addr
-
+    with mock.patch("charm._get_juju_public_address") as m:
+        m.return_value = public_addr
         bs_config = harness.charm._assemble_bootstrap_config()
 
     # We expect the resulting SANs to include the configured addresses as well

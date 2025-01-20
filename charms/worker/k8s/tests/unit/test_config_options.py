@@ -81,12 +81,16 @@ def test_configure_common_extra_args(harness):
     Args:
         harness: the harness under test
     """
-    harness.disable_hooks()
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
 
+    harness.disable_hooks()
+    harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
     harness.update_config({"kubelet-extra-args": "v=3 foo=bar flag"})
     harness.update_config({"kube-proxy-extra-args": "v=4 foo=baz flog"})
 
-    with mock.patch("charm._get_juju_public_address"):
+    with mock.patch("charm._get_juju_public_address") as m:
+        m.return_value = "1.1.1.1"
         bootstrap_config = harness.charm._assemble_bootstrap_config()
     assert bootstrap_config.extra_node_kubelet_args == {
         "--v": "3",
@@ -110,12 +114,13 @@ def test_configure_controller_extra_args(harness):
         pytest.skip("Not applicable on workers")
 
     harness.disable_hooks()
-
+    harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
     harness.update_config({"kube-apiserver-extra-args": "v=3 foo=bar flag"})
     harness.update_config({"kube-controller-manager-extra-args": "v=4 foo=baz flog"})
     harness.update_config({"kube-scheduler-extra-args": "v=5 foo=bat blog"})
 
-    with mock.patch("charm._get_juju_public_address"):
+    with mock.patch("charm._get_juju_public_address") as m:
+        m.return_value = "1.1.1.1"
         bootstrap_config = harness.charm._assemble_bootstrap_config()
     assert bootstrap_config.extra_node_kube_apiserver_args == {
         "--v": "3",
