@@ -782,7 +782,8 @@ class K8sCharm(ops.CharmBase):
         """Retrieve the Juju model config proxy values.
 
         Returns:
-            Dict: contents for the systemd proxy settings.
+            str: A multi-line string containing the systemd [Service] section configuration
+            with proxy environment variables.
         """
         proxy_env_keys = {
             "JUJU_CHARM_HTTP_PROXY",
