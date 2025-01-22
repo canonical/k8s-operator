@@ -73,6 +73,7 @@ from literals import (
     CONTAINERD_BASE_PATH,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
+    CONTAINERD_SERVICE_NAME,
     COS_RELATION,
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
@@ -276,16 +277,22 @@ class K8sCharm(ops.CharmBase):
         """Apply the proxy settings from environment variables."""
         proxy_settings = self._get_proxy_systemd_config()
         if proxy_settings:
-            log.info("Applying Proxied Environment Settings")
             CONTAINERD_HTTP_PROXY.parent.mkdir(parents=True, exist_ok=True)
-            if (
+            existing = (
                 CONTAINERD_HTTP_PROXY.exists()
-                and CONTAINERD_HTTP_PROXY.read_text(encoding="utf-8") != proxy_settings
-            ):
+                and CONTAINERD_HTTP_PROXY.read_text(encoding="utf-8")
+                or ""
+            )
+            if existing != proxy_settings:
+                log.info("Applying Proxied Environment Settings")
                 CONTAINERD_HTTP_PROXY.write_text(proxy_settings, encoding="utf-8")
                 # Reload the containerd service to apply the new settings
                 systemd.daemon_reload()
-                systemd.service_restart("snap.k8s.containerd")
+                systemd.service_restart(CONTAINERD_SERVICE_NAME)
+            else:
+                log.info("No changes to proxy settings, skipping reload")
+        else:
+            log.info("No proxy settings to apply")
 
     def _generate_unique_cluster_name(self) -> str:
         """Use a stable input to generate a unique cluster name.
@@ -792,9 +799,9 @@ class K8sCharm(ops.CharmBase):
         }
         proxy_settings = []
         for key in proxy_env_keys:
-            env_key = key.split("JUJU_CHARM_")[-1]
             env_value = os.getenv(key)
             if env_value:
+                env_key = key.split("JUJU_CHARM_")[-1]
                 proxy_settings.append(f"Environment={env_key}={env_value}")
                 proxy_settings.append(f"Environment={env_key.lower()}={env_value}")
         if proxy_settings:
