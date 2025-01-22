@@ -283,11 +283,14 @@ class K8sCharm(ops.CharmBase):
                 and CONTAINERD_HTTP_PROXY.read_text(encoding="utf-8")
                 or ""
             )
-            if existing != proxy_settings:
+            if written := existing != proxy_settings:
                 log.info("Applying Proxied Environment Settings")
                 CONTAINERD_HTTP_PROXY.write_text(proxy_settings, encoding="utf-8")
-                # Reload the containerd service to apply the new settings
                 systemd.daemon_reload()
+
+            if written and systemd.service_running(CONTAINERD_SERVICE_NAME):
+                # Reload the containerd service to apply the new settings
+                log.info("Restarting %s", CONTAINERD_SERVICE_NAME)
                 systemd.service_restart(CONTAINERD_SERVICE_NAME)
             else:
                 log.info("No changes to proxy settings, skipping reload")
