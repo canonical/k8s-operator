@@ -13,6 +13,7 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # Charm
 CONTAINERD_BASE_PATH = Path("/etc/containerd")
+CONTAINERD_HTTP_PROXY = Path("/etc/systemd/system/snap.k8s.containerd.service.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
 HOSTSD_PATH = CONTAINERD_BASE_PATH / "hosts.d/"
 KUBECONFIG = Path.home() / ".kube/config"
