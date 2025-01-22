@@ -17,7 +17,7 @@ CONTROLLER_NAME = "openstack-cloud-controller-manager"
 STORAGE_CLASS_NAME = "csi-cinder-default"
 
 pytestmark = [
-    pytest.mark.bundle(file="test-bundle-openstack.yaml", apps_local=["k8s", "k8s-worker"]),
+    pytest.mark.bundle(file="test-bundle-openstack.yaml", apps_local=["k8s"]),
     pytest.mark.clouds(CLOUD_TYPE),
 ]
 

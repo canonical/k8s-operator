@@ -359,6 +359,7 @@ class Bundle:
         series:          Series for Machines in the bundle
         content:         Loaded content from the path
         applications:    Mapping of applications in the bundle.
+        needs_trust:     True if the bundle needs to be trusted
     """
 
     path: Path
@@ -422,6 +423,19 @@ class Bundle:
             Mapping: application name to application details
         """
         return self.content["applications"]
+
+    @property
+    def needs_trust(self) -> bool:
+        """Check if the bundle needs to be trusted.
+
+        Returns:
+            bool: True if the bundle needs to be trusted
+        """
+        return any(
+            app.get("trust", False)
+            for app in self.content["applications"].values()
+            if isinstance(app, dict)
+        )
 
     async def discover_charm_files(self, ops_test: OpsTest) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
