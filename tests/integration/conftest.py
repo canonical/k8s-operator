@@ -5,11 +5,15 @@
 import contextlib
 import json
 import logging
+import random
 import shlex
+import string
 from pathlib import Path
 from typing import Optional
 
+import juju.controller
 import juju.utils
+import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
@@ -17,11 +21,11 @@ from juju.model import Model
 from juju.tag import untag
 from juju.url import URL
 from kubernetes import config as k8s_config
-from kubernetes.client import Configuration
+from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import Bundle, cloud_type, get_unit_cidrs, is_deployed
+from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs, is_deployed
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -77,6 +81,10 @@ def pytest_configure(config):
         "bundle(file='', series='', apps_local={}, apps_channel={}, apps_resources={}): "
         "specify a YAML bundle file for a test.",
     )
+    config.addinivalue_line(
+        "markers",
+        "clouds(*args): mark tests to run only on specific clouds.",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -95,17 +103,29 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(skip_cos)
 
 
+@pytest.fixture(scope="module")
+def module_name(request) -> str:
+    """Get the module name of the test.
+
+    Args:
+        request: Pytest request object.
+
+    Returns:
+        str: The test module name.
+    """
+    return request.module.__name__
+
+
 async def cloud_proxied(ops_test: OpsTest):
     """Setup a cloud proxy settings if necessary
 
-    Test if ghcr.io is reachable through a proxy, if so,
-    Apply expected proxy config to juju model.
+    If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
 
     Args:
         ops_test (OpsTest): ops_test plugin
     """
     assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
+    controller: juju.controller.Controller = await ops_test.model.get_controller()
     controller_model = await controller.get_model("controller")
     proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
     proxy_configs = yaml.safe_load(proxy_config_file.read_text())
@@ -130,6 +150,15 @@ async def cloud_profile(ops_test: OpsTest):
         lxd.apply_profile("k8s.profile", profile_name)
     elif _type == "ec2" and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
+
+
+@pytest.fixture(autouse=True)
+async def skip_by_cloud_type(request, ops_test):
+    """Skip tests based on cloud type."""
+    if cloud_markers := request.node.get_closest_marker("clouds"):
+        _type, _ = await cloud_type(ops_test)
+        if _type not in cloud_markers.args:
+            pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
 
 
 @contextlib.asynccontextmanager
@@ -183,9 +212,12 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
     with ops_test.model_context(model) as the_model:
         if await is_deployed(the_model, bundle.path):
-            log.info("Using existing model.")
+            log.info("Using existing model=%s.", the_model.uuid)
             yield ops_test.model
             return
+
+    if request.config.option.no_deploy:
+        pytest.skip("Skipping because of --no-deploy")
 
     log.info("Deploying new cluster using %s bundle.", bundle.path)
     if request.config.option.apply_proxy:
@@ -194,6 +226,45 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     await bundle.apply_marking(ops_test, markings)
     async with deploy_model(ops_test, model, bundle) as the_model:
         yield the_model
+
+
+def valid_namespace_name(s: str) -> str:
+    """Creates a valid kubernetes namespace name.
+
+    Args:
+        s: The string to sanitize.
+
+    Returns:
+        A valid namespace name.
+    """
+    valid_chars = set(string.ascii_lowercase + string.digits + "-")
+    sanitized = "".join("-" if char not in valid_chars else char for char in s)
+    sanitized = sanitized.strip("-")
+    return sanitized[-63:]
+
+
+@pytest.fixture()
+@pytest.mark.usefixtures("kubernetes_cluster")
+async def api_client(ops_test: OpsTest, module_name: str):
+    """Create a k8s API client and namespace for the test.
+
+    Args:
+        ops_test: The pytest-operator plugin.
+        module_name: The name of the module.
+    """
+    rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    namespace = valid_namespace_name(f"{module_name}-{rand_str}")
+    kubeconfig_path = await get_kubeconfig(ops_test, module_name)
+    config = type.__call__(Configuration)
+    k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
+    api_client = ApiClient(configuration=config)
+
+    v1 = CoreV1Api(api_client)
+    v1.create_namespace(
+        body=k8s_models.V1Namespace(metadata=k8s_models.V1ObjectMeta(name=namespace))
+    )
+    yield api_client
+    v1.delete_namespace(name=namespace)
 
 
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
