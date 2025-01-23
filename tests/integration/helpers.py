@@ -431,11 +431,7 @@ class Bundle:
         Returns:
             bool: True if the bundle needs to be trusted
         """
-        return any(
-            app.get("trust", False)
-            for app in self.content["applications"].values()
-            if isinstance(app, dict)
-        )
+        return any(app.get("trust", False) for app in self.applications.values())
 
     async def discover_charm_files(self, ops_test: OpsTest) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
