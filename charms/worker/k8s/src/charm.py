@@ -457,7 +457,7 @@ class K8sCharm(ops.CharmBase):
             msg = "No response from Load Balancer"
             status.add(ops.WaitingStatus(msg))
             raise ReconcilerError(msg)
-        elif resp.error:
+        if resp.error:
             msg = f"Load Balancer error: {resp.error}"
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
