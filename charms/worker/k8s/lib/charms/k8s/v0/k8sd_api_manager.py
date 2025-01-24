@@ -608,7 +608,7 @@ class RefreshCertificatesPlanMetadata(BaseModel, allow_population_by_field_name=
         of the CertificateSigningRequests that need to be signed externally (for worker nodes).
     """
 
-    seed: int
+    seed: int = Field(default=None, alias="seconds")
     certificate_signing_requests: Optional[list[str]] = Field(
         default=None, alias="certificate-signing-requests"
     )

@@ -425,7 +425,6 @@ class K8sCharm(ops.CharmBase):
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
         return bootstrap_config
 
-    @on_error(ops.WaitingStatus("Waiting for external load balancer"), ReconcilerError)
     def _configure_external_load_balancer(self):
         """Configure the external load balancer for the application.
 
@@ -449,9 +448,19 @@ class K8sCharm(ops.CharmBase):
         req.port_mapping = {EXTERNAL_LOAD_BALANCER_PORT: APISERVER_PORT}
         req.public = True
         if not req.health_checks:
-            req.add_health_check(protocol=req.protocols.http, port=APISERVER_PORT, path="/livez")
+            req.add_health_check(protocol=req.protocols.https, port=APISERVER_PORT, path="/livez")
         self.external_load_balancer.send_request(req)
         log.info("External load balancer request was sent")
+
+        resp = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
+        if not resp:
+            msg = "No response from Load Balancer"
+            status.add(ops.WaitingStatus(msg))
+            raise ReconcilerError(msg)
+        elif resp.error:
+            msg = f"Load Balancer error: {resp.error}"
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
@@ -1188,14 +1197,8 @@ class K8sCharm(ops.CharmBase):
 
         response = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
 
-        if not response:
-            log.info("Response from external load balancer is not yet available.")
-            return None
-        if response.error:
-            log.error(
-                "Error from external load balancer when trying to get address: %s",
-                response.error,
-            )
+        if not response or response.error:
+            log.info("Response from external load balancer is not yet successful.")
             return None
 
         return response.address
