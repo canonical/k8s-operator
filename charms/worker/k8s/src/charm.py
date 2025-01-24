@@ -187,6 +187,7 @@ class K8sCharm(ops.CharmBase):
         )
         self._upgrade_snap = False
         self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
+        self._external_load_balancer_address = ""
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -396,14 +397,13 @@ class K8sCharm(ops.CharmBase):
         binding = self.model.get_binding(CLUSTER_RELATION)
         addresses = binding and binding.network.ingress_addresses
         if addresses:
+            log.info("Adding ingress addresses to extra SANs")
             extra_sans |= {str(addr) for addr in addresses}
 
         # Add the external load balancer address
-        if self.external_load_balancer.is_available:
-            if external_lb_addr := self._get_external_load_balancer_address():
-                extra_sans.add(external_lb_addr)
-            else:
-                log.warning("Failed to get external load balancer address for extra SANs")
+        if self._external_load_balancer_address:
+            log.info("Adding external load balancer address to extra SANs")
+            extra_sans.add(self._external_load_balancer_address)
 
         return sorted(extra_sans)
 
@@ -425,7 +425,7 @@ class K8sCharm(ops.CharmBase):
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
         return bootstrap_config
 
-    def _configure_external_load_balancer(self):
+    def _configure_external_load_balancer(self) -> None:
         """Configure the external load balancer for the application.
 
         This method checks if the external load balancer is available and then
@@ -454,13 +454,15 @@ class K8sCharm(ops.CharmBase):
 
         resp = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
         if not resp:
-            msg = "No response from Load Balancer"
+            msg = "No response from external load balancer"
             status.add(ops.WaitingStatus(msg))
             raise ReconcilerError(msg)
         if resp.error:
-            msg = f"Load Balancer error: {resp.error}"
+            msg = f"External load balancer error: {resp.error}"
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
+
+        self._external_load_balancer_address = resp.address
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
@@ -1166,7 +1168,7 @@ class K8sCharm(ops.CharmBase):
         except (InvalidResponseError, K8sdConnectionError) as e:
             event.fail(f"Failed to retrieve kubeconfig: {e}")
 
-    def _get_public_address(self) -> Optional[str]:
+    def _get_public_address(self) -> str:
         """Get the most public address either from external load balancer or from juju.
 
         If the external load balancer is available and the unit is a control-plane unit,
@@ -1175,33 +1177,14 @@ class K8sCharm(ops.CharmBase):
         NOTE: Don't ignore the unit's IP in the extra SANs just because there's a load balancer.
 
         Returns:
-            Optional[str]: The public ip address of the unit, or None if the public address
-            is not available.
+            str: The public ip address of the unit.
         """
-        if self.is_control_plane and self.external_load_balancer.is_available:
+        if self._external_load_balancer_address:
             log.info("Using external load balancer address as the public address")
-            return self._get_external_load_balancer_address()
+            return self._external_load_balancer_address
+
         log.info("Using juju public address as the public address")
         return _get_juju_public_address()
-
-    def _get_external_load_balancer_address(self) -> Optional[str]:
-        """Get the external load balancer address.
-
-        Returns:
-            Optional[str]: The external load balancer IP address, or None if it's
-            not available.
-        """
-        if not self.is_control_plane:
-            log.error("External load balancer address is only available for control-plane units")
-            return None
-
-        response = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
-
-        if not response or response.error:
-            log.info("Response from external load balancer is not yet successful.")
-            return None
-
-        return response.address
 
     @on_error(
         ops.WaitingStatus("Ensuring SANs are up-to-date"),
