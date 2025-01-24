@@ -608,6 +608,8 @@ class RefreshCertificatesPlanMetadata(BaseModel, allow_population_by_field_name=
         of the CertificateSigningRequests that need to be signed externally (for worker nodes).
     """
 
+    # NOTE(Hue): Alias is because of a naming mismatch:
+    # https://github.com/canonical/k8s-snap-api/blob/6d4139295b37800fb2b3fcce9fc260e6caf284b9/api/v1/rpc_refresh_certificates_plan.go#L12
     seed: Optional[int] = Field(default=None, alias="seconds")
     certificate_signing_requests: Optional[list[str]] = Field(
         default=None, alias="certificate-signing-requests"
