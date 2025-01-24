@@ -148,7 +148,7 @@ async def cloud_profile(ops_test: OpsTest):
         profile_name = f"juju-{ops_test.model.name}"
         lxd.remove_profile(profile_name)
         lxd.apply_profile("k8s.profile", profile_name)
-    elif _type == "ec2" and ops_test.model:
+    elif _type in ("ec2", "openstack") and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
@@ -192,7 +192,7 @@ async def deploy_model(
         await cloud_profile(ops_test)
         async with ops_test.fast_forward("60s"):
             bundle_yaml = bundle.render(ops_test.tmp_path)
-            await the_model.deploy(bundle_yaml)
+            await the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
                 status="active",
@@ -244,11 +244,13 @@ def valid_namespace_name(s: str) -> str:
 
 
 @pytest.fixture()
-@pytest.mark.usefixtures("kubernetes_cluster")
-async def api_client(ops_test: OpsTest, module_name: str):
+async def api_client(
+    kubernetes_cluster, ops_test: OpsTest, module_name: str  # pylint: disable=unused-argument
+):
     """Create a k8s API client and namespace for the test.
 
     Args:
+        kubernetes_cluster: The k8s model.
         ops_test: The pytest-operator plugin.
         module_name: The name of the module.
     """
