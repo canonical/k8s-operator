@@ -77,7 +77,7 @@ config:
         Kubernetes cluster. For more information, see the upstream Canonical
         Kubernetes documentation about annotations:
 
-        https://documentation.ubuntu.com/canonical-kubernetes/latest/snap/reference/annotations/
+        https://documentation.ubuntu.com/canonical-kubernetes/latest/src/snap/reference/annotations/
 
         Example:
           e.g.: key1=value1 key2=value2
