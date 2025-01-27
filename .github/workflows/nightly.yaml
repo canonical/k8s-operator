@@ -1,0 +1,25 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs every midnight
+  pull_request:
+    paths:
+      - .github/workflows/nightly.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests-terraform:
+    runs-on: self-hosted-linux-amd64-jammy-large
+    steps:
+    - name: Checking out repo
+      uses: actions/checkout@v4
+    - name: Terraform setup
+      run: |
+        echo "Setting up the cluster with Terraform"
+        ${{ github.workspace }}/tests/integration/data/setup_with_terraform.sh
+    - name: Run integration tests
+      run: |
+        tox -e integration -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy
