@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   integration-tests-terraform:
-    runs-on: self-hosted-linux-amd64-jammy-large
+    runs-on: self-hosted-linux-amd64-noble-large
     steps:
     - name: Checking out repo
       uses: actions/checkout@v4
