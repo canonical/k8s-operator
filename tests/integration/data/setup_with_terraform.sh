@@ -60,7 +60,7 @@ get_installed_version() {
 INSTALLED_VERSION=$(get_installed_version)
 if [[ -z "$INSTALLED_VERSION" ]]; then
   echo "Terraform is not installed. Installing version $EXPECTED_VERSION..."
-  sudo snap install terraform --channel="$EXPECTED_VERSION"
+  sudo snap install terraform --channel="$EXPECTED_VERSION" --classic
 elif [[ "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]]; then
   echo "Error: Installed Terraform version ($INSTALLED_VERSION) does not match the expected version ($EXPECTED_VERSION)."
   exit 1
