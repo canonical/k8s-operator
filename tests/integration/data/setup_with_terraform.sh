@@ -89,10 +89,10 @@ ensure_model_exists() {
   # Check if the current Juju controller is using LXD/localhost
   CONTROLLER_CLOUD=$(juju show-controller | yq -r ".$CONTROLLER.details.cloud")
   if [[ "$CONTROLLER_CLOUD" == "localhost" || "$CONTROLLER_CLOUD" == "lxd" ]]; then
-    echo "Current Juju controller is using LXD/localhost. Applying '../k8s.profile' to the model..."
-    lxc profile edit juju-"$MODEL_NAME" < "$TERRAFORM_DIR"/../k8s.profile
+    echo "Current Juju controller is using LXD/localhost. Applying 'k8s.profile' to the model..."
+    lxc profile edit juju-"$MODEL_NAME" < "$TERRAFORM_DIR"/k8s.profile
   else
-    echo "Current Juju controller is not LXD/localhost. Skipping '../k8s.profile' application."
+    echo "Current Juju controller is not LXD/localhost. Skipping 'k8s.profile' application."
   fi
 }
 
