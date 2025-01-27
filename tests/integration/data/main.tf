@@ -26,5 +26,5 @@ module "k8s" {
   source        = "git::https://github.com/asbalderson/k8s-bundles//terraform?ref=terraform-bundle-basic"
   model         = var.model_name
   # TODO: This should be set to the path of the manifest file
-  manifest_yaml = "/k8s-operator/tests/integration/data/terraform/default-manifest.yaml"
+  manifest_yaml = var.manifest_path
 }
