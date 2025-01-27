@@ -13,7 +13,7 @@ provider "juju" {}
 variable "manifest_path" {
   description = "Path to the manifest YAML file"
   type        = string
-  default     = "./default-manifest.yaml"
+  default     = "default-manifest.yaml"
 }
 
 variable "model_name" {
