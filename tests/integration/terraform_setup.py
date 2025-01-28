@@ -35,7 +35,7 @@ import subprocess
 import sys
 
 
-def run_command(command, capture_output=False):
+def run_command(command, capture_output=False, fail_on_error=True):
     """Run a shell command."""
     try:
         result = subprocess.run(
@@ -43,8 +43,9 @@ def run_command(command, capture_output=False):
         )
         return result.stdout.strip() if capture_output else None
     except subprocess.CalledProcessError as e:
-        print(f"Error running command: {command}\n{e}")
-        sys.exit(1)
+        if fail_on_error:
+            print(f"Error running command: {command}\n{e}")
+            sys.exit(1)
 
 
 def ensure_terraform(expected_version):
@@ -104,8 +105,9 @@ def setup_juju_provider_authentication():
 
 
 def ensure_model_exists(model_name, terraform_dir):
-    """Ensure the specified Juju model exists."""
-    if run_command(f"juju models | grep -q {model_name}", capture_output=True):
+    """Ensure the specified Juju model exists. If not, create it and configure required LXD profile."""
+    # Grep returns 1 if no match is found, so we use `fail_on_error=False` to suppress the error
+    if run_command(f"juju models | grep -q {model_name}", capture_output=True, fail_on_error=False):
         print(f"Juju model '{model_name}' already exists.")
     else:
         print(f"Juju model '{model_name}' does not exist. Creating it...")
