@@ -1,9 +1,12 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 terraform {
   required_version = ">= 1.6"
   required_providers {
     juju = {
       source  = "juju/juju"
-      version = "~> 0.14.0"
+      version = "~> 0.16.0"
     }
   }
 }
@@ -25,6 +28,5 @@ variable "model_name" {
 module "k8s" {
   source        = "git::https://github.com/asbalderson/k8s-bundles//terraform?ref=terraform-bundle-basic"
   model         = var.model_name
-  # TODO: This should be set to the path of the manifest file
   manifest_yaml = var.manifest_path
 }

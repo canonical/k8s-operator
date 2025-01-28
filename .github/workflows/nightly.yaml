@@ -25,9 +25,7 @@ jobs:
     - name: Terraform setup
       run: |
         echo "Setting up the cluster with Terraform"
-        ${{ github.workspace }}/tests/integration/data/setup_with_terraform.sh
+        ./${{ github.workspace }}/tests/integration/terraform_setup.py
     - name: Run integration tests
       run: |
         tox -e integration -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy
-    - name: Setup tmate session
-      uses: canonical/action-tmate@main
