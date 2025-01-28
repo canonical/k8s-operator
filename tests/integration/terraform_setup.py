@@ -75,7 +75,7 @@ def setup_juju_provider_authentication():
     os.environ["CONTROLLER"] = controller or ""
     os.environ["JUJU_CONTROLLER_ADDRESSES"] = (
         run_command(
-            f"juju show-controller | yq {controller}.details.api-endpoints | yq -r '. | join(\",\")'",
+            f"juju show-controller | yq .{controller}.details.api-endpoints | yq -r '. | join(\",\")'",
             capture_output=True,
         )
         or ""
