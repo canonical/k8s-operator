@@ -29,3 +29,5 @@ jobs:
     - name: Run integration tests
       run: |
         tox -e integration -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy
+    - name: Setup tmate session
+      uses: canonical/action-tmate@main
