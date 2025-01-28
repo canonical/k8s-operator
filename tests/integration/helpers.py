@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 import juju.application
 import juju.model
 import juju.unit
+import juju.utils
 import yaml
 from juju.url import URL
 from pytest_operator.plugin import OpsTest
@@ -436,21 +437,6 @@ class Bundle:
         """
         return any(app.get("trust", False) for app in self.applications.values())
 
-    def get_base_by_series(self) -> str:
-        """Get the base release for the series.
-
-        Returns:
-            str: base release for the series
-        """
-        if not self.series:
-            return "22.04"
-
-        return {
-            "focal": "20.04",
-            "jammy": "22.04",
-            "noble": "24.04",
-        }.get(self.series, "22.04")
-
     async def discover_charm_files(self, ops_test: OpsTest) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
 
@@ -463,7 +449,9 @@ class Bundle:
         app_to_charm = {}
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
-                await charm.resolve(ops_test, self.arch, self.get_base_by_series())
+                await charm.resolve(
+                    ops_test, self.arch, juju.utils.get_series_version(self.series)
+                )
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
