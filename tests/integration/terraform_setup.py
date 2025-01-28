@@ -142,7 +142,7 @@ def main():
     )
     parser.add_argument(
         "--manifest-path",
-        default=script_dir / "default-manifest.yaml",
+        default=script_dir / "data" / "default-manifest.yaml",
         help="Path to the manifest YAML file.",
     )
     parser.add_argument("--model-name", default="my-canonical-k8s", help="Name of the Juju model.")
