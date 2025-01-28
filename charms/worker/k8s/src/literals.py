@@ -43,6 +43,20 @@ ETCD_RELATION = "etcd"
 UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
+# Certificates
+SUPPORTED_CERTIFICATES = ["external", "self-signed"]
+
+WORKER_CERTIFICATES = ["kubelet", "kubelet-client", "proxy"]
+CONTROL_PLANE_CERTIFICATES = [
+    "apiserver",
+    "front-proxy-client",
+    "admin",
+    "controller",
+    "scheduler",
+] + WORKER_CERTIFICATES
+LEADER_CONTROL_PLANE_CERTIFICATES = ["apiserver-kubelet-client"] + CONTROL_PLANE_CERTIFICATES
+
+
 # Kubernetes services
 K8S_COMMON_SERVICES = [
     "kubelet",

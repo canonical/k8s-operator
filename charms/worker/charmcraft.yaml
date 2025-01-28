@@ -64,6 +64,12 @@ platforms:
 
 config:
   options:
+    bootstrap-certificates:
+      type: string
+      default: "self-signed"
+      description: |
+        The type of certificates to use in Canonical Kubernetes. This cannot be
+        changed after deployment. Allowed values are "self-signed" and "external".
     bootstrap-node-taints:
       type: string
       default: ""
@@ -165,6 +171,8 @@ requires:
     interface: aws-integration
   azure:
     interface: azure-integration
+  certificates:
+    interface: tls-certificates
   cluster:
     interface: k8s-cluster
     # interface to connect with the k8s charm to provide

@@ -4,6 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 """Unit tests containerd module."""
+
 from os import getgid, getuid
 from unittest import mock
 
@@ -62,14 +63,14 @@ def test_registry_parse_all_fields():
     "registry_errors",
     [
         ("{", "not valid JSON"),
-        ("{}", "value is not a valid list"),
-        ("[1]", "value is not a valid dict"),
-        ("[{}]", "url\n  field required"),
-        ('[{"url": 1}]', "invalid or missing URL scheme"),
-        ('[{"url": "not-a-url"}]', "invalid or missing URL scheme"),
+        ("{}", "Input should be a valid list"),
+        ("[1]", "Input should be a valid dictionary"),
+        ("[{}]", "url\n  Field required"),
+        ('[{"url": 1}]', "Input should be a valid string"),
+        ('[{"url": "not-a-url"}]', "Input should be a valid URL"),
         (
             '[{"url": "http://ghcr.io", "why-am-i-here": "abc"}]',
-            "extra fields not permitted",
+            "Extra inputs are not permitted",
         ),
         (
             '[{"url": "http://ghcr.io"}, {"url": "http://ghcr.io"}]',

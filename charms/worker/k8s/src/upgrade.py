@@ -26,7 +26,10 @@ from literals import (
     UPGRADE_RELATION,
 )
 from protocols import K8sCharmProtocol
-from pydantic import BaseModel
+
+# TODO: (mateoflorido) We are using the compatibility layer for pydantic.v1
+#  because the upgrade model does not support pydantic v2 yet.
+from pydantic.v1 import BaseModel
 from snap import management as snap_management
 from snap import start, stop
 from snap import version as snap_version

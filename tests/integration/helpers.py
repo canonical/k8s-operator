@@ -107,11 +107,9 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
     action = await k8s.run(cmd)
     result = await action.wait()
     stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
-    assert result.results["return-code"] == 0, (
-        f"\nFailed to get {resource} with kubectl\n"
-        f"\tstdout: '{stdout}'\n"
-        f"\tstderr: '{stderr}'"
-    )
+    assert (
+        result.results["return-code"] == 0
+    ), f"\nFailed to get {resource} with kubectl\n\tstdout: '{stdout}'\n\tstderr: '{stderr}'"
     log.info("Parsing %s list...", resource)
     resource_obj = json.loads(stdout)
     if "/" in resource:

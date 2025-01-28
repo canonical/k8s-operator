@@ -86,19 +86,13 @@ class TestBootstrapConfigTyping(unittest.TestCase):
     def test_json_representation_drops_unset_fields(self):
         """Test a default BootstrapConfig is empty."""
         config = BootstrapConfig()
-        assert config.json(exclude_none=True, by_alias=True) == "{}"
+        assert config.model_dump_json(exclude_none=True, by_alias=True) == "{}"
 
     def test_json_representation_coerced_from_str(self):
         """Test a field that should be an int, is parsed from a str."""
         config = BootstrapConfig(**{"k8s-dqlite-port": "1"})
         assert config.k8s_dqlite_port == 1
-        assert config.json(exclude_none=True, by_alias=True) == '{"k8s-dqlite-port": 1}'
-
-    def test_json_representation_coerced_from_int(self):
-        """Test a field that should be a str, is parsed from an int."""
-        config = BootstrapConfig(**{"datastore-type": 1})
-        assert config.datastore_type == "1"
-        assert config.json(exclude_none=True, by_alias=True) == '{"datastore-type": "1"}'
+        assert config.model_dump_json(exclude_none=True, by_alias=True) == '{"k8s-dqlite-port":1}'
 
 
 class TestUnixSocketHTTPConnection(unittest.TestCase):

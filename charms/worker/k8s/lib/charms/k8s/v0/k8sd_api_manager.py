@@ -26,6 +26,7 @@ except K8sdAPIManagerError as e:
 Similarly, the module allows for requesting authentication tokens and
 managing K8s components.
 """
+
 import enum
 import json
 import logging
@@ -36,7 +37,15 @@ from http.client import HTTPConnection, HTTPException
 from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_serializer,
+    field_validator,
+)
 
 # The unique Charmhub library identifier, never change it
 LIBID = "6a5f235306864667a50437c08ba7e83f"
@@ -46,7 +55,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +117,7 @@ class BaseRequestModel(BaseModel):
     error_code: int
     error: str = Field(default="")
 
-    @validator("status_code", always=True)
+    @field_validator("status_code", mode="after")
     def check_status_code(cls, v):
         """Validate the status_code field.
 
@@ -125,13 +134,13 @@ class BaseRequestModel(BaseModel):
             raise ValueError(f"Status code must be 200. Received {v}")
         return v
 
-    @validator("error_code", always=True)
-    def check_error_code(cls, v, values) -> int:
+    @field_validator("error_code", mode="after")
+    def check_error_code(cls, v, info: ValidationInfo):
         """Validate the error_code field.
 
         Args:
             v (int): The value of the error_code field to validate.
-            values (dict): The values dictionary.
+            info (ValidationInfo): The validation information.
 
         Returns:
             int: The validated error code if it is 0.
@@ -140,7 +149,7 @@ class BaseRequestModel(BaseModel):
             ValueError: If the error_code is not 0.
         """
         if v != 0:
-            error_message = values.get("error", "Unknown error")
+            error_message = info.data.get("error", "Unknown error")
             raise ValueError(f"Error code must be 0, received {v}. Error message: {error_message}")
         return v
 
@@ -195,15 +204,18 @@ class ClusterMember(BaseModel):
     datastore_role: Optional[str] = Field(default=None, alias="datastore-role")
 
 
-class DNSConfig(BaseModel, allow_population_by_field_name=True):
+class DNSConfig(BaseModel):
     """Configuration for the DNS settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which.
         cluster_domain: The domain name of the cluster.
         service_ip: The IP address of the DNS service within the cluster.
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     enabled: Optional[bool] = Field(default=None)
     cluster_domain: Optional[str] = Field(default=None, alias="cluster-domain")
@@ -211,22 +223,26 @@ class DNSConfig(BaseModel, allow_population_by_field_name=True):
     upstream_nameservers: Optional[List[str]] = Field(default=None, alias="upstream-nameservers")
 
 
-class IngressConfig(BaseModel, allow_population_by_field_name=True):
+class IngressConfig(BaseModel):
     """Configuration for the ingress settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which represents the status of Ingress.
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     enabled: Optional[bool] = Field(default=None)
     enable_proxy_protocol: Optional[bool] = Field(default=None, alias="enable-proxy-protocol")
 
 
-class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
+class LoadBalancerConfig(BaseModel):
     """Configuration for the load balancer settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which represents the status of LoadBalancer.
         cidrs: List of CIDR blocks for the load balancer.
         l2_mode: Optional flag to enable or disable layer 2 mode.
@@ -237,6 +253,8 @@ class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
         bgp_peer_asn: The peer ASN for BGP configuration.
         bgp_peer_port: The port for BGP peering.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     enabled: Optional[bool] = Field(default=None)
     cidrs: Optional[List[str]] = Field(default=None)
@@ -249,15 +267,18 @@ class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
     bgp_peer_port: Optional[int] = Field(default=None, alias="bgp-peer-port")
 
 
-class LocalStorageConfig(BaseModel, allow_population_by_field_name=True):
+class LocalStorageConfig(BaseModel):
     """Configuration for the local storage settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which represents the status of Storage.
         local_path: The local path for storage.
         reclaim_policy: The policy for reclaiming local storage.
         set_default: Optional flag to set this as the default storage option.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     enabled: Optional[bool] = Field(default=None)
     local_path: Optional[str] = Field(default=None, alias="local-path")
@@ -265,40 +286,50 @@ class LocalStorageConfig(BaseModel, allow_population_by_field_name=True):
     set_default: Optional[bool] = Field(default=None, alias="set-default")
 
 
-class NetworkConfig(BaseModel, allow_population_by_field_name=True):
+class NetworkConfig(BaseModel):
     """Configuration for the network settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which represents the status of Network.
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     enabled: Optional[bool] = Field(default=None)
 
 
-class GatewayConfig(BaseModel, allow_population_by_field_name=True):
+class GatewayConfig(BaseModel):
     """Configuration for the gateway settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which represents the status of Gateway.
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     enabled: Optional[bool] = Field(default=None)
 
 
-class MetricsServerConfig(BaseModel, allow_population_by_field_name=True):
+class MetricsServerConfig(BaseModel):
     """Configuration for the metrics server settings of the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         enabled: Optional flag which represents the status of MetricsServer.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     enabled: Optional[bool] = Field(default=None)
 
 
-class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
+class UserFacingClusterConfig(BaseModel):
     """Aggregated configuration model for the user-facing aspects of a cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         network: Network configuration for the cluster.
         dns: DNS configuration for the cluster.
         ingress: Ingress configuration for the cluster.
@@ -309,6 +340,8 @@ class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
         cloud_provider: The cloud provider for the cluster.
         annotations: Dictionary that can be used to store arbitrary metadata configuration.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     network: Optional[NetworkConfig] = Field(default=None)
     dns: Optional[DNSConfig] = Field(default=None)
@@ -321,16 +354,19 @@ class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
     annotations: Optional[Dict[str, str]] = Field(default=None)
 
 
-class UserFacingDatastoreConfig(BaseModel, allow_population_by_field_name=True):
+class UserFacingDatastoreConfig(BaseModel):
     """Aggregated configuration model for the user-facing datastore aspects of a cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         type: Type of the datastore. For runtime updates, this needs to be "external".
         servers: Server addresses of the external datastore.
         ca_crt: CA certificate of the external datastore cluster in PEM format.
         client_crt: client certificate of the external datastore cluster in PEM format.
         client_key: client key of the external datastore cluster in PEM format.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     type: Optional[str] = Field(default=None)
     servers: Optional[List[str]] = Field(default=None)
@@ -351,19 +387,52 @@ class BootstrapConfig(BaseModel):
         secure_port (int): The secure port used for Kubernetes.
         k8s_dqlite_port (int): The port used by Dqlite.
         datastore_type (str): The type of datastore used by the cluster.
-        datastore_servers (List[AnyHttpUrl]): The servers used by the datastore.
+        datastore_servers (List[str]): The servers used by the datastore.
         datastore_ca_cert (str): The CA certificate for the datastore.
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
-        extra_node_kube_apiserver_args ([Dict[str,str]]): key-value service args
-        extra_node_kube_controller_manager_args ([Dict[str,str]]): key-value service args
-        extra_node_kube_scheduler_args ([Dict[str,str]]): key-value service args
-        extra_node_kube_proxy_args ([Dict[str,str]]): key-value service args
-        extra_node_kubelet_args ([Dict[str,str]]): key-value service args
-        extra_node_containerd_args ([Dict[str,str]]): key-value service args
-        extra_node_k8s_dqlite_args ([Dict[str,str]]): key-value service args
-        extra_node_containerd_config ([Dict[str,Any]]): key-value config args
+        ca_cert (str): The CA certificate for Kubernetes services.
+        ca_key (str): The CA key for Kubernetes services.
+        client_ca_cert (str): The client CA certificate for Kubernetes services.
+        client_ca_key (str): The client CA key for Kubernetes services.
+        front_proxy_ca_cert (str): The front proxy CA certificate.
+        front_proxy_ca_key (str): The front proxy CA key.
+        front_proxy_client_cert (str): The front proxy client certificate.
+        front_proxy_client_key (str): The front proxy client key.
+        api_server_kubelet_client_cert (str): The kubelet client certificate for the API server.
+        api_server_kubelet_client_key (str): The kubelet client key for the API server.
+        admin_client_cert (str): The admin client certificate.
+        admin_client_key (str): The admin client key.
+        kube_proxy_client_cert (str): The kube-proxy client certificate.
+        kube_proxy_client_key (str): The kube-proxy client key.
+        kube_scheduler_client_cert (str): The kube-scheduler client certificate.
+        kube_scheduler_client_key (str): The kube-scheduler client key.
+        kube_controller_manager_client_cert (str): The controller manager client certificate.
+        kube_controller_manager_client_key (str): The controller manager client key.
+        service_account_key (str): The service account key.
+        api_server_cert (str): The API server certificate.
+        api_server_key (str): The API server key.
+        kubelet_cert (str): The kubelet certificate.
+        kubelet_key (str): The kubelet key.
+        kubelet_client_cert (str): The kubelet client certificate.
+        kubelet_client_key (str): The kubelet client key.
+        extra_node_config_files (Dict[str, str]): Additional configuration files for nodes.
+        extra_node_kube_apiserver_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_kube_controller_manager_args (Dict[str, Optional[str]]):
+            key-value service args .
+        extra_node_kube_scheduler_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_kube_proxy_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_kubelet_args (Dict[str, Optional[str]]): key-value service
+            args .
+        extra_node_containerd_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): key-value
+            service args
+        extra_node_containerd_config (Dict[str, Any]): key-value config args
         containerd_base_dir (str): The base directory for containerd.
     """
 
@@ -375,30 +444,74 @@ class BootstrapConfig(BaseModel):
     secure_port: Optional[int] = Field(default=None, alias="secure-port")
     k8s_dqlite_port: Optional[int] = Field(default=None, alias="k8s-dqlite-port")
     datastore_type: Optional[str] = Field(default=None, alias="datastore-type")
-    datastore_servers: Optional[List[AnyHttpUrl]] = Field(default=None, alias="datastore-servers")
+    datastore_servers: Optional[List[str]] = Field(default=None, alias="datastore-servers")
     datastore_ca_cert: Optional[str] = Field(default=None, alias="datastore-ca-crt")
     datastore_client_cert: Optional[str] = Field(default=None, alias="datastore-client-crt")
     datastore_client_key: Optional[str] = Field(default=None, alias="datastore-client-key")
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
-    extra_node_kube_apiserver_args: Optional[Dict[str, str]] = Field(
+    # Cluster-wide external certificates
+    ca_cert: Optional[str] = Field(default=None, alias="ca-crt")
+    ca_key: Optional[str] = Field(default=None, alias="ca-key")
+    client_ca_cert: Optional[str] = Field(default=None, alias="client-ca-crt")
+    client_ca_key: Optional[str] = Field(default=None, alias="client-ca-key")
+    front_proxy_ca_cert: Optional[str] = Field(default=None, alias="front-proxy-ca-crt")
+    front_proxy_ca_key: Optional[str] = Field(default=None, alias="front-proxy-ca-key")
+    front_proxy_client_cert: Optional[str] = Field(default=None, alias="front-proxy-client-crt")
+    front_proxy_client_key: Optional[str] = Field(default=None, alias="front-proxy-client-key")
+    api_server_kubelet_client_cert: Optional[str] = Field(
+        default=None, alias="apiserver-kubelet-client-crt"
+    )
+    api_server_kubelet_client_key: Optional[str] = Field(
+        default=None, alias="apiserver-kubelet-client-key"
+    )
+    admin_client_cert: Optional[str] = Field(default=None, alias="admin-client-crt")
+    admin_client_key: Optional[str] = Field(default=None, alias="admin-client-key")
+    kube_proxy_client_cert: Optional[str] = Field(default=None, alias="kube-proxy-client-crt")
+    kube_proxy_client_key: Optional[str] = Field(default=None, alias="kube-proxy-client-key")
+    kube_scheduler_client_cert: Optional[str] = Field(
+        default=None, alias="kube-scheduler-client-crt"
+    )
+    kube_scheduler_client_key: Optional[str] = Field(
+        default=None, alias="kube-scheduler-client-key"
+    )
+    kube_controller_manager_client_cert: Optional[str] = Field(
+        default=None, alias="kube-controller-manager-client-crt"
+    )
+    kube_controller_manager_client_key: Optional[str] = Field(
+        default=None, alias="kube-controller-manager-client-key"
+    )
+    service_account_key: Optional[str] = Field(default=None, alias="service-account-key")
+    # Node-specific external certificates
+    api_server_cert: Optional[str] = Field(default=None, alias="apiserver-crt")
+    api_server_key: Optional[str] = Field(default=None, alias="apiserver-key")
+    kubelet_cert: Optional[str] = Field(default=None, alias="kubelet-crt")
+    kubelet_key: Optional[str] = Field(default=None, alias="kubelet-key")
+    kubelet_client_cert: Optional[str] = Field(default=None, alias="kubelet-client-crt")
+    kubelet_client_key: Optional[str] = Field(default=None, alias="kubelet-client-key")
+    # Extra configuration files
+    extra_node_config_files: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-config-files"
+    )
+    # Extra service arguments (values can be None to delete)
+    extra_node_kube_apiserver_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
     )
-    extra_node_kube_controller_manager_args: Optional[Dict[str, str]] = Field(
+    extra_node_kube_controller_manager_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
     )
-    extra_node_kube_scheduler_args: Optional[Dict[str, str]] = Field(
+    extra_node_kube_scheduler_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
     )
-    extra_node_kube_proxy_args: Optional[Dict[str, str]] = Field(
+    extra_node_kube_proxy_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-proxy-args"
     )
-    extra_node_kubelet_args: Optional[Dict[str, str]] = Field(
+    extra_node_kubelet_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kubelet-args"
     )
-    extra_node_containerd_args: Optional[Dict[str, str]] = Field(
+    extra_node_containerd_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-containerd-args"
     )
-    extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
+    extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
@@ -433,12 +546,17 @@ class UpdateClusterConfigRequest(BaseModel):
     datastore: Optional[UserFacingDatastoreConfig] = Field(default=None)
 
 
-class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
+class NodeJoinConfig(BaseModel):
     """Request model for the config on a node joining the cluster.
 
     Attributes:
-        kubelet_crt (str): node's certificate
+        model_config: ConfigDict instance for the model.
+        kubelet_cert (str): node's certificate
         kubelet_key (str): node's certificate key
+        kubelet_client_cert (str): Kubelet client certificate
+        kubelet_client_key (str): Kubelet client key
+        kube_proxy_client_cert (str): Kube-proxy client certificate
+        kube_proxy_client_key (str): Kube-proxy client key
         extra_node_kube_proxy_args (Dict[str, str]): key-value service args
         extra_node_kubelet_args (Dict[str, str]): key-value service args
         extra_node_containerd_args ([Dict[str,str]]): key-value service args
@@ -447,8 +565,14 @@ class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
 
     """
 
-    kubelet_crt: Optional[str] = Field(default=None, alias="kubelet-crt")
+    model_config = ConfigDict(populate_by_name=True)
+
+    kubelet_cert: Optional[str] = Field(default=None, alias="kubelet-crt")
     kubelet_key: Optional[str] = Field(default=None, alias="kubelet-key")
+    kubelet_client_cert: Optional[str] = Field(default=None, alias="kubelet-client-crt")
+    kubelet_client_key: Optional[str] = Field(default=None, alias="kubelet-client-key")
+    kube_proxy_client_cert: Optional[str] = Field(default=None, alias="kube-proxy-client-crt")
+    kube_proxy_client_key: Optional[str] = Field(default=None, alias="kube-proxy-client-key")
     extra_node_kube_proxy_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-kube-proxy-args"
     )
@@ -464,70 +588,114 @@ class NodeJoinConfig(BaseModel, allow_population_by_field_name=True):
     containerd_base_dir: Optional[str] = Field(default=None, alias="containerd-base-dir")
 
 
-class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=True):
+class ControlPlaneNodeJoinConfig(NodeJoinConfig):
     """Request model for the config on a control-plane node joining the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
-        apiserver_crt (str): apiserver certificate
-        apiserver_client_key (str): apiserver certificate key
-        front_proxy_client_crt (str): front-proxy certificate
-        front_proxy_client_key (str): front-proxy certificate key
-        extra_node_kube_apiserver_args (Dict[str, str]): key-value service args
-        extra_node_kube_controller_manager_args (Dict[str, str]): key-value service args
-        extra_node_kube_scheduler_args (Dict[str, str]): key-value service args
-        extra_node_k8s_dqlite_args ([Dict[str,str]]): key-value service args
+        apiserver_crt (str): API server certificate
+        apiserver_key (str): API server certificate key
+        front_proxy_client_crt (str): Front proxy client certificate
+        front_proxy_client_key (str): Front proxy client key
+        admin_client_cert (str): Admin client certificate
+        admin_client_key (str): Admin client key
+        kube_scheduler_client_cert (str): Kube-scheduler client certificate
+        kube_scheduler_client_key (str): Kube-scheduler client key
+        kube_controller_manager_client_cert (str): Controller manager client certificate
+        kube_controller_manager_client_key (str): Controller manager client key
+        extra_node_config_files (Dict[str, str]): Additional node config files
+        extra_node_kube_apiserver_args (Dict[str, Optional[str]]): API server args .
+        extra_node_kube_controller_manager_args (Dict[str, Optional[str]]): Controller manager args
+        extra_node_kube_scheduler_args (Dict[str, Optional[str]]): Scheduler args
+        extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): Dqlite args
+        extra_node_containerd_config (Dict[str, Any]): Containerd config
     """
 
-    extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
+    model_config = ConfigDict(populate_by_name=True)
 
+    extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
     apiserver_crt: Optional[str] = Field(default=None, alias="apiserver-crt")
-    apiserver_client_key: Optional[str] = Field(default=None, alias="apiserver-key")
+    apiserver_key: Optional[str] = Field(default=None, alias="apiserver-key")
     front_proxy_client_crt: Optional[str] = Field(default=None, alias="front-proxy-client-crt")
     front_proxy_client_key: Optional[str] = Field(default=None, alias="front-proxy-client-key")
-    extra_node_kube_apiserver_args: Optional[Dict[str, str]] = Field(
+    admin_client_cert: Optional[str] = Field(default=None, alias="admin-client-crt")
+    admin_client_key: Optional[str] = Field(default=None, alias="admin-client-key")
+    kube_scheduler_client_cert: Optional[str] = Field(
+        default=None, alias="kube-scheduler-client-crt"
+    )
+    kube_scheduler_client_key: Optional[str] = Field(
+        default=None, alias="kube-scheduler-client-key"
+    )
+    kube_controller_manager_client_cert: Optional[str] = Field(
+        default=None, alias="kube-controller-manager-client-crt"
+    )
+    kube_controller_manager_client_key: Optional[str] = Field(
+        default=None, alias="kube-controller-manager-client-key"
+    )
+    extra_node_config_files: Optional[Dict[str, str]] = Field(
+        default=None, alias="extra-node-config-files"
+    )
+    extra_node_kube_apiserver_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
     )
-    extra_node_kube_controller_manager_args: Optional[Dict[str, str]] = Field(
+    extra_node_kube_controller_manager_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
     )
-    extra_node_kube_scheduler_args: Optional[Dict[str, str]] = Field(
+    extra_node_kube_scheduler_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
     )
-    extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
+    extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+        default=None, alias="extra-node-containerd-config"
     )
 
 
-class JoinClusterRequest(BaseModel, allow_population_by_field_name=True):
+class JoinClusterRequest(BaseModel):
     """Request model for a node joining the cluster.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         name (str): node's certificate
         address (str): node's certificate key
         token (str): token
         config (NodeJoinConfig): Node Config
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     address: str
     token: SecretStr
     config: Optional[NodeJoinConfig] = Field(default=None)
 
-    def dict(self, **kwds) -> Dict[Any, Any]:
-        """Render object into a dict.
+    @field_serializer("token")
+    def serialize_token(self, token: SecretStr) -> str:
+        """Serialize the token to a string.
 
-        Arguments:
-            kwds: keyword arguments
+        Args:
+            token (SecretStr): The token to serialize.
 
         Returns:
-            dict mapping of the object
+            str: The serialized token.
         """
-        rendered = super().dict(**kwds)
-        rendered["token"] = self.token.get_secret_value()
-        if self.config:
-            rendered["config"] = yaml.safe_dump(self.config.dict(**kwds))
-        return rendered
+        return token.get_secret_value()
+
+    @field_serializer("config")
+    def serialize_config(self, config: Optional[NodeJoinConfig]) -> Optional[str]:
+        """Serialize the config to a YAML string.
+
+        Args:
+            config (Optional[NodeJoinConfig]): The config to serialize.
+
+        Returns:
+            Optional[str]: The serialized config.
+        """
+        if config is not None:
+            return yaml.safe_dump(config.model_dump(exclude_none=True, mode="json", by_alias=True))
+        return None
 
 
 class DatastoreStatus(BaseModel):
@@ -599,14 +767,17 @@ class GetKubeConfigResponse(BaseRequestModel):
     metadata: KubeConfigMetadata
 
 
-class RefreshCertificatesPlanMetadata(BaseModel, allow_population_by_field_name=True):
+class RefreshCertificatesPlanMetadata(BaseModel):
     """Metadata for the certificates plan response.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         seed (int): The seed for the new certificates.
         certificate_signing_requests (Optional[list[str]]): List of names
         of the CertificateSigningRequests that need to be signed externally (for worker nodes).
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     # NOTE(Hue): Alias is because of a naming mismatch:
     # https://github.com/canonical/k8s-snap-api/blob/6d4139295b37800fb2b3fcce9fc260e6caf284b9/api/v1/rpc_refresh_certificates_plan.go#L12
@@ -626,27 +797,33 @@ class RefreshCertificatesPlanResponse(BaseRequestModel):
     metadata: RefreshCertificatesPlanMetadata
 
 
-class RefreshCertificatesRunRequest(BaseModel, allow_population_by_field_name=True):
+class RefreshCertificatesRunRequest(BaseModel):
     """Request model for running the refresh certificates run.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         seed (int): The seed for the new certificates from plan response.
         expiration_seconds (int): The duration of the new certificates.
         extra_sans (list[str]): List of extra sans for the new certificates.
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     seed: int
     expiration_seconds: int = Field(alias="expiration-seconds")
-    extra_sans: Optional[list[str]] = Field(alias="extra-sans")
+    extra_sans: Optional[list[str]] = Field(None, alias="extra-sans")
 
 
-class RefreshCertificatesRunMetadata(BaseModel, allow_population_by_field_name=True):
+class RefreshCertificatesRunMetadata(BaseModel):
     """Metadata for RefreshCertificatesRunResponse.
 
     Attributes:
+        model_config: ConfigDict instance for the model.
         expiration_seconds (int): The duration of the new certificates
         (might not match the requested value).
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     expiration_seconds: int = Field(alias="expiration-seconds")
 
@@ -819,11 +996,11 @@ class K8sdAPIManager:
         except ValueError as e:
             raise InvalidResponseError(
                 response.status,
-                f"Request failed:\n" f"\tmethod={method}\n" f"\tendpoint={endpoint}",
+                f"Request failed:\n\tmethod={method}\n\tendpoint={endpoint}",
             ) from e
         except (socket.error, HTTPException) as e:
             raise K8sdConnectionError(
-                f"HTTP or Socket error" f"\tmethod={method}\n" f"\tendpoint={endpoint}"
+                f"HTTP or Socket error\tmethod={method}\n\tendpoint={endpoint}"
             ) from e
 
     def create_join_token(self, name: str, worker: bool = False) -> SecretStr:
@@ -851,7 +1028,9 @@ class K8sdAPIManager:
             config: JoinClusterRequest: config to join the cluster
         """
         endpoint = "/1.0/k8sd/cluster/join"
-        request = config.dict(exclude_none=True, by_alias=True)
+        request = config.model_dump(
+            exclude_none=True, by_alias=True, mode="json", exclude_unset=True
+        )
         self._send_request(endpoint, "POST", EmptyResponse, request)
 
     def remove_node(self, name: str, force: bool = True):
@@ -872,7 +1051,7 @@ class K8sdAPIManager:
             config (UpdateClusterConfigRequest): The cluster configuration.
         """
         endpoint = "/1.0/k8sd/cluster/config"
-        body = config.dict(exclude_none=True, by_alias=True)
+        body = config.model_dump(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:
