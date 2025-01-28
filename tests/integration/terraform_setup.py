@@ -104,7 +104,7 @@ def setup_juju_provider_authentication():
     )
 
 
-def ensure_model_exists(model_name, terraform_dir):
+def ensure_model_exists(model_name, lxd_profile_path):
     """Ensure the specified Juju model exists. If not, create it and configure required LXD profile."""
     # Grep returns 1 if no match is found, so we use `fail_on_error=False` to suppress the error
     if run_command(f"juju models | grep -q {model_name}", capture_output=True, fail_on_error=False):
@@ -120,7 +120,7 @@ def ensure_model_exists(model_name, terraform_dir):
         print(
             f"Current Juju controller is using LXD/localhost. Applying 'k8s.profile' to the model..."
         )
-        run_command(f"lxc profile edit juju-{model_name} < {terraform_dir}/k8s.profile")
+        run_command(f"lxc profile edit juju-{model_name} < {lxd_profile_path}")
     else:
         print("Current Juju controller is not LXD/localhost. Skipping 'k8s.profile' application.")
 
