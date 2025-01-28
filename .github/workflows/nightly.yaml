@@ -19,7 +19,6 @@ jobs:
       with:
         provider: lxd
         channel: latest/stable
-        # TODO: COntinue with setting juju channel and deploy juju in CI
         juju-channel: 3.6/stable
     - name: Checking out repo
       uses: actions/checkout@v4
