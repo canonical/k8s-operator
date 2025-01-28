@@ -127,7 +127,7 @@ def main():
     script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
 
     parser = argparse.ArgumentParser(description="Terraform and Juju setup script.")
-    parser.add_argument("--version", default="latest/stable", help="Expected Terraform version.")
+    parser.add_argument("--terraform-version", default="latest/stable", help="Expected Terraform version.")
     parser.add_argument(
         "--terraform-module-path",
         default=script_dir / "data",
@@ -148,33 +148,33 @@ def main():
     args = parser.parse_args()
 
     # Install or validate Terraform
-    ensure_terraform(args.version)
+    ensure_terraform(args.terraform_version)
 
     # Set up Juju provider authentication
     setup_juju_provider_authentication()
 
     # Ensure the Juju model exists
-    ensure_model_exists(args.model_name, args.path)
+    ensure_model_exists(args.model_name, args.lxd_profile_path)
 
     # Change to the Terraform module directory
-    os.chdir(args.path)
+    os.chdir(args.terraform_module_path)
 
     # Run Terraform commands
     print("Running 'terraform init'")
     run_command("terraform init")
 
     print(
-        f"Running 'terraform plan' with manifest: {args.manifest} and model: {args.model_name}..."
+        f"Running 'terraform plan' with manifest: {args.manifest_path} and model: {args.model_name}..."
     )
     run_command(
-        f"terraform plan -var='manifest_path={args.manifest}' -var='model_name={args.model_name}'"
+        f"terraform plan -var='manifest_path={args.manifest_path}' -var='model_name={args.model_name}'"
     )
 
     print(
-        f"Running 'terraform apply' with manifest: {args.manifest} and model: {args.model_name}..."
+        f"Running 'terraform apply' with manifest: {args.manifest_path} and model: {args.model_name}..."
     )
     run_command(
-        f"terraform apply -var='manifest_path={args.manifest}' -var='model_name={args.model_name}' -auto-approve"
+        f"terraform apply -var='manifest_path={args.manifest_path}' -var='model_name={args.model_name}' -auto-approve"
     )
 
 
