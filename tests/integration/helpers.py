@@ -450,7 +450,7 @@ class Bundle:
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
                 await charm.resolve(
-                    ops_test, self.arch, juju.utils.get_series_version(self.series)
+                    ops_test, self.arch, juju.utils.get_series_version(self.series or "jammy")
                 )
                 app_to_charm[charm.name] = charm
         return app_to_charm
