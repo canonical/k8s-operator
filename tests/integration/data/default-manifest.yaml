@@ -1,3 +1,6 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 k8s:
     units: 3
     base: ubuntu@24.04
