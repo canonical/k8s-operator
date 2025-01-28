@@ -313,12 +313,13 @@ class Charm:
             return cls(charmcraft, url)
         return None
 
-    async def resolve(self, ops_test: OpsTest, arch: str) -> "Charm":
+    async def resolve(self, ops_test: OpsTest, arch: str, base: str) -> "Charm":
         """Build or find the charm with ops_test.
 
         Args:
             ops_test:   Instance of the pytest-operator plugin
             arch (str): Cloud architecture
+            base (str): Base release for the charm
 
         Return:
             self (Charm): the resolved charm
@@ -336,7 +337,7 @@ class Charm:
                     Path().glob(charm_name),  # Look in top-level path
                     self.path.glob(charm_name),  # Look in charm-level path
                 )
-                arch_choices = filter(lambda s: arch in str(s), potentials)
+                arch_choices = filter(lambda s: arch in str(s) and base in str(s), potentials)
                 self._charmfile, *_ = filter(lambda s: s.name.startswith(prefix), arch_choices)
                 log.info("For %s found charmfile %s", self.name, self._charmfile)
             except ValueError:
@@ -433,6 +434,21 @@ class Bundle:
         """
         return any(app.get("trust", False) for app in self.applications.values())
 
+    def get_base_by_series(self) -> str:
+        """Get the base release for the series.
+
+        Returns:
+            str: base release for the series
+        """
+        if not self.series:
+            return "22.04"
+
+        return {
+            "focal": "20.04",
+            "jammy": "22.04",
+            "noble": "24.04",
+        }.get(self.series, "22.04")
+
     async def discover_charm_files(self, ops_test: OpsTest) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
 
@@ -445,7 +461,7 @@ class Bundle:
         app_to_charm = {}
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
-                await charm.resolve(ops_test, self.arch)
+                await charm.resolve(ops_test, self.arch, self.get_base_by_series())
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
