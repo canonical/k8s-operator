@@ -27,7 +27,7 @@ jobs:
         echo "Setting up the cluster with Terraform"
         python3 ${{ github.workspace }}/tests/integration/terraform_setup.py
     - name: Setup tmate session
-      if: faiure()
+      if: failure()
       uses: canonical/action-tmate@main
     - name: Run integration tests
       run: |
