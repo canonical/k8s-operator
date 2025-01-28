@@ -25,7 +25,7 @@ jobs:
     - name: Terraform setup
       run: |
         echo "Setting up the cluster with Terraform"
-        ls ${{ ghub.workspace }}/tests/integration/
+        ls ${{ github.workspace }}/tests/integration/
         ./${{ github.workspace }}/tests/integration/terraform_setup.py
     - name: Run integration tests
       run: |
