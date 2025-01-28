@@ -8,7 +8,7 @@
 #
 # Inputs:
 #   - `--version`: Expected Terraform version (default: latest/stable)
-#   - `--path`: Path to the Terraform module (default: ./)
+#   - `--path`: Path to the Terraform module (default: absolute path to the script directory)
 #   - `--manifest`: Path to the manifest YAML file (default: ./default_manifest.yaml)
 #   - `--model-name`: Juju model name (default: my-canonical-k8s)
 #
@@ -17,11 +17,10 @@
 
 set -ex
 
-TERRAFORM_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Default values
 EXPECTED_VERSION="latest/stable"
-MODULE_PATH="$TERRAFORM_DIR"
+TERRAFORM_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 MANIFEST_PATH="$TERRAFORM_DIR/default-manifest.yaml"
 MODEL_NAME="my-canonical-k8s"
 
@@ -33,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --path)
-      MODULE_PATH="$2"
+      TERRAFORM_DIR="$2"
       shift 2
       ;;
     --manifest)
@@ -96,6 +95,8 @@ ensure_model_exists() {
     echo "Current Juju controller is not LXD/localhost. Skipping 'k8s.profile' application."
   fi
 }
+
+cd "$TERRAFORM_DIR"
 
 setup_juju_provider_authentication
 ensure_model_exists
