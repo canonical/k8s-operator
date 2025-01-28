@@ -392,7 +392,9 @@ class Bundle:
         arch = await cloud_arch(ops_test)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        bundle = cls(path=path, arch=arch)
+        series = ops_test.request.config.getoption("--series")
+
+        bundle = cls(path=path, arch=arch, series=series)
         assert not all(
             _ in kwargs for _ in ("apps_local", "apps_channel")
         ), "Cannot use both apps_local and apps_channel"
