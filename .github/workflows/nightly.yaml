@@ -26,9 +26,6 @@ jobs:
       run: |
         echo "Setting up the cluster with Terraform"
         python3 ${{ github.workspace }}/tests/integration/terraform_setup.py
-    - name: Setup tmate session
-      if: failure()
-      uses: canonical/action-tmate@main
     - name: Run integration tests
       run: |
         tox -e integration -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy
