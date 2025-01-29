@@ -31,6 +31,7 @@ import json
 import logging
 import socket
 from contextlib import contextmanager
+from datetime import datetime
 from http.client import HTTPConnection, HTTPException
 from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 
@@ -45,7 +46,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 logger = logging.getLogger(__name__)
 
@@ -598,6 +599,68 @@ class GetKubeConfigResponse(BaseRequestModel):
     metadata: KubeConfigMetadata
 
 
+class RefreshCertificatesPlanMetadata(BaseModel, allow_population_by_field_name=True):
+    """Metadata for the certificates plan response.
+
+    Attributes:
+        seed (int): The seed for the new certificates.
+        certificate_signing_requests (Optional[list[str]]): List of names
+        of the CertificateSigningRequests that need to be signed externally (for worker nodes).
+    """
+
+    # NOTE(Hue): Alias is because of a naming mismatch:
+    # https://github.com/canonical/k8s-snap-api/blob/6d4139295b37800fb2b3fcce9fc260e6caf284b9/api/v1/rpc_refresh_certificates_plan.go#L12
+    seed: Optional[int] = Field(default=None, alias="seconds")
+    certificate_signing_requests: Optional[list[str]] = Field(
+        default=None, alias="certificate-signing-requests"
+    )
+
+
+class RefreshCertificatesPlanResponse(BaseRequestModel):
+    """Response model for the refresh certificates plan.
+
+    Attributes:
+        metadata (RefreshCertificatesPlanMetadata): Metadata for the certificates plan response.
+    """
+
+    metadata: RefreshCertificatesPlanMetadata
+
+
+class RefreshCertificatesRunRequest(BaseModel, allow_population_by_field_name=True):
+    """Request model for running the refresh certificates run.
+
+    Attributes:
+        seed (int): The seed for the new certificates from plan response.
+        expiration_seconds (int): The duration of the new certificates.
+        extra_sans (list[str]): List of extra sans for the new certificates.
+    """
+
+    seed: int
+    expiration_seconds: int = Field(alias="expiration-seconds")
+    extra_sans: Optional[list[str]] = Field(alias="extra-sans")
+
+
+class RefreshCertificatesRunMetadata(BaseModel, allow_population_by_field_name=True):
+    """Metadata for RefreshCertificatesRunResponse.
+
+    Attributes:
+        expiration_seconds (int): The duration of the new certificates
+        (might not match the requested value).
+    """
+
+    expiration_seconds: int = Field(alias="expiration-seconds")
+
+
+class RefreshCertificatesRunResponse(BaseRequestModel):
+    """Response model for the refresh certificates run.
+
+    Attributes:
+        metadata (RefreshCertificatesRunMetadata): Metadata for the certificates run response.
+    """
+
+    metadata: RefreshCertificatesRunMetadata
+
+
 T = TypeVar("T", bound=BaseRequestModel)
 
 
@@ -920,3 +983,34 @@ class K8sdAPIManager:
         body = {"server": server or ""}
         response = self._send_request(endpoint, "GET", GetKubeConfigResponse, body)
         return response.metadata.kubeconfig
+
+    def refresh_certs(
+        self, extra_sans: list[str], expiration_seconds: Optional[int] = None
+    ) -> None:
+        """Refresh the certificates for the cluster.
+
+        Args:
+            extra_sans (list[str]): List of extra SANs for the certificates.
+            expiration_seconds (Optional[int]): The duration of the new certificates.
+        """
+        plan_endpoint = "/1.0/k8sd/refresh-certs/plan"
+        plan_resp = self._send_request(plan_endpoint, "POST", RefreshCertificatesPlanResponse, {})
+
+        # NOTE(Hue): Default certificate expiration is set to 20 years:
+        # https://github.com/canonical/k8s-snap/blob/32e35128394c0880bcc4ce87447f4247cc315ba5/src/k8s/pkg/k8sd/app/hooks_bootstrap.go#L331-L338
+        if expiration_seconds is None:
+            now = datetime.now()
+            twenty_years_later = datetime(
+                now.year + 20, now.month, now.day, now.hour, now.minute, now.second
+            )
+            expiration_seconds = int((twenty_years_later - now).total_seconds())
+
+        run_endpoint = "/1.0/k8sd/refresh-certs/run"
+        run_req = RefreshCertificatesRunRequest(  # type: ignore
+            seed=plan_resp.metadata.seed,
+            expiration_seconds=expiration_seconds,
+            extra_sans=extra_sans,
+        )
+
+        body = run_req.dict(exclude_none=True, by_alias=True)
+        self._send_request(run_endpoint, "POST", RefreshCertificatesRunResponse, body)

@@ -13,6 +13,7 @@ output "requires" {
     etcd                    = "etcd"
     external_cloud_provider = "external-cloud-provider"
     gcp                     = "gcp"
+    external_load_balancer  = "external-load-balancer"
   }
 }
 

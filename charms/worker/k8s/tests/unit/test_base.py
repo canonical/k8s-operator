@@ -57,6 +57,7 @@ def mock_reconciler_handlers(harness):
     }
     if harness.charm.is_control_plane:
         handler_names |= {
+            "_configure_external_load_balancer",
             "_bootstrap_k8s_snap",
             "_create_cluster_tokens",
             "_create_cos_tokens",
@@ -66,6 +67,7 @@ def mock_reconciler_handlers(harness):
             "_ensure_cluster_config",
             "_expose_ports",
             "_announce_kubernetes_version",
+            "_ensure_cert_sans",
         }
 
     mocked = [mock.patch(f"charm.K8sCharm.{name}") for name in handler_names]
@@ -197,7 +199,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
     assert uccr_config.datastore.type == "external"
 
 
-def test_configure_boostrap_extra_sans(harness):
+def test_configure_bootstrap_extra_sans(harness):
     """Test configuring kube-apiserver-extra-sans on bootstrap.
 
     Args:
@@ -208,11 +210,11 @@ def test_configure_boostrap_extra_sans(harness):
 
     cfg_extra_sans = ["mykubernetes", "mykubernetes.local"]
     public_addr = "11.12.13.14"
+    harness.add_relation("cluster", "remote", unit_data={"ingress-address": public_addr})
     harness.update_config({"kube-apiserver-extra-sans": " ".join(cfg_extra_sans)})
 
-    with mock.patch("charm._get_public_address") as mock_get_public_addr:
-        mock_get_public_addr.return_value = public_addr
-
+    with mock.patch("charm._get_juju_public_address") as m:
+        m.return_value = public_addr
         bs_config = harness.charm._assemble_bootstrap_config()
 
     # We expect the resulting SANs to include the configured addresses as well

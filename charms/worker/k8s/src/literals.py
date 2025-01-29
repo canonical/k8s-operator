@@ -16,12 +16,18 @@ CONTAINERD_BASE_PATH = Path("/etc/containerd")
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
+PKI_DIR = ETC_KUBERNETES / "pki"
+APISERVER_CERT = PKI_DIR / "apiserver.crt"
 HOSTSD_PATH = CONTAINERD_BASE_PATH / "hosts.d/"
 KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
+EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
+EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
+EXTERNAL_LOAD_BALANCER_PORT = 443
+APISERVER_PORT = 6443
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
@@ -35,6 +41,7 @@ COS_TOKENS_WORKER_RELATION = "cos-worker-tokens"
 COS_RELATION = "cos-agent"
 ETCD_RELATION = "etcd"
 UPGRADE_RELATION = "upgrade"
+EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [
