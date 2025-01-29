@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 
-def run_command(command, capture_output=False, fail_on_error=True) -> str | None:
+def run_command(command: str, capture_output: bool = False, fail_on_error: bool = True) -> Optional[str]:
     """Run a shell command.
 
     Args:
@@ -51,7 +51,7 @@ def run_command(command, capture_output=False, fail_on_error=True) -> str | None
         return None
 
 
-def ensure_terraform(expected_version) -> None:
+def ensure_terraform(expected_version: str) -> None:
     """Ensure Terraform is installed and matches the expected version.
 
     Args:
@@ -75,7 +75,7 @@ def ensure_terraform(expected_version) -> None:
         )
 
 
-def setup_juju_provider_authentication():
+def setup_juju_provider_authentication() -> None:
     """Set up Juju provider authentication.
 
     See https://registry.terraform.io/providers/juju/juju/latest/docs#authentication
@@ -116,7 +116,7 @@ def setup_juju_provider_authentication():
     )
 
 
-def ensure_model_exists(model_name, lxd_profile_path):
+def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str]) -> None:
     """Ensure the specified Juju model exists.
 
     If not, create it and configure LXD profile if required.
