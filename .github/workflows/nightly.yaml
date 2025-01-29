@@ -19,7 +19,7 @@ jobs:
       with:
         provider: lxd
         channel: latest/stable
-        juju-channel: 3.6/stable
+        juju-channel: 3/stable
     - name: Checking out repo
       uses: actions/checkout@v4
     - name: Terraform setup
