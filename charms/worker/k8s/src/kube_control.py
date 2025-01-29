@@ -8,6 +8,8 @@ from base64 import b64decode
 
 import ops
 import yaml
+from charms.contextual_status import BlockedStatus, on_error
+from literals import APISERVER_PORT
 from protocols import K8sCharmProtocol
 
 import charms.contextual_status as status
@@ -45,7 +47,7 @@ def configure(charm: K8sCharmProtocol):
         return
 
     status.add(ops.MaintenanceStatus("Configuring Kube Control"))
-    ca_cert, endpoints = "", [f"https://{binding.network.bind_address}:6443"]
+    ca_cert, endpoints = "", [f"https://{binding.network.bind_address}:{APISERVER_PORT}"]
     if charm._internal_kubeconfig.exists():
         kubeconfig = yaml.safe_load(charm._internal_kubeconfig.read_text())
         cluster = kubeconfig["clusters"][0]["cluster"]
