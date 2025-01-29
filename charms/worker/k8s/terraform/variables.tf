@@ -57,3 +57,13 @@ variable "units" {
   type        = number
   default     = 1
 }
+
+variable "expose" {
+  description = "How to expose the Kubernetes API endpoint"
+  type        = map(string)
+  default     = {
+    cidrs      = "0.0.0.0/32"
+    endpoints  = null
+    spaces     = null
+  }
+}

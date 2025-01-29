@@ -12,6 +12,12 @@ resource "juju_application" "k8s" {
     base     = var.base
   }
 
+  expose {
+    cidrs     = var.expose.cidrs
+    endpoints = var.expose.endpoints
+    spaces    = var.expose.spaces
+  }
+
   config      = var.config
   constraints = var.constraints
   units       = var.units
