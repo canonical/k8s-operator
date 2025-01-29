@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 import juju.application
 import juju.model
 import juju.unit
+import juju.utils
 import yaml
 from juju.url import URL
 from pytest_operator.plugin import OpsTest
@@ -313,12 +314,13 @@ class Charm:
             return cls(charmcraft, url)
         return None
 
-    async def resolve(self, ops_test: OpsTest, arch: str) -> "Charm":
+    async def resolve(self, ops_test: OpsTest, arch: str, base: str) -> "Charm":
         """Build or find the charm with ops_test.
 
         Args:
             ops_test:   Instance of the pytest-operator plugin
             arch (str): Cloud architecture
+            base (str): Base release for the charm
 
         Return:
             self (Charm): the resolved charm
@@ -336,7 +338,7 @@ class Charm:
                     Path().glob(charm_name),  # Look in top-level path
                     self.path.glob(charm_name),  # Look in charm-level path
                 )
-                arch_choices = filter(lambda s: arch in str(s), potentials)
+                arch_choices = filter(lambda s: arch in str(s) and base in str(s), potentials)
                 self._charmfile, *_ = filter(lambda s: s.name.startswith(prefix), arch_choices)
                 log.info("For %s found charmfile %s", self.name, self._charmfile)
             except ValueError:
@@ -391,7 +393,9 @@ class Bundle:
         arch = await cloud_arch(ops_test)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        bundle = cls(path=path, arch=arch)
+        series = ops_test.request.config.getoption("--series")
+
+        bundle = cls(path=path, arch=arch, series=series)
         assert not all(
             _ in kwargs for _ in ("apps_local", "apps_channel")
         ), "Cannot use both apps_local and apps_channel"
@@ -445,7 +449,9 @@ class Bundle:
         app_to_charm = {}
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
-                await charm.resolve(ops_test, self.arch)
+                await charm.resolve(
+                    ops_test, self.arch, juju.utils.get_series_version(self.series or "jammy")
+                )
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
