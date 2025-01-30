@@ -108,7 +108,7 @@ class BaseRequestModel(BaseModel):
     error_code: int
     error: str = Field(default="")
 
-    @validator("status_code", always=True)
+    @validator("status_code", always=True, allow_reuse=True)
     def check_status_code(cls, v):
         """Validate the status_code field.
 
@@ -125,7 +125,7 @@ class BaseRequestModel(BaseModel):
             raise ValueError(f"Status code must be 200. Received {v}")
         return v
 
-    @validator("error_code", always=True)
+    @validator("error_code", always=True, allow_reuse=True)
     def check_error_code(cls, v, values) -> int:
         """Validate the error_code field.
 
@@ -604,14 +604,14 @@ class RefreshCertificatesPlanMetadata(BaseModel, allow_population_by_field_name=
 
     Attributes:
         seed (int): The seed for the new certificates.
-        certificate_signing_requests (Optional[list[str]]): List of names
+        certificate_signing_requests (Optional[List[str]]): List of names
         of the CertificateSigningRequests that need to be signed externally (for worker nodes).
     """
 
     # NOTE(Hue): Alias is because of a naming mismatch:
     # https://github.com/canonical/k8s-snap-api/blob/6d4139295b37800fb2b3fcce9fc260e6caf284b9/api/v1/rpc_refresh_certificates_plan.go#L12
     seed: Optional[int] = Field(default=None, alias="seconds")
-    certificate_signing_requests: Optional[list[str]] = Field(
+    certificate_signing_requests: Optional[List[str]] = Field(
         default=None, alias="certificate-signing-requests"
     )
 
@@ -632,12 +632,12 @@ class RefreshCertificatesRunRequest(BaseModel, allow_population_by_field_name=Tr
     Attributes:
         seed (int): The seed for the new certificates from plan response.
         expiration_seconds (int): The duration of the new certificates.
-        extra_sans (list[str]): List of extra sans for the new certificates.
+        extra_sans (List[str]): List of extra sans for the new certificates.
     """
 
     seed: int
     expiration_seconds: int = Field(alias="expiration-seconds")
-    extra_sans: Optional[list[str]] = Field(alias="extra-sans")
+    extra_sans: Optional[List[str]] = Field(alias="extra-sans")
 
 
 class RefreshCertificatesRunMetadata(BaseModel, allow_population_by_field_name=True):
@@ -985,12 +985,12 @@ class K8sdAPIManager:
         return response.metadata.kubeconfig
 
     def refresh_certs(
-        self, extra_sans: list[str], expiration_seconds: Optional[int] = None
+        self, extra_sans: List[str], expiration_seconds: Optional[int] = None
     ) -> None:
         """Refresh the certificates for the cluster.
 
         Args:
-            extra_sans (list[str]): List of extra SANs for the certificates.
+            extra_sans (List[str]): List of extra SANs for the certificates.
             expiration_seconds (Optional[int]): The duration of the new certificates.
         """
         plan_endpoint = "/1.0/k8sd/refresh-certs/plan"

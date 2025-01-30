@@ -9,12 +9,12 @@ import logging
 import subprocess
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple, List
 
 log = logging.getLogger(__name__)
 
 
-def get_certificate_sans(cert_path: Union[str, Path]) -> tuple[list[str], list[str]]:
+def get_certificate_sans(cert_path: Union[str, Path]) -> Tuple[List[str], List[str]]:
     """Extract the DNS and IP Subject Alternative Names (SANs) from a given certificate file.
 
     This function uses the openssl command to extract the SANs from the certificate file.
