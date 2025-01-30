@@ -16,7 +16,9 @@ from pathlib import Path
 from typing import Optional, Union
 
 
-def run_command(command: str, capture_output: bool = False, fail_on_error: bool = True) -> Optional[str]:
+def run_command(
+    command: str, capture_output: bool = False, fail_on_error: bool = True
+) -> Optional[str]:
     """Run a shell command.
 
     Args:
@@ -87,9 +89,12 @@ def setup_juju_provider_authentication() -> None:
         or ""
     )
     os.environ["JUJU_PASSWORD"] = (
+        run_command(
             f"yq .controllers.{controller}.password < ~/.local/share/juju/accounts.yaml",
             capture_output=True,
-        ) or ""
+        )
+        or ""
+    )
     os.environ["JUJU_CA_CERT"] = (
         run_command(
             f"juju show-controller {controller.strip()}"
@@ -172,7 +177,6 @@ def main():
     # Run Terraform commands
     print("Running 'terraform init'")
     run_command("terraform init")
-
 
     print(
         f"Running 'terraform apply' with manifest: {args.manifest_path} "
