@@ -9,7 +9,7 @@ import logging
 import subprocess
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Union, Tuple, List
+from typing import List, Set, Tuple, Union
 
 log = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ def get_certificate_sans(cert_path: Union[str, Path]) -> Tuple[List[str], List[s
 
     # lines[0] == "X509v3 Subject Alternative Name: "
     all_sans = [san.strip() for san in lines[1].split(",")]
-    dns_sans: set[str] = set()
-    ip_sans: set[str] = set()
+    dns_sans: Set[str] = set()
+    ip_sans: Set[str] = set()
 
     dns_prefix = "DNS:"
     ip_prefix = "IP Address:"
