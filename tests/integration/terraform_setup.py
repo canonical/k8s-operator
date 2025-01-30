@@ -5,20 +5,7 @@
 """
 This script deploys a Kubernetes cluster using the Juju
 Terraform provider and a manifest as input.
-See https://github.com/asbalderson/k8s-bundles/blob/terraform-bundle-basic/terraform/README.md
-
-Command-Line Arguments:
-- `--version`: Specifies the expected version of Terraform to be installed
-  (default: latest/stable).
-- `--path`: The path to the Terraform module directory
-  (default: the script's directory).
-- `--manifest`: Path to the YAML manifest file used by Terraform
-  (default: `default-manifest.yaml` in the script's directory).
-- `--model-name`: The name of the Juju model to operate on
-  (default: `my-canonical-k8s`).
-
-Usage:
-    python3 script.py
+See https://github.com/canonical/k8s-bundles/blob/main/terraform/README.md
 """
 
 import argparse
@@ -26,6 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional, Union
 
 
 def run_command(command: str, capture_output: bool = False, fail_on_error: bool = True) -> Optional[str]:
@@ -99,13 +87,9 @@ def setup_juju_provider_authentication() -> None:
         or ""
     )
     os.environ["JUJU_PASSWORD"] = (
-        run_command(
-            f"cat ~/.local/share/juju/accounts.yaml"
-            f"| yq .controllers.{controller}.password | tr -d '\"'",
+            f"yq .controllers.{controller}.password < ~/.local/share/juju/accounts.yaml",
             capture_output=True,
-        )
-        or ""
-    )
+        ) or ""
     os.environ["JUJU_CA_CERT"] = (
         run_command(
             f"juju show-controller {controller.strip()}"
@@ -189,14 +173,6 @@ def main():
     print("Running 'terraform init'")
     run_command("terraform init")
 
-    print(
-        f"Running 'terraform plan' with manifest: {args.manifest_path} "
-        f"and model: {args.model_name}..."
-    )
-    run_command(
-        f"terraform plan -var='manifest_path={args.manifest_path}' "
-        f"-var='model_name={args.model_name}'"
-    )
 
     print(
         f"Running 'terraform apply' with manifest: {args.manifest_path} "
