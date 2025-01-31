@@ -33,7 +33,7 @@ jobs:
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@81409b668682e5b66e1a714e582d9aac850a32e8
     needs: [charmcraft-channel, extra-args]
     secrets: inherit
     strategy:
@@ -51,7 +51,7 @@ jobs:
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
         ${{needs.extra-args.outputs.args}} -k test_${{ matrix.suite }}
-        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=focal' || '' }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=jammy' || '' }}
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
