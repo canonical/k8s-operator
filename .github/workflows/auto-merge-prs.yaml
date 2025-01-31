@@ -1,0 +1,19 @@
+name: Auto-update K8s charm libraries
+
+on:
+  schedule:
+    - cron: "0 * * * *"  # every hour
+  pull_request:
+    paths:
+      - .github/workflows/auto-merge-prs.yaml
+
+jobs:
+  auto-update-libs:
+    uses: canonical/k8s-workflows/.github/workflows/auto-merge-successful-prs.yaml@266ba16ea137767561d67c4f6a12ffec07ab7003
+    secrets: inherit
+    with:
+      approve-msg: "Approved for merge by 'auto-merge-prs' action"
+      dry-run: ${{ github.event_name != 'schedule' }}  # only merge the action on schedule events
+      bot-authors: "app/renovate"
+      labels: "automerge"
+      min-passing-checks: 5
