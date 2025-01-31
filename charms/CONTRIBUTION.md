@@ -2,7 +2,7 @@
 
 ## Structure of the charms
 
-The `k8s` and `k8s-worker` charms are noticeably tucked into one-another.  
+The `k8s` and `k8s-worker` charms are noticeably tucked into one-another.
 
 ```
 └── worker
@@ -46,12 +46,13 @@ Much of the charm's behavior will be identical. They will employ many of the sam
 ### Why not use a charm library?
 
 Sharing code between a charm library is a really reasonable idea, there are limitations that a charm library presents:
+
 * limited to a single file
 * PRs where the library changes doesn't reflect in the secondary charm
-* updating a second charm isn't immediate 
-    - must upload to charmhub, then download into the secondary charms
+* updating a second charm isn't immediate
+  * must upload to charmhub, then download into the secondary charms
 
-### How to use two charms in the same code base:
+### How to use two charms in the same code base
 
 In cases where the charms should diverge the behavior, use a runtime switch to make the decision
 
