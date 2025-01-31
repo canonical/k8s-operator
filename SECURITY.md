@@ -5,6 +5,7 @@
 To report a security issue, please follow the steps below:
 
 Using GitHub, file a [Private Security Report](https://github.com/canonical/k8s-operator/security/advisories/new) with:
+
 - A description of the issue
 - Steps to reproduce the issue
 - Affected versions of the `k8s-operator` package

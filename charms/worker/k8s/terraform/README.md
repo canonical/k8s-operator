@@ -3,11 +3,13 @@
 This is a Terraform module facilitating the deployment of the k8s charm, using the [Terraform juju provider](https://github.com/juju/terraform-provider-juju/). For more information, refer to the provider [documentation](https://registry.terraform.io/providers/juju/juju/latest/docs).
 
 ## Requirements
+
 This module requires a `juju` model to be available. Refer to the [usage section](#usage) below for more details.
 
 ## API
 
 ### Inputs
+
 The module offers the following configurable inputs:
 
 | Name | Type | Description | Required | Default |
@@ -23,6 +25,7 @@ The module offers the following configurable inputs:
 | `units` | number | Number of units to deploy | False | 1 |
 
 ### Outputs
+
 Upon applied, the module exports the following outputs:
 
 | Name | Description |
@@ -36,6 +39,7 @@ Upon applied, the module exports the following outputs:
 This module is intended to be used as part of a higher-level module. When defining one, users should ensure that Terraform is aware of the `juju_model` dependency of the charm module. There are two options to do so when creating a high-level module:
 
 ### Define a `juju_model` resource
+
 Define a `juju_model` resource and pass to the `model_name` input a reference to the `juju_model` resource's name. For example:
 
 ```
@@ -49,7 +53,9 @@ module "k8s" {
 ```
 
 ### Define a `data` source
+
 Define a `data` source and pass a reference to the `model_name` input to the `data.juju_model` resource's name. Terraform will look for a `juju_model` resource with a matching model name and only apply resources if the names match.
+
 ```
 data "juju_model" "testing" {
   name = var.model_name
