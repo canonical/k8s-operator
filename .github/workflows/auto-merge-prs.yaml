@@ -9,7 +9,7 @@ on:
 
 jobs:
   auto-update-libs:
-    uses: canonical/k8s-workflows/.github/workflows/auto-merge-successful-prs.yaml@266ba16ea137767561d67c4f6a12ffec07ab7003
+    uses: canonical/k8s-workflows/.github/workflows/auto-merge-successful-prs.yaml@b43b74c79552a0c485ddb369639eb2ae97175fa7
     secrets: inherit
     with:
       approve-msg: "Approved for merge by 'auto-merge-prs' action"
@@ -17,3 +17,4 @@ jobs:
       bot-authors: "app/renovate"
       labels: "automerge"
       min-passing-checks: 5
+      workflow-ref: "b43b74c79552a0c485ddb369639eb2ae97175fa7"
