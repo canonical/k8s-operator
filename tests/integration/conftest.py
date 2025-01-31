@@ -32,7 +32,7 @@ TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
 
 
-def pytest_addoption(parser: pytest.Parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Parse additional pytest options.
 
     --charm-file
@@ -69,7 +69,7 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """Add pytest configuration args.
 
     Args:
@@ -87,7 +87,7 @@ def pytest_configure(config):
     )
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Add cos marker parsing.
 
     Called after collection has been performed. May filter or re-order the items in-place.
@@ -104,7 +104,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(scope="module")
-def module_name(request) -> str:
+def module_name(request: pytest.FixtureRequest) -> str:
     """Get the module name of the test.
 
     Args:
@@ -116,7 +116,7 @@ def module_name(request) -> str:
     return request.module.__name__
 
 
-async def cloud_proxied(ops_test: OpsTest):
+async def cloud_proxied(ops_test: OpsTest) -> None:
     """Setup a cloud proxy settings if necessary
 
     If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
@@ -135,7 +135,7 @@ async def cloud_proxied(ops_test: OpsTest):
     await ops_test.model.set_config(proxy_configs)
 
 
-async def cloud_profile(ops_test: OpsTest):
+async def cloud_profile(ops_test: OpsTest) -> None:
     """Apply Cloud Specific Settings to the model
 
     Args:
@@ -149,11 +149,17 @@ async def cloud_profile(ops_test: OpsTest):
         lxd.remove_profile(profile_name)
         lxd.apply_profile("k8s.profile", profile_name)
     elif _type in ("ec2", "openstack") and ops_test.model:
-        await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
+        await ops_test.model.set_config({
+            "container-networking-method": "local",
+            "fan-config": "",
+            "juju-http-proxy": "http://squid.internal:3128",
+            "juju-https-proxy": "http://squid.internal:3128",
+            "juju-no-proxy": "10.0.8.0/24,192.168.0.0/16,127.0.0.1",
+        })
 
 
 @pytest.fixture(autouse=True)
-async def skip_by_cloud_type(request, ops_test):
+async def skip_by_cloud_type(request: pytest.FixtureRequest, ops_test: OpsTest) -> None:
     """Skip tests based on cloud type."""
     if cloud_markers := request.node.get_closest_marker("clouds"):
         _type, _ = await cloud_type(ops_test)
