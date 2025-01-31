@@ -1,0 +1,28 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs every midnight
+  pull_request:
+    paths:
+      - .github/workflows/nightly.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests-terraform:
+    runs-on: self-hosted-linux-amd64-noble-large
+    steps:
+    - name: Setup operator environment
+      uses: charmed-kubernetes/actions-operator@main
+      with:
+        provider: lxd
+        channel: latest/stable
+        juju-channel: 3/stable
+    - name: Checking out repo
+      uses: actions/checkout@v4
+    - name: Run terraform integration tests
+      # TODO(ben): Add remaining integration tests once we have the terraform modules.
+      run: |
+        tox -e run-terraform-e2e-tests -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy
