@@ -12,12 +12,14 @@ import argparse
 import os
 import subprocess
 import sys
+from  juju.controller import Controller
+import asyncio
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 
 def run_command(
-    command: str, capture_output: bool = False, fail_on_error: bool = True
+    command: List[str], capture_output: bool = False, fail_on_error: bool = True
 ) -> Optional[str]:
     """Run a shell command.
 
@@ -31,7 +33,7 @@ def run_command(
     """
     try:
         result = subprocess.run(
-            command, shell=True, check=True, text=True, capture_output=capture_output
+            command, check=True, text=True, capture_output=capture_output
         )
         return result.stdout.strip() if capture_output else None
     except subprocess.CalledProcessError as e:
@@ -40,6 +42,23 @@ def run_command(
             sys.exit(1)
         return None
 
+def get_installed_terraform_channel() -> Optional[str]:
+    """Retrieve the installed Terraform channel from the snap list output."""
+    result = None
+    try:
+        result = subprocess.run(
+            ["snap", "list", "terraform"], check=True, text=True, capture_output=True
+        )
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if parts and parts[0] == "terraform":
+                return parts[3]  # The fourth column contains the channel
+    except subprocess.CalledProcessError:
+        if result:
+            print("Error retrieving Terraform version: {}".format(result.stderr))
+            sys.exit(1)
+
+    return None
 
 def ensure_terraform(expected_version: str) -> None:
     """Ensure Terraform is installed and matches the expected version.
@@ -47,16 +66,14 @@ def ensure_terraform(expected_version: str) -> None:
     Args:
         expected_version: The expected version of Terraform.
     """
-    installed_version = run_command(
-        "snap list terraform | awk '/^terraform/ {print $4}'", capture_output=True
-    )
+    installed_version = get_installed_terraform_channel()
     if not installed_version:
         print(f"Terraform is not installed. Installing version {expected_version}...")
-        run_command(f"sudo snap install terraform --channel={expected_version} --classic")
+        run_command(f"sudo snap install terraform --channel {expected_version} --classic".split())
     elif installed_version != expected_version:
         print(
-            f"Error: Installed Terraform version ({installed_version})"
-            f"does not match the expected version ({expected_version})."
+            f"Error: Installed Terraform channel ({installed_version})"
+            f"does not match the expected channel ({expected_version})."
         )
         sys.exit(1)
     else:
@@ -65,47 +82,29 @@ def ensure_terraform(expected_version: str) -> None:
         )
 
 
-def setup_juju_provider_authentication() -> None:
-    """Set up Juju provider authentication.
+async def setup_juju_auth_details():
+    """Retrieve Juju provider authentication details using the Juju Python library."""
+    controller = Controller()
+    try:
+        await controller.connect()  # Connect to the current controller
+        controller_name = controller.controller_name
 
-    See https://registry.terraform.io/providers/juju/juju/latest/docs#authentication
-    """
-    controller = run_command("juju whoami | yq .Controller", capture_output=True) or ""
-    os.environ["CONTROLLER"] = controller or ""
-    os.environ["JUJU_CONTROLLER_ADDRESSES"] = (
-        run_command(
-            f"juju show-controller | yq .{controller}.details.api-endpoints"
-            "| yq -r '. | join(\",\")'",
-            capture_output=True,
-        )
-        or ""
-    )
-    os.environ["JUJU_USERNAME"] = (
-        run_command(
-            f"cat ~/.local/share/juju/accounts.yaml"
-            f"| yq .controllers.{controller}.user | tr -d '\"'",
-            capture_output=True,
-        )
-        or ""
-    )
-    os.environ["JUJU_PASSWORD"] = (
-        run_command(
-            f"yq .controllers.{controller}.password < ~/.local/share/juju/accounts.yaml",
-            capture_output=True,
-        )
-        or ""
-    )
-    os.environ["JUJU_CA_CERT"] = (
-        run_command(
-            f"juju show-controller {controller.strip()}"
-            f"| yq '.{controller}.details.\"ca-cert\"' | tr -d '\"' | sed 's/\\\\n/\\n/g'",
-            capture_output=True,
-        )
-        or ""
-    )
+        # Fetch controller details
+        controller_info = await controller.get_controller()
+        accounts = controller.accounts[controller_name]
+
+        # Extract relevant details
+        os.environ["CONTROLLER"] = controller_name or ""
+        os.environ["JUJU_CONTROLLER_ADDRESSES"] = ",".join(controller_info.api_endpoints) or ""
+        os.environ["JUJU_USERNAME"] = accounts["user"] or ""
+        os.environ["JUJU_PASSWORD"] = accounts["password"] or ""
+        os.environ["JUJU_CA_CERT"] = controller_info.ca_certificate or ""
+
+    finally:
+        await controller.disconnect()
 
 
-def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str]) -> None:
+async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str]) -> None:
     """Ensure the specified Juju model exists.
 
     If not, create it and configure LXD profile if required.
@@ -114,28 +113,36 @@ def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str]) -> 
         model_name: The name of the Juju model.
         lxd_profile_path: The path to the LXD profile file.
     """
-    # Grep returns 1 if no match is found, so we use `fail_on_error=False` to suppress the error
-    if run_command(
-        f"juju models | grep -q {model_name}", capture_output=True, fail_on_error=False
-    ):
-        print(f"Juju model '{model_name}' already exists.")
-    else:
-        print(f"Juju model '{model_name}' does not exist. Creating it...")
-        run_command(f"juju add-model {model_name} localhost")
+    controller = Controller()
+    try:
+        await controller.connect()
+        model_names = await controller.list_models()
 
-    controller_cloud = run_command(
-        "juju show-controller | yq -r .$CONTROLLER.details.cloud", capture_output=True
-    )
+        if model_name in model_names:
+            print(f"Juju model '{model_name}' already exists.")
+        else:
+            print(f"Juju model '{model_name}' does not exist. Creating it...")
+            await controller.add_model(model_name)
+
+        # Get the controller cloud
+        controller_info = await controller.get_controller()
+        controller_cloud = controller_info.cloud
+        print(f"Controller cloud: {controller_cloud}")
+
+    finally:
+        await controller.disconnect()
     if controller_cloud in ["localhost", "lxd"]:
         print(
             "Current Juju controller is using LXD/localhost. Applying 'k8s.profile' to the model..."
         )
-        run_command(f"lxc profile edit juju-{model_name} < {lxd_profile_path}")
+        subprocess.run(
+            f"lxc profile edit juju-{model_name}".split(), check=True, text=True, capture_output=True, input=Path(lxd_profile_path).read_text()
+        )
     else:
         print("Current Juju controller is not LXD/localhost. Skipping 'k8s.profile' application.")
 
 
-def main():
+async def main():
     """Main entrypoint."""
     script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
 
@@ -166,27 +173,26 @@ def main():
     ensure_terraform(args.terraform_version)
 
     # Set up Juju provider authentication
-    setup_juju_provider_authentication()
+    await setup_juju_auth_details()
 
     # Ensure the Juju model exists
-    ensure_model_exists(args.model_name, args.lxd_profile_path)
+    await ensure_model_exists(args.model_name, args.lxd_profile_path)
 
     # Change to the Terraform module directory
     os.chdir(args.terraform_module_path)
 
     # Run Terraform commands
     print("Running 'terraform init'")
-    run_command("terraform init")
+    run_command(["terraform", "init"])
 
     print(
         f"Running 'terraform apply' with manifest: {args.manifest_path} "
         f"and model: {args.model_name}..."
     )
     run_command(
-        f"terraform apply -var='manifest_path={args.manifest_path}' "
-        f"-var='model_name={args.model_name}' -auto-approve"
+        ["terraform", "apply", "-var", "manifest_path={args.manifest_path}", "-var", "model_name={args.model_name}", "-auto-approve"]
     )
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
