@@ -8,16 +8,19 @@ See https://github.com/canonical/k8s-bundles/blob/main/terraform/README.md
 """
 
 import argparse
+import asyncio
 import os
 import subprocess
 import sys
-import asyncio
-from juju.controller import Controller
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Optional, Union
+
+from juju.controller import Controller
 
 
-def run_command(command: List[str], capture_output: bool = False, fail_on_error: bool = True) -> Optional[str]:
+def run_command(
+    command: List[str], capture_output: bool = False, fail_on_error: bool = True
+) -> Optional[str]:
     """Run a shell command safely.
 
     Args:
@@ -67,12 +70,18 @@ def ensure_terraform(expected_version: str) -> None:
 
     if not installed_version:
         print(f"Terraform is not installed. Installing version {expected_version}...")
-        run_command(["sudo", "snap", "install", "terraform", "--channel", expected_version, "--classic"])
+        run_command(
+            ["sudo", "snap", "install", "terraform", "--channel", expected_version, "--classic"]
+        )
     elif installed_version != expected_version:
-        print(f"Error: Installed Terraform ({installed_version}) does not match expected ({expected_version}).")
+        print(
+            f"Error: Installed Terraform ({installed_version}) does not match expected ({expected_version})."
+        )
         sys.exit(1)
     else:
-        print(f"Terraform is already installed and matches the expected version: {installed_version}.")
+        print(
+            f"Terraform is already installed and matches the expected version: {installed_version}."
+        )
 
 
 async def setup_juju_auth_details() -> None:
@@ -84,13 +93,15 @@ async def setup_juju_auth_details() -> None:
         user = await controller.get_current_user()
 
         # Set environment variables
-        os.environ.update({
-            "CONTROLLER": controller_name or "",
-            "JUJU_CONTROLLER_ADDRESSES": ",".join(controller.api_endpoints) or "",
-            "JUJU_USERNAME": user.username,
-            "JUJU_PASSWORD": user.password,
-            "JUJU_CA_CERT": controller_info.cacert or "",
-        })
+        os.environ.update(
+            {
+                "CONTROLLER": controller_name or "",
+                "JUJU_CONTROLLER_ADDRESSES": ",".join(controller.api_endpoints) or "",
+                "JUJU_USERNAME": user.username,
+                "JUJU_PASSWORD": user.password,
+                "JUJU_CA_CERT": controller_info.cacert or "",
+            }
+        )
 
 
 async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str]) -> None:
@@ -116,11 +127,11 @@ async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str
 
     if controller_cloud in ["localhost", "lxd"]:
         print("Applying 'k8s.profile' to the model...")
-        run_command(
+        subprocess.run(
             ["lxc", "profile", "edit", f"juju-{model_name}"],
+            check=True,
             capture_output=True,
-            fail_on_error=True,
-            input=Path(lxd_profile_path).read_text(),
+            input=Path(lxd_profile_path).read_text("utf-8"),
         )
     else:
         print("Skipping 'k8s.profile' application (not LXD/localhost).")
@@ -131,10 +142,20 @@ async def main() -> None:
     script_dir = Path(__file__).resolve().parent
 
     parser = argparse.ArgumentParser(description="Terraform and Juju setup script.")
-    parser.add_argument("--terraform-version", default="latest/stable", help="Expected Terraform version.")
-    parser.add_argument("--terraform-module-path", default=script_dir / "data", help="Path to Terraform module.")
-    parser.add_argument("--lxd-profile-path", default=script_dir / "data/k8s.profile", help="Path to LXD profile.")
-    parser.add_argument("--manifest-path", default=script_dir / "data/default-manifest.yaml", help="Path to manifest.")
+    parser.add_argument(
+        "--terraform-version", default="latest/stable", help="Expected Terraform version."
+    )
+    parser.add_argument(
+        "--terraform-module-path", default=script_dir / "data", help="Path to Terraform module."
+    )
+    parser.add_argument(
+        "--lxd-profile-path", default=script_dir / "data/k8s.profile", help="Path to LXD profile."
+    )
+    parser.add_argument(
+        "--manifest-path",
+        default=script_dir / "data/default-manifest.yaml",
+        help="Path to manifest.",
+    )
     parser.add_argument("--model-name", default="my-canonical-k8s", help="Juju model name.")
 
     args = parser.parse_args()
@@ -154,13 +175,20 @@ async def main() -> None:
     print("Initializing Terraform...")
     run_command(["terraform", "init"])
 
-    print(f"Applying Terraform with manifest: {args.manifest_path} and model: {args.model_name}...")
-    run_command([
-        "terraform", "apply",
-        "-var", f"manifest_path={args.manifest_path}",
-        "-var", f"model_name={args.model_name}",
-        "-auto-approve",
-    ])
+    print(
+        f"Applying Terraform with manifest: {args.manifest_path} and model: {args.model_name}..."
+    )
+    run_command(
+        [
+            "terraform",
+            "apply",
+            "-var",
+            f"manifest_path={args.manifest_path}",
+            "-var",
+            f"model_name={args.model_name}",
+            "-auto-approve",
+        ]
+    )
 
 
 if __name__ == "__main__":
