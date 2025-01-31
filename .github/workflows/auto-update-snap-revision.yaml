@@ -61,9 +61,15 @@ jobs:
         pip install pyyaml
         python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }}
 
+    - name: Report Pull Request
+      if: ${{ github.event_name != 'schedule' && steps.update-revision.outputs.result != ''}}
+      run: |
+        echo "Would have created pull-request"
+        echo '[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}'
+    
     - name: Create pull request
       uses: peter-evans/create-pull-request@v7
-      if: ${{ steps.update-revision.outputs.result != '' }}
+      if: ${{ github.event_name == 'schedule' && steps.update-revision.outputs.result != '' }}
       with:
         commit-message: '[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}'
         title: "[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision on ${{ matrix.arch }}"
