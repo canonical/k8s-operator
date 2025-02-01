@@ -6,7 +6,7 @@ ops-interface-kube-control @ git+https://github.com/charmed-kubernetes/interface
 ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops
 ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
 ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
-cosl==0.0.51
+cosl==0.0.54
 ops==2.18.0
 pydantic==1.10.21
 PyYAML==6.0.2
