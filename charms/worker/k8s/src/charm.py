@@ -70,7 +70,6 @@ from kube_control import configure as configure_kube_control
 from literals import (
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
-    CONTAINERD_BASE_PATH,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
     CONTAINERD_SERVICE_NAME,
@@ -395,7 +394,6 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
         bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
         bootstrap_config.extra_sans = self._get_extra_sans()
-        bootstrap_config.containerd_base_dir = str(CONTAINERD_BASE_PATH)
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
         return bootstrap_config
