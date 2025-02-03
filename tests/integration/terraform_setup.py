@@ -140,20 +140,19 @@ async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str
             print(f"Juju model '{model_name}' does not exist. Creating it...")
             await controller.add_model(model_name)
 
-        controller_cloud = await controller.cloud()
+        controller_cloud = (await controller.cloud()).cloud.type
         print(f"Controller cloud: {controller_cloud}")
-        print(f"Controller cloud: {controller_cloud}")
-        controller_cloud = controller_cloud["cloud"]
-    if controller_cloud in ["localhost", "lxd"]:
-        print("Applying 'k8s.profile' to the model...")
-        subprocess.run(
-            ["lxc", "profile", "edit", f"juju-{model_name}"],
-            check=True,
-            capture_output=True,
-            input=Path(lxd_profile_path).read_text("utf-8"),
-        )
-    else:
-        print("Skipping 'k8s.profile' application (not LXD/localhost).")
+
+        if controller_cloud in ["localhost", "lxd"]:
+            print("Applying 'k8s.profile' to the model...")
+            subprocess.run(
+                ["lxc", "profile", "edit", f"juju-{model_name}"],
+                check=True,
+                capture_output=True,
+                input=Path(lxd_profile_path).read_text("utf-8"),
+            )
+        else:
+            print("Skipping 'k8s.profile' application (not LXD/localhost).")
 
 
 async def main() -> None:
