@@ -118,7 +118,7 @@ async def setup_juju_auth_details() -> None:
                 "JUJU_CONTROLLER_ADDRESSES": ",".join(endpoints) or "",
                 "JUJU_USERNAME": user.username or "",
                 "JUJU_PASSWORD": password or "",
-                "JUJU_CA_CERT": controller_info.ca_certificate or "",
+                "JUJU_CA_CERT": controller_info.cacert or "",
             }
         )
 
