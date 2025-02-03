@@ -148,7 +148,7 @@ async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str
                 ["lxc", "profile", "edit", f"juju-{model_name}"],
                 check=True,
                 capture_output=True,
-                input=Path(lxd_profile_path).read_text("utf-8"),
+                input=Path(lxd_profile_path).read_bytes(),
             )
         else:
             print("Skipping 'k8s.profile' application (not LXD/localhost).")
