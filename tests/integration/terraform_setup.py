@@ -92,7 +92,7 @@ async def setup_juju_auth_details() -> None:
     async with Controller() as controller:
         await controller.connect_current()
         controller_name = controller.controller_name
-        controller_info = await controller.info()
+        controller_info = (await controller.info()).results[0]
         user = await controller.get_current_user()
         endpoints = await controller.api_endpoints
 
