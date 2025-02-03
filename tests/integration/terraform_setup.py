@@ -92,7 +92,7 @@ async def setup_juju_auth_details() -> None:
     async with Controller() as controller:
         await controller.connect_current()
         controller_name = controller.controller_name
-        controller_info = await controller.info()
+        controller_info = await controller.get_controller()
         user = await controller.get_current_user()
         endpoints = await controller.api_endpoints
 
@@ -116,7 +116,7 @@ async def setup_juju_auth_details() -> None:
                 "JUJU_CONTROLLER_ADDRESSES": ",".join(endpoints) or "",
                 "JUJU_USERNAME": user.username or "",
                 "JUJU_PASSWORD": password or "",
-                "JUJU_CA_CERT": controller_info.cacert or "",
+                "JUJU_CA_CERT": controller_info.ca_certificate or "",
             }
         )
 
