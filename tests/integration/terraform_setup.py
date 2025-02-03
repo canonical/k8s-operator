@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Union
 
+import yaml
 from juju.controller import Controller
 
 
@@ -48,13 +49,15 @@ def get_installed_terraform_channel() -> Optional[str]:
         The installed Terraform channel, or `None` if Terraform is not installed
     """
     try:
-        output = run_command(["snap", "list", "terraform"], capture_output=True, fail_on_error=False)
+        output = run_command(
+            ["snap", "list", "terraform"], capture_output=True, fail_on_error=False
+        )
         if output:
             for line in output.splitlines():
                 parts = line.split()
                 if parts and parts[0] == "terraform":
                     return parts[3]  # Fourth column contains the channel
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
         print(f"Error retrieving Terraform version: {e}")
         sys.exit(1)
     return None
@@ -93,13 +96,26 @@ async def setup_juju_auth_details() -> None:
         user = await controller.get_current_user()
         endpoints = await controller.api_endpoints
 
+        # Read password from accounts.yaml as the Juju
+        # API does not expose the password for security reasons.
+        accounts_file = Path.home() / ".local/share/juju/accounts.yaml"
+        password = ""
+        if accounts_file.exists():
+            with open(accounts_file, "r") as f:
+                accounts_data = yaml.safe_load(f)
+                password = (
+                    accounts_data.get("controllers", {})
+                    .get(controller_name, {})
+                    .get("password", "")
+                )
+
         # Set environment variables
         os.environ.update(
             {
                 "CONTROLLER": controller_name or "",
                 "JUJU_CONTROLLER_ADDRESSES": ",".join(endpoints) or "",
-                "JUJU_USERNAME": user.username,
-                "JUJU_PASSWORD": user.password,
+                "JUJU_USERNAME": user.username or "",
+                "JUJU_PASSWORD": password or "",
                 "JUJU_CA_CERT": controller_info.cacert or "",
             }
         )
