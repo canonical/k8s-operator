@@ -140,8 +140,7 @@ async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str
             print(f"Juju model '{model_name}' does not exist. Creating it...")
             await controller.add_model(model_name)
 
-        controller_info = await controller.get_controller()
-        controller_cloud = controller_info.cloud
+        controller_cloud = controller.cloud[0].type
         print(f"Controller cloud: {controller_cloud}")
 
     if controller_cloud in ["localhost", "lxd"]:
