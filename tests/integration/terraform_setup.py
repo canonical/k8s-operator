@@ -48,7 +48,7 @@ def get_installed_terraform_channel() -> Optional[str]:
         The installed Terraform channel, or `None` if Terraform is not installed
     """
     try:
-        output = run_command(["snap", "list", "terraform"], capture_output=True)
+        output = run_command(["snap", "list", "terraform"], capture_output=True, fail_on_error=False)
         if output:
             for line in output.splitlines():
                 parts = line.split()
