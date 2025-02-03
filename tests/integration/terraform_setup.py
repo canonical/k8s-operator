@@ -91,12 +91,13 @@ async def setup_juju_auth_details() -> None:
         controller_name = controller.controller_name
         controller_info = await controller.info()
         user = await controller.get_current_user()
+        endpoints = await controller.api_endpoints()
 
         # Set environment variables
         os.environ.update(
             {
                 "CONTROLLER": controller_name or "",
-                "JUJU_CONTROLLER_ADDRESSES": ",".join(controller.api_endpoints) or "",
+                "JUJU_CONTROLLER_ADDRESSES": ",".join(endpoints) or "",
                 "JUJU_USERNAME": user.username,
                 "JUJU_PASSWORD": user.password,
                 "JUJU_CA_CERT": controller_info.cacert or "",
