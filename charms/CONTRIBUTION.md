@@ -67,7 +67,7 @@ if self.is_worker:
     ...
 ```
 
-## Integration Tests
+## Integration tests
 
 The functionality of the charms is verified through a set of [integration tests](../tests/integration/). While we officially only support deploying the charms using Terraform modules, the [Terraform Juju provider](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#charm-1) currently only supports deploying charm applications from Charmhub, not from a local build.
 

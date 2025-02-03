@@ -78,7 +78,8 @@ def ensure_terraform(expected_version: str) -> None:
         )
     elif installed_version != expected_version:
         print(
-            f"Error: Installed Terraform ({installed_version}) does not match expected ({expected_version})."
+            f"Error: Installed Terraform ({installed_version}) does \
+                not match expected ({expected_version})."
         )
         sys.exit(1)
     else:
@@ -101,15 +102,13 @@ async def setup_juju_auth_details() -> None:
         accounts_file = Path.home() / ".local/share/juju/accounts.yaml"
         password = ""
         if accounts_file.exists():
-            with open(accounts_file, "r") as f:
+            with open(accounts_file, "r", encoding="utf-8") as f:
                 accounts_data = yaml.safe_load(f)
                 password = (
                     accounts_data.get("controllers", {})
                     .get(controller_name, {})
                     .get("password", "")
                 )
-
-        print(controller_info)
 
         # Set environment variables
         os.environ.update(
@@ -140,10 +139,10 @@ async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str
             print(f"Juju model '{model_name}' does not exist. Creating it...")
             await controller.add_model(model_name)
 
-        controller_cloud = (await controller.cloud()).cloud.type
+        controller_cloud = (await controller.cloud()).cloud
         print(f"Controller cloud: {controller_cloud}")
 
-        if controller_cloud in ["localhost", "lxd"]:
+        if controller_cloud.type_ == "lxd":
             print("Applying 'k8s.profile' to the model...")
             subprocess.run(
                 ["lxc", "profile", "edit", f"juju-{model_name}"],
