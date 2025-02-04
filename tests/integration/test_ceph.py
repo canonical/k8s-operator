@@ -8,6 +8,7 @@
 
 import pytest
 from juju import model
+from kubernetes.client import ApiClient
 
 from . import storage
 
@@ -17,7 +18,7 @@ pytestmark = [pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=["k8s"
 
 
 @pytest.mark.abort_on_fail
-async def test_ceph_sc(kubernetes_cluster: model.Model):
+async def test_ceph_sc(kubernetes_cluster: model.Model, api_client: ApiClient):
     """Test that a ceph storage class is available and validate pv attachments."""
     manifests = storage.StorageProviderManifests(
         "ceph-xfs-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"
@@ -25,4 +26,4 @@ async def test_ceph_sc(kubernetes_cluster: model.Model):
     definition = storage.StorageProviderTestDefinition(
         "ceph", "ceph-xfs", "rbd.csi.ceph.com", kubernetes_cluster, manifests
     )
-    await storage.exec_storage_class(definition)
+    await storage.exec_storage_class(definition, api_client)
