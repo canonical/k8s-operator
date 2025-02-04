@@ -103,19 +103,6 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(skip_cos)
 
 
-@pytest.fixture(scope="module")
-def module_name(request) -> str:
-    """Get the module name of the test.
-
-    Args:
-        request: Pytest request object.
-
-    Returns:
-        str: The test module name.
-    """
-    return request.module.__name__
-
-
 async def cloud_proxied(ops_test: OpsTest):
     """Setup a cloud proxy settings if necessary
 
@@ -243,29 +230,30 @@ def valid_namespace_name(s: str) -> str:
     return sanitized[-63:]
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(scope="module")
 async def api_client(
-    kubernetes_cluster, ops_test: OpsTest, module_name: str  # pylint: disable=unused-argument
+    kubernetes_cluster, ops_test: OpsTest, request  # pylint: disable=unused-argument
 ):
     """Create a k8s API client and namespace for the test.
 
     Args:
         kubernetes_cluster: The k8s model.
         ops_test: The pytest-operator plugin.
-        module_name: The name of the module.
+        request: The pytest request object.
     """
+    module_name = request.module.__name__
     rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
     namespace = valid_namespace_name(f"{module_name}-{rand_str}")
     kubeconfig_path = await get_kubeconfig(ops_test, module_name)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
-    api_client = ApiClient(configuration=config)
+    client = ApiClient(configuration=config)
 
-    v1 = CoreV1Api(api_client)
+    v1 = CoreV1Api(client)
     v1.create_namespace(
         body=k8s_models.V1Namespace(metadata=k8s_models.V1ObjectMeta(name=namespace))
     )
-    yield api_client
+    yield client
     v1.delete_namespace(name=namespace)
 
 
