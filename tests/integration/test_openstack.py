@@ -44,7 +44,7 @@ async def test_provider_ids(api_client: ApiClient):
         assert node.spec.provider_id.startswith(f"{CLOUD_TYPE}://")
 
 
-async def test_cinder_pv(kubernetes_cluster: juju.model.Model):
+async def test_cinder_pv(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
     """Test that a cinder storage class is available and validate pv attachments."""
     manifests = storage.StorageProviderManifests(
         "cinder-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"
@@ -52,4 +52,4 @@ async def test_cinder_pv(kubernetes_cluster: juju.model.Model):
     definition = storage.StorageProviderTestDefinition(
         "cinder", STORAGE_CLASS_NAME, "cinder.csi.openstack.org", kubernetes_cluster, manifests
     )
-    await storage.exec_storage_class(definition)
+    await storage.exec_storage_class(definition, api_client)
