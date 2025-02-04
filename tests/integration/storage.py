@@ -5,9 +5,11 @@
 
 import dataclasses
 from pathlib import Path
-from typing import Generator
+from typing import Generator, List
 
 from juju import model, unit
+from kubernetes.client import ApiClient
+from kubernetes.utils import create_from_yaml
 
 from . import helpers
 
@@ -70,11 +72,12 @@ class StorageProviderTestDefinition:
     manifests: StorageProviderManifests
 
 
-async def exec_storage_class(definition: StorageProviderTestDefinition):
+async def exec_storage_class(definition: StorageProviderTestDefinition, api_client: ApiClient):
     """Test that a storage class is available and validate pv attachments.
 
     Args:
         definition: The storage provider test definition.
+        api_client: The k8s api client.
     """
     k8s: unit.Unit = definition.cluster.applications["k8s"].units[0]
     event = await k8s.run("k8s kubectl get sc -o=jsonpath='{.items[*].provisioner}'")
@@ -82,29 +85,20 @@ async def exec_storage_class(definition: StorageProviderTestDefinition):
     stdout = result.results["stdout"]
     manifests = definition.manifests
     assert definition.provisioner in stdout, f"No {definition.name} provisioner found in: {stdout}"
-
-    # Copy pod definitions.
-    for fname in manifests:
-        await k8s.scp_to(_get_data_file_path(fname), f"/tmp/{fname}")
+    created: List = []
 
     try:
         # Create PVC.
-        event = await k8s.run(f"k8s kubectl apply -f /tmp/{manifests.pvc}")
-        result = await event.wait()
-        assert result.results["return-code"] == 0, "Failed to create pvc."
+        created.extend(*create_from_yaml(api_client, _get_data_file_path(manifests.pvc)))
 
         # Create a pod that writes to the PV.
-        event = await k8s.run(f"k8s kubectl apply -f /tmp/{manifests.pv_writer_pod}")
-        result = await event.wait()
-        assert result.results["return-code"] == 0, "Failed to create writer pod."
+        created.extend(*create_from_yaml(api_client, _get_data_file_path(manifests.pv_writer_pod)))
 
         # Wait for the pod to exit successfully.
         await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
 
         # Create a pod that reads the PV data and writes it to the log.
-        event = await k8s.run(f"k8s kubectl apply -f /tmp/{manifests.pv_reader_pod}")
-        result = await event.wait()
-        assert result.results["return-code"] == 0, "Failed to create reader pod."
+        created.extend(*create_from_yaml(api_client, _get_data_file_path(manifests.pv_reader_pod)))
 
         await helpers.wait_pod_phase(k8s, "pv-reader-test", "Succeeded")
 
@@ -113,6 +107,8 @@ async def exec_storage_class(definition: StorageProviderTestDefinition):
         assert "PVC test data" in logs
     finally:
         # Cleanup
-        for fname in reversed(manifests):
-            event = await k8s.run(f"k8s kubectl delete -f /tmp/{fname}")
+        for resource in reversed(created):
+            kind = resource.kind
+            name = resource.metadata.name
+            event = await k8s.run(f"k8s kubectl delete {kind} {name}")
             result = await event.wait()
