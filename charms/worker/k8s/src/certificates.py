@@ -45,6 +45,7 @@ class K8sCertificates(ops.Object):
             charm: An instance of the charm.
             refresh_event: An event source that triggers certificate refresh.
         """
+        super().__init__(charm, "certificates-integration")
         self._charm = charm
         if self.using_external_certificates:
             self.certificates = TLSCertificatesRequiresV4(
