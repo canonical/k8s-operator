@@ -29,7 +29,7 @@ pytestmark = [
 
 
 @pytest.fixture
-async def preserve_charm_config(kubernetes_cluster: juju.model.Model, timeout):
+async def preserve_charm_config(kubernetes_cluster: juju.model.Model, timeout: int):
     """Preserve the charm config changes from a test."""
     k8s: juju.application.Application = kubernetes_cluster.applications["k8s"]
     worker: juju.application.Application = kubernetes_cluster.applications["k8s-worker"]
