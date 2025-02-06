@@ -235,7 +235,7 @@ from typing import (
 
 import pydantic
 from cosl import DashboardPath40UID, JujuTopology, LZMABase64
-from cosl.rules import AlertRules
+from cosl.rules import AlertRules, generic_alert_groups
 from ops.charm import RelationChangedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import ModelError, Relation
@@ -254,7 +254,7 @@ if TYPE_CHECKING:
 
 LIBID = "dc15fa84cef84ce58155fb84f6c6213a"
 LIBAPI = 0
-LIBPATCH = 17
+LIBPATCH = 18
 
 PYDEPS = ["cosl >= 0.0.50", "pydantic"]
 
@@ -267,7 +267,6 @@ DEFAULT_SCRAPE_CONFIG = {
 
 logger = logging.getLogger(__name__)
 SnapEndpoint = namedtuple("SnapEndpoint", "owner, name")
-
 
 # Note: MutableMapping is imported from the typing module and not collections.abc
 # because subscripting collections.abc.MutableMapping was added in python 3.9, but
@@ -732,6 +731,10 @@ class COSAgentProvider(Object):
             query_type="promql", topology=JujuTopology.from_charm(self._charm)
         )
         alert_rules.add_path(self._metrics_rules, recursive=self._recursive)
+        alert_rules.add(
+            generic_alert_groups.application_rules,
+            group_name_prefix=JujuTopology.from_charm(self._charm).identifier,
+        )
         return alert_rules.as_dict()
 
     @property
