@@ -45,7 +45,8 @@ def pytest_addoption(parser: pytest.Parser):
         if cloud is LXD, use containers
     --apply-proxy
         apply proxy to model-config
-
+    --timeout
+        set timeout for tests
     Args:
         parser: Pytest parser.
     """
@@ -67,7 +68,7 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
-
+    parser.addoption("--timeout", default=10, help="timeout for tests in minutes")
 
 def pytest_configure(config):
     """Add pytest configuration args.
