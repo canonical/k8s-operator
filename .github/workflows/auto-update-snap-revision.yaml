@@ -1,11 +1,11 @@
-name: Update Snap Revisions
+name: Auto-update Snap Revisions
 
 on:
   schedule:
     - cron: "0 */4 * * *" # every 4 hours
   pull_request:
     paths:
-      - .github/workflows/update-snap-revision.yaml
+      - .github/workflows/auto-update-snap-revision.yaml
 
 jobs:
   stable-branches:
@@ -81,5 +81,6 @@ jobs:
           automerge
         branch: revision-update-job/${{ env.TRACK }}/${{matrix.arch}}/${{ steps.update-revision.outputs.result }}
         base: ${{ matrix.branch }}
+        token: ${{ secrets.REPO_ACCESS_TOKEN }}
         add-paths: |
           charms/worker/k8s/templates/*.yaml
