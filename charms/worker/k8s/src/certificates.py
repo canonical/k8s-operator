@@ -81,7 +81,7 @@ class K8sCertificates:
         self,
     ) -> Dict[str, CertificateRequestAttributes]:
         node_name = self.charm.get_node_name()
-        sans_ip = {"127.0.0.1"}
+        sans_ip = {"127.0.0.1", "::1"}
         sans_dns = {
             node_name,
             "kubernetes",
