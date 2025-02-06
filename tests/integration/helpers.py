@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 """Additions to tools missing from juju library."""
 
-# pylint: disable=too-many-arguments,too-many-positional-arguments
+# pylint: disable=too-many-arguments
 
 import asyncio
 import ipaddress
