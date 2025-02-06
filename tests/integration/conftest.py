@@ -47,6 +47,7 @@ def pytest_addoption(parser: pytest.Parser):
         apply proxy to model-config
     --timeout
         set timeout for tests
+
     Args:
         parser: Pytest parser.
     """
@@ -69,6 +70,7 @@ def pytest_addoption(parser: pytest.Parser):
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
     parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
+
 
 def pytest_configure(config):
     """Add pytest configuration args.
@@ -428,4 +430,5 @@ async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
 
 @pytest.fixture(scope="module")
 def timeout(request):
+    """Fixture to set the timeout for certain tests"""
     return request.config.option.timeout
