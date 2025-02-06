@@ -393,12 +393,11 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
-    def get_sorted_sans(self) -> Tuple[FrozenSet[str], FrozenSet[str]]:
-        """Sort SANs into IP addresses and DNS names.
+    def split_sans_by_type(self) -> Tuple[FrozenSet[str], FrozenSet[str]]:
+        """Split SANs into IP addresses and DNS names.
 
         Returns:
-            Tuple[FrozenSet[str], FrozenSet[str]]: A tuple containing the sorted IP addresses
-            and DNS names.
+            Tuple[FrozenSet[str], FrozenSet[str]]: IP addresses and DNS names.
         """
         ip_sans = set()
         dns_sans = set()

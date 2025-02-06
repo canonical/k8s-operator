@@ -30,7 +30,7 @@ class RefreshCertificates(ops.EventBase):
     """Event emitted when the certificates need to be refreshed."""
 
 
-class K8sCertificates:
+class K8sCertificates(ops.Object):
     """A class for managing Kubernetes certificates associated with a cluster unit.
 
     Attributes:
@@ -45,12 +45,10 @@ class K8sCertificates:
             charm: An instance of the charm.
             refresh_event: An event source that triggers certificate refresh.
         """
-        self.charm = charm
-        self.model = charm.model
-        self.config = charm.config
+        self._charm = charm
         if self.using_external_certificates:
             self.certificates = TLSCertificatesRequiresV4(
-                charm=self.charm,
+                charm=charm,
                 relationship_name="certificates",
                 certificate_requests=self._certificate_requests,
                 mode=Mode.UNIT,
@@ -60,7 +58,7 @@ class K8sCertificates:
     @property
     def using_external_certificates(self) -> bool:
         """Return whether the charm is using external certificates."""
-        return self.config.get("bootstrap-certificates") == "external"
+        return self._charm.config.get("bootstrap-certificates") == "external"
 
     @property
     def events(self) -> List[ops.CharmEvents]:
@@ -80,7 +78,7 @@ class K8sCertificates:
     def _certificates_request_mapping(
         self,
     ) -> Dict[str, CertificateRequestAttributes]:
-        node_name = self.charm.get_node_name()
+        node_name = self._charm.get_node_name()
         sans_ip = {"127.0.0.1", "::1"}
         sans_dns = {
             node_name,
@@ -90,10 +88,10 @@ class K8sCertificates:
             "kubernetes.default.svc.cluster.local",
         }
 
-        if self.charm.is_control_plane:
+        if self._charm.is_control_plane:
             sans_ip.update(self._get_service_ips())
 
-        extra_ips, extra_dns = self.charm.get_sorted_sans()
+        extra_ips, extra_dns = self._charm.split_sans_by_type()
         sans_ip.update(extra_ips)
         sans_dns.update(extra_dns)
 
@@ -135,9 +133,9 @@ class K8sCertificates:
             ),
         }
 
-        if self.charm.lead_control_plane:
+        if self._charm.lead_control_plane:
             return csr_attributes
-        if self.charm.is_control_plane:
+        if self._charm.is_control_plane:
             return {k: v for k, v in csr_attributes.items() if k in CONTROL_PLANE_CERTIFICATES}
         return {k: v for k, v in csr_attributes.items() if k in WORKER_CERTIFICATES}
 
@@ -151,7 +149,7 @@ class K8sCertificates:
             ValueError: If the service CIDR is invalid.
         """
         service_ips = set()
-        service_cidrs = self.config["bootstrap-service-cidr"].split(",")
+        service_cidrs = self._charm.config["bootstrap-service-cidr"].split(",")
         for cidr in service_cidrs:
             cidr = cidr.strip()
             try:
@@ -283,7 +281,7 @@ class K8sCertificates:
         Raises:
             ReconcilerError: If the certificates issuer is invalid.
         """
-        certificates_type = self.config.get("bootstrap-certificates")
+        certificates_type = self._charm.config.get("bootstrap-certificates")
 
         if certificates_type not in SUPPORTED_CERTIFICATES:
             log.error(
@@ -296,15 +294,15 @@ class K8sCertificates:
 
         if certificates_type == "external":
             log.info("Using external certificates")
-            certificates_relation = self.model.get_relation("certificates")
+            certificates_relation = self._charm.model.get_relation("certificates")
             if not certificates_relation:
                 msg = "Missing required 'certificates' relation"
                 status.add(ops.BlockedStatus(msg))
                 raise status.ReconcilerError(msg)
 
-            if self.charm.lead_control_plane and isinstance(config, BootstrapConfig):
+            if self._charm.lead_control_plane and isinstance(config, BootstrapConfig):
                 self._populate_bootstrap_certificates(config)
-            elif self.charm.is_control_plane and isinstance(config, ControlPlaneNodeJoinConfig):
+            elif self._charm.is_control_plane and isinstance(config, ControlPlaneNodeJoinConfig):
                 self._populate_join_certificates(config)
             elif isinstance(config, NodeJoinConfig):
                 self._populate_join_certificates(config)
