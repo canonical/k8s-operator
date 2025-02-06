@@ -86,7 +86,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
     """
 
     # e.g. "https://registry-1.docker.io"
-    url: pydantic.AnyHttpUrl
+    url: str
 
     # e.g. "docker.io", or "registry.example.com:32000"
     host: str = ""
@@ -113,10 +113,24 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             kwargs: construction keyword arguments
         """
         super().__init__(*args, **kwargs)
-        if not self.host and (host := self.url.host):
+        url = pydantic.AnyHttpUrl(self.url)
+        if not self.host and (host := url.host):
             self.host = host
 
-    @pydantic.validator("ca_file", "cert_file", "key_file")
+    @pydantic.field_validator("url")
+    def validate_url(cls, v: str) -> str:
+        """Validate the URL.
+
+        Args:
+            v (str): value to validate
+
+        Returns:
+            validated URL
+        """
+        pydantic.AnyHttpUrl(v)
+        return v
+
+    @pydantic.field_validator("ca_file", "cert_file", "key_file")
     def parse_base64(cls, v: str) -> str:
         """Validate Base64 Content.
 

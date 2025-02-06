@@ -8,4 +8,6 @@ k8s/.coverage
 k8s/.tox
 k8s/.mypy_cache
 k8s/lxd-profile.yaml
+terraform/
+**/*.charm
 __pycache__/

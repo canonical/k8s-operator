@@ -7,7 +7,6 @@
 
 """Snap Installation Module."""
 
-
 import logging
 import re
 import shutil
@@ -21,7 +20,7 @@ import ops
 import yaml
 from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE
 from protocols import K8sCharmProtocol
-from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, parse_obj_as
 from typing_extensions import Annotated
 
 # Log messages can be retrieved using juju debug-log
@@ -92,7 +91,7 @@ class SnapStoreArgument(BaseModel):
     cohort: Optional[str] = None
     revision: Optional[str] = None
 
-    @validator("revision", pre=True)
+    @field_validator("revision", mode="before")
     def _validate_revision(cls, value: Union[str, int, None]) -> Optional[str]:
         """Validate the revision is a valid snap revision.
 
@@ -293,8 +292,9 @@ def management(charm: K8sCharmProtocol) -> None:
         if block_refresh(which, args, charm.is_upgrade_granted):
             continue
         install_args = args.dict(exclude_none=True)
-        if isinstance(args, SnapFileArgument) and which.revision != "x1":
-            snap_lib.install_local(**install_args)
+        if isinstance(args, SnapFileArgument):
+            if which.revision != "x1":
+                snap_lib.install_local(**install_args)
         elif isinstance(args, SnapStoreArgument):
             log.info("Ensuring args=%s current=%s", str(args), str(which))
             new_rev = bool(args.revision) and which.revision != args.revision
