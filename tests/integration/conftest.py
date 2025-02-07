@@ -430,5 +430,5 @@ async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
 
 @pytest.fixture(scope="module")
 def timeout(request):
-    """Fixture to set the timeout for certain tests"""
+    """Fixture to set the timeout for certain tests."""
     return request.config.option.timeout
