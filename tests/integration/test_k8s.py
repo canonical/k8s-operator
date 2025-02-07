@@ -28,7 +28,7 @@ pytestmark = [
 ]
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def preserve_charm_config(kubernetes_cluster: juju.model.Model):
     """Preserve the charm config changes from a test."""
     k8s: juju.application.Application = kubernetes_cluster.applications["k8s"]
@@ -172,24 +172,17 @@ async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model)
     await ready_nodes(follower, expected_nodes)
 
 
-@pytest_asyncio.fixture()
-async def override_snap_on_k8s(kubernetes_cluster: juju.model.Model, request):
+async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, request):
     """
     Override the snap resource on a Kubernetes cluster application and revert it after the test.
 
-    This coroutine function overrides the snap resource of the "k8s" application in the given
+    This function overrides the snap resource of the "k8s" application in the given
     Kubernetes cluster with a specified override file, waits for the cluster to become idle,
     and then reverts the snap resource back to its original state after the test.
 
     Args:
         kubernetes_cluster (model.Model): The Kubernetes cluster model.
         request: The pytest request object containing test configuration options.
-
-    Yields:
-        The "k8s" application object after the snap resource has been overridden.
-
-    Raises:
-        AssertionError: If the "k8s" application is not found in the Kubernetes cluster.
     """
     k8s = kubernetes_cluster.applications["k8s"]
     assert k8s, "k8s application not found"
@@ -197,24 +190,17 @@ async def override_snap_on_k8s(kubernetes_cluster: juju.model.Model, request):
     revert = Path(request.config.option.snap_installation_resource)
     override = Path(__file__).parent / "data" / "override-latest-edge.tar.gz"
 
-    with override.open("rb") as obj:
-        k8s.attach_resource("snap-installation", override, obj)
-        await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    try:
+        with override.open("rb") as obj:
+            k8s.attach_resource("snap-installation", override, obj)
+            await kubernetes_cluster.wait_for_idle(status="active", idle_period=30)
 
-    yield k8s
-
-    with revert.open("rb") as obj:
-        k8s.attach_resource("snap-installation", revert, obj)
-        await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
-
-
-async def test_override_snap_resource(override_snap_on_k8s: juju.application.Application):
-    """Override snap resource."""
-    k8s = override_snap_on_k8s
-    assert k8s, "k8s application not found"
-
-    for _unit in k8s.units:
-        assert "Override" in _unit.workload_status_message
+        for _unit in k8s.units:
+            assert "Override" in _unit.workload_status_message
+    finally:
+        with revert.open("rb") as obj:
+            k8s.attach_resource("snap-installation", revert, obj)
+            await kubernetes_cluster.wait_for_idle(status="active")
 
 
 @pytest.mark.cos
