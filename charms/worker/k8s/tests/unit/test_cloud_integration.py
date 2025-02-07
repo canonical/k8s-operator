@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 """Unit tests cloud-integration module."""
+
 from pathlib import Path
 from unittest import mock
 
