@@ -19,6 +19,12 @@ pip install 'tox>=4,<5'
 
 ### Setting up a development environment with `uv`
 
+If you don't have `uv` installed, you can install it with:
+
+```shell
+snap install astral-uv
+```
+
 You can create an environment for development with `uv`:
 
 ```shell
