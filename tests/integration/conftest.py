@@ -142,7 +142,7 @@ async def cloud_profile(ops_test: OpsTest):
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def skip_by_cloud_type(request, ops_test):
     """Skip tests based on cloud type."""
     if cloud_markers := request.node.get_closest_marker("clouds"):
