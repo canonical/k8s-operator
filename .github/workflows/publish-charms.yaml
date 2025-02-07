@@ -56,4 +56,4 @@ jobs:
       working-directory: ${{ matrix.charm.path }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       tag-prefix: ${{ matrix.charm.tagPrefix }}
-      identifier: ${{matrix.arch}}-k8s
+      identifier: ${{matrix.arch}}
