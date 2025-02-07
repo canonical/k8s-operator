@@ -1,0 +1,14 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+[Unit]
+Description=Timer to dispatch {event} event periodically
+Requires={app}.{event}.service
+ 
+[Timer]
+Unit={app}.{event}.service
+OnUnitInactiveSec={interval}s
+RandomizedDelaySec={random_delay}s
+ 
+[Install]
+WantedBy=timers.target
