@@ -11,12 +11,13 @@ The `k8s` and `k8s-worker` charms are noticeably tucked into one-another.
         ├── charmcraft.yaml
         ├── lib
         │   └── charms/...
-        ├── requirements.txt
+        ├── pyproject.toml
+        ├── uv.lock
         └── src
             └── charm.py
 ```
 
-While unfamiliar to some charm developers, this lets both charms share the exact same `src` folder. This is accomplished by using the `parts.charm.charm-entrypoint` value in the `worker` directory set to `k8s/src/charm.py`.
+While unfamiliar to some charm developers, this lets both charms share the exact same `src` folder.
 
 ### What's unique
 
@@ -33,7 +34,7 @@ In order to exclude the `k8s` exclusive components from the `k8s-worker` charm, 
 
 ### What's shared
 
-The shared portions of each charm are within `worker/k8s` (except for the above mentioned exclusions).  This includes shared libraries from `worker/k8s/lib`, shared source from `worker/k8s/src`, shared python dependencies from `worker/k8s/requirements.txt`
+The shared portions of each charm are within `worker/k8s` (except for the above mentioned exclusions).  This includes shared libraries from `worker/k8s/lib`, shared source from `worker/k8s/src`, shared python dependencies from `worker/k8s/pyproject.toml` and the `uv` lockfile (`uv.lock`).
 
 ### How to distinguish which charm code should engage
 
