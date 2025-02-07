@@ -2,8 +2,8 @@
 
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""
-Deploy a Kubernetes cluster using the Juju Terraform provider and a manifest as input.
+"""Deploy a Kubernetes cluster using the Juju Terraform provider and a manifest as input.
+
 See https://github.com/canonical/k8s-bundles/blob/main/terraform/README.md
 """
 
@@ -84,7 +84,8 @@ def ensure_terraform(expected_version: str) -> None:
         sys.exit(1)
     else:
         print(
-            f"Terraform is already installed and matches the expected version: {installed_version}."
+            "Terraform is already installed and "
+            f"matches the expected version: {installed_version}."
         )
 
 
@@ -155,7 +156,7 @@ async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str
 
 
 async def main() -> None:
-    """Main entry point for setting up Terraform and Juju."""
+    """Set up entry point for Terraform and Juju."""
     script_dir = Path(__file__).resolve().parent
 
     parser = argparse.ArgumentParser(description="Terraform and Juju setup script.")
