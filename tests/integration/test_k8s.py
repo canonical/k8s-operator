@@ -36,7 +36,7 @@ async def preserve_charm_config(kubernetes_cluster: juju.model.Model):
     k8s_config, worker_config = await asyncio.gather(k8s.get_config(), worker.get_config())
     yield k8s_config, worker_config
     await asyncio.gather(k8s.set_config(k8s_config), worker.set_config(worker_config))
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
 
 
 async def test_nodes_ready(kubernetes_cluster: juju.model.Model):
