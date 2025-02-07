@@ -26,3 +26,8 @@ dependencies = [
     "httpx",
     "loadbalancer_interface"
 ]
+[dependency-groups]
+unit = [
+    "coverage[toml]",
+    "pytest",
+]
