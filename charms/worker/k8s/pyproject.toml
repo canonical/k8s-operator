@@ -1,7 +1,7 @@
 [project]
-name = "k8s"
+name = "k8s-operator"
 version = "0.1.0"
-description = "Add your description here"
+description = "Charmed Operators for Canonical Kubernetes"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
