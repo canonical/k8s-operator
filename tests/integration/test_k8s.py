@@ -173,8 +173,7 @@ async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model,
 
 
 async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, request):
-    """
-    Override the snap resource on a Kubernetes cluster application and revert it after the test.
+    """Override the snap resource on a Kubernetes cluster application and revert it after the test.
 
     This function overrides the snap resource of the "k8s" application in the given
     Kubernetes cluster with a specified override file, waits for the cluster to become idle,

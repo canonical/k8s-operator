@@ -107,7 +107,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 async def cloud_proxied(ops_test: OpsTest):
-    """Setup a cloud proxy settings if necessary
+    """Set up a cloud proxy settings if necessary.
 
     If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
 
@@ -126,7 +126,7 @@ async def cloud_proxied(ops_test: OpsTest):
 
 
 async def cloud_profile(ops_test: OpsTest):
-    """Apply Cloud Specific Settings to the model
+    """Apply Cloud Specific Settings to the model.
 
     Args:
         ops_test (OpsTest): ops_test plugin
@@ -219,7 +219,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
 
 def valid_namespace_name(s: str) -> str:
-    """Creates a valid kubernetes namespace name.
+    """Create a valid kubernetes namespace name.
 
     Args:
         s: The string to sanitize.
