@@ -2,7 +2,7 @@
 
 To make contributions to this charm, you'll need a working [development setup](https://juju.is/docs/sdk/dev-setup).
 
-### Setting Up a Development Environment with `tox`
+### Setting up a development environment with `tox`
 
 You can create an environment for development with `tox`:
 
@@ -17,7 +17,7 @@ The development setup ships with tox3, you might want to install tox4:
 pip install 'tox>=4,<5'
 ```
 
-### Setting Up a Development Environment with `uv`
+### Setting up a development environment with `uv`
 
 You can create an environment for development with `uv`:
 
@@ -44,31 +44,31 @@ Now you can install the project dependencies with:
 uv sync # Installs all dependencies from uv.lock
 ```
 
-## Managing Dependencies with `uv`
+## Managing dependencies with `uv`
 
 This section outlines how to add, upgrade and generate lock files for
 dependencies using the `uv` tool.
 
-### Adding Dependencies
+### Adding dependencies
 
 To add a new dependency to the charm, use `uv add <package>` in the
 `charms/worker/k8s` directory. This updates `pyproject.toml` and
 automatically generates/updates the `uv.lock` file. For example:
 
 ```shell
-uv add foo # Adds the latest version of "foo" to the charm
-uv add foo==1.2.3 # Pins to a specific version of "foo"
+uv add foo
+uv add foo==1.2.3
 ```
 
 For development/testing dependencies, use the appropriate `dependency-group`:
 
 ```shell
-uv add ruff --group lint # Adds "mypackage" to the lint group
+uv add ruff --group lint
 ```
 
 This adds the package under the `lint` dependency group in `pyproject.toml`.
 
-### Upgrading Dependencies
+### Upgrading dependencies
 
 To upgrade packages:
 
