@@ -11,13 +11,14 @@ This handler is responsible for updating the unit's workload version and status
 import logging
 from typing import Optional
 
-import charms.contextual_status as status
 import ops
 import reschedule
 from inspector import ClusterInspector
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
 from upgrade import K8sUpgrade
+
+import charms.contextual_status as status
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
