@@ -1,5 +1,5 @@
 [project]
-name = "k8s-operator"
+name = "k8s"
 version = "0.1.0"
 description = "Charmed Operators for Canonical Kubernetes"
 readme = "README.md"
