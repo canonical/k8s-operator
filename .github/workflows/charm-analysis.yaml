@@ -13,6 +13,7 @@ jobs:
       matrix:
         python-version: 
         - '3.10'
+        - '3.12'
     with:
       charm-directory: charms
       self-hosted-runner:  false

@@ -2,6 +2,8 @@
 
 To make contributions to this charm, you'll need a working [development setup](https://juju.is/docs/sdk/dev-setup).
 
+### Setting up a development environment with `tox`
+
 You can create an environment for development with `tox`:
 
 ```shell
@@ -14,6 +16,84 @@ The development setup ships with tox3, you might want to install tox4:
 ```shell
 pip install 'tox>=4,<5'
 ```
+
+### Setting up a development environment with `uv`
+
+If you don't have `uv` installed, you can install it with:
+
+```shell
+snap install astral-uv
+```
+
+You can create an environment for development with `uv`:
+
+```shell
+uv venv
+```
+
+Or with an specific Python version:
+
+```shell
+uv venv -p 3.8
+```
+
+This will create a virtual environment in the `.venv` directory. You can
+activate it with:
+
+```shell
+source .venv/bin/activate
+```
+
+Now you can install the project dependencies with:
+
+```shell
+uv sync # Installs all dependencies from uv.lock
+```
+
+## Managing dependencies with `uv`
+
+This section outlines how to add, upgrade and generate lock files for
+dependencies using the `uv` tool.
+
+### Adding dependencies
+
+To add a new dependency to the charm, use `uv add <package>` in the
+`charms/worker/k8s` directory. This updates `pyproject.toml` and
+automatically generates/updates the `uv.lock` file. For example:
+
+```shell
+uv add foo
+uv add foo==1.2.3
+```
+
+For development/testing dependencies, use the appropriate `dependency-group`:
+
+```shell
+uv add ruff --group lint
+```
+
+This adds the package under the `lint` dependency group in `pyproject.toml`.
+
+### Upgrading dependencies
+
+To upgrade packages:
+
+- Upgrade all packages:
+```shell
+uv lock --upgrade
+```
+
+- Upgrade a specific package:
+```shell
+uv lock --upgrade-package foo
+```
+
+- Upgrade a specific package to a specific version:
+```shell
+uv lock --upgrade-package "foo==1.2.3"
+```
+
+These commands update the `uv.lock` but not the `pyproject.toml` file.
 
 ## Testing
 
