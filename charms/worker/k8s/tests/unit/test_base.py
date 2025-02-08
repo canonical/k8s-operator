@@ -14,6 +14,7 @@ import ops
 import ops.testing
 import pytest
 from charm import K8sCharm
+
 from charms.k8s.v0.k8sd_api_manager import BootstrapConfig, UpdateClusterConfigRequest
 
 

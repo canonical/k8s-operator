@@ -6,13 +6,14 @@ on:
 
 jobs:
   unit-tests:
-    uses: canonical/operator-workflows/.github/workflows/test.yaml@0ffbcf4619d7c28ae66bbc33f206f4b6c7bc4d4f
+    uses: canonical/operator-workflows/.github/workflows/test.yaml@eb4a25cf55f74b668a22ea359869b1efcce3d503
     secrets: inherit
     strategy:
       fail-fast: false
       matrix:
         python-version: 
         - '3.10'
+        - '3.12'
     with:
       charm-directory: charms
       self-hosted-runner:  false

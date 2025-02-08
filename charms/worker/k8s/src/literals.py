@@ -12,7 +12,7 @@ SNAP_NAME = "k8s"
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # Charm
-CONTAINERD_BASE_PATH = Path("/etc/containerd")
+CONTAINERD_BASE_PATH = Path("/etc/containerd/k8s-containerd/etc/containerd")
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")

@@ -138,27 +138,27 @@ resources:
 
 parts:
   charm:
-    plugin: charm
+    source: .
+    plugin: uv
     build-packages:
       - git
       - libffi-dev
       - libssl-dev
       - pkg-config
-      - rustc
-      - cargo
-    charm-entrypoint: k8s/src/charm.py
-    charm-requirements: [k8s/requirements.txt]
-  promote:
-    # move paths out of ./k8s to ./ since 
-    # charmcraft assumes ./lib to be there
-    # charmcraft assumes ./templates to be there
-    after: [charm]
-    plugin: nil
-    source: ./
-    override-prime: |
-      rm -rf $CRAFT_PRIME/lib $CRAFT_PRIME/templates
-      mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
-      mv $CRAFT_PRIME/k8s/templates $CRAFT_PRIME/templates
+    build-snaps:
+      - astral-uv
+      - rustup
+    override-build: |
+      rustup default stable
+      for item in pyproject.toml uv.lock lib templates src; do
+        cp -r "$CRAFT_PART_BUILD/k8s/$item" "$CRAFT_PART_BUILD"
+      done
+      craftctl default
+  templates:
+    plugin: dump
+    source: k8s/templates
+    organize:
+      "*": templates/
 actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.

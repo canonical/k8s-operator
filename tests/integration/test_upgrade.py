@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 
 def charm_channel_missing(charms: Iterable[str], channel: str) -> Tuple[bool, str]:
-    """Run to test if a given channel has charms for deployment
+    """Run to test if a given channel has charms for deployment.
 
     Args:
         charms: The list of charms to check

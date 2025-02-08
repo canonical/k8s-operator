@@ -5,12 +5,13 @@
 import logging
 from base64 import b64decode
 
-import charms.contextual_status as status
 import ops
 import yaml
-from charms.contextual_status import BlockedStatus, on_error
 from literals import APISERVER_PORT
 from protocols import K8sCharmProtocol
+
+import charms.contextual_status as status
+from charms.contextual_status import BlockedStatus, on_error
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)

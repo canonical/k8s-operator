@@ -29,41 +29,10 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-import charms.contextual_status as status
-import charms.operator_libs_linux.v2.snap as snap_lib
 import config.extra_args
 import containerd
 import ops
 import yaml
-from certificates import K8sCertificates, RefreshCertificates
-from charms.contextual_status import ReconcilerError, WaitingStatus, on_error
-from charms.grafana_agent.v0.cos_agent import COSAgentProvider
-from charms.interface_external_cloud_provider import ExternalCloudProvider
-from charms.k8s.v0.k8sd_api_manager import (
-    BootstrapConfig,
-    ControlPlaneNodeJoinConfig,
-    CreateClusterRequest,
-    DNSConfig,
-    GatewayConfig,
-    IngressConfig,
-    InvalidResponseError,
-    JoinClusterRequest,
-    K8sdAPIManager,
-    K8sdConnectionError,
-    LoadBalancerConfig,
-    LocalStorageConfig,
-    MetricsServerConfig,
-    NetworkConfig,
-    NodeJoinConfig,
-    UnixSocketConnectionFactory,
-    UpdateClusterConfigRequest,
-    UserFacingClusterConfig,
-    UserFacingDatastoreConfig,
-)
-from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
-from charms.node_base import LabelMaker
-from charms.operator_libs_linux.v1 import systemd
-from charms.reconciler import Reconciler
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from endpoints import build_url
@@ -103,6 +72,37 @@ from snap import version as snap_version
 from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
 from typing_extensions import Literal
 from upgrade import K8sDependenciesModel, K8sUpgrade
+
+import charms.contextual_status as status
+import charms.operator_libs_linux.v2.snap as snap_lib
+from charms.contextual_status import ReconcilerError, WaitingStatus, on_error
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
+from charms.interface_external_cloud_provider import ExternalCloudProvider
+from charms.k8s.v0.k8sd_api_manager import (
+    BootstrapConfig,
+    ControlPlaneNodeJoinConfig,
+    CreateClusterRequest,
+    DNSConfig,
+    GatewayConfig,
+    IngressConfig,
+    InvalidResponseError,
+    JoinClusterRequest,
+    K8sdAPIManager,
+    K8sdConnectionError,
+    LoadBalancerConfig,
+    LocalStorageConfig,
+    MetricsServerConfig,
+    NetworkConfig,
+    NodeJoinConfig,
+    UnixSocketConnectionFactory,
+    UpdateClusterConfigRequest,
+    UserFacingClusterConfig,
+    UserFacingDatastoreConfig,
+)
+from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
+from charms.node_base import LabelMaker
+from charms.operator_libs_linux.v1 import systemd
+from charms.reconciler import Reconciler
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)

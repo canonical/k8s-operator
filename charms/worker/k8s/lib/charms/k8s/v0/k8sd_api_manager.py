@@ -782,7 +782,7 @@ class RefreshCertificatesPlanMetadata(BaseModel):
     # NOTE(Hue): Alias is because of a naming mismatch:
     # https://github.com/canonical/k8s-snap-api/blob/6d4139295b37800fb2b3fcce9fc260e6caf284b9/api/v1/rpc_refresh_certificates_plan.go#L12
     seed: Optional[int] = Field(default=None, alias="seconds")
-    certificate_signing_requests: Optional[list[str]] = Field(
+    certificate_signing_requests: Optional[List[str]] = Field(
         default=None, alias="certificate-signing-requests"
     )
 
@@ -811,7 +811,7 @@ class RefreshCertificatesRunRequest(BaseModel):
 
     seed: int
     expiration_seconds: int = Field(alias="expiration-seconds")
-    extra_sans: Optional[list[str]] = Field(None, alias="extra-sans")
+    extra_sans: Optional[List[str]] = Field(alias="extra-sans")
 
 
 class RefreshCertificatesRunMetadata(BaseModel):
@@ -1164,7 +1164,7 @@ class K8sdAPIManager:
         return response.metadata.kubeconfig
 
     def refresh_certs(
-        self, extra_sans: list[str], expiration_seconds: Optional[int] = None
+        self, extra_sans: List[str], expiration_seconds: Optional[int] = None
     ) -> None:
         """Refresh the certificates for the cluster.
 

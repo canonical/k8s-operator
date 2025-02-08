@@ -425,17 +425,26 @@ actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
 
-
 parts:
   charm:
-    plugin: charm
+    source: .
+    plugin: uv
     build-packages:
       - git
       - libffi-dev
       - libssl-dev
       - pkg-config
-      - rustc
-      - cargo
+    build-snaps:
+      - astral-uv
+      - rustup
+    override-build: |
+      rustup default stable
+      craftctl default
+  templates:
+    plugin: dump
+    source: templates/
+    organize:
+      "*": templates/
 
 peers:
   cluster:
