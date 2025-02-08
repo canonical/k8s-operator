@@ -115,7 +115,7 @@ async def test_nodes_labelled(request, kubernetes_cluster: juju.model.Model):
     assert 0 == len(labelled), "Not all nodes labelled without custom-label"
 
 
-async def test_remove_worker(kubernetes_cluster: juju.model.Model):
+async def test_remove_worker(kubernetes_cluster: juju.model.Model, timeout: int):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
     worker = kubernetes_cluster.applications["k8s-worker"]
@@ -125,14 +125,14 @@ async def test_remove_worker(kubernetes_cluster: juju.model.Model):
     # Remove a worker
     log.info("Remove unit %s", worker.units[0].name)
     await worker.units[0].destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
     await ready_nodes(k8s.units[0], expected_nodes - 1)
     await worker.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
-async def test_remove_non_leader_control_plane(kubernetes_cluster: juju.model.Model):
+async def test_remove_non_leader_control_plane(kubernetes_cluster: juju.model.Model, timeout: int):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
     worker = kubernetes_cluster.applications["k8s-worker"]
@@ -145,14 +145,14 @@ async def test_remove_non_leader_control_plane(kubernetes_cluster: juju.model.Mo
     # Remove a control-plane
     log.info("Remove unit %s", follower.name)
     await follower.destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
     await ready_nodes(leader, expected_nodes - 1)
     await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
     await ready_nodes(leader, expected_nodes)
 
 
-async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model):
+async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model, timeout: int):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
     worker = kubernetes_cluster.applications["k8s-worker"]
@@ -165,10 +165,10 @@ async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model)
     # Remove a control-plane
     log.info("Remove unit %s", leader.name)
     await leader.destroy()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
     await ready_nodes(follower, expected_nodes - 1)
     await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=10 * 60)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
     await ready_nodes(follower, expected_nodes)
 
 
@@ -209,10 +209,11 @@ async def test_grafana(
     grafana_password: str,
     expected_dashboard_titles: set,
     cos_model: juju.model.Model,
+    timeout: int,
 ):
     """Test integration with Grafana."""
     grafana = Grafana(model_name=cos_model.name, base=traefik_url, password=grafana_password)
-    await asyncio.wait_for(grafana.is_ready(), timeout=10 * 60)
+    await asyncio.wait_for(grafana.is_ready(), timeout=timeout * 60)
     dashboards = await grafana.dashboards_all()
     actual_dashboard_titles = set()
 
@@ -225,10 +226,10 @@ async def test_grafana(
 @pytest.mark.cos
 @pytest.mark.usefixtures("related_prometheus")
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_url: str, cos_model: juju.model.Model):
+async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout: int):
     """Test integration with Prometheus."""
     prometheus = Prometheus(model_name=cos_model.name, base=traefik_url)
-    await asyncio.wait_for(prometheus.is_ready(), timeout=10 * 60)
+    await asyncio.wait_for(prometheus.is_ready(), timeout=timeout * 60)
 
     queries = [
         'up{job="kubelet", metrics_path="/metrics"} > 0',
