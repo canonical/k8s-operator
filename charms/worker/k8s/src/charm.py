@@ -33,6 +33,7 @@ import config.extra_args
 import containerd
 import ops
 import yaml
+from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from endpoints import build_url

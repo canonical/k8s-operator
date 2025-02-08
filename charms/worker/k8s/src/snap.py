@@ -269,7 +269,8 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
 
     try:
         args: List[SnapArgument] = [
-            parse_obj_as(SnapArgument, arg) for arg in arch_spec  # type: ignore[arg-type]
+            parse_obj_as(SnapArgument, arg)
+            for arg in arch_spec  # type: ignore[arg-type]
         ]
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)
