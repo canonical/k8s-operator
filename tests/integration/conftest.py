@@ -45,6 +45,8 @@ def pytest_addoption(parser: pytest.Parser):
         if cloud is LXD, use containers
     --apply-proxy
         apply proxy to model-config
+    --timeout
+        set timeout for tests
 
     Args:
         parser: Pytest parser.
@@ -67,6 +69,7 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
+    parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
 
 
 def pytest_configure(config):
@@ -423,3 +426,9 @@ async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
     with ops_test.model_context("cos") as model:
         log.info("Removing Prometheus Offer...")
         await model.remove_offer(f"{model.name}.prometheus-receive-remote-write", force=True)
+
+
+@pytest.fixture(scope="module")
+def timeout(request):
+    """Fixture to set the timeout for certain tests."""
+    return request.config.option.timeout
