@@ -492,7 +492,7 @@ class K8sCharm(ops.CharmBase):
     @on_error(
         ops.BlockedStatus("Failed to apply containerd_custom_registries, check logs for details"),
         ValueError,
-        subprocess.CalledProcessError,
+        FileNotFoundError,
         OSError,
     )
     def _config_containerd_registries(self):

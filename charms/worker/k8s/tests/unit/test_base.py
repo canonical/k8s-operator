@@ -102,6 +102,7 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
+@mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 def test_set_leader(harness):
     """Test emitting the set_leader hook while not reconciled.
 
