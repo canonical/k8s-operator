@@ -1,0 +1,20 @@
+k8s:
+    units: 3
+    base: ubuntu@24.04
+    constraints: arch=amd64 cores=2 mem=8G root-disk=16G
+    channel: latest/edge
+k8s_worker:
+    units: 3
+    base: ubuntu@24.04
+    constraints: arch=amd64 cores=2 mem=8G root-disk=16G
+    channel: latest/edge
+ceph_csi:
+    channel: 1.32/stable
+    base: ubuntu@22.04
+microceph:
+    units: 3
+    base: ubuntu@24.04
+    constraints: arch=amd64 cores=2 mem=8G root-disk=16G
+    channel: squid/beta
+    config:
+        snap-channel: squid/stable
