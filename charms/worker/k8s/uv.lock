@@ -184,7 +184,7 @@ dependencies = [
 [[package]]
 name = "charm-lib-reconciler"
 version = "0.0.0"
-source = { git = "https://github.com/charmed-kubernetes/charm-lib-reconciler?rev=f818cc30d1a22be43ffdfecf7fbd9c3fd2967502#f818cc30d1a22be43ffdfecf7fbd9c3fd2967502" }
+source = { git = "https://github.com/charmed-kubernetes/charm-lib-reconciler?rev=d802829b5e71b2cbf974cd5c7c69d7ce2137b308#d802829b5e71b2cbf974cd5c7c69d7ce2137b308" }
 dependencies = [
     { name = "charm-lib-contextual-status" },
     { name = "ops" },
@@ -524,7 +524,7 @@ requires-dist = [
     { name = "charm-lib-contextual-status", git = "https://github.com/charmed-kubernetes/charm-lib-contextual-status?rev=255dd4a23defc16dcdac832306e5f460a0f1200c" },
     { name = "charm-lib-interface-external-cloud-provider", git = "https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider?rev=e9cadd749ff8e2a6c81fadb0268a8b10e26876be" },
     { name = "charm-lib-node-base", git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=e35bbe08c1035849ed10a6838fa676c7847bc757" },
-    { name = "charm-lib-reconciler", git = "https://github.com/charmed-kubernetes/charm-lib-reconciler?rev=f818cc30d1a22be43ffdfecf7fbd9c3fd2967502" },
+    { name = "charm-lib-reconciler", git = "https://github.com/charmed-kubernetes/charm-lib-reconciler?rev=d802829b5e71b2cbf974cd5c7c69d7ce2137b308" },
     { name = "cosl" },
     { name = "cryptography", specifier = ">=44.0.0" },
     { name = "httpx" },
