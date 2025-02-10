@@ -6,7 +6,6 @@
 # pylint: disable=duplicate-code,missing-function-docstring
 """Unit tests."""
 
-
 import contextlib
 from pathlib import Path
 from unittest import mock

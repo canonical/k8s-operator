@@ -20,6 +20,7 @@ CHARM_DIR = Path(os.environ.get("CHARM_DIR") or Path(__file__).parent.parent)
 SYSTEMD_SERVICE = (CHARM_DIR / "templates/reschedule.service").read_text()
 SYSTEMD_TIMER = (CHARM_DIR / "templates/reschedule.timer").read_text()
 
+
 def _execute_command(args: Sequence[str], check_exit: bool = True) -> int:
     """Subprocess run wrapper.
 
