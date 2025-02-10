@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
+import httpx
 from lightkube import ApiError, Client, KubeConfig
 from lightkube.core.client import LabelSelector
 from lightkube.resources.core_v1 import Node, Pod
@@ -77,7 +78,7 @@ class ClusterInspector:
                 )
 
             return [node for node in client.list(Node, labels=labels) if is_node_not_ready(node)]
-        except ApiError as e:
+        except (ApiError, httpx.ConnectError) as e:
             raise ClusterInspector.ClusterInspectorError(f"Failed to get nodes: {e}") from e
 
     def verify_pods_running(self, namespaces: List[str]) -> Optional[str]:
@@ -103,6 +104,6 @@ class ClusterInspector:
                         failing_pods.append(f"{namespace}/{pod.metadata.name}")  # type: ignore
             if failing_pods:
                 return ", ".join(failing_pods)
-        except ApiError as e:
+        except (ApiError, httpx.ConnectError) as e:
             raise ClusterInspector.ClusterInspectorError(f"Failed to get pods: {e}") from e
         return None
