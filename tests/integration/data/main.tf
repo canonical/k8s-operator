@@ -26,7 +26,7 @@ variable "model_name" {
 }
 
 module "k8s" {
-  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=main"
+  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=KU-2592/terraform-ceph"
   model         = var.model_name
   manifest_yaml = var.manifest_path
 }
