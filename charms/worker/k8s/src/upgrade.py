@@ -107,7 +107,7 @@ class K8sUpgrade(DataUpgrade):
         unready_nodes = nodes or []
 
         if unready_nodes:
-            joined = ', '.join([node.metadata.name for node in unready_nodes])
+            joined = ", ".join([node.metadata.name for node in unready_nodes])
             raise ClusterNotReadyError(
                 message="Cluster is not ready for an upgrade",
                 cause=f"Nodes not ready: {joined}",
