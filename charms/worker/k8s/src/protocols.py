@@ -40,6 +40,7 @@ class K8sCharmProtocol(ops.CharmBase):
     is_control_plane: bool
     is_worker: bool
     datastore: str
+    stored_state: ops.BoundStoredState
 
     def get_cluster_name(self) -> str:
         """Get the cluster name.

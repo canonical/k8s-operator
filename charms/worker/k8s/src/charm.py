@@ -33,6 +33,7 @@ import containerd
 import ops
 import yaml
 from cloud_integration import CloudIntegration
+from config_change_preventer import BootstrapConfigChangePreventer
 from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
@@ -202,6 +203,13 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
+        self.config_change_preventer = BootstrapConfigChangePreventer(
+            charm=self,
+            refresh_events=[
+                self.on.config_changed,
+            ],
+        )
+
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
@@ -283,6 +291,11 @@ class K8sCharm(ops.CharmBase):
     def is_upgrade_granted(self) -> bool:
         """Check if the upgrade has been granted."""
         return self._upgrade_snap
+
+    @property
+    def stored_state(self) -> ops.BoundStoredState:
+        """Return the stored state."""
+        return self._stored
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
