@@ -4,6 +4,7 @@
 # Learn more at: https://juju.is/docs/sdk
 
 """Parse extra arguments for Kubernetes components."""
+
 from typing import Dict, List, Union
 
 import ops
