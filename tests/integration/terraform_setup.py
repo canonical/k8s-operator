@@ -170,11 +170,11 @@ async def main() -> None:
         "--lxd-profile-path", default=script_dir / "data/k8s.profile", help="Path to LXD profile."
     )
     parser.add_argument(
-        "--manifest-path",
+        "--manifest-yaml",
         default=script_dir / "data/default-manifest.yaml",
         help="Path to manifest.",
     )
-    parser.add_argument("--model-name", default="my-canonical-k8s", help="Juju model name.")
+    parser.add_argument("--model", default="my-canonical-k8s", help="Juju model name.")
 
     args = parser.parse_args()
 
@@ -183,7 +183,7 @@ async def main() -> None:
     # Set up Juju and ensure the model exists
     await asyncio.gather(
         setup_juju_auth_details(),
-        ensure_model_exists(args.model_name, args.lxd_profile_path),
+        ensure_model_exists(args.model, args.lxd_profile_path),
     )
 
     # Change to Terraform module directory
@@ -194,16 +194,16 @@ async def main() -> None:
     run_command(["terraform", "init"])
 
     print(
-        f"Applying Terraform with manifest: {args.manifest_path} and model: {args.model_name}..."
+        f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}..."
     )
     run_command(
         [
             "terraform",
             "apply",
             "-var",
-            f"manifest_path={args.manifest_path}",
+            f"manifest_yaml={args.manifest_yaml}",
             "-var",
-            f"model_name={args.model_name}",
+            f"model={args.model}",
             "-auto-approve",
         ]
     )
