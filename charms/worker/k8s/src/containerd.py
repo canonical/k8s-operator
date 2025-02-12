@@ -17,15 +17,37 @@ import collections
 import json
 import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import ops
 import pydantic
 import tomli_w
-from literals import HOSTSD_PATH
+from literals import CONTAINERD_ARGS
 
 log = logging.getLogger(__name__)
+
+
+@lru_cache()
+def containerd_path() -> Path:
+    """Return path to hosts.toml directory.
+
+    Returns:
+        path to containerd config
+
+    Raises:
+        FileNotFoundError: if containerd config path cannot be found
+    """
+    for line in CONTAINERD_ARGS.read_text().splitlines():
+        if line.startswith("--config="):
+            return Path(line.split("=")[1]).parent
+    raise FileNotFoundError("Could not find containerd config path in args file.")
+
+
+def hostsd_path() -> Path:
+    """Return path to hosts.toml directory."""
+    return containerd_path() / "hosts.d"
 
 
 def _ensure_file(
@@ -135,7 +157,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return HOSTSD_PATH / self.host / "ca.crt"
+        return hostsd_path() / self.host / "ca.crt"
 
     @property
     def cert_file_path(self) -> Path:
@@ -144,7 +166,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return HOSTSD_PATH / self.host / "client.crt"
+        return hostsd_path() / self.host / "client.crt"
 
     @property
     def key_file_path(self) -> Path:
@@ -153,7 +175,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return HOSTSD_PATH / self.host / "client.key"
+        return hostsd_path() / self.host / "client.key"
 
     @property
     def hosts_toml_path(self) -> Path:
@@ -162,7 +184,7 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         Returns:
             path to file
         """
-        return HOSTSD_PATH / self.host / "hosts.toml"
+        return hostsd_path() / self.host / "hosts.toml"
 
     @property
     def auth_config_header(self) -> Dict[str, Any]:
@@ -284,7 +306,7 @@ def ensure_registry_configs(registries: List[Registry]):
     Args:
         registries (List[Registry]): list of registries
     """
-    unneeded = {host.parent.name for host in HOSTSD_PATH.glob("**/hosts.toml")}
+    unneeded = {host.parent.name for host in hostsd_path().glob("**/hosts.toml")}
     for r in registries:
         unneeded -= {r.host}
         log.info("Configure registry %s (%s)", r.host, r.url)
@@ -293,7 +315,7 @@ def ensure_registry_configs(registries: List[Registry]):
 
     for h in unneeded:
         log.info("Removing unneeded registry %s", h)
-        (HOSTSD_PATH / h / "hosts.toml").unlink(missing_ok=True)
+        (hostsd_path() / h / "hosts.toml").unlink(missing_ok=True)
 
 
 def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):
