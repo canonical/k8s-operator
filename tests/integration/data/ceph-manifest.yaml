@@ -18,6 +18,6 @@ microceph:
     units: 3
     base: ubuntu@22.04
     constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M
-    channel: squid/beta
+    channel: reef/stable
     config:
-        snap-channel: squid/stable
+        snap-channel: reef/stable
