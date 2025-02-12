@@ -33,7 +33,7 @@ class DynamicActiveStatus(ops.ActiveStatus):
         postfix (str): Optional postfix to the unit status
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialise the DynamicActiveStatus."""
         super().__init__("Ready")
         self.prefix: str = ""
