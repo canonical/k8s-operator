@@ -6,6 +6,7 @@
 """Unit tests containerd module."""
 
 from os import getgid, getuid
+from pathlib import Path
 from unittest import mock
 
 import containerd
@@ -96,8 +97,11 @@ def test_registry_parse_failures(registry_errors):
     assert expected in str(e.value)
 
 
-def test_registry_methods():
+@mock.patch("containerd.hostsd_path")
+def test_registry_methods(hostsd_path, tmp_path):
     """Test registry methods."""
+    hostsd_path.return_value = test_path = tmp_path / "hostsd"
+
     registry = containerd.Registry(
         host="ghcr-mirror.io",
         url="http://ghcr.io/",
@@ -111,10 +115,10 @@ def test_registry_methods():
         override_path=True,
     )
 
-    assert registry.ca_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/ca.crt"
-    assert registry.cert_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/client.crt"
-    assert registry.key_file_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/client.key"
-    assert registry.hosts_toml_path == containerd.HOSTSD_PATH / "ghcr-mirror.io/hosts.toml"
+    assert registry.ca_file_path == test_path / "ghcr-mirror.io/ca.crt"
+    assert registry.cert_file_path == test_path / "ghcr-mirror.io/client.crt"
+    assert registry.key_file_path == test_path / "ghcr-mirror.io/client.key"
+    assert registry.hosts_toml_path == test_path / "ghcr-mirror.io/hosts.toml"
 
     assert registry.auth_config_header == {"Authorization": "Basic dXNlcjpwYXNz"}
 
@@ -172,6 +176,7 @@ def test_registry_methods():
 
 
 @mock.patch("containerd._ensure_file")
+@mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 def test_ensure_registry_configs(mock_ensure_file):
     """Test registry methods."""
     registry = containerd.Registry(
