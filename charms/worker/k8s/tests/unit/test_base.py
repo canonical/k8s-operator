@@ -7,9 +7,11 @@
 """Unit tests."""
 
 import contextlib
+import json
 from pathlib import Path
 from unittest import mock
 
+import containerd
 import ops
 import ops.testing
 import pytest
@@ -100,6 +102,7 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
+@mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 def test_set_leader(harness):
     """Test emitting the set_leader hook while not reconciled.
 
@@ -222,3 +225,36 @@ def test_configure_bootstrap_extra_sans(harness):
     exp_extra_sans = cfg_extra_sans + [public_addr]
     for san in exp_extra_sans:
         assert san in bs_config.extra_sans
+
+
+@mock.patch("containerd.ensure_registry_configs")
+def test_config_containerd_registries(mock_ensure_registry_configs, harness):
+    """Test configuring containerd registries.
+
+    Args:
+        mock_ensure_registry_configs: mock for containerd.ensure_registry_configs
+        harness: the harness under test
+    """
+    harness.disable_hooks()
+    cfg_registries = [
+        {
+            "url": "https://registry.example.com",
+            "host": "my.registry:port",
+            "username": "user",
+            "password": "pass",
+        }
+    ]
+    cfg_data, remote_app = json.dumps(cfg_registries), ""
+    app_data = {"custom-registries": cfg_data}
+    if harness.charm.is_worker:
+        remote_app = "k8s"
+        rel = harness.add_relation("containerd", remote_app, app_data=app_data)
+    else:
+        remote_app = "k8s-worker"
+        rel = harness.add_relation("containerd", remote_app)
+        harness.set_leader(True)
+        harness.update_config({"containerd-custom-registries": cfg_data})
+    harness.charm._config_containerd_registries()
+    expected = containerd.parse_registries(cfg_data)
+    mock_ensure_registry_configs.assert_called_once_with(expected)
+    assert app_data == harness.get_relation_data(rel, "k8s")

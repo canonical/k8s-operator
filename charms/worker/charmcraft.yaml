@@ -167,7 +167,6 @@ peers:
   upgrade:
     interface: upgrade
 
-
 provides:
   cos-agent:
     interface: cos_agent
@@ -175,19 +174,27 @@ provides:
 requires:
   aws:
     interface: aws-integration
+    limit: 1
   azure:
     interface: azure-integration
   certificates:
     interface: tls-certificates
+    limit: 1
   cluster:
-    interface: k8s-cluster
     # interface to connect with the k8s charm to provide
     # authentication token via a secret in order to cluster
     # this machine as a worker unit.
     #   juju integrate k8s:k8s-cluster k8s-worker:cluster
+    interface: k8s-cluster
+    limit: 1
   cos-tokens:
     interface: cos-k8s-tokens
+    limit: 1
   containerd:
+    # Interface provided by the control-plane charm to
+    # share containerd configuration.
     interface: containerd
+    limit: 1
   gcp:
     interface: gcp-integration
+    limit: 1
