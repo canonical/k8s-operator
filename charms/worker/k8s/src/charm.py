@@ -428,22 +428,27 @@ class K8sCharm(ops.CharmBase):
     @on_error(
         ops.BlockedStatus("Failed to apply containerd_custom_registries, check logs for details"),
         ValueError,
-        subprocess.CalledProcessError,
+        FileNotFoundError,
         OSError,
     )
     def _config_containerd_registries(self):
         """Apply containerd custom registries."""
         registries, config = [], ""
-        for relation in self.model.relations.get(CONTAINERD_RELATION, []):
-            if self.is_control_plane:
-                config = str(self.config["containerd-custom-registries"])
-                registries = containerd.parse_registries(config)
-            else:
-                registries = containerd.recover(relation)
-            self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
+        if self.is_control_plane:
+            config = str(self.config["containerd-custom-registries"])
+            registries = containerd.parse_registries(config)
             containerd.ensure_registry_configs(registries)
+
+        for relation in self.model.relations.get(CONTAINERD_RELATION, []):
             if self.lead_control_plane:
                 containerd.share(config, self.app, relation)
+                continue
+            if self.is_control_plane:
+                continue
+            ## Only workers here, and they are limited to only relate to one containerd endpoint
+            self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
+            registries = containerd.recover(relation)
+            containerd.ensure_registry_configs(registries)
 
     def _configure_cos_integration(self):
         """Retrieve the join token from secret databag and join the cluster."""
@@ -734,7 +739,7 @@ class K8sCharm(ops.CharmBase):
             relation.data[self.unit]["version"] = version
 
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
-    def _announce_kubernetes_version(self):
+    def _announce_kubernetes_version(self) -> None:
         """Announce the Kubernetes version to the cluster.
 
         This method ensures that the Kubernetes version is consistent across the cluster.

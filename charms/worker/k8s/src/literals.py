@@ -12,14 +12,16 @@ SNAP_NAME = "k8s"
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # Charm
-CONTAINERD_BASE_PATH = Path("/etc/containerd/k8s-containerd/etc/containerd")
+SNAP_COMMON = "/var/snap/k8s/common"
+CONTAINERD_ARGS = Path(SNAP_COMMON) / "args/containerd"
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
-HOSTSD_PATH = CONTAINERD_BASE_PATH / "hosts.d/"
+PKI_DIR = ETC_KUBERNETES / "pki"
+APISERVER_CERT = PKI_DIR / "apiserver.crt"
 KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
-K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
+K8SD_SNAP_SOCKET = f"{SNAP_COMMON}/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
 SUPPORTED_DATASTORES = ["dqlite", "etcd"]
 
