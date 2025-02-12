@@ -25,4 +25,4 @@ jobs:
     - name: Run terraform integration tests
       # TODO(ben): Add remaining integration tests once we have the terraform modules.
       run: |
-        tox -e run-terraform-e2e-tests -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy --manifest-path data/ceph-manifest.yaml
+        tox -e run-terraform-e2e-tests -- -s -k test_nodes_ready --model my-canonical-k8s --no-deploy
