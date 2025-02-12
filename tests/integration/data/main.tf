@@ -6,7 +6,7 @@ terraform {
   required_providers {
     juju = {
       source  = "juju/juju"
-      version = "~> 0.16.0"
+      version = "~> 0.14.0"
     }
   }
 }
@@ -26,7 +26,7 @@ variable "model" {
 }
 
 module "k8s" {
-  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=KU-2592/terraform-ceph"
+  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=main"
   model         = var.model
   manifest_yaml = var.manifest_yaml
 }
