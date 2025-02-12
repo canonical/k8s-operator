@@ -379,7 +379,7 @@ class K8sCharm(ops.CharmBase):
         """Retrieve the certificate extra SANs."""
         extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
         configured_sans = {san for san in extra_sans_str.strip().split() if san}
-        all_sans = configured_sans | set([_get_public_address()])
+        all_sans = configured_sans | {_get_public_address()}
         return sorted(all_sans)
 
     def _assemble_bootstrap_config(self):

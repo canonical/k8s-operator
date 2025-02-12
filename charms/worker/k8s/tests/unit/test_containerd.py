@@ -4,6 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 """Unit tests containerd module."""
+
 from os import getgid, getuid
 from pathlib import Path
 from unittest import mock

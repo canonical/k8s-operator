@@ -92,12 +92,12 @@ async def test_nodes_labelled(request, kubernetes_cluster: juju.model.Model):
     nodes = await get_rsc(k8s.units[0], "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
-    assert len(k8s.units + worker.units) == len(
-        labelled
-    ), "Not all nodes labelled with custom-label"
-    assert len(k8s.units + worker.units) == len(
-        juju_nodes
-    ), "Not all nodes labelled as juju-charms"
+    assert len(k8s.units + worker.units) == len(labelled), (
+        "Not all nodes labelled with custom-label"
+    )
+    assert len(k8s.units + worker.units) == len(juju_nodes), (
+        "Not all nodes labelled as juju-charms"
+    )
 
     # Set an INVALID node-label on both k8s and worker
     label_config = {"node-labels": f"{testname}=invalid="}
