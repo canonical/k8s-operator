@@ -7,7 +7,6 @@
 
 """Snap Installation Module."""
 
-
 import logging
 import re
 import shutil

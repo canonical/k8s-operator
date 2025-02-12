@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 """Relation kube-control module."""
+
 import logging
 from base64 import b64decode
 

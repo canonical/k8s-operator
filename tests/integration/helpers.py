@@ -109,9 +109,7 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
     result = await action.wait()
     stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
     assert result.results["return-code"] == 0, (
-        f"\nFailed to get {resource} with kubectl\n"
-        f"\tstdout: '{stdout}'\n"
-        f"\tstderr: '{stderr}'"
+        f"\nFailed to get {resource} with kubectl\n\tstdout: '{stdout}'\n\tstderr: '{stderr}'"
     )
     log.info("Parsing %s list...", resource)
     resource_obj = json.loads(stdout)
@@ -397,9 +395,9 @@ class Bundle:
         series = ops_test.request.config.getoption("--series")
 
         bundle = cls(path=path, arch=arch, series=series)
-        assert not all(
-            _ in kwargs for _ in ("apps_local", "apps_channel")
-        ), "Cannot use both apps_local and apps_channel"
+        assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
+            "Cannot use both apps_local and apps_channel"
+        )
 
         return bundle, Markings(**kwargs)
 
