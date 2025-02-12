@@ -4,12 +4,12 @@
 k8s:
     units: 3
     base: ubuntu@22.04
-    constraints: arch=amd64 cores=2 mem=8G root-disk=16G
+    constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M
     channel: latest/edge
 k8s_worker:
     units: 3
     base: ubuntu@22.04
-    constraints: arch=amd64 cores=2 mem=8G root-disk=16G
+    constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M
     channel: latest/edge
 ceph_csi:
     channel: 1.32/stable
@@ -17,7 +17,7 @@ ceph_csi:
 microceph:
     units: 3
     base: ubuntu@22.04
-    constraints: arch=amd64 cores=2 mem=8G root-disk=16G
+    constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M
     channel: squid/beta
     config:
         snap-channel: squid/stable
