@@ -43,6 +43,9 @@ ETCD_RELATION = "etcd"
 UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
+# Cluster Relation Keys
+CLUSTER_CERTIFICATES_KEY = "certificates-provider"
+
 # Certificates
 SUPPORTED_CERTIFICATES = ["external", "self-signed"]
 

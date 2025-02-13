@@ -43,6 +43,7 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
+    CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     CONTAINERD_HTTP_PROXY,
@@ -266,6 +267,13 @@ class K8sCharm(ops.CharmBase):
     def datastore(self) -> str:
         """Return the datastore type."""
         return str(self.config.get("bootstrap-datastore"))
+
+    @property
+    def certificates_provider(self) -> str:
+        """Return the certificates provider."""
+        if self.is_control_plane:
+            return str(self.config.get("bootstrap-certificates"))
+        return self._recover_certificates_provider
 
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
@@ -828,6 +836,18 @@ class K8sCharm(ops.CharmBase):
         if version:
             relation.data[self.unit]["version"] = version
 
+    @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
+    def _announce_certificates_provider(self) -> None:
+        if not (provider := self.config.get("bootstrap-certificates")):
+            raise ReconcilerError("Missing certificates provider")
+
+        relation = self.model.get_relation(CLUSTER_WORKER_RELATION)
+        if not relation:
+            log.info("Cluster (worker) relation not found, skipping certificates sharing.")
+            return
+
+        relation.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
+
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
     def _announce_kubernetes_version(self) -> None:
         """Announce the Kubernetes version to the cluster.
@@ -1012,6 +1032,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._announce_kubernetes_version()
+            self._announce_certificates_provider()
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
@@ -1231,6 +1252,8 @@ class K8sCharm(ops.CharmBase):
         if not self.is_control_plane:
             return
         if self.config.get("bootstrap-certificates") == "external":
+            # TODO: This should be implemented once k8s-snap offers an API endpoint
+            # to update the certificates in the node.
             log.info("External certificates are used, skipping SANs update")
             return
 

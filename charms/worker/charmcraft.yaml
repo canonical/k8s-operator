@@ -64,12 +64,6 @@ platforms:
 
 config:
   options:
-    bootstrap-certificates:
-      type: string
-      default: "self-signed"
-      description: |
-        The type of certificates to use in Canonical Kubernetes. This cannot be
-        changed after deployment. Allowed values are "self-signed" and "external".
     bootstrap-node-taints:
       type: string
       default: ""
