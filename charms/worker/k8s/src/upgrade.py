@@ -6,17 +6,8 @@
 import logging
 from typing import List, Union
 
-import charms.contextual_status as status
 import ops
 import reschedule
-from charms.data_platform_libs.v0.upgrade import (
-    ClusterNotReadyError,
-    DataUpgrade,
-    DependencyModel,
-    UpgradeGrantedEvent,
-    verify_requirements,
-)
-from charms.operator_libs_linux.v2.snap import SnapError
 from inspector import ClusterInspector
 from literals import (
     K8S_CONTROL_PLANE_SERVICES,
@@ -30,6 +21,16 @@ from pydantic import BaseModel
 from snap import management as snap_management
 from snap import start, stop
 from snap import version as snap_version
+
+import charms.contextual_status as status
+from charms.data_platform_libs.v0.upgrade import (
+    ClusterNotReadyError,
+    DataUpgrade,
+    DependencyModel,
+    UpgradeGrantedEvent,
+    verify_requirements,
+)
+from charms.operator_libs_linux.v2.snap import SnapError
 
 log = logging.getLogger(__name__)
 
@@ -106,9 +107,10 @@ class K8sUpgrade(DataUpgrade):
         unready_nodes = nodes or []
 
         if unready_nodes:
+            joined = ", ".join([node.metadata.name for node in unready_nodes])
             raise ClusterNotReadyError(
                 message="Cluster is not ready for an upgrade",
-                cause=f"Nodes not ready: {', '.join(node.metadata.name for node in unready_nodes)}",
+                cause=f"Nodes not ready: {joined}",
                 resolution="""Node(s) may be in a bad state.
                     Please check the node(s) for more information.""",
             )

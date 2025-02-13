@@ -419,11 +419,26 @@ actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
 
-
 parts:
   charm:
-    plugin: charm
-    build-packages: [git]
+    source: .
+    plugin: uv
+    build-packages:
+      - git
+      - libffi-dev
+      - libssl-dev
+      - pkg-config
+    build-snaps:
+      - astral-uv
+      - rustup
+    override-build: |
+      rustup default stable
+      craftctl default
+  templates:
+    plugin: dump
+    source: templates/
+    organize:
+      "*": templates/
 
 peers:
   cluster:
@@ -458,3 +473,5 @@ requires:
     interface: external_cloud_provider
   gcp:
     interface: gcp-integration
+  external-load-balancer:
+    interface: loadbalancer

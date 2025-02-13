@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 
 def charm_channel_missing(charms: Iterable[str], channel: str) -> Tuple[bool, str]:
-    """Run to test if a given channel has charms for deployment
+    """Run to test if a given channel has charms for deployment.
 
     Args:
         charms: The list of charms to check
@@ -80,7 +80,7 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         stop=stop_after_delay(datetime.timedelta(minutes=30)),
         before_sleep=before_sleep_log(log, logging.WARNING),
     )
-    async def _wait_for_upgrade_complete():
+    async def _wait_for_upgrade_complete() -> None:
         """Wait for the model to become idle."""
         k8s_apps = {
             k: v

@@ -6,15 +6,18 @@
 # pylint: disable=duplicate-code,missing-function-docstring
 """Unit tests."""
 
-
 import contextlib
+import json
 from pathlib import Path
 from unittest import mock
 
+import containerd
 import ops
 import ops.testing
 import pytest
 from charm import K8sCharm
+from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
+
 from charms.k8s.v0.k8sd_api_manager import BootstrapConfig, UpdateClusterConfigRequest
 
 
@@ -98,6 +101,7 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
+@mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 def test_set_leader(harness):
     """Test emitting the set_leader hook while not reconciled.
 
@@ -105,6 +109,7 @@ def test_set_leader(harness):
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
+    harness.charm._ensure_cert_sans = mock.MagicMock()
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
@@ -197,7 +202,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
     assert uccr_config.datastore.type == "external"
 
 
-def test_configure_boostrap_extra_sans(harness):
+def test_configure_bootstrap_extra_sans(harness):
     """Test configuring kube-apiserver-extra-sans on bootstrap.
 
     Args:
@@ -206,17 +211,172 @@ def test_configure_boostrap_extra_sans(harness):
     if harness.charm.is_worker:
         pytest.skip("Not applicable on workers")
 
+    harness.charm._ensure_cert_sans = mock.MagicMock()
     cfg_extra_sans = ["mykubernetes", "mykubernetes.local"]
     public_addr = "11.12.13.14"
+    remote_addr = "11.12.13.15"
+    harness.add_network(
+        public_addr, endpoint="cluster", ingress_addresses=[public_addr, remote_addr]
+    )
+    harness.add_relation("cluster", "remote")
     harness.update_config({"kube-apiserver-extra-sans": " ".join(cfg_extra_sans)})
 
-    with mock.patch("charm._get_public_address") as mock_get_public_addr:
-        mock_get_public_addr.return_value = public_addr
-
+    with mock.patch("charm._get_juju_public_address") as m:
+        m.return_value = public_addr
         bs_config = harness.charm._assemble_bootstrap_config()
 
     # We expect the resulting SANs to include the configured addresses as well
     # as the unit address.
-    exp_extra_sans = cfg_extra_sans + [public_addr]
+    exp_extra_sans = cfg_extra_sans + [public_addr, remote_addr]
+    assert len(exp_extra_sans) == len(bs_config.extra_sans)
     for san in exp_extra_sans:
         assert san in bs_config.extra_sans
+
+
+@mock.patch("containerd.ensure_registry_configs")
+def test_config_containerd_registries(mock_ensure_registry_configs, harness):
+    """Test configuring containerd registries.
+
+    Args:
+        mock_ensure_registry_configs: mock for containerd.ensure_registry_configs
+        harness: the harness under test
+    """
+    harness.disable_hooks()
+    cfg_registries = [
+        {
+            "url": "https://registry.example.com",
+            "host": "my.registry:port",
+            "username": "user",
+            "password": "pass",
+        }
+    ]
+    cfg_data, remote_app = json.dumps(cfg_registries), ""
+    app_data = {"custom-registries": cfg_data}
+    if harness.charm.is_worker:
+        remote_app = "k8s"
+        rel = harness.add_relation("containerd", remote_app, app_data=app_data)
+    else:
+        remote_app = "k8s-worker"
+        rel = harness.add_relation("containerd", remote_app)
+        harness.set_leader(True)
+        harness.update_config({"containerd-custom-registries": cfg_data})
+    harness.charm._config_containerd_registries()
+    expected = containerd.parse_registries(cfg_data)
+    mock_ensure_registry_configs.assert_called_once_with(expected)
+    assert app_data == harness.get_relation_data(rel, "k8s")
+
+
+def test_get_public_address_with_external_lb(harness):
+    """Test getting the public address with an external load balancer.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    lb_address = "1.2.3.4"
+
+    with (
+        mock.patch.object(harness.charm, "external_load_balancer") as mock_elb,
+    ):
+        mock_elb.is_available = True
+        mock_elb.get_response.return_value = MockELBResponse(addr=lb_address)
+        public_addr = harness.charm._get_public_address()
+
+    assert public_addr == lb_address
+
+
+def test_get_public_address_without_external_lb(harness):
+    """Test getting the public address without an external load balancer.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    exp_public_addr = "1.2.3.4"
+    with mock.patch("charm._get_juju_public_address", return_value=exp_public_addr):
+        public_addr = harness.charm._get_public_address()
+    assert public_addr == exp_public_addr
+
+
+def test_ensure_cert_sans(harness):
+    """Test ensuring certificate SANs are up-to-date.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    with (
+        mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans,
+        mock.patch("charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])),
+        mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_api_manager,
+    ):
+        mock_extra_sans.return_value = ["sans1", "sans2"]
+        harness.charm._ensure_cert_sans()
+        mock_api_manager.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])
+
+
+def test_get_external_kubeconfig(harness):
+    """Test getting the external kubeconfig.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    public_addr = "1.2.3.4"
+    with (
+        mock.patch.object(harness.charm, "_get_public_address"),
+        mock.patch.object(harness.charm.api_manager, "get_kubeconfig") as mock_api_manager,
+    ):
+        event = MockEvent(MockEvent.Params())
+        mock_api_manager.return_value = {"server": public_addr}
+        harness.charm._get_external_kubeconfig(event)
+        assert event.results == {"kubeconfig": {"server": public_addr}}
+
+        custom_addr = "10.20.30.40"
+        mock_api_manager.return_value = {"server": custom_addr}
+        event = MockEvent(MockEvent.Params({"server": custom_addr}))
+        harness.charm._get_external_kubeconfig(event)
+        assert event.results == {"kubeconfig": {"server": custom_addr}}
+
+
+def test_configure_external_load_balancer(harness):
+    """Test that the external load balancer is configured correctly.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    exp_addr = "1.2.3.4"
+    with mock.patch.object(harness.charm, "external_load_balancer") as mock_elb:
+        mock_elb.is_available = True
+        mock_elb.get_request.return_value = MockELBRequest(MockELBRequest.Protocols())
+        mock_elb.get_response = mock.MagicMock()
+        mock_elb.get_response.return_value = MockELBResponse(exp_addr)
+        harness.charm._configure_external_load_balancer()
+        mock_elb.get_response.assert_called_once()
+
+
+def test_external_load_balancer_address(harness):
+    """Test that the external load balancer address is returned correctly.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    with mock.patch.object(harness.charm, "external_load_balancer") as mock_elb:
+        lb_addr = "1.2.3.4"
+        mock_elb.is_available = True
+        mock_elb.get_response.return_value = MockELBResponse(lb_addr)
+        assert harness.charm.external_load_balancer_address == lb_addr

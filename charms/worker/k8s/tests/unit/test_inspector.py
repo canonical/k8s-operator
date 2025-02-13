@@ -23,7 +23,7 @@ class TestClusterInspector(unittest.TestCase):
         self.mock_client = MagicMock()
         self.inspector.client = self.mock_client
 
-    def test_get_nodes_returns_unready(self):
+    def test_get_nodes_returns_unready(self) -> None:
         """Test that get_nodes returns unready nodes."""
         mock_node1 = MagicMock(spec=Node)
         mock_node1.status.conditions = [NodeCondition(type="Ready", status="True")]
