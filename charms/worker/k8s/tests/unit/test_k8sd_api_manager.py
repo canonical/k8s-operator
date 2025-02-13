@@ -7,6 +7,7 @@
 import socket
 import unittest
 from socket import AF_UNIX, SOCK_STREAM
+from typing import Union
 from unittest.mock import MagicMock, call, patch
 
 from charms.k8s.v0.k8sd_api_manager import (
@@ -24,6 +25,10 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdConnectionError,
     LocalStorageConfig,
     NetworkConfig,
+    RefreshCertificatesPlanMetadata,
+    RefreshCertificatesPlanResponse,
+    RefreshCertificatesRunRequest,
+    RefreshCertificatesRunResponse,
     TokenMetadata,
     UnixSocketHTTPConnection,
     UpdateClusterConfigRequest,
@@ -384,3 +389,57 @@ class TestK8sdAPIManager(unittest.TestCase):
             AuthTokenResponse,
             {"username": test_user, "groups": test_groups},
         )
+
+    @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
+    def test_refresh_certs(self, mock_send_request: MagicMock):
+        """Test successfully calling refresh certificates endpoints on K8sd.
+
+        Args:
+            mock_send_request: the mocked send_request function
+        """
+        extra_sans = ["test-sans1", "test-sans2", "1.2.3.4"]
+        expiration_seconds = 180
+        seed = 123
+        plan_args = (
+            "/1.0/k8sd/refresh-certs/plan",
+            "POST",
+            RefreshCertificatesPlanResponse,
+            {},
+        )  # type: ignore
+        run_req = RefreshCertificatesRunRequest(  # type: ignore
+            seed=seed,
+            expiration_seconds=expiration_seconds,  # type: ignore
+            extra_sans=extra_sans,  # type: ignore
+        )
+        run_body = run_req.dict(exclude_none=True, by_alias=True)
+        run_args = (
+            "/1.0/k8sd/refresh-certs/run",
+            "POST",
+            RefreshCertificatesRunResponse,
+            run_body,
+        )  # type: ignore
+
+        def mock_send_request_se(*args) -> Union[RefreshCertificatesPlanResponse, EmptyResponse]:
+            """Mock send_request side effect.
+
+            Args:
+                args: the arguments to the call
+
+            Returns:
+                the response for the call
+            """
+            if args == plan_args:
+                return RefreshCertificatesPlanResponse(
+                    status_code=200,
+                    type="test",
+                    error_code=0,
+                    metadata=RefreshCertificatesPlanMetadata(seconds=seed),
+                )
+            if args == run_args:
+                return EmptyResponse(status_code=200, type="test", error_code=0)
+
+            return EmptyResponse(status_code=404, type="test", error_code=1)
+
+        mock_send_request.side_effect = mock_send_request_se
+        self.api_manager.refresh_certs(extra_sans, expiration_seconds)
+        mock_send_request.assert_has_calls([call(*plan_args), call(*run_args)], any_order=False)
