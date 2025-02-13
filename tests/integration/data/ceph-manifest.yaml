@@ -17,14 +17,14 @@ ceph_csi:
 ceph_mon:
     channel: quincy/stable
     constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
-    num_units: 1
+    units: 1
     config:
         monitor-count: 1
         expected-osd-count: 2
 ceph_osd:
     channel: quincy/stable
     constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
-    num_units: 2
-    storage:
+    units: 2
+    config:
         osd-devices: 1G,1
         osd-journals: 1G,1
