@@ -27,4 +27,4 @@ ceph_osd:
     units: 2
     config:
         osd-devices: 1G,1
-        osd-journals: 1G,1
+        osd-journal: 1G,1
