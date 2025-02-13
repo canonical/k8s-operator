@@ -5,5 +5,5 @@ metadata:
 spec:
   containers:
     - name: test-container
-      #image:
-      command: ["echo", "Success"]
+      #image: set by test
+      command: ["sleep", "100"]
