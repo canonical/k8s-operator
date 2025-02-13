@@ -436,7 +436,7 @@ class K8sCharm(ops.CharmBase):
                 log.info("Adding external load balancer address to extra SANs")
                 extra_sans.add(lb_addr)
         except LookupError as e:
-            raise ReconcilerError(f"Failed to get external load balancer address: {e}")
+            raise ReconcilerError(f"Failed to get external load balancer address: {e}") from e
 
         return sorted(extra_sans)
 
@@ -1229,7 +1229,7 @@ class K8sCharm(ops.CharmBase):
                 log.info("Using external load balancer address as the public address")
                 return lb_addr
         except LookupError as e:
-            raise LookupError(f"Failed to get external load balancer address: {e}")
+            raise LookupError(f"Failed to get external load balancer address: {e}") from e
 
         log.info("Using juju public address as the public address")
         return _get_juju_public_address()
