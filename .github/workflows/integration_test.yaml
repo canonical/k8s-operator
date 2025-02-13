@@ -1,4 +1,3 @@
-
 name: Integration tests
 
 on:
@@ -28,9 +27,9 @@ jobs:
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-    - uses: actions/checkout@v4
-    - id: charmcraft
-      run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+      - id: charmcraft
+        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@a23cb8af2877316bd87af472b1732318386bd05c
@@ -44,7 +43,7 @@ jobs:
           builder-label: ubuntu-22.04
           tester-arch: AMD64
           tester-size: xlarge
-          modules: '["test_k8s", "test_etcd", "test_ceph", "test_upgrade", "test_external_certs"]'
+          modules: '["test_k8s", "test_etcd", "test_ceph", "test_upgrade", "test_external_certs", "test_registry"]'
         # built and test on on self-hosted
         - id: arm64
           builder-label: ARM64
