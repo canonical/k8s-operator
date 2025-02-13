@@ -28,3 +28,4 @@ relations:
   - [openstack-cloud-controller:external-cloud-provider, k8s:external-cloud-provider]
   - [openstack-cloud-controller:openstack,               openstack-integrator:clients]
   - [cinder-csi:openstack,                               openstack-integrator:clients]
+  - [k8s:external-load-balancer,                         openstack-integrator:lb-consumers]

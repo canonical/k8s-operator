@@ -8,7 +8,6 @@ from base64 import b64decode
 
 import ops
 import yaml
-from charms.contextual_status import BlockedStatus, on_error
 from literals import APISERVER_PORT
 from protocols import K8sCharmProtocol
 
