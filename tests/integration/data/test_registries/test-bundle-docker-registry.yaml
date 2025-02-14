@@ -1,0 +1,16 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: integration-test-docker-registry
+description: |-
+  Used to deploy or refresh within an integration test model
+series: jammy
+applications:
+  k8s:
+    charm: k8s
+    constraints: cores=2 mem=8G root-disk=16G
+    num_units: 1
+  docker-registry:
+    charm: docker-registry
+    channel: latest/edge
+    num_units: 1
