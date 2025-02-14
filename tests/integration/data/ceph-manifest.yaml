@@ -26,7 +26,5 @@ ceph_osd:
     constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
     units: 2
     storage:
-        [
-            { type: "osd-devices", count: 1, size: "1G" },
-            { type: "osd-journals", count: 1, size: "1G" },
-        ]
+        osd-devices: 1G,1
+        osd-journals: 1G,1
