@@ -183,6 +183,10 @@ async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, requ
         kubernetes_cluster (model.Model): The Kubernetes cluster model.
         request: The pytest request object containing test configuration options.
     """
+    charm_default_snap_resource = Path("charms/worker/k8s/templates/snap_installation.yaml")
+    if "latest/edge" not in charm_default_snap_resource.read_text():
+        pytest.skip("only run on latest/edge channel")
+
     k8s = kubernetes_cluster.applications["k8s"]
     assert k8s, "k8s application not found"
     # Override snap resource
