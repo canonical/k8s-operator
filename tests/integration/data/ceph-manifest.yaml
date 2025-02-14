@@ -25,6 +25,6 @@ ceph_osd:
     channel: quincy/stable
     constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
     units: 2
-    config:
+    storage:
         osd-devices: 1G,1
-        osd-journal: 1G,1
+        osd-journals: 1G,1
