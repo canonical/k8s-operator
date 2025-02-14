@@ -19,7 +19,7 @@ import ops
 import yaml
 from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE
 from protocols import K8sCharmProtocol
-from pydantic import BaseModel, Field, ValidationError, field_validator, parse_obj_as
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
 from typing_extensions import Annotated
 
 import charms.operator_libs_linux.v2.snap as snap_lib
@@ -268,7 +268,8 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
         raise snap_lib.SnapError(f"Failed to find revision for arch={arch}")
 
     try:
-        args = parse_obj_as(List[SnapArgument], arch_spec)
+        adapter = TypeAdapter(List[SnapArgument])
+        args = adapter.validate_python(arch_spec)
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)
         raise snap_lib.SnapError("Failed to validate snap args")
@@ -290,7 +291,7 @@ def management(charm: K8sCharmProtocol) -> None:
         which: snap_lib.Snap = cache[args.name]
         if block_refresh(which, args, charm.is_upgrade_granted):
             continue
-        install_args = args.dict(exclude_none=True)
+        install_args = args.model_dump(exclude_none=True)
         if isinstance(args, SnapFileArgument):
             if which.revision != "x1":
                 snap_lib.install_local(**install_args)

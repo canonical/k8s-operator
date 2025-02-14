@@ -54,15 +54,6 @@ wheels = [
 ]
 
 [[package]]
-name = "backports-cached-property"
-version = "1.0.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/08/83/4cea5c665d2af765c02f7d8e8560b5918405c1d7d11ccfc60c4919c1cfd0/backports.cached-property-1.0.2.tar.gz", hash = "sha256:9306f9eed6ec55fd156ace6bc1094e2c86fae5fb2bf07b6a9c00745c656e75dd", size = 8031 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/ae/69e52acdcf381b108b36d989ea58656de4a9ab8863aba6176d80d01041df/backports.cached_property-1.0.2-py3-none-any.whl", hash = "sha256:baeb28e1cd619a3c9ab8941431fe34e8490861fb998c6c4590693d50171db0cc", size = 6090 },
-]
-
-[[package]]
 name = "cached-property"
 version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -534,7 +525,7 @@ requires-dist = [
     { name = "ops-interface-aws", git = "https://github.com/charmed-kubernetes/interface-aws-integration?subdirectory=ops&rev=main" },
     { name = "ops-interface-azure", git = "https://github.com/charmed-kubernetes/interface-azure-integration?subdirectory=ops&rev=main" },
     { name = "ops-interface-gcp", git = "https://github.com/charmed-kubernetes/interface-gcp-integration?subdirectory=ops&rev=main" },
-    { name = "ops-interface-kube-control", git = "https://github.com/charmed-kubernetes/interface-kube-control.git?subdirectory=ops&rev=mateoflorido%2Fpydantic2" },
+    { name = "ops-interface-kube-control", specifier = "==0.3.1" },
     { name = "poetry-core" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -675,12 +666,15 @@ dependencies = [
 
 [[package]]
 name = "ops-interface-kube-control"
-version = "0.2.0"
-source = { git = "https://github.com/charmed-kubernetes/interface-kube-control.git?subdirectory=ops&rev=mateoflorido%2Fpydantic2#a46fff2eee62aae2c9ce2e2d7dacb0eb959326ef" }
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "backports-cached-property" },
     { name = "ops" },
     { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/50/46/e32dc6a71383d6d9e74536e1c4a78b4a9511c6864b1b9750a35d85cc2753/ops_interface_kube_control-0.3.1.tar.gz", hash = "sha256:bce33c5ba410c71898377034458f8b8d0334facee8d31ddb95b457228a65c02b", size = 52806 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/cb/3f759088008972601a3639ee7d346f356e0e5b7bbb1de2c76286ad68f485/ops.interface_kube_control-0.3.1-py3-none-any.whl", hash = "sha256:ce51334b21ea9bb284294495c81ebec145377a42d3cce6012b74532578286073", size = 10132 },
 ]
 
 [[package]]
