@@ -41,8 +41,8 @@ def get_certificate_sans(cert_path: Union[str, Path]) -> Tuple[List[str], List[s
 
     # lines[0] == "X509v3 Subject Alternative Name: "
     all_sans = [san.strip() for san in lines[1].split(",")]
-    dns_sans: set[str] = set()
-    ip_sans: set[str] = set()
+    dns_sans = set()
+    ip_sans = set()
 
     dns_prefix = "DNS:"
     ip_prefix = "IP Address:"
