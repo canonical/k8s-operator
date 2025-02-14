@@ -27,6 +27,10 @@ pytestmark = [
     pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
 ]
 
+pinned_revision = (
+    "latest/edge" not in Path("charms/worker/k8s/templates/snap_installation.yaml").read_text()
+)
+
 
 @pytest_asyncio.fixture
 async def preserve_charm_config(kubernetes_cluster: juju.model.Model):
@@ -172,6 +176,7 @@ async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model,
     await ready_nodes(follower, expected_nodes)
 
 
+@pytest.mark.skipif(pinned_revision, reason="only run on latest/edge channel")
 async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, request):
     """Override the snap resource on a Kubernetes cluster application and revert it after the test.
 
@@ -183,10 +188,6 @@ async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, requ
         kubernetes_cluster (model.Model): The Kubernetes cluster model.
         request: The pytest request object containing test configuration options.
     """
-    charm_default_snap_resource = Path("charms/worker/k8s/templates/snap_installation.yaml")
-    if "latest/edge" not in charm_default_snap_resource.read_text():
-        pytest.skip("only run on latest/edge channel")
-
     k8s = kubernetes_cluster.applications["k8s"]
     assert k8s, "k8s application not found"
     # Override snap resource
