@@ -22,7 +22,6 @@ applications:
     constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
     options:
-      bootstrap-certificates: external
 relations:
   - [k8s, k8s-worker:cluster]
   - [k8s, k8s-worker:containerd]
