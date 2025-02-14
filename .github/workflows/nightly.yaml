@@ -12,6 +12,10 @@ permissions:
 
 jobs:
   integration-tests-terraform:
+    name: integration-tests-terraform-{{ matrix.manifest }}
+    strategy:
+      matrix:
+        manifest: [k8s, ceph]
     runs-on: self-hosted-linux-amd64-jammy-xlarge
     steps:
     - name: Setup operator environment
@@ -25,7 +29,7 @@ jobs:
     - name: Run terraform integration tests
       # TODO(ben): Add remaining integration tests once we have the terraform modules.
       run: |
-        tox -e run-terraform-e2e-tests -- -s -k test_ceph_cs --model my-canonical-k8s --no-deploy
+        tox -e run-terraform-e2e-tests -- -s -k test_{{ matrix.manifest }} --model my-canonical-k8s --no-deploy --manifest-yaml tests/integration/data/{{ matrix.manifest }}-manifest.yaml
     - name: Setup tmate session
       if: ${{ failure() }}
       uses: canonical/action-tmate@main
