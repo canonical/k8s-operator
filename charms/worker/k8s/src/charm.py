@@ -294,13 +294,6 @@ class K8sCharm(ops.CharmBase):
         """Return the datastore type."""
         return str(self.config.get("bootstrap-datastore"))
 
-    @property
-    def certificates_provider(self) -> str:
-        """Return the certificates provider."""
-        if self.is_control_plane:
-            return str(self.config.get("bootstrap-certificates"))
-        return self._recover_certificates_provider
-
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
 
