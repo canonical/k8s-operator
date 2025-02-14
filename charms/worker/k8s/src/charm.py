@@ -170,7 +170,6 @@ class K8sCharm(ops.CharmBase):
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
         self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
-        self.certificates = K8sCertificates(self, self.certificate_refresh)
         self.upgrade = K8sUpgrade(
             self,
             cluster_inspector=self.cluster_inspector,
@@ -180,12 +179,6 @@ class K8sCharm(ops.CharmBase):
         )
         self.cos = COSIntegration(self)
         self.update_status = update_status.Handler(self, self.upgrade)
-        self.reconciler = Reconciler(
-            self,
-            self._reconcile,
-            exit_status=self.update_status.active_status,
-            custom_events=self.certificates.events,
-        )
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -216,6 +209,13 @@ class K8sCharm(ops.CharmBase):
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
+        self.certificates = K8sCertificates(self, self.certificate_refresh)
+        self.reconciler = Reconciler(
+            self,
+            self._reconcile,
+            exit_status=self.update_status.active_status,
+            custom_events=self.certificates.events,
+        )
 
     @property
     def external_load_balancer_address(self) -> str:
