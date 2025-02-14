@@ -151,6 +151,7 @@ class K8sCharm(ops.CharmBase):
         is_upgrade_granted: true if the upgrade has been granted
         datastore: the datastore used for Kubernetes
         certificate_refresh: event source for certificate refresh
+        external_load_balancer_address: the external load balancer address, if available
     """
 
     _stored = ops.StoredState()
@@ -166,7 +167,6 @@ class K8sCharm(ops.CharmBase):
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
-        self._external_load_balancer_address = ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
         self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
@@ -216,6 +216,32 @@ class K8sCharm(ops.CharmBase):
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
+
+    @property
+    def external_load_balancer_address(self) -> str:
+        """Return the external load balancer address.
+
+        Raises:
+            LookupError: If the loadbalancer response has errors.
+        """
+        if not self.is_control_plane:
+            log.warning("External load balancer is only configured for control-plane units.")
+            return ""
+
+        if not self.external_load_balancer.is_available:
+            log.warning(
+                "External load balancer relation is not available but the address was requested."
+            )
+            return ""
+
+        resp = self.external_load_balancer.get_response(EXTERNAL_LOAD_BALANCER_RESPONSE_NAME)
+        if not resp:
+            log.error("No response from external load balancer")
+            return ""
+        if resp.error:
+            raise LookupError(f"External load balancer error: {resp.error}")
+
+        return resp.address
 
     def _k8s_info(self, event: ops.EventBase):
         """Send cluster information on the kubernetes-info relation.
@@ -420,7 +446,11 @@ class K8sCharm(ops.CharmBase):
         return frozenset(ip_sans), frozenset(dns_sans)
 
     def _get_extra_sans(self):
-        """Retrieve the certificate extra SANs."""
+        """Retrieve the certificate extra SANs.
+
+        Raises:
+            ReconcilerError: If it fails to get the external load balancer address.
+        """
         # Get the extra SANs from the configuration
         extra_sans_str = str(self.config.get("kube-apiserver-extra-sans") or "")
         extra_sans = set(extra_sans_str.strip().split())
@@ -434,9 +464,12 @@ class K8sCharm(ops.CharmBase):
             extra_sans |= {str(addr) for addr in addresses}
 
         # Add the external load balancer address
-        if self._external_load_balancer_address:
-            log.info("Adding external load balancer address to extra SANs")
-            extra_sans.add(self._external_load_balancer_address)
+        try:
+            if lb_addr := self.external_load_balancer_address:
+                log.info("Adding external load balancer address to extra SANs")
+                extra_sans.add(lb_addr)
+        except LookupError as e:
+            raise ReconcilerError(f"Failed to get external load balancer address: {e}") from e
 
         return sorted(extra_sans)
 
@@ -495,7 +528,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
 
-        self._external_load_balancer_address = resp.address
+        log.info("External load balancer is configured with address %s", resp.address)
 
     @on_error(
         ops.WaitingStatus("Waiting to bootstrap k8s snap"),
@@ -1201,7 +1234,12 @@ class K8sCharm(ops.CharmBase):
             if not server:
                 log.info("No server requested, use public address")
 
-                server = self._get_public_address()
+                try:
+                    server = self._get_public_address()
+                except LookupError as e:
+                    event.fail(f"Failed to get public address: {e}")
+                    return
+
                 if not server:
                     event.fail("Failed to get public address. Check logs for details.")
                     return
@@ -1230,10 +1268,16 @@ class K8sCharm(ops.CharmBase):
 
         Returns:
             str: The public ip address of the unit.
+
+        Raises:
+            LookupError: If it fails to get the external load balancer address.
         """
-        if self._external_load_balancer_address:
-            log.info("Using external load balancer address as the public address")
-            return self._external_load_balancer_address
+        try:
+            if lb_addr := self.external_load_balancer_address:
+                log.info("Using external load balancer address as the public address")
+                return lb_addr
+        except LookupError as e:
+            raise LookupError(f"Failed to get external load balancer address: {e}") from e
 
         log.info("Using juju public address as the public address")
         return _get_juju_public_address()
@@ -1268,12 +1312,13 @@ class K8sCharm(ops.CharmBase):
 
         missing_sans = [san for san in extra_sans if san not in all_cert_sans]
         if missing_sans:
+            all_sans = sorted(set(all_cert_sans) | set(extra_sans))
             log.info(
-                "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, extra_sans
+                "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
             if self.config.get("bootstrap-certificates") == "self-signed":
-                self.api_manager.refresh_certs(extra_sans)
+                self.api_manager.refresh_certs(all_sans)
             elif self.config.get("bootstrap-certificates") == "external":
                 self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")

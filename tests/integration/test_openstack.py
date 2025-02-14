@@ -3,10 +3,12 @@
 
 """Openstack specific Integration tests."""
 
+import asyncio
 from typing import Dict
 
 import juju.model
 import pytest
+import yaml
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
 
@@ -53,3 +55,60 @@ async def test_cinder_pv(kubernetes_cluster: juju.model.Model, api_client: ApiCl
         "cinder", STORAGE_CLASS_NAME, "cinder.csi.openstack.org", kubernetes_cluster, manifests
     )
     await storage.exec_storage_class(definition, api_client)
+
+
+async def test_external_load_balancer(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
+    """Test external load balancer."""
+    k8s = kubernetes_cluster.applications["k8s"]
+
+    # Get the server endpoint
+    action = await k8s.units[0].run_action("get-kubeconfig")
+    result = await action.wait()
+    completed = result.status == "completed" or result.results["return-code"] == 0
+    assert completed, "Failed to get kubeconfig"
+    kubeconfig_raw = result.results["kubeconfig"]
+    kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
+    server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
+
+    server_endpoint = server_endpoint.removeprefix("https://")
+    server_endpoint = server_endpoint[: server_endpoint.rfind(":")]
+    server_endpoint = server_endpoint.strip("[")
+    server_endpoint = server_endpoint.strip("]")
+
+    for unit in k8s.units:
+        assert unit.get_public_address() != server_endpoint, "External lb not configured"
+
+    api_client.configuration.host = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
+    v1 = CoreV1Api(api_client)
+    # Just to make sure the connection is working
+    node_list: V1NodeList = v1.list_node()
+    assert node_list.items, "No nodes found"
+
+
+async def test_extra_sans(kubernetes_cluster: juju.model.Model):
+    """Test extra sans config."""
+    k8s = kubernetes_cluster.applications["k8s"]
+
+    extra_san = "test.example.com"
+    sans_config = {"kube-apiserver-extra-sans": extra_san}
+    await asyncio.gather(k8s.set_config(sans_config))
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+
+    # Get the server endpoint
+    action = await k8s.units[0].run_action("get-kubeconfig")
+    result = await action.wait()
+    completed = result.status == "completed" or result.results["return-code"] == 0
+    assert completed, "Failed to get kubeconfig"
+    kubeconfig_raw = result.results["kubeconfig"]
+    kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
+
+    server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
+    server_endpoint = server_endpoint.removeprefix("https://")
+
+    result = await k8s.units[0].run(
+        f"echo | openssl s_client -connect {server_endpoint} -servername {extra_san} | "
+        f"openssl x509 -noout -text"
+    )
+    result = await result.wait()
+    out = result.results["stdout"]
+    assert extra_san in out, f"Extra SAN {extra_san} not found in certificate"
