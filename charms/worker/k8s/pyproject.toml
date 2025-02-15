@@ -8,8 +8,7 @@ dependencies = [
     "charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@255dd4a23defc16dcdac832306e5f460a0f1200c",
     "charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e9cadd749ff8e2a6c81fadb0268a8b10e26876be",
     "charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@e35bbe08c1035849ed10a6838fa676c7847bc757#subdirectory=ops",
-    "charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502",
-    "ops-interface-kube-control @ git+https://github.com/charmed-kubernetes/interface-kube-control.git@main#subdirectory=ops",
+    "charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@d802829b5e71b2cbf974cd5c7c69d7ce2137b308",
     "ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops",
     "ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops",
     "ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops",
@@ -24,7 +23,9 @@ dependencies = [
     "poetry-core",
     "lightkube",
     "httpx",
-    "loadbalancer_interface"
+    "loadbalancer_interface",
+    "cryptography>=44.0.0",
+    "ops-interface-kube-control==0.3.1",
 ]
 
 [dependency-groups]

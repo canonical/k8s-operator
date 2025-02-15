@@ -92,6 +92,12 @@ config:
         The datastore to use in Canonical Kubernetes. This cannot be changed
         after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
         chosen, the charm should be integrated with the etcd charm.
+    bootstrap-certificates:
+      type: string
+      default: "self-signed"
+      description: |
+        The type of certificates to use in Canonical Kubernetes. This cannot be
+        changed after deployment. Allowed values are "self-signed" and "external".
     bootstrap-node-taints:
       type: string
       default: ""
@@ -467,6 +473,8 @@ requires:
     interface: aws-integration
   azure:
     interface: azure-integration
+  certificates:
+    interface: tls-certificates
   etcd:
     interface: etcd
   external-cloud-provider:
