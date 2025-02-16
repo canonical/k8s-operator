@@ -94,6 +94,7 @@ class K8sCertificates(ops.Object):
         super().__init__(charm, "certificates-integration")
         self._charm = charm
         self.certificates = self._init_certificates_provider(refresh_event)
+        self.refresh_event = refresh_event
 
     def _init_certificates_provider(self, refresh_event: ops.EventSource) -> CertificateProvider:
         """Return a certificate provider based on the charm configuration.
@@ -235,6 +236,7 @@ class K8sCertificates(ops.Object):
         """
         certificate, key = self.certificates.get_assigned_certificate(request)
         if not certificate or not key:
+            self.refresh_event.emit()
             raise status.ReconcilerError(f"Missing certificate/key pair for {request.common_name}")
 
         return certificate, key
