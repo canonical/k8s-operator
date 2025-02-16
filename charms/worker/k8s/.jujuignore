@@ -1,6 +1,7 @@
 venv
 tox.ini
 tests/
+terraform/
 pyproject.toml
 .coverage
 .tox

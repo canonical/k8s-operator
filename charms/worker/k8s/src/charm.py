@@ -16,6 +16,7 @@ certificate storage.
 """
 
 import hashlib
+import ipaddress
 import logging
 import os
 import shlex
@@ -25,13 +26,14 @@ from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, List, Optional, Union
+from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import config.extra_args
 import containerd
 import ops
 import yaml
+from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from endpoints import build_url
@@ -41,6 +43,7 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
+    CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     CONTAINERD_HTTP_PROXY,
@@ -147,10 +150,12 @@ class K8sCharm(ops.CharmBase):
         lead_control_plane: true if this is a control-plane unit and its the leader
         is_upgrade_granted: true if the upgrade has been granted
         datastore: the datastore used for Kubernetes
+        certificate_refresh: event source for certificate refresh
         external_load_balancer_address: the external load balancer address, if available
     """
 
     _stored = ops.StoredState()
+    certificate_refresh = ops.EventSource(RefreshCertificates)
 
     def __init__(self, *args):
         """Initialise the K8s charm.
@@ -174,9 +179,6 @@ class K8sCharm(ops.CharmBase):
         )
         self.cos = COSIntegration(self)
         self.update_status = update_status.Handler(self, self.upgrade)
-        self.reconciler = Reconciler(
-            self, self._reconcile, exit_status=self.update_status.active_status
-        )
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -207,6 +209,13 @@ class K8sCharm(ops.CharmBase):
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
+        self.certificates = K8sCertificates(self, self.certificate_refresh)
+        self.reconciler = Reconciler(
+            self,
+            self._reconcile,
+            exit_status=self.update_status.active_status,
+            custom_events=self.certificates.events,
+        )
 
     @property
     def external_load_balancer_address(self) -> str:
@@ -412,6 +421,23 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
+    def split_sans_by_type(self) -> Tuple[FrozenSet[str], FrozenSet[str]]:
+        """Split SANs into IP addresses and DNS names.
+
+        Returns:
+            Tuple[FrozenSet[str], FrozenSet[str]]: IP addresses and DNS names.
+        """
+        ip_sans = set()
+        dns_sans = set()
+
+        for san in self._get_extra_sans():
+            try:
+                ip = ipaddress.ip_address(san)
+                ip_sans.add(str(ip))
+            except ValueError:
+                dns_sans.add(san)
+        return frozenset(ip_sans), frozenset(dns_sans)
+
     def _get_extra_sans(self):
         """Retrieve the certificate extra SANs.
 
@@ -447,6 +473,7 @@ class K8sCharm(ops.CharmBase):
             BootstrapConfig: The bootstrap configuration object.
         """
         bootstrap_config = BootstrapConfig.construct()
+        self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = self._assemble_cluster_config()
         bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
@@ -835,6 +862,18 @@ class K8sCharm(ops.CharmBase):
         if version:
             relation.data[self.unit]["version"] = version
 
+    @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
+    def _announce_certificates_provider(self) -> None:
+        if not (provider := self.config.get("bootstrap-certificates")):
+            raise ReconcilerError("Missing certificates provider")
+
+        relation = self.model.get_relation(CLUSTER_WORKER_RELATION)
+        if not relation:
+            log.info("Cluster (worker) relation not found, skipping certificates sharing.")
+            return
+
+        relation.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
+
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
     def _announce_kubernetes_version(self) -> None:
         """Announce the Kubernetes version to the cluster.
@@ -966,6 +1005,7 @@ class K8sCharm(ops.CharmBase):
             bootstrap_node_taints = str(self.config["bootstrap-node-taints"] or "").strip().split()
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
+        self.certificates.configure_certificates(request.config)
         self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)
 
@@ -1018,6 +1058,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._announce_kubernetes_version()
+            self._announce_certificates_provider()
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
@@ -1247,6 +1288,11 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
+        if self.config.get("bootstrap-certificates") == "external":
+            # TODO: This should be implemented once k8s-snap offers an API endpoint
+            # to update the certificates in the node.
+            log.info("External certificates are used, skipping SANs update")
+            return
 
         extra_sans = self._get_extra_sans()
         if not extra_sans:
@@ -1264,7 +1310,10 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            self.api_manager.refresh_certs(all_sans)
+            if self.config.get("bootstrap-certificates") == "self-signed":
+                self.api_manager.refresh_certs(all_sans)
+            elif self.config.get("bootstrap-certificates") == "external":
+                self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")
 
         log.info("Certificate SANs are up-to-date")

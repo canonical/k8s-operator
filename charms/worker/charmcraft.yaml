@@ -171,6 +171,8 @@ requires:
     limit: 1
   azure:
     interface: azure-integration
+  certificates:
+    interface: tls-certificates
     limit: 1
   cluster:
     # interface to connect with the k8s charm to provide

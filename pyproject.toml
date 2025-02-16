@@ -56,7 +56,7 @@ max-module-lines = 1500
 
 [tool.pylint.typecheck]
 # Ignore typechecking on pylxd manager classes
-ignored-classes = "ProfileManager,InstanceManager,NetworkManager"
+ignored-classes = "ProfileManager,InstanceManager,NetworkManager,FieldInfo"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
