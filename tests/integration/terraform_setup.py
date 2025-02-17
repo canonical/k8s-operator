@@ -193,9 +193,7 @@ async def main() -> None:
     print("Initializing Terraform...")
     run_command(["terraform", "init"])
 
-    print(
-        f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}..."
-    )
+    print(f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}...")
     run_command(
         [
             "terraform",
