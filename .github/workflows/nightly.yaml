@@ -28,7 +28,7 @@ jobs:
       uses: actions/checkout@v4
     - name: Setup cluster with terraform
       run: |
-        tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml tests/integration/data/${{ matrix.test }}-manifest.yaml
+        tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml ${{ github.workspace }}/tests/integration/data/${{ matrix.test }}-manifest.yaml
     - name: Run integration tests
       run: |
         tox -e integration -- -s -k test_${{ matrix.test }} --model my-canonical-k8s --no-deploy
