@@ -16,7 +16,7 @@ provider "juju" {}
 variable "manifest_yaml" {
   description = "Path to the manifest YAML file"
   type        = string
-  default     = "default-manifest.yaml"
+  default     = "k8s-manifest.yaml"
 }
 
 variable "model" {

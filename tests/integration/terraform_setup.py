@@ -171,7 +171,7 @@ async def main() -> None:
     )
     parser.add_argument(
         "--manifest-yaml",
-        default=script_dir / "data/default-manifest.yaml",
+        default=script_dir / "data/k8s-manifest.yaml",
         help="Path to manifest.",
     )
     parser.add_argument("--model", default="my-canonical-k8s", help="Juju model name.")

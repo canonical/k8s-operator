@@ -12,10 +12,10 @@ permissions:
 
 jobs:
   integration-tests-terraform:
-    name: integration-tests-terraform-{{ matrix.manifest }}
     strategy:
       matrix:
-        manifest: [k8s, ceph]
+        test: [ceph]
+    name: integration-tests-terraform-${{ matrix.test }}
     runs-on: self-hosted-linux-amd64-jammy-xlarge
     steps:
     - name: Setup operator environment
@@ -26,10 +26,12 @@ jobs:
         juju-channel: 3/stable
     - name: Checking out repo
       uses: actions/checkout@v4
-    - name: Run terraform integration tests
-      # TODO(ben): Add remaining integration tests once we have the terraform modules.
+    - name: Setup cluster with terraform
       run: |
-        tox -e run-terraform-e2e-tests -- -s -k test_{{ matrix.manifest }} --model my-canonical-k8s --no-deploy --manifest-yaml tests/integration/data/{{ matrix.manifest }}-manifest.yaml
+        tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml tests/integration/data/${{ matrix.test }}-manifest.yaml
+    - name: Run integration tests
+      run: |
+        tox -e integration -- -s -k test_${{ matrix.test }} --model my-canonical-k8s --no-deploy
     - name: Setup tmate session
       if: ${{ failure() }}
       uses: canonical/action-tmate@main
