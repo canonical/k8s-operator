@@ -194,6 +194,7 @@ async def main() -> None:
     run_command(["terraform", "init"])
 
     print(f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}...")
+    print(os.environ.get("TF_VAR_csi_integration"))
     run_command(
         [
             "terraform",
