@@ -14,7 +14,17 @@ jobs:
   integration-tests-terraform:
     strategy:
       matrix:
-        test: [k8s, ceph]
+        test: [default, ceph]
+        include:
+          - test: default
+            test_name: test_k8s
+            manifest-yaml: ${{ github.workspace }}/tests/integration/data/default-manifest.yaml
+            env: []
+          - test: ceph
+            test_name: test_ceph
+            manifest-yaml: ${{ github.workspace }}/tests/integration/data/ceph-manifest.yaml
+            env:
+              TF_VAR_csi_integration: "ceph"
     name: integration-tests-terraform-${{ matrix.test }}
     runs-on: self-hosted-linux-amd64-jammy-xlarge
     steps:
@@ -27,11 +37,13 @@ jobs:
     - name: Checking out repo
       uses: actions/checkout@v4
     - name: Setup cluster with terraform
+      env:
+        ${{ matrix.env }}
       run: |
-        tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml ${{ github.workspace }}/tests/integration/data/${{ matrix.test }}-manifest.yaml
+        tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml ${{ matrix.manifest-yaml }}
     - name: Run integration tests
       run: |
-        tox -e integration -- -s -k test_${{ matrix.test }} --model my-canonical-k8s --no-deploy
+        tox -e integration -- -s -k ${{ matrix.test_name }} --model my-canonical-k8s --no-deploy
     - name: Setup tmate session
       if: ${{ failure() }}
       uses: canonical/action-tmate@main
