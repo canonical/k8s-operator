@@ -35,11 +35,9 @@ def _get_data_file_path(name) -> Path:
 
 
 @pytest.mark.abort_on_fail
-async def test_ready_nodes(kubernetes_cluster: model.Model):
-    # Check that the units are ready
+async def test_nodes_ready(kubernetes_cluster: model.Model):
     k8s_app = kubernetes_cluster.applications["k8s"]
-
-    assert k8s_app
+    await helpers.ready_nodes(k8s_app.units[0], 1)
 
 
 @pytest.mark.abort_on_fail
