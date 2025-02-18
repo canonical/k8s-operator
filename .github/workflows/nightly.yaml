@@ -19,7 +19,7 @@ jobs:
           - test: default
             test_name: test_k8s
             manifest-yaml: ${{ github.workspace }}/tests/integration/data/default-manifest.yaml
-            env: []
+            env: {}
           - test: ceph
             test_name: test_ceph
             manifest-yaml: ${{ github.workspace }}/tests/integration/data/ceph-manifest.yaml
@@ -37,8 +37,7 @@ jobs:
     - name: Checking out repo
       uses: actions/checkout@v4
     - name: Setup cluster with terraform
-      env:
-        ${{ matrix.env }}
+      env: ${{ matrix.env }}
       run: |
         tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml ${{ matrix.manifest-yaml }}
     - name: Run integration tests
