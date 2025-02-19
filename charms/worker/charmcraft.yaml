@@ -132,21 +132,27 @@ resources:
 
 parts:
   charm:
-    plugin: charm
-    build-packages: [git]
-    charm-entrypoint: k8s/src/charm.py
-    charm-requirements: [k8s/requirements.txt]
-  promote:
-    # move paths out of ./k8s to ./ since 
-    # charmcraft assumes ./lib to be there
-    # charmcraft assumes ./templates to be there
-    after: [charm]
-    plugin: nil
-    source: ./
-    override-prime: |
-      rm -rf $CRAFT_PRIME/lib $CRAFT_PRIME/templates
-      mv $CRAFT_PRIME/k8s/lib $CRAFT_PRIME/lib
-      mv $CRAFT_PRIME/k8s/templates $CRAFT_PRIME/templates
+    source: .
+    plugin: uv
+    build-packages:
+      - git
+      - libffi-dev
+      - libssl-dev
+      - pkg-config
+    build-snaps:
+      - astral-uv
+      - rustup
+    override-build: |
+      rustup default stable
+      for item in pyproject.toml uv.lock lib templates src; do
+        cp -r "$CRAFT_PART_BUILD/k8s/$item" "$CRAFT_PART_BUILD"
+      done
+      craftctl default
+  templates:
+    plugin: dump
+    source: k8s/templates
+    organize:
+      "*": templates/
 actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
@@ -155,7 +161,6 @@ peers:
   upgrade:
     interface: upgrade
 
-
 provides:
   cos-agent:
     interface: cos_agent
@@ -163,17 +168,25 @@ provides:
 requires:
   aws:
     interface: aws-integration
+    limit: 1
   azure:
     interface: azure-integration
+    limit: 1
   cluster:
-    interface: k8s-cluster
     # interface to connect with the k8s charm to provide
     # authentication token via a secret in order to cluster
     # this machine as a worker unit.
     #   juju integrate k8s:k8s-cluster k8s-worker:cluster
+    interface: k8s-cluster
+    limit: 1
   cos-tokens:
     interface: cos-k8s-tokens
+    limit: 1
   containerd:
+    # Interface provided by the control-plane charm to
+    # share containerd configuration.
     interface: containerd
+    limit: 1
   gcp:
     interface: gcp-integration
+    limit: 1

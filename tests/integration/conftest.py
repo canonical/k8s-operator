@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 """Fixtures for charm tests."""
+
 import contextlib
 import json
 import logging
@@ -104,7 +105,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 async def cloud_proxied(ops_test: OpsTest):
-    """Setup a cloud proxy settings if necessary
+    """Set up a cloud proxy settings if necessary.
 
     If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
 
@@ -123,7 +124,7 @@ async def cloud_proxied(ops_test: OpsTest):
 
 
 async def cloud_profile(ops_test: OpsTest):
-    """Apply Cloud Specific Settings to the model
+    """Apply Cloud Specific Settings to the model.
 
     Args:
         ops_test (OpsTest): ops_test plugin
@@ -216,7 +217,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
 
 
 def valid_namespace_name(s: str) -> str:
-    """Creates a valid kubernetes namespace name.
+    """Create a valid kubernetes namespace name.
 
     Args:
         s: The string to sanitize.
@@ -232,7 +233,9 @@ def valid_namespace_name(s: str) -> str:
 
 @pytest_asyncio.fixture(scope="module")
 async def api_client(
-    kubernetes_cluster, ops_test: OpsTest, request  # pylint: disable=unused-argument
+    kubernetes_cluster,
+    ops_test: OpsTest,
+    request,  # pylint: disable=unused-argument
 ):
     """Create a k8s API client and namespace for the test.
 
@@ -281,7 +284,9 @@ async def grafana_agent(kubernetes_cluster: Model):
 
 @pytest_asyncio.fixture(scope="module")
 async def cos_model(
-    ops_test: OpsTest, kubernetes_cluster, _grafana_agent  # pylint: disable=W0613
+    ops_test: OpsTest,
+    kubernetes_cluster,
+    _grafana_agent,  # pylint: disable=W0613
 ):
     """Create a COS substrate and a K8s model."""
     container_name = "cos-substrate"

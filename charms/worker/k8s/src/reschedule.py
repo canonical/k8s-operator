@@ -4,6 +4,7 @@
 """EventTimer for scheduling dispatch of juju event on regular intervals."""
 
 import logging
+import os
 import subprocess
 from datetime import timedelta
 from pathlib import Path
@@ -14,30 +15,10 @@ import ops
 log = logging.getLogger(__name__)
 Period = timedelta  # Type aliasing
 BIN_SYSTEMCTL = "/usr/bin/systemctl"
-SYSTEMD_SERVICE = """
-[Unit]
-Description=Dispatch the {event} event on {app}/{unit_num}
 
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/timeout {timeout} /usr/bin/bash -c '/usr/bin/juju-exec "{app}/{unit_num}" "JUJU_DISPATCH_PATH={event} ./dispatch"'
-
-[Install]
-WantedBy=multi-user.target
-"""
-SYSTEMD_TIMER = """
-[Unit]
-Description=Timer to dispatch {event} event periodically
-Requires={app}.{event}.service
-
-[Timer]
-Unit={app}.{event}.service
-OnUnitInactiveSec={interval}s
-RandomizedDelaySec={random_delay}s
-
-[Install]
-WantedBy=timers.target
-"""
+CHARM_DIR = Path(os.environ.get("CHARM_DIR") or Path(__file__).parent.parent)
+SYSTEMD_SERVICE = (CHARM_DIR / "templates/reschedule.service").read_text()
+SYSTEMD_TIMER = (CHARM_DIR / "templates/reschedule.timer").read_text()
 
 
 def _execute_command(args: Sequence[str], check_exit: bool = True) -> int:

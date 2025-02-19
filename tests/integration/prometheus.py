@@ -2,7 +2,6 @@
 # See LICENSE file for licensing details.
 """Aid for testing promtheus."""
 
-
 import json
 import logging
 import urllib.parse

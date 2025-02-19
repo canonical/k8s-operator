@@ -7,7 +7,6 @@
 
 """Snap Installation Module."""
 
-
 import logging
 import re
 import shutil
@@ -16,13 +15,14 @@ import tarfile
 from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 
-import charms.operator_libs_linux.v2.snap as snap_lib
 import ops
 import yaml
 from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE
 from protocols import K8sCharmProtocol
 from pydantic import BaseModel, Field, ValidationError, parse_obj_as, validator
 from typing_extensions import Annotated
+
+import charms.operator_libs_linux.v2.snap as snap_lib
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -268,9 +268,7 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
         raise snap_lib.SnapError(f"Failed to find revision for arch={arch}")
 
     try:
-        args: List[SnapArgument] = [
-            parse_obj_as(SnapArgument, arg) for arg in arch_spec  # type: ignore[arg-type]
-        ]
+        args = parse_obj_as(List[SnapArgument], arch_spec)
     except ValidationError as e:
         log.warning("Failed to validate args=%s (%s)", arch_spec, e)
         raise snap_lib.SnapError("Failed to validate snap args")

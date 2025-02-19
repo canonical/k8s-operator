@@ -28,7 +28,8 @@ CHARMCRAFT_DIRS = {"k8s": Path("charms/worker/k8s"), "k8s-worker": Path("charms/
 
 
 async def is_deployed(model: juju.model.Model, bundle_path: Path) -> bool:
-    """Checks if model has apps defined by the bundle.
+    """Check if model has apps defined by the bundle.
+
     If all apps are deployed, wait for model to be active/idle
 
     Args:
@@ -85,7 +86,7 @@ async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) 
             continue
         if cidr.prefixlen < 32:
             local_cidrs.add(str(cidr))
-    return list(sorted(local_cidrs))
+    return sorted(local_cidrs)
 
 
 async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
@@ -108,9 +109,7 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
     result = await action.wait()
     stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
     assert result.results["return-code"] == 0, (
-        f"\nFailed to get {resource} with kubectl\n"
-        f"\tstdout: '{stdout}'\n"
-        f"\tstderr: '{stderr}'"
+        f"\nFailed to get {resource} with kubectl\n\tstdout: '{stdout}'\n\tstderr: '{stderr}'"
     )
     log.info("Parsing %s list...", resource)
     resource_obj = json.loads(stdout)
@@ -396,15 +395,15 @@ class Bundle:
         series = ops_test.request.config.getoption("--series")
 
         bundle = cls(path=path, arch=arch, series=series)
-        assert not all(
-            _ in kwargs for _ in ("apps_local", "apps_channel")
-        ), "Cannot use both apps_local and apps_channel"
+        assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
+            "Cannot use both apps_local and apps_channel"
+        )
 
         return bundle, Markings(**kwargs)
 
     @property
     def content(self) -> Dict[str, Any]:
-        """Yaml content of the bundle loaded into a dict
+        """Yaml content of the bundle loaded into a dict.
 
         Returns:
             Dict: bundle content
@@ -557,7 +556,7 @@ class Bundle:
 
 
 async def cloud_arch(ops_test: OpsTest) -> str:
-    """Return current architecture of the selected controller
+    """Return current architecture of the selected controller.
 
     Args:
         ops_test (OpsTest): ops_test plugin
@@ -576,7 +575,7 @@ async def cloud_arch(ops_test: OpsTest) -> str:
 
 
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
-    """Return current cloud type of the selected controller
+    """Return current cloud type of the selected controller.
 
     Args:
         ops_test (OpsTest): ops_test plugin
