@@ -35,6 +35,8 @@ import ops
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
+from config.bootstrap import BootstrapConfigOptions, bootstrap_config_options_from_cluster_config
+from config.changed import BootstrapConfigChangeError, ChangedConfig
 from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
@@ -46,6 +48,11 @@ from literals import (
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
+    CONFIG_BOOTSTRAP_CERTIFICATES,
+    CONFIG_BOOTSTRAP_DATASTORE,
+    CONFIG_BOOTSTRAP_NODE_TAINTS,
+    CONFIG_BOOTSTRAP_POD_CIDR,
+    CONFIG_BOOTSTRAP_SERVICE_CIDR,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
     CONTAINERD_SERVICE_NAME,
@@ -59,6 +66,7 @@ from literals import (
     EXTERNAL_LOAD_BALANCER_RELATION,
     EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
     EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
+    HTTP_503_SERVICE_UNAVAILABLE,
     K8SD_PORT,
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
@@ -292,7 +300,7 @@ class K8sCharm(ops.CharmBase):
     @property
     def datastore(self) -> str:
         """Return the datastore type."""
-        return str(self.config.get("bootstrap-datastore"))
+        return str(self.config.get(CONFIG_BOOTSTRAP_DATASTORE))
 
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
@@ -472,13 +480,15 @@ class K8sCharm(ops.CharmBase):
         Returns:
             BootstrapConfig: The bootstrap configuration object.
         """
-        bootstrap_config = BootstrapConfig.construct()
+        bootstrap_config = BootstrapConfig.model_construct()
         self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
-        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
-        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
+        bootstrap_config.service_cidr = str(self.config[CONFIG_BOOTSTRAP_SERVICE_CIDR])
+        bootstrap_config.pod_cidr = str(self.config[CONFIG_BOOTSTRAP_POD_CIDR])
+        bootstrap_config.control_plane_taints = str(
+            self.config[CONFIG_BOOTSTRAP_NODE_TAINTS]
+        ).split()
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
@@ -687,7 +697,7 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = self.config.get("bootstrap-datastore")
+        datastore = self.config.get(CONFIG_BOOTSTRAP_DATASTORE)
 
         if datastore not in SUPPORTED_DATASTORES:
             log.error(
@@ -726,7 +736,7 @@ class K8sCharm(ops.CharmBase):
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
 
-        elif datastore == "dqlite":
+        elif datastore == "k8s-dqlite":
             log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
@@ -864,7 +874,7 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
     def _announce_certificates_provider(self) -> None:
-        if not (provider := self.config.get("bootstrap-certificates")):
+        if not (provider := self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES)):
             raise ReconcilerError("Missing certificates provider")
 
         relation = self.model.get_relation(CLUSTER_WORKER_RELATION)
@@ -1002,7 +1012,9 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name)
 
-            bootstrap_node_taints = str(self.config["bootstrap-node-taints"] or "").strip().split()
+            bootstrap_node_taints = (
+                str(self.config[CONFIG_BOOTSTRAP_NODE_TAINTS] or "").strip().split()
+            )
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
         self.certificates.configure_certificates(request.config)
@@ -1047,6 +1059,7 @@ class K8sCharm(ops.CharmBase):
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
+        self._prevent_bootstrap_config_change()
         self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
@@ -1288,7 +1301,7 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-        if self.config.get("bootstrap-certificates") == "external":
+        if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "external":
             # TODO: This should be implemented once k8s-snap offers an API endpoint
             # to update the certificates in the node.
             log.info("External certificates are used, skipping SANs update")
@@ -1310,13 +1323,123 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if self.config.get("bootstrap-certificates") == "self-signed":
+            if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "self-signed":
                 self.api_manager.refresh_certs(all_sans)
-            elif self.config.get("bootstrap-certificates") == "external":
+            elif self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "external":
                 self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")
 
         log.info("Certificate SANs are up-to-date")
+
+    @on_error(
+        ops.BlockedStatus("Cannot change bootstrap config after bootstrap. Check logs."),
+        BootstrapConfigChangeError,
+    )
+    @on_error(
+        ops.ErrorStatus("Prevent bootstrap config change: Failed to get cluster config"),
+        InvalidResponseError,
+        K8sdConnectionError,
+    )
+    def _prevent_bootstrap_config_change(self):
+        """Prevent bootstrap config changes after bootstrap."""
+        log.info("Preventing bootstrap config changes after bootstrap")
+
+        try:
+            cluster_config = bootstrap_config_options_from_cluster_config(
+                self.api_manager.get_cluster_config().metadata
+            )
+        except InvalidResponseError as e:
+            if e.code == HTTP_503_SERVICE_UNAVAILABLE:
+                log.info("k8sd is not ready, skipping bootstrap config check")
+                return
+            raise
+
+        # NOTE(Hue): The way we're saving certificates has nothing to do with the snap
+        # so we can't rely on the snap to tell us if the certificates have changed.
+        self._stored.set_default(certificates=self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES))
+
+        if self.is_control_plane:
+            self._prevent_control_plane_bootstrap_config_change(cluster_config)
+        else:
+            self._prevent_worker_bootstrap_config_change(cluster_config)
+
+    def _prevent_control_plane_bootstrap_config_change(self, ref: BootstrapConfigOptions):
+        """Prevent control-plane bootstrap config changes after bootstrap."""
+        changed: List[ChangedConfig] = []
+
+        if self.config.get(CONFIG_BOOTSTRAP_DATASTORE, "") != ref.datastore:
+            changed.append(
+                ChangedConfig(
+                    name=CONFIG_BOOTSTRAP_DATASTORE,
+                    cluster_config=ref.datastore,
+                    charm_config=self.config.get(CONFIG_BOOTSTRAP_DATASTORE, ""),
+                )
+            )
+
+        # NOTE(Hue): bootstrap-certificates is not represented in the cluster config and should be
+        # checked against the stored value.
+        if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES, "") != self._stored.certificates:
+            changed.append(
+                ChangedConfig(
+                    name=CONFIG_BOOTSTRAP_CERTIFICATES,
+                    cluster_config=self._stored.certificates,
+                    charm_config=self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES, ""),
+                )
+            )
+
+        if self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, "") != ref.node_taints:
+            changed.append(
+                ChangedConfig(
+                    name=CONFIG_BOOTSTRAP_NODE_TAINTS,
+                    cluster_config=ref.node_taints,
+                    charm_config=self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, ""),
+                )
+            )
+
+        if self.config.get(CONFIG_BOOTSTRAP_POD_CIDR, "") != ref.pod_cidr:
+            changed.append(
+                ChangedConfig(
+                    name=CONFIG_BOOTSTRAP_POD_CIDR,
+                    cluster_config=ref.pod_cidr,
+                    charm_config=self.config.get(CONFIG_BOOTSTRAP_POD_CIDR, ""),
+                )
+            )
+
+        if self.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, "") != ref.service_cidr:
+            changed.append(
+                ChangedConfig(
+                    name=CONFIG_BOOTSTRAP_SERVICE_CIDR,
+                    cluster_config=ref.service_cidr,
+                    charm_config=self.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, ""),
+                )
+            )
+
+        if changed:
+            for c in changed:
+                log.error(
+                    "Bootstrap config '%s' should NOT be changed after bootstrap. %s", c.name, c
+                )
+            raise BootstrapConfigChangeError(changed)
+
+    def _prevent_worker_bootstrap_config_change(self, ref: BootstrapConfigOptions):
+        """Prevent worker bootstrap config changes after bootstrap."""
+        changed: List[ChangedConfig] = []
+
+        if self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, "") != ref.node_taints:
+            changed.append(
+                ChangedConfig(
+                    name=CONFIG_BOOTSTRAP_NODE_TAINTS,
+                    cluster_config=ref.node_taints,
+                    charm_config=self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, ""),
+                )
+            )
+
+        if changed:
+            for c in changed:
+                log.error(
+                    "Bootstrap config '%s' should NOT be changed after bootstrap. %s", c.name, c
+                )
+            raise BootstrapConfigChangeError(changed)
 
 
 if __name__ == "__main__":  # pragma: nocover

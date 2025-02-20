@@ -23,11 +23,18 @@ KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = f"{SNAP_COMMON}/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
-SUPPORTED_DATASTORES = ["dqlite", "etcd"]
+SUPPORTED_DATASTORES = ["k8s-dqlite", "etcd"]
 EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
 EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
 EXTERNAL_LOAD_BALANCER_PORT = 443
 APISERVER_PORT = 6443
+
+# Charm Config
+CONFIG_BOOTSTRAP_DATASTORE = "bootstrap-datastore"
+CONFIG_BOOTSTRAP_CERTIFICATES = "bootstrap-certificates"
+CONFIG_BOOTSTRAP_NODE_TAINTS = "bootstrap-node-taints"
+CONFIG_BOOTSTRAP_POD_CIDR = "bootstrap-pod-cidr"
+CONFIG_BOOTSTRAP_SERVICE_CIDR = "bootstrap-service-cidr"
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
@@ -99,3 +106,6 @@ DEPENDENCIES = {
         "version": "1.32.0",
     },
 }
+
+# Auxiliary
+HTTP_503_SERVICE_UNAVAILABLE = 503

@@ -18,7 +18,15 @@ import pytest
 from charm import K8sCharm
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
-from charms.k8s.v0.k8sd_api_manager import BootstrapConfig, UpdateClusterConfigRequest
+from charms.contextual_status import ReconcilerError
+from charms.k8s.v0.k8sd_api_manager import (
+    BootstrapConfig,
+    GetClusterConfigMetadata,
+    GetClusterConfigResponse,
+    UpdateClusterConfigRequest,
+    UserFacingClusterConfig,
+    UserFacingDatastoreConfig,
+)
 
 
 @pytest.fixture(params=["worker", "control-plane"])
@@ -57,6 +65,7 @@ def mock_reconciler_handlers(harness):
         "_configure_cos_integration",
         "_apply_node_labels",
         "_update_kubernetes_version",
+        "_prevent_bootstrap_config_change",
     }
     if harness.charm.is_control_plane:
         handler_names |= {
@@ -101,6 +110,40 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
+def test_prevent_bootstrap_config_change(harness):
+    """Test that the bootstrap config change is prevented.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
+    # NOTE(Hue): the bootstrap-node-taints is present in both charms
+    taints = ["taint1", "taint2"]
+    harness.disable_hooks()
+
+    raised = False
+    with mock.patch.object(harness.charm.api_manager, "get_cluster_config") as mock_api_manager:
+        mock_api_manager.return_value = GetClusterConfigResponse(
+            error="",
+            error_code=0,
+            operation="",
+            status="OK",
+            status_code=200,
+            type="",
+            metadata=GetClusterConfigMetadata(
+                status=UserFacingClusterConfig(),
+                datastore=UserFacingDatastoreConfig(type="k8s-dqlite"),
+                nodeTaints=taints,
+            ),
+        )
+        harness.update_config({"bootstrap-node-taints": "newTaint1 newTaint2"})
+        try:
+            harness.charm._prevent_bootstrap_config_change()
+        except ReconcilerError:
+            raised = True
+
+    assert raised, "ReconcilerError not raised, bootstrap config change not prevented"
+
+
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 def test_set_leader(harness):
     """Test emitting the set_leader hook while not reconciled.
@@ -120,7 +163,7 @@ def test_set_leader(harness):
 
 
 def test_configure_datastore_bootstrap_config_dqlite(harness):
-    """Test configuring the datastore=dqlite on bootstrap.
+    """Test configuring the datastore=k8s-dqlite on bootstrap.
 
     Args:
         harness: the harness under test
@@ -163,7 +206,7 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
 
 
 def test_configure_datastore_runtime_config_dqlite(harness):
-    """Test configuring the datastore=dqlite on runtime changes.
+    """Test configuring the datastore=k8s-dqlite on runtime changes.
 
     Args:
         harness: the harness under test

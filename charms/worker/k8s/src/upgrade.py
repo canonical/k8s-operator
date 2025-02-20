@@ -208,7 +208,7 @@ class K8sUpgrade(DataUpgrade):
             K8S_CONTROL_PLANE_SERVICES if self.charm.is_control_plane else K8S_WORKER_SERVICES
         )
 
-        if K8S_DQLITE_SERVICE in services and self.charm.datastore != "dqlite":
+        if K8S_DQLITE_SERVICE in services and self.charm.datastore != "k8s-dqlite":
             services.remove(K8S_DQLITE_SERVICE)
 
         try:
