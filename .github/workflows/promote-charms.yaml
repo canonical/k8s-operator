@@ -72,7 +72,7 @@ jobs:
         arch:
         - amd64
         - arm64
-    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@608b77a2a0649584f18711b2f3e3af104781a9d8
+    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@577040b0b3402bb5c9c9bfe0946e090231af0377
     with:
       base-architecture: ${{ matrix.arch }}
       charm-directory: ${{ matrix.charm.path }}
