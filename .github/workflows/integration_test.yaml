@@ -33,7 +33,7 @@ jobs:
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@608b77a2a0649584f18711b2f3e3af104781a9d8
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@577040b0b3402bb5c9c9bfe0946e090231af0377
     needs: [charmcraft-channel, extra-args]
     secrets: inherit
     strategy:
