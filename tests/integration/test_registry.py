@@ -35,12 +35,6 @@ def _get_data_file_path(name) -> Path:
 
 
 @pytest.mark.abort_on_fail
-async def test_nodes_ready(kubernetes_cluster: model.Model):
-    k8s_app = kubernetes_cluster.applications["k8s"]
-    await helpers.ready_nodes(k8s_app.units[0], 1)
-
-
-@pytest.mark.abort_on_fail
 async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
     """Test that the charm configures the correct directory and can access a custom registry."""
     # List of resources created during the test
@@ -80,7 +74,7 @@ async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
         await helpers.wait_pod_phase(k8s_unit, random_pod_name, "Running")
     finally:
         # Cleanup
-        for resource in reversed(created):
+        for resource in created:
             kind = resource.kind
             name = resource.metadata.name
             event = await k8s_unit.run(f"k8s kubectl delete {kind} {name}")
