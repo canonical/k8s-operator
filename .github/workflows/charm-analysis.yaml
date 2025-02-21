@@ -6,7 +6,7 @@ on:
 
 jobs:
   unit-tests:
-    uses: canonical/operator-workflows/.github/workflows/test.yaml@577040b0b3402bb5c9c9bfe0946e090231af0377
+    uses: canonical/operator-workflows/.github/workflows/test.yaml@a72c03b13be186cd0b907a636e2a7dbbf23b26f4
     secrets: inherit
     strategy:
       fail-fast: false
