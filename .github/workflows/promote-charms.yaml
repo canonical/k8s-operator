@@ -26,6 +26,15 @@ on:
         - stable
 
 jobs:
+  charmcraft-channel:
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.charmcraft.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read charmcraft version file
+        id: charmcraft
+        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
   configure-track:
     runs-on: ubuntu-latest
     outputs:
@@ -65,18 +74,16 @@ jobs:
             echo 'charms=[{"name": "k8s-worker", "path": "charms/worker"}]' >> "$GITHUB_OUTPUT"
           fi
   promote-charm:
-    needs: [configure-track, select-charms]
+    needs: [charmcraft-channel, configure-track, select-charms]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         charm: ${{ fromJson(needs.select-charms.outputs.charms) }}
-        arch:
-        - amd64
-        - arm64
-    uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@577040b0b3402bb5c9c9bfe0946e090231af0377
-    with:
-      base-architecture: ${{ matrix.arch }}
-      charm-directory: ${{ matrix.charm.path }}
-      destination-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.destination-risk }}
-      origin-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.origin-risk }}
-      tag-prefix: ${{ matrix.charm.name }}
-    secrets: inherit
+    steps:
+    - uses: canonical/charming-actions/promote-charm@2.7.0
+      with:
+        credentials: ${{ secrets.CHARMHUB_TOKEN }}
+        charm-path: ${{ matrix.charm.path }}
+        charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
+        destination-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.destination-risk }}
+        origin-channel: ${{needs.configure-track.outputs.track}}/${{ inputs.origin-risk }}
