@@ -37,25 +37,50 @@ def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
 
     --charm-file
-        can be used multiple times, specifies which local charm files are available
+        Can be used multiple times, specifies which local charm files are available.
+        Expected filename format: {charmName}_{base}-{arch}
+        Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm
+        Some tests use subordinate charms (e.g. Ceph) that expect the charm
+        base to match.
     --upgrade-from
-        instruct tests to start with a specific channel, and upgrade to these charms
+        Instruct tests to start with a specific channel, and upgrade to these charms.
     --snap-installation-resource
-        path to the snap installation resource
+        Path to the snap installation resource.
+        The tarball must contain either a "snap_installation.yaml" OR a
+        "*.snap" file.
     --lxd-containers
-        if cloud is LXD, use containers
+        If cloud is LXD, use containers instead of LXD VMs.
+        Note that some charms may not work in LXD containers (e.g. Ceph).
     --apply-proxy
-        apply proxy to model-config
+        Apply proxy to model-config.
     --timeout
-        set timeout for tests
+        Set timeout for tests
 
     Args:
         parser: Pytest parser.
     """
     parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
-    parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
     parser.addoption(
-        "--snap-installation-resource", default=str(DEFAULT_SNAP_INSTALLATION.resolve())
+        "--charm-file",
+        dest="charm_files",
+        action="append",
+        default=[],
+        help=(
+            "Can be used multiple times, specifies which local charm files are available. "
+            r"Expected filename format: {charmName}_{base}-{arch}. "
+            "Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm. "
+            "Some tests use subordinate charms (e.g. Ceph) that expect the charm "
+            "base to match"
+        ),
+    )
+    parser.addoption(
+        "--snap-installation-resource",
+        default=str(DEFAULT_SNAP_INSTALLATION.resolve()),
+        help=(
+            "Path to the snap installation resource. "
+            'The tarball must contain either a "snap_installation.yaml" OR a '
+            '"*.snap" file.'
+        ),
     )
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
     parser.addoption(
@@ -65,7 +90,10 @@ def pytest_addoption(parser: pytest.Parser):
         "--lxd-containers",
         action="store_true",
         default=False,
-        help="If cloud is LXD, use containers",
+        help=(
+            "If cloud is LXD, use containers instead of LXD VMs. "
+            "Note that some charms may not work in LXD containers (e.g. Ceph)."
+        ),
     )
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
