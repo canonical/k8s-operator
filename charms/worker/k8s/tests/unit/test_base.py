@@ -120,7 +120,7 @@ def test_prevent_bootstrap_config_change(harness):
     taints = ["taint1", "taint2"]
     harness.disable_hooks()
 
-    raised = False
+    raised, exp = False, None
     with mock.patch.object(harness.charm.api_manager, "get_cluster_config") as mock_api_manager:
         mock_api_manager.return_value = GetClusterConfigResponse(
             error="",
@@ -138,10 +138,11 @@ def test_prevent_bootstrap_config_change(harness):
         harness.update_config({"bootstrap-node-taints": "newTaint1 newTaint2"})
         try:
             harness.charm._prevent_bootstrap_config_change()
-        except ReconcilerError:
-            raised = True
+        except ReconcilerError as e:
+            raised, exp = True, e
 
     assert raised, "ReconcilerError not raised, bootstrap config change not prevented"
+    assert "Bootstrap config options can not be changed" in str(exp)
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))

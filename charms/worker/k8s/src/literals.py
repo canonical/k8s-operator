@@ -106,6 +106,3 @@ DEPENDENCIES = {
         "version": "1.32.0",
     },
 }
-
-# Auxiliary
-HTTP_503_SERVICE_UNAVAILABLE = 503

@@ -16,6 +16,7 @@ certificate storage.
 """
 
 import hashlib
+import http
 import ipaddress
 import logging
 import os
@@ -35,8 +36,11 @@ import ops
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
-from config.bootstrap import BootstrapConfigOptions, bootstrap_config_options_from_cluster_config
-from config.changed import BootstrapConfigChangeError, ChangedConfig
+from config.bootstrap import (
+    BootstrapConfigChangeError,
+    BootstrapConfigChangePreventer,
+    bootstrap_config_options_from_cluster_config,
+)
 from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
@@ -66,7 +70,6 @@ from literals import (
     EXTERNAL_LOAD_BALANCER_RELATION,
     EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
     EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
-    HTTP_503_SERVICE_UNAVAILABLE,
     K8SD_PORT,
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
@@ -211,6 +214,8 @@ class K8sCharm(ops.CharmBase):
                 self.on.upgrade_charm,
             ],
         )
+
+        self.bootstrap_config_change_preventer = BootstrapConfigChangePreventer(self)
 
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
@@ -1349,97 +1354,12 @@ class K8sCharm(ops.CharmBase):
                 self.api_manager.get_cluster_config().metadata
             )
         except InvalidResponseError as e:
-            if e.code == HTTP_503_SERVICE_UNAVAILABLE:
+            if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
                 log.info("k8sd is not ready, skipping bootstrap config check")
                 return
             raise
 
-        # NOTE(Hue): The way we're saving certificates has nothing to do with the snap
-        # so we can't rely on the snap to tell us if the certificates have changed.
-        self._stored.set_default(certificates=self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES))
-
-        if self.is_control_plane:
-            self._prevent_control_plane_bootstrap_config_change(cluster_config)
-        else:
-            self._prevent_worker_bootstrap_config_change(cluster_config)
-
-    def _prevent_control_plane_bootstrap_config_change(self, ref: BootstrapConfigOptions):
-        """Prevent control-plane bootstrap config changes after bootstrap."""
-        changed: List[ChangedConfig] = []
-
-        if self.config.get(CONFIG_BOOTSTRAP_DATASTORE, "") != ref.datastore:
-            changed.append(
-                ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_DATASTORE,
-                    cluster_config=ref.datastore,
-                    charm_config=self.config.get(CONFIG_BOOTSTRAP_DATASTORE, ""),
-                )
-            )
-
-        # NOTE(Hue): bootstrap-certificates is not represented in the cluster config and should be
-        # checked against the stored value.
-        if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES, "") != self._stored.certificates:
-            changed.append(
-                ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_CERTIFICATES,
-                    cluster_config=self._stored.certificates,
-                    charm_config=self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES, ""),
-                )
-            )
-
-        if self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, "") != ref.node_taints:
-            changed.append(
-                ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_NODE_TAINTS,
-                    cluster_config=ref.node_taints,
-                    charm_config=self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, ""),
-                )
-            )
-
-        if self.config.get(CONFIG_BOOTSTRAP_POD_CIDR, "") != ref.pod_cidr:
-            changed.append(
-                ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_POD_CIDR,
-                    cluster_config=ref.pod_cidr,
-                    charm_config=self.config.get(CONFIG_BOOTSTRAP_POD_CIDR, ""),
-                )
-            )
-
-        if self.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, "") != ref.service_cidr:
-            changed.append(
-                ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_SERVICE_CIDR,
-                    cluster_config=ref.service_cidr,
-                    charm_config=self.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, ""),
-                )
-            )
-
-        if changed:
-            for c in changed:
-                log.error(
-                    "Bootstrap config '%s' should NOT be changed after bootstrap. %s", c.name, c
-                )
-            raise BootstrapConfigChangeError(changed)
-
-    def _prevent_worker_bootstrap_config_change(self, ref: BootstrapConfigOptions):
-        """Prevent worker bootstrap config changes after bootstrap."""
-        changed: List[ChangedConfig] = []
-
-        if self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, "") != ref.node_taints:
-            changed.append(
-                ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_NODE_TAINTS,
-                    cluster_config=ref.node_taints,
-                    charm_config=self.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, ""),
-                )
-            )
-
-        if changed:
-            for c in changed:
-                log.error(
-                    "Bootstrap config '%s' should NOT be changed after bootstrap. %s", c.name, c
-                )
-            raise BootstrapConfigChangeError(changed)
+        self.bootstrap_config_change_preventer.prevent(cluster_config)
 
 
 if __name__ == "__main__":  # pragma: nocover
