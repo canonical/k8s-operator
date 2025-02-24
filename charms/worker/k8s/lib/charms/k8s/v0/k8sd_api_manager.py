@@ -871,7 +871,7 @@ class GetClusterConfigMetadata(BaseModel):
 
     status: UserFacingClusterConfig
     datastore: Optional[UserFacingDatastoreConfig] = Field(default=None)
-    node_taints: Optional[List[str]] = Field(default=None, alias="nodeTaints")
+    node_taints: Optional[List[str]] = Field(default=None, alias="node-taints")
 
 
 class GetClusterConfigResponse(BaseRequestModel):
