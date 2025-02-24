@@ -42,6 +42,10 @@ def bootstrap_config_options_from_cluster_config(
         if cluster_config.datastore and cluster_config.datastore.type
         else ""
     )
+    # NOTE(Hue) datastore type `dqlite` (in charm) is equal to `k8s-dqlite` in the snap.
+    # We change it to `dqlite` here to conform with the charm config.
+    if datastore == "k8s-dqlite":
+        datastore = "dqlite"
 
     node_taints = " ".join(cluster_config.node_taints) if cluster_config.node_taints else ""
 
