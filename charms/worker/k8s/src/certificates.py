@@ -11,6 +11,8 @@ import ops
 from literals import (
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
+    CONFIG_BOOTSTRAP_CERTIFICATES,
+    CONFIG_BOOTSTRAP_SERVICE_CIDR,
     CONTROL_PLANE_CERTIFICATES,
     SUPPORTED_CERTIFICATES,
     WORKER_CERTIFICATES,
@@ -209,7 +211,7 @@ class K8sCertificates(ops.Object):
             ValueError: If the service CIDR is invalid.
         """
         service_ips = set()
-        service_cidrs = self._charm.config.get("bootstrap-service-cidr", "").split(",")
+        service_cidrs = self._charm.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, "").split(",")
         for cidr in service_cidrs:
             cidr = cidr.strip()
             try:
@@ -338,7 +340,7 @@ class K8sCertificates(ops.Object):
             str: The certificates provider.
         """
         if self._charm.is_control_plane:
-            return str(self._charm.config.get("bootstrap-certificates"))
+            return str(self._charm.config.get(CONFIG_BOOTSTRAP_CERTIFICATES))
 
         # NOTE: This operation is safe because we're validating the provider during the
         # certificate configuration in the `configure_certificates` method.

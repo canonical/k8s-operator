@@ -85,7 +85,7 @@ def _ensure_file(
     return changed
 
 
-class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
+class Registry(pydantic.BaseModel):
     """Represents a containerd registry.
 
     Attrs:
@@ -106,6 +106,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         auth_config_header (Dict[str, Any]):
         hosts_toml (Dict[str, Any]):
     """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
 
     # e.g. "https://registry-1.docker.io"
     url: str
@@ -277,12 +279,14 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         _ensure_file(hosts_toml_path, tomli_w.dumps(self.hosts_toml), 0o600, 0, 0)
 
 
-class RegistryConfigs(pydantic.BaseModel, extra=pydantic.Extra.forbid):
+class RegistryConfigs(pydantic.BaseModel):
     """Represents a set of containerd registries.
 
     Attrs:
         registries (List[Registry]):
     """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
 
     registries: List[Registry]
 
