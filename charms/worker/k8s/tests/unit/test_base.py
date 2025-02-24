@@ -131,7 +131,7 @@ def test_prevent_bootstrap_config_change(harness):
             type="",
             metadata=GetClusterConfigMetadata(
                 status=UserFacingClusterConfig(),
-                datastore=UserFacingDatastoreConfig(type="k8s-dqlite"),
+                datastore=UserFacingDatastoreConfig(type="dqlite"),
                 nodeTaints=taints,
             ),
         )
@@ -163,7 +163,7 @@ def test_set_leader(harness):
 
 
 def test_configure_datastore_bootstrap_config_dqlite(harness):
-    """Test configuring the datastore=k8s-dqlite on bootstrap.
+    """Test configuring the datastore=dqlite on bootstrap.
 
     Args:
         harness: the harness under test
@@ -206,7 +206,7 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
 
 
 def test_configure_datastore_runtime_config_dqlite(harness):
-    """Test configuring the datastore=k8s-dqlite on runtime changes.
+    """Test configuring the datastore=dqlite on runtime changes.
 
     Args:
         harness: the harness under test

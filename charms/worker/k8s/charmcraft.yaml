@@ -86,11 +86,11 @@ config:
         Example:
           e.g.: key1=value1 key2=value2
     bootstrap-datastore:
-      default: k8s-dqlite
+      default: dqlite
       type: string
       description: |
         The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "k8s-dqlite" and "etcd". If "etcd" is
+        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
         chosen, the charm should be integrated with the etcd charm.
     bootstrap-certificates:
       type: string
