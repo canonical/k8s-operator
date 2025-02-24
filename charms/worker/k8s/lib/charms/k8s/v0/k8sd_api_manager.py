@@ -990,8 +990,6 @@ class HTTPConnectionFactory(ConnectionFactory):
 class K8sdAPIManager:
     """Manager for K8sd API interactions."""
 
-    CLUSTER_CONFIG_ENDPOINT: str = "/1.0/k8sd/cluster/config"
-
     def __init__(self, factory: ConnectionFactory):
         """Initialise the K8sdAPIManager.
 
@@ -1105,7 +1103,7 @@ class K8sdAPIManager:
             config (UpdateClusterConfigRequest): The cluster configuration.
         """
         body = config.model_dump(exclude_none=True, by_alias=True)
-        self._send_request(self.CLUSTER_CONFIG_ENDPOINT, "PUT", EmptyResponse, body)
+        self._send_request("/1.0/k8sd/cluster/config", "PUT", EmptyResponse, body)
 
     def get_cluster_config(self) -> GetClusterConfigResponse:
         """Retrieve the cluster configuration.
@@ -1113,7 +1111,7 @@ class K8sdAPIManager:
         Returns:
             GetClusterConfigResponse: The cluster configuration.
         """
-        return self._send_request(self.CLUSTER_CONFIG_ENDPOINT, "GET", GetClusterConfigResponse)
+        return self._send_request("/1.0/k8sd/cluster/config", "GET", GetClusterConfigResponse)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:
         """Retrieve cluster status.
