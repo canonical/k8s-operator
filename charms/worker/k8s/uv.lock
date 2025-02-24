@@ -149,14 +149,6 @@ wheels = [
 ]
 
 [[package]]
-name = "charm-lib-contextual-status"
-version = "0.0.0"
-source = { git = "https://github.com/charmed-kubernetes/charm-lib-contextual-status?rev=255dd4a23defc16dcdac832306e5f460a0f1200c#255dd4a23defc16dcdac832306e5f460a0f1200c" }
-dependencies = [
-    { name = "ops" },
-]
-
-[[package]]
 name = "charm-lib-interface-external-cloud-provider"
 version = "0.0.0"
 source = { git = "https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider?rev=e9cadd749ff8e2a6c81fadb0268a8b10e26876be#e9cadd749ff8e2a6c81fadb0268a8b10e26876be" }
@@ -173,12 +165,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "charm-lib-reconciler"
+name = "charms-contextual-status"
 version = "0.0.0"
-source = { git = "https://github.com/charmed-kubernetes/charm-lib-reconciler?rev=d802829b5e71b2cbf974cd5c7c69d7ce2137b308#d802829b5e71b2cbf974cd5c7c69d7ce2137b308" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "charm-lib-contextual-status" },
     { name = "ops" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e1/33/fea17ca3fc2f4d27df0b2047ad1c0da65f1accea5658cc2296b76d1abf07/charms_contextual_status-0.0.0.tar.gz", hash = "sha256:926722aaa2a61f119ba5c35a256bd47d7b18b2a3f718e11aed94ebcfca99c355", size = 43211 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/ac/52e7a680f632573336227773e2115dd7941e213562b43530216dbdecd122/charms.contextual_status-0.0.0-py3-none-any.whl", hash = "sha256:1f6001309a13565693dd73e1fa3fa4b184dc3df56279ef5cc7ceec7097108d58", size = 9343 },
+]
+
+[[package]]
+name = "charms-reconciler"
+version = "0.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "charms-contextual-status" },
+    { name = "ops" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/53/2ddeeae5fb18d24082f08666a6402243633e55f9af7dc80b1850a817e589/charms_reconciler-0.0.0.tar.gz", hash = "sha256:f644d00e204fbcd37e63659bf3100fae84bc74439478985ac2e1af2427aa84f6", size = 42315 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/d3/323f78d95e3a73d3ffe8cecf9a908f84266387ec2629d71759577d48c93a/charms.reconciler-0.0.0-py3-none-any.whl", hash = "sha256:324f4cfe06de66d921f3ae77798f1ea41c71deb6dcf54bad995721793d3c8842", size = 8060 },
 ]
 
 [[package]]
@@ -478,10 +486,10 @@ name = "k8s"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "charm-lib-contextual-status" },
     { name = "charm-lib-interface-external-cloud-provider" },
     { name = "charm-lib-node-base" },
-    { name = "charm-lib-reconciler" },
+    { name = "charms-contextual-status" },
+    { name = "charms-reconciler" },
     { name = "cosl" },
     { name = "cryptography" },
     { name = "httpx" },
@@ -512,10 +520,10 @@ unit = [
 
 [package.metadata]
 requires-dist = [
-    { name = "charm-lib-contextual-status", git = "https://github.com/charmed-kubernetes/charm-lib-contextual-status?rev=255dd4a23defc16dcdac832306e5f460a0f1200c" },
     { name = "charm-lib-interface-external-cloud-provider", git = "https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider?rev=e9cadd749ff8e2a6c81fadb0268a8b10e26876be" },
     { name = "charm-lib-node-base", git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=e35bbe08c1035849ed10a6838fa676c7847bc757" },
-    { name = "charm-lib-reconciler", git = "https://github.com/charmed-kubernetes/charm-lib-reconciler?rev=d802829b5e71b2cbf974cd5c7c69d7ce2137b308" },
+    { name = "charms-contextual-status" },
+    { name = "charms-reconciler" },
     { name = "cosl" },
     { name = "cryptography", specifier = ">=44.0.0" },
     { name = "httpx" },
