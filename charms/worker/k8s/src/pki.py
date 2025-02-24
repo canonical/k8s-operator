@@ -51,4 +51,4 @@ def get_certificate_sans(cert_path: Union[str, Path]) -> Tuple[List[str], List[s
         log.exception("No SAN extension found in certificate %s", cert_path)
         return [], []
 
-    return list(dns_sans), list(ip_address)
+    return sorted(dns_sans), sorted(ip_address)
