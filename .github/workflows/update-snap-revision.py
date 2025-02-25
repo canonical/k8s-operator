@@ -82,7 +82,7 @@ def update_current_revision(arch: str, rev: str):
 def update_github_output(variable: str, value: str):
     if github_output := os.environ.get("GITHUB_OUTPUT", None):
         with Path(github_output).open(mode="a+") as f:
-            f.write(f"{variable}={value}")
+            f.write(f"{variable}={value}\n")
 
 
 if __name__ == "__main__":
