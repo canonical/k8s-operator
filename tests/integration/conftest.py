@@ -10,7 +10,7 @@ import random
 import shlex
 import string
 from pathlib import Path
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import juju.controller
 import juju.utils
@@ -224,7 +224,9 @@ async def deploy_model(
 
 
 @pytest_asyncio.fixture(scope="module")
-async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
+async def kubernetes_cluster(
+    request: pytest.FixtureRequest, ops_test: OpsTest
+) -> AsyncGenerator[Model, None]:
     """Deploy kubernetes charms according to the bundle_marker."""
     model = "main"
     bundle, markings = await Bundle.create(ops_test)
@@ -232,6 +234,7 @@ async def kubernetes_cluster(request: pytest.FixtureRequest, ops_test: OpsTest):
     with ops_test.model_context(model) as the_model:
         if await is_deployed(the_model, bundle.path):
             log.info("Using existing model=%s.", the_model.uuid)
+            assert ops_test.model, "Model must be present"
             yield ops_test.model
             return
 
