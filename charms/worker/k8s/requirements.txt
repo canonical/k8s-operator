@@ -5,6 +5,6 @@ charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-recon
 cosl==0.0.8
 ops==2.13.0
 pydantic==1.10.15
-PyYAML==6.0.1
+PyYAML==6.0.2
 typing_extensions==4.11.0
 websocket-client==1.8.0
