@@ -59,9 +59,9 @@ async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
     )
     test_pod_manifest[0]["metadata"]["name"] = random_pod_name
 
-    test_pod_manifest[0]["spec"]["containers"][0][
-        "image"
-    ] = f"{docker_registry_ip}:5000/busybox:latest"
+    test_pod_manifest[0]["spec"]["containers"][0]["image"] = (
+        f"{docker_registry_ip}:5000/busybox:latest"
+    )
 
     k8s_unit = kubernetes_cluster.applications["k8s"].units[0]
     try:
