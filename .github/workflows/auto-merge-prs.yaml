@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/auto-merge-prs.yaml
-  
+
 jobs:
   auto-merge-successful-prs:
     name: Auto-merge K8s charm PRs

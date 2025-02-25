@@ -11,7 +11,7 @@ index 5a01ef2..b582e63 100644
        summary: Target disappeared from Prometheus target discovery.
 -    expr: 'absent(up{job="apiserver"} == 1)
 +    expr: 'up{job="apiserver"} == 0
- 
+
        '
      for: 15m
 @@ -758,7 +758,7 @@ groups:
@@ -20,7 +20,7 @@ index 5a01ef2..b582e63 100644
        summary: Target disappeared from Prometheus target discovery.
 -    expr: 'absent(up{job="kubelet", metrics_path="/metrics"} == 1)
 +    expr: 'up{job="kubelet", metrics_path="/metrics"} == 0
- 
+
        '
      for: 15m
 @@ -771,7 +771,7 @@ groups:
@@ -29,7 +29,7 @@ index 5a01ef2..b582e63 100644
        summary: Target disappeared from Prometheus target discovery.
 -    expr: 'absent(up{job="kube-scheduler"} == 1)
 +    expr: 'up{job="kube-scheduler"} == 0
- 
+
        '
      for: 15m
 @@ -784,7 +784,7 @@ groups:
@@ -38,6 +38,6 @@ index 5a01ef2..b582e63 100644
        summary: Target disappeared from Prometheus target discovery.
 -    expr: 'absent(up{job="kube-controller-manager"} == 1)
 +    expr: 'up{job="kube-controller-manager"} == 0
- 
+
        '
      for: 15m
