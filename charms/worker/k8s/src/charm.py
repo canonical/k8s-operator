@@ -1302,7 +1302,6 @@ class K8sCharm(ops.CharmBase):
             return
 
         dns_sans, ip_sans = get_certificate_sans(APISERVER_CERT)
-        ip_sans = [str(ip) for ip in ip_sans]
         all_cert_sans = dns_sans + ip_sans
 
         missing_sans = [san for san in extra_sans if san not in all_cert_sans]
