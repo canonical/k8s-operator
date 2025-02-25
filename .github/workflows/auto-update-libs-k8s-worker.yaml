@@ -6,7 +6,7 @@ on:
 
 jobs:
   auto-update-libs:
-    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@a23cb8af2877316bd87af472b1732318386bd05c
     secrets: inherit
     with:
       working-directory:  ./charms/worker/k8s
