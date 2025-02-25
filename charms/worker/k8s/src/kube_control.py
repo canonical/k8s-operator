@@ -12,14 +12,14 @@ from literals import APISERVER_PORT
 from protocols import K8sCharmProtocol
 
 import charms.contextual_status as status
-from charms.contextual_status import BlockedStatus, on_error
+from charms.contextual_status import on_error
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
 
 
 @on_error(
-    BlockedStatus("Invalid config on node-labels or bootstrap-node-taints"),
+    ops.BlockedStatus("Invalid config on node-labels or bootstrap-node-taints"),
     ValueError,
     TypeError,
 )

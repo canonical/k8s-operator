@@ -77,7 +77,7 @@ from upgrade import K8sDependenciesModel, K8sUpgrade
 
 import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
-from charms.contextual_status import ReconcilerError, WaitingStatus, on_error
+from charms.contextual_status import ReconcilerError, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import (
@@ -402,7 +402,9 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap installation"))
         snap_management(self)
 
-    @on_error(WaitingStatus("Waiting to apply snap requirements"), subprocess.CalledProcessError)
+    @on_error(
+        ops.WaitingStatus("Waiting to apply snap requirements"), subprocess.CalledProcessError
+    )
     def _apply_snap_requirements(self):
         """Apply necessary snap requirements for the k8s snap.
 
@@ -414,7 +416,7 @@ class K8sCharm(ops.CharmBase):
         init_sh = "/snap/k8s/current/k8s/hack/init.sh"
         subprocess.check_call(shlex.split(init_sh))
 
-    @on_error(WaitingStatus("Waiting for k8sd"), InvalidResponseError, K8sdConnectionError)
+    @on_error(ops.WaitingStatus("Waiting for k8sd"), InvalidResponseError, K8sdConnectionError)
     def _check_k8sd_ready(self):
         """Check if k8sd is ready to accept requests."""
         log.info("Check if k8ds is ready")
@@ -804,7 +806,7 @@ class K8sCharm(ops.CharmBase):
             )
 
     @on_error(
-        WaitingStatus("Ensure that the cluster configuration is up-to-date"),
+        ops.WaitingStatus("Ensure that the cluster configuration is up-to-date"),
         ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
@@ -955,7 +957,7 @@ class K8sCharm(ops.CharmBase):
         return "\n".join(proxy_settings)
 
     @on_error(
-        WaitingStatus("Waiting for Cluster token"),
+        ops.WaitingStatus("Waiting for Cluster token"),
         ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
@@ -1009,7 +1011,7 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)
 
-    @on_error(WaitingStatus("Awaiting cluster removal"))
+    @on_error(ops.WaitingStatus("Awaiting cluster removal"))
     def _death_handler(self, event: ops.EventBase):
         """Reconcile end of unit's position in the cluster.
 
