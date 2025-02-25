@@ -20,18 +20,13 @@ from kubernetes.utils import create_from_yaml
 
 from . import helpers
 
-# This pytest mark configures the test environment to use the Canonical Kubernetes
-# bundle with ceph, for all the test within this module.
 pytestmark = [
     pytest.mark.bundle(file="test_registries/test-bundle-docker-registry.yaml", apps_local=["k8s"])
 ]
 
 log = logging.getLogger(__name__)
 
-
-def _get_data_file_path(name) -> Path:
-    """Retrieve the full path of the specified test data file."""
-    return Path(__file__).parent / "data" / "test_registries" / name
+TEST_DATA_PATH = Path(__file__).parent / "data" / "test_registries" / "pod.yaml"
 
 
 @pytest.mark.abort_on_fail
@@ -57,16 +52,16 @@ async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
 
     # Create a pod that uses the busybox image from the custom registry
     # Image: {docker_registry_ip}:5000/busybox:latest
-    test_pod_manifest = list(yaml.safe_load_all(_get_data_file_path("pod.yaml").open()))
+    test_pod_manifest = list(yaml.safe_load_all(TEST_DATA_PATH.open()))
 
     random_pod_name = "test-pod-" + "".join(
         random.choices(string.ascii_lowercase + string.digits, k=5)
     )
     test_pod_manifest[0]["metadata"]["name"] = random_pod_name
 
-    test_pod_manifest[0]["spec"]["containers"][0]["image"] = (
-        f"{docker_registry_ip}:5000/busybox:latest"
-    )
+    test_pod_manifest[0]["spec"]["containers"][0][
+        "image"
+    ] = f"{docker_registry_ip}:5000/busybox:latest"
 
     k8s_unit = kubernetes_cluster.applications["k8s"].units[0]
     try:
