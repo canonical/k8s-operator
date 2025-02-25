@@ -6,7 +6,7 @@ on:
 
 jobs:
   unit-tests:
-    uses: canonical/operator-workflows/.github/workflows/test.yaml@08c5a65a0bc4696164b4f85a29a9ccbd830d10d8
+    uses: canonical/operator-workflows/.github/workflows/test.yaml@a23cb8af2877316bd87af472b1732318386bd05c
     secrets: inherit
     with:
       charm-directory: charms
