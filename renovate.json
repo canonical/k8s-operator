@@ -1,21 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:base"],
+  "extends": ["config:recommended"],
+  "baseBranches": ["main", "/^release-.*$/"],
   "enabled": true,
+  "labels": ["dependencies"],
   "packageRules": [
     {
-      "matchManagers": ["pip_requirements"],
-      "matchPaths": [
-        "charms/worker/k8s/uv.lock",
-        "charms/worker/k8s/pyproject.toml"
-      ],
-      "groupName": "python dependencies",
-      "enabled": true
+      "matchManagers": ["pep621"],
+      "groupName": "Python dependencies"
     }
   ],
-  "pip_requirements": {
-    "fileMatch": ["uv.lock"]
-  },
   "lockFileMaintenance": {
     "enabled": true
   }
