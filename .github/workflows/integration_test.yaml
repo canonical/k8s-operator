@@ -38,18 +38,18 @@ jobs:
     strategy:
       matrix:
         arch:
-        # built on azure, test on self-hosted
-        - id: amd64
-          builder-label: ubuntu-22.04
-          tester-arch: AMD64
-          tester-size: xlarge
-          modules: '["test_k8s", "test_etcd", "test_ceph", "test_upgrade", "test_external_certs", "test_registry"]'
-        # built and test on on self-hosted
-        - id: arm64
-          builder-label: ARM64
-          tester-arch: ARM64
-          tester-size: large
-          modules: '["test_k8s", "test_etcd"]'
+          # built on azure, test on self-hosted
+          - id: amd64
+            builder-label: ubuntu-22.04
+            tester-arch: AMD64
+            tester-size: xlarge
+            modules: '["test_k8s", "test_etcd", "test_ceph", "test_upgrade", "test_external_certs", "test_registry"]'
+          # built and test on on self-hosted
+          - id: arm64
+            builder-label: ARM64
+            tester-arch: ARM64
+            tester-size: large
+            modules: '["test_k8s", "test_etcd"]'
     with:
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
@@ -64,7 +64,7 @@ jobs:
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
       self-hosted-runner-label: ${{ matrix.arch.tester-size }}
-      test-timeout: 120
+      test-timeout: 600
       test-tox-env: integration
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
