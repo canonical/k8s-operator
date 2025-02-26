@@ -4,7 +4,7 @@ charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502
 cosl==0.0.8
 ops==2.13.0
-pydantic==1.10.15
+pydantic==2.10.6
 PyYAML==6.0.1
 typing_extensions==4.11.0
 websocket-client==1.8.0
