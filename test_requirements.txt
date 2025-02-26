@@ -1,5 +1,5 @@
 juju
-pydantic<2
+pydantic<3
 pylxd
 pytest
 pytest-asyncio
