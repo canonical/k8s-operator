@@ -37,7 +37,6 @@ jobs:
     strategy:
       matrix:
         branch: ${{ fromJSON(needs.stable-branches.outputs.branches) }}
-        arch: ["amd64", "arm64"]
     steps:
     - name: Prepare Track
       run: |-
@@ -55,31 +54,52 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Update Revision
-      id: update-revision
+    - run: "pip install pyyaml"
+    - name: Update amd64 Revision
+      id: update-amd64-revision
       run: |
-        pip install pyyaml
-        python3 .github/workflows/update-snap-revision.py ${{ matrix.arch }}
+        python3 .github/workflows/update-snap-revision.py amd64
+
+    - name: Update arm64 Revision
+      id: update-arm64-revision
+      run: |
+        python3 .github/workflows/update-snap-revision.py arm64
+
+    - name: Assemble Revisions
+      id: assemble-revisions
+      run: |
+        AMD64_REVISION=${{ steps.update-amd64-revision.outputs.result }}
+        ARM64_REVISION=${{ steps.update-arm64-revision.outputs.result }}
+        REVISIONS=()
+        if [[ -n $AMD64_REVISION ]]; then
+            REVISIONS+=("amd64-${AMD64_REVISION}")
+        fi
+        if [[ -n $ARM64_REVISION ]]; then
+            REVISIONS+=("arm64-${ARM64_REVISION}")
+        fi
+        if [[ ${#REVISIONS[@]} -eq 0 ]]; then
+          echo 'revisions=[]' >> ${GITHUB_OUTPUT}
+        else
+          echo "revisions=$(printf '%s\n' "${REVISIONS[@]}" | jq -R . | jq -s -c .)" >> ${GITHUB_OUTPUT}
+        fi
 
     - name: Report Pull Request
-      if: ${{ github.event_name != 'schedule' && steps.update-revision.outputs.result != ''}}
+      if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
       run: |
         echo "Would have created pull-request"
-        echo '[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}'
-
+        echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
     - name: Create pull request
       uses: peter-evans/create-pull-request@v7
-      if: ${{ github.event_name == 'schedule' && steps.update-revision.outputs.result != '' }}
+      if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
-        commit-message: '[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision to ${{ steps.update-revision.outputs.result }} on ${{ matrix.arch }}'
-        title: "[Release ${{ env.TRACK }}] Update K8s ${{ env.TRACK }} revision on ${{ matrix.arch }}"
+        commit-message: '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
+        title: "[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}"
         body: |-
-          Updates K8s version for ${{ env.TRACK }}
-          * revision=${{ steps.update-revision.outputs.result }}
-          * arch = ${{ matrix.arch }}
+          Updates K8s revisions for ${{ env.TRACK }}
+          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '\n *') }}
         labels: |
           automerge
-        branch: revision-update-job/${{ env.TRACK }}/${{matrix.arch}}/${{ steps.update-revision.outputs.result }}
+        branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.Revisions), '-') }}
         base: ${{ matrix.branch }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
         add-paths: |
