@@ -83,7 +83,7 @@ config:
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.
-        
+
         Note: Due to NodeRestriction, workers are limited to how they can label themselves
         https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#noderestriction
     kube-proxy-extra-args:
@@ -122,7 +122,7 @@ resources:
     description: |
       Override charm defined snap installation script
 
-      This charm is designed to operate with a specific revision of snaps, overriding 
+      This charm is designed to operate with a specific revision of snaps, overriding
       with anything will indicate that the charm is running an unsupported configuration.
 
       Content Options:

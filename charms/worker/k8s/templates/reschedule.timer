@@ -4,11 +4,11 @@
 [Unit]
 Description=Timer to dispatch {event} event periodically
 Requires={app}.{event}.service
- 
+
 [Timer]
 Unit={app}.{event}.service
 OnUnitInactiveSec={interval}s
 RandomizedDelaySec={random_delay}s
- 
+
 [Install]
 WantedBy=timers.target
