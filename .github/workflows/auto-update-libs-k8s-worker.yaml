@@ -15,7 +15,7 @@ jobs:
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
   auto-update-libs:
     needs: [charmcraft-channel]
-    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@e848763f1e14d3169781fe95b4b896399a1a8a92
+    uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@1adf2138eaa5dfe42ac8ef5305f15c7a2c56ba14
     secrets: inherit
     with:
       working-directory:  ./charms/worker/k8s
