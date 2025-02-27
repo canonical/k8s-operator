@@ -3,10 +3,10 @@
 
 [Unit]
 Description=Dispatch the {event} event on {app}/{unit_num}
- 
+
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/timeout {timeout} /usr/bin/bash -c '/usr/bin/juju-exec "{app}/{unit_num}" "JUJU_DISPATCH_PATH={event} ./dispatch"'
- 
+
 [Install]
 WantedBy=multi-user.target
