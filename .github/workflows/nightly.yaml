@@ -14,19 +14,16 @@ jobs:
   integration-tests-terraform:
     strategy:
       matrix:
-        test: [default, ceph]
-        include:
-          - test: default
-            test_name: test_k8s
-            manifest-yaml: default-manifest.yaml
-            env: {}
-          - test: ceph
-            test_name: test_ceph
-            manifest-yaml: ceph-manifest.yaml
-            env:
-              TF_VAR_csi_integration: "ceph"
-    name: integration-tests-terraform-${{ matrix.test }}
+        test:
+        - name: test_k8s
+          manifest-yaml: default-manifest.yaml
+        - name: test_ceph
+          manifest-yaml: ceph-manifest.yaml
+    name: integration-tests-terraform-${{ matrix.test.name }}
     runs-on: self-hosted-linux-amd64-jammy-xlarge
+    env:
+      TF_VAR_model: my-canonical-k8s
+      TF_VAR_csi_integration: ${{ matrix.test.name == 'test_ceph' && '["ceph"]' || '[]'}}
     steps:
     - name: Setup operator environment
       uses: charmed-kubernetes/actions-operator@main
@@ -37,12 +34,11 @@ jobs:
     - name: Checking out repo
       uses: actions/checkout@v4
     - name: Setup cluster with terraform
-      env: ${{ matrix.env }}
       run: |
-        tox -e deploy-terraform -- --model my-canonical-k8s --manifest-yaml ${{ github.workspace }}/tests/integration/data/${{ matrix.manifest-yaml }}
+        tox -e deploy-terraform -- --model ${{env.TF_VAR_model}} --manifest-yaml ${{ github.workspace }}/tests/integration/data/${{ matrix.test.manifest-yaml }}
     - name: Run integration tests
       run: |
-        tox -e integration -- -s -k ${{ matrix.test_name }} --model my-canonical-k8s --no-deploy
+        tox -e integration -- -s -k ${{ matrix.test.name }} --model ${{env.TF_VAR_model}} --no-deploy
     - name: Setup tmate session
       if: ${{ failure() }}
       uses: canonical/action-tmate@main
