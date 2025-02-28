@@ -1,0 +1,12 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+    - name: test-container
+      #image: set by test
+      command: ["sleep", "100"]
