@@ -12,6 +12,8 @@ ceph-csi:
   csi_integration: ceph
   channel: latest/edge
   base: ubuntu@22.04
+  config:
+    provisioner-replicas: 1
 ceph-mon:
   cluster-name: main
   csi_integration: ceph
