@@ -6,54 +6,27 @@ k8s:
   base: ubuntu@22.04
   constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
   channel: latest/edge
-k8s_worker:
-  units: 0
-  base: ubuntu@22.04
-  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
-  channel: latest/edge
-# The following is the primary ceph configuration
-# only applied if csi_integration is set to ["ceph"]
-ceph_csi-0:
-  app_name: ceph-csi
+
+ceph-csi:
+  cluster-name: main
+  csi_integration: ceph
   channel: latest/edge
   base: ubuntu@22.04
-ceph_mon-0:
-  app_name: ceph-mon
+ceph-mon:
+  cluster-name: main
+  csi_integration: ceph
   channel: quincy/stable
   constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
   units: 1
   config:
     monitor-count: 1
-    expected-osd-count: 1
-ceph_osd-0:
-  app_name: ceph-osd
+    expected-osd-count: 2
+ceph-osd:
+  cluster-name: main
+  csi_integration: ceph
   channel: quincy/stable
   constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
-  units: 1
-  storage:
-    osd-devices: 1G,1
-    osd-journals: 1G,1
-# The following is an alternative ceph configuration
-# only applied if csi_integration is set to ["ceph", "ceph"]
-ceph_csi-1:
-  app_name: ceph-csi-alt
-  channel: latest/edge
-  base: ubuntu@22.04
-  config:
-    namespace: ceph-1
-ceph_mon-1:
-  app_name: ceph-mon-alt
-  channel: quincy/stable
-  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
-  units: 1
-  config:
-    monitor-count: 1
-    expected-osd-count: 1
-ceph_osd-1:
-  app_name: ceph-osd-alt
-  channel: quincy/stable
-  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
-  units: 1
+  units: 2
   storage:
     osd-devices: 1G,1
     osd-journals: 1G,1
