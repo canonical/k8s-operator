@@ -32,7 +32,7 @@ from cryptography.hazmat._oid import ExtensionOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
-from ops import BoundEvent, CharmBase, CharmEvents, SecretExpiredEvent, SecretRemoveEvent
+from ops import BoundEvent, CharmBase, CharmEvents, Secret, SecretExpiredEvent, SecretRemoveEvent
 from ops.framework import EventBase, EventSource, Handle, Object
 from ops.jujuversion import JujuVersion
 from ops.model import (
@@ -52,7 +52,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -1064,9 +1064,17 @@ class TLSCertificatesRequiresV4(Object):
     def _mode_is_valid(self, mode: Mode) -> bool:
         return mode in [Mode.UNIT, Mode.APP]
 
+    def _validate_secret_exists(self, secret: Secret) -> None:
+        secret.get_info()  # Will raise `SecretNotFoundError` if the secret does not exist
+
     def _on_secret_remove(self, event: SecretRemoveEvent) -> None:
         """Handle Secret Removed Event."""
         try:
+            # Ensure the secret exists before trying to remove it, otherwise
+            # the unit could be stuck in an error state. See the docstring of
+            # `remove_revision` and the below issue for more information.
+            # https://github.com/juju/juju/issues/19036
+            self._validate_secret_exists(event.secret)
             event.secret.remove_revision(event.revision)
         except SecretNotFoundError:
             logger.warning(
