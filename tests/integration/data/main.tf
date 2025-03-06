@@ -39,7 +39,7 @@ variable "csi_integration" {
 }
 
 module "k8s" {
-  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=KU-2592/multiple-ceph-cluster-clean"
+  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=main"
   model         = {
     name = var.model
     cloud = var.cloud
