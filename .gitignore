@@ -10,4 +10,9 @@ __pycache__/
 .mypy_cache
 *.egg-info/
 */*.rock
-.terraform
+
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/.terraform
+**/.terraform.lock.hcl
+**/.terraform.lock.hcl.backup
