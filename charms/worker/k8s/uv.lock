@@ -160,7 +160,7 @@ dependencies = [
 [[package]]
 name = "charm-lib-node-base"
 version = "0.0.0"
-source = { git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=e35bbe08c1035849ed10a6838fa676c7847bc757#e35bbe08c1035849ed10a6838fa676c7847bc757" }
+source = { git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=1bd8506cf1fdfcb584c50388c7082cc23a5ee14f#1bd8506cf1fdfcb584c50388c7082cc23a5ee14f" }
 dependencies = [
     { name = "ops" },
 ]
@@ -531,7 +531,7 @@ unit = [
 [package.metadata]
 requires-dist = [
     { name = "charm-lib-interface-external-cloud-provider", git = "https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider?rev=e9cadd749ff8e2a6c81fadb0268a8b10e26876be" },
-    { name = "charm-lib-node-base", git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=e35bbe08c1035849ed10a6838fa676c7847bc757" },
+    { name = "charm-lib-node-base", git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=1bd8506cf1fdfcb584c50388c7082cc23a5ee14f" },
     { name = "charms-contextual-status" },
     { name = "charms-reconciler" },
     { name = "cosl" },
