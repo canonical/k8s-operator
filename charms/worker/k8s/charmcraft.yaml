@@ -182,7 +182,7 @@ config:
           e.g.: "skip_verify": true
 
         Example config:
-        juju config k8s containerd_custom_registries='[{
+        juju config k8s containerd-custom-registries='[{
             "url": "https://registry.example.com",
             "host": "ghcr.io",
             "ca_file": "'"$(base64 -w 0 < ~/my.custom.ca.pem)"'",
