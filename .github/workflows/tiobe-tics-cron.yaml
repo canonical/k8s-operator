@@ -37,7 +37,7 @@ jobs:
       - name: Install Go for Cobertura Coverage Converter
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.24"
 
       - name: Run Tests With Coverage
         run: |
