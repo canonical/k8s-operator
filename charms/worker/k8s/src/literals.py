@@ -33,6 +33,7 @@ APISERVER_PORT = 6443
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
 
 # Relations
+CERTIFICATES_RELATION = "certificates"
 CLUSTER_RELATION = "cluster"
 CLUSTER_WORKER_RELATION = "k8s-cluster"
 CONTAINERD_RELATION = "containerd"
@@ -48,6 +49,7 @@ CLUSTER_CERTIFICATES_KEY = "certificates-provider"
 
 # Certificates
 SUPPORTED_CERTIFICATES = ["external", "self-signed"]
+MAX_COMMON_NAME_SIZE = 64
 
 WORKER_CERTIFICATES = ["kubelet", "kubelet-client", "proxy"]
 CONTROL_PLANE_CERTIFICATES = [
