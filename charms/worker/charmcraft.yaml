@@ -77,6 +77,13 @@ config:
         For more information, see the upstream Kubernetes documentation about
         taints:
         https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+    external-certs-kubelet-common-name-format:
+      type: string
+      default: "system:node:{node-name}"
+      description: |
+        Formatter string for the Kubelet's TLS certificate common name (CN).
+        Supports placeholders: {node-name}, {cluster-name}, and {domain-name}.
+        The resulting CN must not exceed 64 characters. Required when using external certificates.
     node-labels:
       default: ""
       type: string

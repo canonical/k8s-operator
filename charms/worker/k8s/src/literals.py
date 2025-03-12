@@ -53,6 +53,9 @@ KUBELET_CN_FORMATTER_CONFIG_KEY = "external-certs-kubelet-common-name-format"
 MAX_COMMON_NAME_SIZE = 64
 SUPPORTED_CERTIFICATES = ["external", "self-signed"]
 
+APISERVER_CSR_KEY = "apiserver"
+KUBELET_CSR_KEY = "kubelet"
+
 WORKER_CERTIFICATES = ["kubelet", "kubelet-client", "proxy"]
 CONTROL_PLANE_CERTIFICATES = [
     "apiserver",

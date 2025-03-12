@@ -5,15 +5,17 @@
 
 import ipaddress
 import logging
-from typing import List, Optional, Protocol, Set, Tuple, Union, cast
+from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
 
 import ops
 from literals import (
     APISERVER_CN_FORMATTER_CONFIG_KEY,
+    APISERVER_CSR_KEY,
     CERTIFICATES_RELATION,
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
     KUBELET_CN_FORMATTER_CONFIG_KEY,
+    KUBELET_CSR_KEY,
     MAX_COMMON_NAME_SIZE,
     SUPPORTED_CERTIFICATES,
 )
@@ -144,19 +146,31 @@ class K8sCertificates(ops.Object):
 
         If the common name formatters are invalid, return an empty list.
         """
+        return list(self._certificate_requests_mapping.values())
+
+    @property
+    def _certificate_requests_mapping(self) -> Dict[str, CertificateRequestAttributes]:
+        """Return the certificate requests mapping.
+
+        If the common name formatters are invalid, return an empty dict.
+        """
         try:
-            apiserver_common_name = self.apiserver_common_name
-            kubelet_common_name = self.kubelet_common_name
-            return [
-                self._create_certificates_request(common_name=apiserver_common_name),
-                self._create_certificates_request(
-                    common_name=kubelet_common_name, organization="system:nodes"
-                ),
-            ]
+            requests = {}
+
+            requests[KUBELET_CSR_KEY] = self._create_certificates_request(
+                common_name=self.kubelet_common_name, organization="system:nodes"
+            )
+
+            if self._charm.is_control_plane:
+                requests[APISERVER_CSR_KEY] = self._create_certificates_request(
+                    common_name=self.apiserver_common_name
+                )
+
+            return requests
 
         except (KeyError, ValueError):
             log.exception("Invalid common name formatter")
-            return []
+            return {}
 
     def _create_certificates_request(
         self, common_name: str, organization: Optional[str] = None
@@ -256,11 +270,15 @@ class K8sCertificates(ops.Object):
                 certificates and keys will be stored.
         """
         if isinstance(config, ControlPlaneNodeJoinConfig):
-            certificate, key = self._get_validated_certificate(self._certificate_requests[0])
+            certificate, key = self._get_validated_certificate(
+                self._certificate_requests_mapping.get(APISERVER_CSR_KEY)
+            )
             config.apiserver_crt = str(certificate.certificate)
             config.apiserver_key = str(key)
 
-        certificate, key = self._get_validated_certificate(self._certificate_requests[1])
+        certificate, key = self._get_validated_certificate(
+            self._certificate_requests_mapping.get(KUBELET_CSR_KEY)
+        )
         config.kubelet_cert = str(certificate.certificate)
         config.kubelet_key = str(key)
 
@@ -275,12 +293,16 @@ class K8sCertificates(ops.Object):
             bootstrap_config (BootstrapConfig): An instance of BootstrapConfig
                 where the certificates and keys will be stored.
         """
-        certificate, key = self._get_validated_certificate(self._certificate_requests[0])
+        certificate, key = self._get_validated_certificate(
+            self._certificate_requests_mapping.get(APISERVER_CSR_KEY)
+        )
         bootstrap_config.ca_cert = self._get_certificate_full_chain(certificate)
         bootstrap_config.api_server_cert = str(certificate.certificate)
         bootstrap_config.api_server_key = str(key)
 
-        certificate, key = self._get_validated_certificate(self._certificate_requests[1])
+        certificate, key = self._get_validated_certificate(
+            self._certificate_requests_mapping.get(KUBELET_CSR_KEY)
+        )
         bootstrap_config.kubelet_cert = str(certificate.certificate)
         bootstrap_config.kubelet_key = str(key)
 
@@ -307,7 +329,7 @@ class K8sCertificates(ops.Object):
 
     def _validate_common_name_size(self):
         """Validate that the common names do not exceed the maximum size."""
-        if len(self.apiserver_common_name) > MAX_COMMON_NAME_SIZE:
+        if self._charm.is_control_plane and len(self.apiserver_common_name) > MAX_COMMON_NAME_SIZE:
             raise status.ReconcilerError(
                 f"CN: {self.apiserver_common_name} exceeds {MAX_COMMON_NAME_SIZE} chars."
             )
@@ -319,9 +341,11 @@ class K8sCertificates(ops.Object):
     def _validate_common_name_formatters(self):
         """Validate that the common name formatters are valid."""
         try:
-            api_name = self.apiserver_common_name
-            kubelet_name = self.kubelet_common_name
-            if not api_name or not kubelet_name:
+            formatters = []
+            if self._charm.is_control_plane:
+                formatters.append(self.apiserver_common_name)
+            formatters.append(self.kubelet_common_name)
+            if any(not f for f in formatters):
                 msg = "Common name formatters resulted in empty common names"
                 raise status.ReconcilerError(msg)
         except (KeyError, ValueError):
