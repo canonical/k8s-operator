@@ -8,7 +8,6 @@ series: jammy
 applications:
   self-signed-certificates:
     charm: self-signed-certificates
-    channel: 1/stable
     constraints: cores=1 mem=4G root-disk=16G
     num_units: 1
   k8s:
