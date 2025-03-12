@@ -9,9 +9,11 @@ from typing import List, Optional, Protocol, Set, Tuple, Union, cast
 
 import ops
 from literals import (
+    APISERVER_CN_FORMATTER_CONFIG_KEY,
     CERTIFICATES_RELATION,
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
+    KUBELET_CN_FORMATTER_CONFIG_KEY,
     MAX_COMMON_NAME_SIZE,
     SUPPORTED_CERTIFICATES,
 )
@@ -100,27 +102,26 @@ class K8sCertificates(ops.Object):
             CertificateProvider: An instance implementing the CertificateProvider protocol.
         """
         if self._get_certificates_provider() == "external":
-            certificates = TLSCertificatesRequiresV4(
+            return TLSCertificatesRequiresV4(
                 charm=self._charm,
                 relationship_name=CERTIFICATES_RELATION,
                 certificate_requests=self._certificate_requests,
                 mode=Mode.UNIT,
                 refresh_events=[self._refresh_event],
             )
-            return certificates
 
         return NoOpCertificateProvider()
 
     @property
     def apiserver_common_name(self) -> str:
         """API Server common name."""
-        formatter = str(self._charm.config.get("external-certs-apiserver-common-name", ""))
+        formatter = str(self._charm.config.get(APISERVER_CN_FORMATTER_CONFIG_KEY, ""))
         return self._format_common_name(formatter)
 
     @property
     def kubelet_common_name(self) -> str:
         """Kubelet common name."""
-        formatter = str(self._charm.config.get("external-certs-kubelet-common-name", ""))
+        formatter = str(self._charm.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY, ""))
         return self._format_common_name(formatter)
 
     @property
