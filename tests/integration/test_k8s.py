@@ -89,14 +89,19 @@ async def test_nodes_labelled(request, kubernetes_cluster: juju.model.Model):
     await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
     await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
 
+    az_label = "topology.kubernetes.io/zone"
     nodes = await get_rsc(k8s.units[0], "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
+    az_nodes = [n for n in nodes if az_label in n["metadata"]["labels"]]
     assert len(k8s.units + worker.units) == len(labelled), (
         "Not all nodes labelled with custom-label"
     )
     assert len(k8s.units + worker.units) == len(juju_nodes), (
         "Not all nodes labelled as juju-charms"
+    )
+    assert len(k8s.units + worker.units) == len(az_nodes), (
+        f"Not all nodes labelled with {az_label}"
     )
 
     # Set an INVALID node-label on both k8s and worker
