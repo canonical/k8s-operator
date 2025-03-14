@@ -5,6 +5,7 @@
 
 import ipaddress
 import logging
+from string import Template
 from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
 
 import ops
@@ -12,7 +13,9 @@ from literals import (
     APISERVER_CN_FORMATTER_CONFIG_KEY,
     APISERVER_CSR_KEY,
     CERTIFICATES_RELATION,
+    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
     CLUSTER_CERTIFICATES_KEY,
+    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
     KUBELET_CN_FORMATTER_CONFIG_KEY,
     KUBELET_CSR_KEY,
@@ -123,8 +126,31 @@ class K8sCertificates(ops.Object):
     @property
     def kubelet_common_name(self) -> str:
         """Kubelet common name."""
-        formatter = str(self._charm.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY, ""))
+        formatter = ""
+        if self._charm.is_control_plane:
+            formatter = str(self._charm.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY, ""))
+        else:
+            relation = self.model.get_relation(CLUSTER_RELATION)
+            formatter = (
+                str(relation.data[relation.app].get(CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY))
+                if relation and relation.app in relation.data
+                else ""
+            )
+
         return self._format_common_name(formatter)
+
+    @property
+    def domain_name(self) -> str:
+        """Certificates domain name."""
+        if self._charm.is_control_plane:
+            return str(self._charm.config.get("external-certs-domain-name"))
+        else:
+            relation = self.model.get_relation(CLUSTER_RELATION)
+            return (
+                str(relation.data[relation.app].get(CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY))
+                if relation and relation.app in relation.data
+                else ""
+            )
 
     @property
     def using_external_certificates(self) -> bool:
@@ -203,18 +229,23 @@ class K8sCertificates(ops.Object):
         if not formatter:
             raise ValueError("Empty common name formatter")
 
-        fmt_context = {
-            "node-name": self._charm.get_node_name(),
-            "cluster-name": self._charm.get_cluster_name(),
-            "domain-name": self._charm.config.get("external-certs-domain-name"),
+        tmp_context = {
+            "node_name": self._charm.get_node_name(),
+            "cluster_name": self._charm.get_cluster_name(),
+            "domain_name": self._charm.config.get("external-certs-domain-name"),
         }
+
         try:
-            formatted_name = formatter.format(**fmt_context)
+            template = Template(formatter)
+            formatted_name = template.safe_substitute(tmp_context)
             if not formatted_name:
-                raise ValueError(f"Common name formatter '{formatter}' resulted in empty string")
+                raise ValueError(
+                    f"Common name formatter '{formatter}' resulted in '{formatted_name}'"
+                )
+
             return formatted_name
-        except KeyError:
-            log.exception("Failed to format common name using formatter '%s'", formatter)
+        except ValueError:
+            log.exception("Invalid common name formatter '%s'", formatter)
             raise
 
     def _get_service_ips(self) -> Set[str]:

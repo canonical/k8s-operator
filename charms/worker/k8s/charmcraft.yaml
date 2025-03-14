@@ -224,14 +224,14 @@ config:
       default: "kube-apiserver"
       description: |
         Formatter string for the API server's TLS certificate common name (CN).
-        Supports placeholders: {node-name}, {cluster-name}, and {domain-name}.
+        Supports placeholders: $node_name, $cluster_name, and $domain_name.
         The resulting CN must not exceed 64 characters. Required when using external certificates.
     external-certs-kubelet-common-name-format:
       type: string
-      default: "system:node:{node-name}"
+      default: "system:node:$node_name"
       description: |
         Formatter string for the Kubelet's TLS certificate common name (CN).
-        Supports placeholders: {node-name}, {cluster-name}, and {domain-name}.
+        Supports placeholders: $node_name, $cluster_name, and $domain_name.
         The resulting CN must not exceed 64 characters. Required when using external certificates.
     gateway-enabled:
       type: boolean
@@ -442,6 +442,14 @@ actions:
         type: string
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
+  refresh-certs:
+    description:  Refresh the certificates of the Kubernetes node
+    params:
+      expires-in:
+        description: Time until the certificates expire, e.g., 1h, 2d, 4mo, 5y
+        type: string
+    required:
+    - expires-in
 
 parts:
   charm:

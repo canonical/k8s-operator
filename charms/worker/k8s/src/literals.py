@@ -45,11 +45,14 @@ UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
 # Cluster Relation Keys
-CLUSTER_CERTIFICATES_KEY = "certificates-provider"
+CLUSTER_CERTIFICATES_KEY = "certs-provider"
+CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY = "certs-kubelet-formatter"
+CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY = "certs-domain-name"
 
 # Certificates
 APISERVER_CN_FORMATTER_CONFIG_KEY = "external-certs-apiserver-common-name-format"
 KUBELET_CN_FORMATTER_CONFIG_KEY = "external-certs-kubelet-common-name-format"
+COMMON_NAME_CONFIG_KEY = "external-certs-domain-name"
 MAX_COMMON_NAME_SIZE = 64
 SUPPORTED_CERTIFICATES = ["external", "self-signed"]
 
