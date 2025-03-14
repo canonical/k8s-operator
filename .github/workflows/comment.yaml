@@ -8,5 +8,5 @@ on:
 
 jobs:
   comment-on-pr:
-    uses: canonical/operator-workflows/.github/workflows/comment.yaml@b59c2b3aeaba89e71b203baf2fef64752c0ae763
+    uses: canonical/operator-workflows/.github/workflows/comment.yaml@6c41054c615a00e16926e7d40e0b722a812d0b16
     secrets: inherit
