@@ -33,6 +33,7 @@ APISERVER_PORT = 6443
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
 
 # Relations
+CERTIFICATES_RELATION = "certificates"
 CLUSTER_RELATION = "cluster"
 CLUSTER_WORKER_RELATION = "k8s-cluster"
 CONTAINERD_RELATION = "containerd"
@@ -44,10 +45,19 @@ UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
 # Cluster Relation Keys
-CLUSTER_CERTIFICATES_KEY = "certificates-provider"
+CLUSTER_CERTIFICATES_KEY = "certs-provider"
+CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY = "certs-kubelet-formatter"
+CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY = "certs-domain-name"
 
 # Certificates
+APISERVER_CN_FORMATTER_CONFIG_KEY = "external-certs-apiserver-common-name-format"
+KUBELET_CN_FORMATTER_CONFIG_KEY = "external-certs-kubelet-common-name-format"
+COMMON_NAME_CONFIG_KEY = "external-certs-domain-name"
+MAX_COMMON_NAME_SIZE = 64
 SUPPORTED_CERTIFICATES = ["external", "self-signed"]
+
+APISERVER_CSR_KEY = "apiserver"
+KUBELET_CSR_KEY = "kubelet"
 
 WORKER_CERTIFICATES = ["kubelet", "kubelet-client", "proxy"]
 CONTROL_PLANE_CERTIFICATES = [

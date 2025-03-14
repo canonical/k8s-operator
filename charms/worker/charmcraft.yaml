@@ -156,6 +156,14 @@ parts:
 actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
+  refresh-certs:
+    description:  Refresh the certificates of the Kubernetes node
+    params:
+      expires-in:
+        description: Time until the certificates expire, e.g., 1h, 2d, 4mo, 5y
+        type: string
+    required:
+    - expires-in
 
 peers:
   upgrade:

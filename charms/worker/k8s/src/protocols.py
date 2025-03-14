@@ -3,7 +3,7 @@
 
 """Protocol definitions module."""
 
-from typing import Dict, List
+from typing import Dict, FrozenSet, List, Tuple
 
 import ops
 from inspector import ClusterInspector
@@ -73,10 +73,26 @@ class K8sCharmProtocol(ops.CharmBase):
         """
         raise NotImplementedError
 
+    def get_node_name(self) -> str:
+        """Return the lowercase hostname.
+
+        Returns:
+            the hostname of the machine.
+        """
+        raise NotImplementedError
+
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the worker versions.
 
         Raises:
             NotImplementedError: If the method is not implemented.
+        """
+        raise NotImplementedError
+
+    def split_sans_by_type(self) -> Tuple[FrozenSet[str], FrozenSet[str]]:
+        """Split SANs into IP addresses and DNS names.
+
+        Returns:
+            Tuple[FrozenSet[str], FrozenSet[str]]: IP addresses and DNS names.
         """
         raise NotImplementedError

@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 import config.extra_args
 import containerd
 import ops
+import utils
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
@@ -43,9 +44,12 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
+    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
     CLUSTER_CERTIFICATES_KEY,
+    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
+    COMMON_NAME_CONFIG_KEY,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
     CONTAINERD_SERVICE_NAME,
@@ -63,6 +67,7 @@ from literals import (
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
     KUBECTL_PATH,
+    KUBELET_CN_FORMATTER_CONFIG_KEY,
     SUPPORTED_DATASTORES,
 )
 from loadbalancer_interface import LBProvider
@@ -216,6 +221,7 @@ class K8sCharm(ops.CharmBase):
             exit_status=self.update_status.active_status,
             custom_events=self.certificates.events,
         )
+        self.framework.observe(self.on.refresh_certs_action, self._on_refresh_certs_action)
 
     @property
     def external_load_balancer_address(self) -> str:
@@ -865,7 +871,7 @@ class K8sCharm(ops.CharmBase):
             relation.data[self.unit]["version"] = version
 
     @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
-    def _announce_certificates_provider(self) -> None:
+    def _announce_certificates_config(self) -> None:
         if not (provider := self.config.get("bootstrap-certificates")):
             raise ReconcilerError("Missing certificates provider")
 
@@ -875,6 +881,10 @@ class K8sCharm(ops.CharmBase):
             return
 
         relation.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
+        kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
+        relation.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
+        domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
+        relation.data[self.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
 
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
     def _announce_kubernetes_version(self) -> None:
@@ -895,7 +905,7 @@ class K8sCharm(ops.CharmBase):
             "worker": self.model.relations.get(CLUSTER_WORKER_RELATION, []),
         }
 
-        waiting_units = {role: 0 for role in relation_config}
+        waiting_units = dict.fromkeys(relation_config, 0)
 
         for role, relations in relation_config.items():
             for relation in relations:
@@ -1060,7 +1070,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._announce_kubernetes_version()
-            self._announce_certificates_provider()
+            self._announce_certificates_config()
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
@@ -1318,6 +1328,17 @@ class K8sCharm(ops.CharmBase):
             log.info("Certificates have been refreshed")
 
         log.info("Certificate SANs are up-to-date")
+
+    def _on_refresh_certs_action(self, event: ops.ActionEvent):
+        """Handle the refresh-certs action."""
+        if self.is_control_plane:
+            expires_in = event.params["expires-in"]
+            ttl_seconds = utils.ttl_to_seconds(expires_in)
+            sans = self._get_extra_sans()
+            try:
+                self.api_manager.refresh_certs(extra_sans=sans, expiration_seconds=ttl_seconds)
+            except (InvalidResponseError, K8sdConnectionError) as e:
+                event.fail(f"Failed to refresh certificates: {e}")
 
 
 if __name__ == "__main__":  # pragma: nocover
