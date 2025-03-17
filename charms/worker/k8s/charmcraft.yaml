@@ -218,14 +218,21 @@ config:
     external-certs-domain-name:
       type: string
       default: ""
-      description: ""
+      description: |
+        Specifies the domain name (e.g., `example.com`) used by the charm for
+        formatting common names in external-facing certificates (e.g.,
+        kube-apiserver or kubelet).
+        This value is passed to formatters using the `$domain_name` key and
+        applies only to external certificates. It can be use in the `external-certs-*-format`
+        configuration options.
     external-certs-apiserver-common-name-format:
       type: string
       default: "kube-apiserver"
       description: |
         Formatter string for the API server's TLS certificate common name (CN).
         Supports placeholders: $node_name, $cluster_name, and $domain_name.
-        The resulting CN must not exceed 64 characters. Required when using external certificates.
+        The resulting CN must not exceed 64 characters and applies only to
+        external certificates.
         Example: "apiserver.$cluster_name.$domain_name"
         (e.g., "apiserver.mycluster.mydomain.com" if $cluster_name="mycluster" and $domain_name="mydomain.com")
 
@@ -235,7 +242,8 @@ config:
       description: |
         Formatter string for the Kubelet's TLS certificate common name (CN).
         Supports placeholders: $node_name, $cluster_name, and $domain_name.
-        The resulting CN must not exceed 64 characters. Required when using external certificates.
+        The resulting CN must not exceed 64 characters and applies only to
+        external certificates.
         Example: "system:node:$node_name"
         (e.g., "system:node:worker1" if $node_name="worker1")
     gateway-enabled:

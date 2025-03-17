@@ -259,10 +259,7 @@ class K8sCertificates(ops.Object):
         """
         service_ips = set()
         service_cidrs = self._charm.config.get("bootstrap-service-cidr", "")
-        if not isinstance(service_cidrs, str):
-            log.warning("Service CIDRs is not str, instead %s", type(service_cidrs))
-            return set()
-        cidrs = service_cidrs.split(",")
+        cidrs = cast(str, service_cidrs).split(",")
 
         for cidr in cidrs:
             cidr = cidr.strip()
