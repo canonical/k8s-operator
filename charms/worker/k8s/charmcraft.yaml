@@ -226,6 +226,9 @@ config:
         Formatter string for the API server's TLS certificate common name (CN).
         Supports placeholders: $node_name, $cluster_name, and $domain_name.
         The resulting CN must not exceed 64 characters. Required when using external certificates.
+        Example: "apiserver.$cluster_name.$domain_name"
+        (e.g., "apiserver.mycluster.mydomain.com" if $cluster_name="mycluster" and $domain_name="mydomain.com")
+
     external-certs-kubelet-common-name-format:
       type: string
       default: "system:node:$node_name"
@@ -233,6 +236,8 @@ config:
         Formatter string for the Kubelet's TLS certificate common name (CN).
         Supports placeholders: $node_name, $cluster_name, and $domain_name.
         The resulting CN must not exceed 64 characters. Required when using external certificates.
+        Example: "system:node:$node_name"
+        (e.g., "system:node:worker1" if $node_name="worker1")
     gateway-enabled:
       type: boolean
       default: false
