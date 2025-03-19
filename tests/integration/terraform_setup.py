@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import yaml
 from juju.controller import Controller
@@ -89,70 +89,55 @@ def ensure_terraform(expected_version: str) -> None:
         )
 
 
-async def setup_juju_auth_details() -> None:
+async def setup_terraform_env(args) -> None:
     """Retrieve Juju provider authentication details using the Juju Python library."""
     async with Controller() as controller:
         await controller.connect_current()
         controller_name = controller.controller_name
         controller_info = (await controller.info()).results[0]
-        user = await controller.get_current_user()
-        endpoints = await controller.api_endpoints
+        user = controller.get_current_username()
+        cloud = await controller.get_cloud()
 
         # Read password from accounts.yaml as the Juju
         # API does not expose the password for security reasons.
         accounts_file = Path.home() / ".local/share/juju/accounts.yaml"
         password = ""
         if accounts_file.exists():
-            with open(accounts_file, "r", encoding="utf-8") as f:
-                accounts_data = yaml.safe_load(f)
-                password = (
-                    accounts_data.get("controllers", {})
-                    .get(controller_name, {})
-                    .get("password", "")
-                )
+            accounts_data = yaml.safe_load(accounts_file.read_text())
+            password = (
+                accounts_data.get("controllers", {}).get(controller_name, {}).get("password", "")
+            )
 
         # Set environment variables
         os.environ.update(
             {
                 "CONTROLLER": controller_name or "",
-                "JUJU_CONTROLLER_ADDRESSES": ",".join(endpoints) or "",
-                "JUJU_USERNAME": user.username or "",
+                "JUJU_CONTROLLER_ADDRESSES": ",".join(controller_info.addresses) or "",
+                "JUJU_USERNAME": user or "",
                 "JUJU_PASSWORD": password or "",
                 "JUJU_CA_CERT": controller_info.cacert or "",
+                "TF_VAR_cloud": cloud or "",
+                "TF_VAR_model": args.model,
+                "TF_VAR_manifest_yaml": str(args.manifest_yaml.absolute()),
             }
         )
 
 
-async def ensure_model_exists(model_name: str, lxd_profile_path: Union[Path, str]) -> None:
-    """Ensure the specified Juju model exists, creating it if necessary.
-
-    Args:
-        model_name: The name of the Juju model.
-        lxd_profile_path: The path to the LXD profile file.
-    """
+async def model_exists(model: str) -> bool:
+    """Check if the model already exists in the controller."""
     async with Controller() as controller:
         await controller.connect_current()
-        model_names = await controller.list_models()
+        return model in await controller.list_models()
 
-        if model_name in model_names:
-            print(f"Juju model '{model_name}' already exists.")
-        else:
-            print(f"Juju model '{model_name}' does not exist. Creating it...")
-            await controller.add_model(model_name)
 
-        controller_cloud = (await controller.cloud()).cloud
-        print(f"Controller cloud: {controller_cloud}")
-
-        if controller_cloud.type_ == "lxd":
-            print("Applying 'k8s.profile' to the model...")
-            subprocess.run(
-                ["lxc", "profile", "edit", f"juju-{model_name}"],
-                check=True,
-                capture_output=True,
-                input=Path(lxd_profile_path).read_bytes(),
-            )
-        else:
-            print("Skipping 'k8s.profile' application (not LXD/localhost).")
+def tf_run(path: Path, args: List[str]) -> None:
+    """Run Terraform command."""
+    current = os.getcwd()
+    try:
+        os.chdir(path)
+        run_command(["terraform"] + args)
+    finally:
+        os.chdir(current)
 
 
 async def main() -> None:
@@ -170,42 +155,37 @@ async def main() -> None:
         "--lxd-profile-path", default=script_dir / "data/k8s.profile", help="Path to LXD profile."
     )
     parser.add_argument(
-        "--manifest-path",
-        default=script_dir / "data/default-manifest.yaml",
+        "--manifest-yaml",
+        default=script_dir / "data/k8s-manifest.yaml",
+        type=Path,
         help="Path to manifest.",
     )
-    parser.add_argument("--model-name", default="my-canonical-k8s", help="Juju model name.")
+    parser.add_argument("--model", default="my-canonical-k8s", help="Juju model name.")
 
     args = parser.parse_args()
 
     ensure_terraform(args.terraform_version)
 
-    # Set up Juju and ensure the model exists
-    await asyncio.gather(
-        setup_juju_auth_details(),
-        ensure_model_exists(args.model_name, args.lxd_profile_path),
-    )
-
-    # Change to Terraform module directory
-    os.chdir(args.terraform_module_path)
+    # Set up Juju auth details
+    await setup_terraform_env(args)
 
     # Run Terraform commands
     print("Initializing Terraform...")
-    run_command(["terraform", "init"])
+    tf_run(args.terraform_module_path, ["init", "--upgrade"])
 
-    print(
-        f"Applying Terraform with manifest: {args.manifest_path} and model: {args.model_name}..."
-    )
-    run_command(
+    # Import Existing Model if it exists
+    if await model_exists(args.model):
+        print("Import existing model...")
+        tf_run(args.terraform_module_path, ["import", "module.k8s.juju_model.this", args.model])
+
+    print(f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}...")
+    print(os.environ.get("TF_VAR_csi_integration"))
+    tf_run(
+        args.terraform_module_path,
         [
-            "terraform",
             "apply",
-            "-var",
-            f"manifest_path={args.manifest_path}",
-            "-var",
-            f"model_name={args.model_name}",
             "-auto-approve",
-        ]
+        ],
     )
 
 
