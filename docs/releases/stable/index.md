@@ -152,10 +152,10 @@ tests is documented here and needs to be updated when new tests are added.
 Hopefully this list will be empty in the future, as we will be able to run all the
 tests in CI.
 
-- [Openstack tests]:
-  These tests should be manually run on Openstack by the individual responsible for
+- [OpenStack tests]:
+  These tests should be manually run on OpenStack by the individual responsible for
   the release. In order to run them, make sure you have an active Juju controller with
-  an Openstack cloud, and run:
+  an OpenStack cloud, and run:
   ```shell
   tox run -e integration -- -k test_openstack.py --apply-proxy --model test-openstack --keep-models
   ```
@@ -242,5 +242,5 @@ Email announcement to k8s-crew with any relevant information.
 [snap_installation.yaml]: ../../../charms/worker/k8s/templates/snap_installation.yaml
 [auto-update-snap-revision]: ../../../.github/workflows/auto-update-snap-revision.yaml
 [publish-charms]: ../../../.github/workflows/publish-charms.yaml
-[Openstack tests]: ../../../tests/integration/test_openstack.py
+[OpenStack tests]: ../../../tests/integration/test_openstack.py
 [nightly tests]: ../../../.github/workflows/nightly.yaml
