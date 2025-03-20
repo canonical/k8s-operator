@@ -854,7 +854,7 @@ class K8sCharm(ops.CharmBase):
             "worker": self.model.relations.get(CLUSTER_WORKER_RELATION, []),
         }
 
-        waiting_units = {role: 0 for role in relation_config}
+        waiting_units = dict.fromkeys(relation_config, 0)
 
         for role, relations in relation_config.items():
             for relation in relations:
