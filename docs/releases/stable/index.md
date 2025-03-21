@@ -147,13 +147,12 @@ branch should publish the charm to the upstream `1.xx/beta` channel.
 
 It's assumed that tests pass on the release branch. This means that the CI for PRs
 on the release branch should be green before they are merged. **Certain tests might
-be skipped tho**, because of they need to be run on a specific cloud. The list of these
-tests is documented here and needs to be updated when new tests are added.
-Hopefully this list will be empty in the future, as we will be able to run all the
-tests in CI.
+be skipped** because they rely on a specific cloud. The list of these
+tests is as follows and needs to be updated when new tests are added.
+We aim to remove this list in the future, and have all tests running in CI.
 
 - [OpenStack tests]:
-  These tests should be manually run on OpenStack by the individual responsible for
+  These tests should be run manually on OpenStack by the individual responsible for
   the release. In order to run them, make sure you have an active Juju controller with
   an OpenStack cloud, and run:
   ```shell
