@@ -7,7 +7,7 @@ requires-python = ">=3.8"
 dependencies = [
     "charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@255dd4a23defc16dcdac832306e5f460a0f1200c",
     "charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e9cadd749ff8e2a6c81fadb0268a8b10e26876be",
-    "charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@e35bbe08c1035849ed10a6838fa676c7847bc757#subdirectory=ops",
+    "charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@1bd8506cf1fdfcb584c50388c7082cc23a5ee14f#subdirectory=ops",
     "charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@f818cc30d1a22be43ffdfecf7fbd9c3fd2967502",
     "ops-interface-kube-control==0.2.0",
     "ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops",
