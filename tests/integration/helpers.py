@@ -331,11 +331,23 @@ class Charm:
         def _narrow(potentials: Iterable[Path]) -> Path:
             by_arch_base = filter(lambda s: arch in str(s) and base in str(s), potentials)
             by_name = filter(lambda s: s.name.startswith(prefix), by_arch_base)
-            if options := list(by_name):
+            exist = filter(lambda s: s.exists(), by_name)
+            if options := set(exist):
                 if len(options) > 1:
-                    raise FileNotFoundError("Too many charmfiles found")
-                return options[0]
-            raise FileNotFoundError("No charmfiles found")
+                    log.warning(
+                        "Too many charm files found matching filters\n"
+                        "   starting-with: '%s'\n"
+                        "   with arch: '%s'\n"
+                        "   with base: '%s'\n"
+                        "options: %s",
+                        prefix,
+                        arch,
+                        base,
+                        ", ".join(map(str, options)),
+                    )
+                    raise FileNotFoundError("Too many charm files found")
+                return options.pop()
+            raise FileNotFoundError("No charm files found")
 
         prefix = f"{self.name}_"
         if self._charmfile is None:
@@ -349,8 +361,8 @@ class Charm:
                 )
                 self._charmfile = _narrow(potentials)
                 log.info("For %s found charmfile %s", self.name, self._charmfile)
-            except FileNotFoundError:
-                log.warning("No pre-built charm is available, let's build it")
+            except FileNotFoundError as err:
+                log.warning(f"For {self.name} failed locating existing {err=}, build instead")
 
         if self._charmfile is None:
             log.info("For %s build charmfiles", self.name)
