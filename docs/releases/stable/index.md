@@ -63,31 +63,33 @@ promote to the new release.
 
 ### Pin snap channel in the release branches
 
-We need to make sure that the charms have `1.xx/<risk>` set as the default snap channel.
+The charms run the `k8s-snap` underneath, so to make sure the changes in the 
+snap are going to be available in the charm, we need to make sure the correct
+k8s snap channel is referenced. For that, the [snap_installation.yaml] file
+needs to be updated either with the correct `channel`, or with the `revision` of the
+snap.
 
-Task:
+- Example with `channel`:
 
-```sh
-git switch release_1.xx
-git checkout -b task/snap-risk/release-1.xx/<risk>
-# edit the config.options.channel.default = "1.xx/<risk>"
-edit charms/worker/k8s/charmcraft.yaml
-edit charms/worker/charmcraft.yaml
+```yaml
+amd64:
+- install-type: store
+  name: k8s
+  channel: 1.32-classic/stable
+  classic: true
 ```
 
-Where `risk` represents the channel the most stable available risk of the snap.
+- Example with `revision`:
 
-For example) `1.30-classic/beta` is the most stable shown below
-
-```sh
-⚡ snap info k8s | grep 1.30
-  1.30-classic/stable:    --
-  1.30-classic/candidate: --
-  1.30-classic/beta:      v1.30.0-beta.0 2024-03-13 (140) 107MB classic
-  1.30-classic/edge:      ^
+```yaml
+amd64:
+- install-type: store
+  name: k8s
+  revision: 2500
 ```
 
-Commit, and raise a new PR into the `release_1.xx`
+The [auto-update-snap-revision] job is also responsible for auto-updating the snap 
+revision in the [snap_installation.yaml] file. This job is triggered on a schedule.
 
 ### Pin pip versions of all python dependencies
 
@@ -130,10 +132,34 @@ pip freeze > charms/worker/k8s/requirements.txt
 
 ### Build charms from the release branches
 
+The [publish-charms] job is responsible for publishing the charms either to the
+`latest/edge` OR `<release>/beta` (e.g. `1.32/beta`) channels, depending on the
+branch that is updated. If a change is merged to the `main` branch, the charm will be
+published to the `latest/edge` channel. If a change is merged to a release branch,
+the charm will be published to the `<release>/beta` channel.
+
 Raising a PR, passing the integration tests, and merging into the release
 branch should publish the charm to the upstream `1.xx/beta` channel.
 
 ## Internal verification
+
+### Make sure all tests are passing
+
+It's assumed that tests pass on the release branch. This means that the CI for PRs
+on the release branch should be green before they are merged. **Certain tests might
+be skipped** because they rely on a specific cloud. The list of these
+tests is as follows and needs to be updated when new tests are added.
+We aim to remove this list in the future, and have all tests running in CI.
+
+- [OpenStack tests]:
+  These tests should be run manually on OpenStack by the individual responsible for
+  the release. In order to run them, make sure you have an active Juju controller with
+  an OpenStack cloud, and run:
+  ```shell
+  tox run -e integration -- -k test_openstack.py --apply-proxy --model test-openstack --keep-models
+  ```
+
+Also, make sure that all the [nightly tests] are passing.
 
 ### Run **validate-k8s-release-upgrade** job
 
@@ -146,6 +172,17 @@ run on:
 * multiple series
 * multiple architectures
 * multiple clouds (aws/azure/gcp/vsphere)
+
+### Promote charms to candidate
+
+**Job**: <https://github.com/canonical/k8s-operator/actions/workflows/promote_charm.yaml>
+
+Once we've made sure that the [publish-charms] job ran successfully for the latest
+changes in the release branch, and the changes are available in `beta`, we can 
+promote the charms to `candidate`. This can be done by running the [promote-charms] job
+for the release branch:
+
+![Promote to candidate](./beta-to-candidate.png)
 
 ### Notify Solutions QA
 
@@ -189,13 +226,20 @@ Next, open an upstream PR:
 Run the workflow from a branch, select `release_1.xx`,
 
 * Choose `Charm` - `all`
-* Choose `Origin Channel`- `beta`
+* Choose `Origin Channel`- `candidate`
 * Choose `Destination Channel` - `stable`
 
-![promote charm options](promote-charm.png)
+![promote charm options](candidate-to-stable.png)
 
 ### Send announcement
 
 Email announcement to k8s-crew with any relevant information.
 
 # Fin
+
+<!-- LINKS -->
+[snap_installation.yaml]: ../../../charms/worker/k8s/templates/snap_installation.yaml
+[auto-update-snap-revision]: ../../../.github/workflows/auto-update-snap-revision.yaml
+[publish-charms]: ../../../.github/workflows/publish-charms.yaml
+[OpenStack tests]: ../../../tests/integration/test_openstack.py
+[nightly tests]: ../../../.github/workflows/nightly.yaml
