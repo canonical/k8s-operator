@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import chain
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
 import juju.application
 import juju.model
@@ -327,6 +327,16 @@ class Charm:
         Raises:
             FileNotFoundError: the charm file wasn't found
         """
+
+        def _narrow(potentials: Iterable[Path]) -> Path:
+            by_arch_base = filter(lambda s: arch in str(s) and base in str(s), potentials)
+            by_name = filter(lambda s: s.name.startswith(prefix), by_arch_base)
+            if options := list(by_name):
+                if len(options) > 1:
+                    raise FileNotFoundError("Too many charmfiles found")
+                return options[0]
+            raise FileNotFoundError("No charmfiles found")
+
         prefix = f"{self.name}_"
         if self._charmfile is None:
             charm_files = ops_test.request.config.option.charm_files or []
@@ -337,14 +347,17 @@ class Charm:
                     Path().glob(charm_name),  # Look in top-level path
                     self.path.glob(charm_name),  # Look in charm-level path
                 )
-                arch_choices = filter(lambda s: arch in str(s) and base in str(s), potentials)
-                self._charmfile, *_ = filter(lambda s: s.name.startswith(prefix), arch_choices)
+                self._charmfile = _narrow(potentials)
                 log.info("For %s found charmfile %s", self.name, self._charmfile)
-            except ValueError:
+            except FileNotFoundError:
                 log.warning("No pre-built charm is available, let's build it")
+
         if self._charmfile is None:
-            log.info("For %s build charmfile", self.name)
-            self._charmfile = await ops_test.build_charm(self.path)
+            log.info("For %s build charmfiles", self.name)
+            potentials = await ops_test.build_charm(self.path, return_all=True)
+            self._charmfile = _narrow(potentials)
+            log.info("For %s built charmfile %s", self.name, self._charmfile)
+
         if self._charmfile is None:
             raise FileNotFoundError(f"{prefix}*.charm not found")
         return self
