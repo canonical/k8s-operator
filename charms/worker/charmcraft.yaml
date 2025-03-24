@@ -29,17 +29,6 @@ assumes:
 
 type: charm
 platforms:
-  ubuntu-20.04-amd64:
-    build-on:
-      - ubuntu@20.04:amd64
-    build-for:
-      - ubuntu@20.04:amd64
-  ubuntu-20.04-arm64:
-    build-on:
-      - ubuntu@20.04:arm64
-    build-for:
-      - ubuntu@20.04:arm64
-
   ubuntu-22.04-amd64:
     build-on:
       - ubuntu@22.04:amd64
@@ -156,6 +145,14 @@ parts:
 actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
+  refresh-certs:
+    description:  Refresh the certificates of the Kubernetes node
+    params:
+      expires-in:
+        description: Time until the certificates expire, e.g., 1h, 2d, 4mo, 5y
+        type: string
+    required:
+    - expires-in
 
 peers:
   upgrade:
