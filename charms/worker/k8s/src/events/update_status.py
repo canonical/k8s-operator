@@ -9,7 +9,7 @@ This handler is responsible for updating the unit's workload version and status
 """
 
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 import ops
 import reschedule
@@ -93,20 +93,22 @@ class Handler(ops.Object):
         except status.ReconcilerError:
             log.exception("Can't update_status")
 
-    def kube_system_pods_waiting(self) -> Optional[ops.WaitingStatus]:
-        """Check if kube-system pods are waiting.
+    def unready_pods_waiting(self) -> Optional[ops.WaitingStatus]:
+        """Check if pods any are not ready.
 
         Returns:
-            WaitingStatus: waiting status if kube-system pods are not ready.
+            WaitingStatus: waiting status if pods are not ready.
         """
         if self.charm.is_worker:
-            # Worker nodes don't need to check the kube-system pods
+            # Worker nodes don't need to check the unready pods
             return None
 
         waiting, inspect = None, self.charm.cluster_inspector
+        namespace_cfg = cast(str, self.charm.config["unready-pod-namespaces"])
+        namespaces = namespace_cfg.split()
 
         try:
-            if failing_pods := inspect.verify_pods_running(["kube-system"]):
+            if failing_pods := inspect.verify_pods_running(namespaces):
                 waiting = ops.WaitingStatus(f"Unready Pods: {failing_pods}")
         except ClusterInspector.ClusterInspectorError as e:
             log.exception("Failed to verify pods: %s", e)
@@ -132,7 +134,7 @@ class Handler(ops.Object):
             trigger.create(reschedule.Period(seconds=30))
             return
 
-        if waiting := self.kube_system_pods_waiting():
+        if waiting := self.unready_pods_waiting():
             status.add(waiting)
             trigger.create(reschedule.Period(seconds=30))
             return
