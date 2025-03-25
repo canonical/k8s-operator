@@ -5,5 +5,5 @@ on:
 
 jobs:
   bot_pr_approval:
-    uses: canonical/operator-workflows/.github/workflows/bot_pr_approval.yaml@e32881808200882a791592bf6e38dbcb00e85c55
+    uses: canonical/operator-workflows/.github/workflows/bot_pr_approval.yaml@29eb49f6df457cb503a8aceb8e30df34d80d2d02
     secrets: inherit
