@@ -100,10 +100,56 @@ class ClusterInspector:
         try:
             for namespace in namespaces:
                 for pod in client.list(Pod, namespace=namespace):
-                    if pod.status.phase != "Running":  # type: ignore
+                    if is_not_running(pod):
                         failing_pods.append(f"{namespace}/{pod.metadata.name}")  # type: ignore
             if failing_pods:
                 return ", ".join(failing_pods)
         except (ApiError, httpx.ConnectError) as e:
             raise ClusterInspector.ClusterInspectorError(f"Failed to get pods: {e}") from e
         return None
+
+
+def is_not_running(pod: Pod) -> bool:
+    """Check if a pod is not running.
+
+    Args:
+        pod: The pod to check.
+
+    Returns:
+        True if the pod is not running, False otherwise.
+    """
+    if not (status := pod.status):
+        pod_phase = "Unknown"
+        pod_reason = "Unknown"
+    else:
+        pod_phase, pod_reason = status.phase, status.reason
+
+    if pod_phase == "Failed":
+        # Failed pods are not running -- full stop
+        not_running = True
+    elif pod_phase == "Succeeded":
+        # Exclude Succeeded pods since they have run and done their work
+        not_running = False
+    elif status and pod_phase == "Running":
+        # Any Running phase pod with not ready containers, should be considered not running
+        container_statuses = status.initContainerStatuses or []
+        container_statuses += status.containerStatuses or []
+        not_running = any(not status.ready for status in container_statuses)
+    elif pod_phase == "Unknown":
+        # Unknown phase pods are not running
+        not_running = True
+    else:
+        # Any other phase (Pending or Unknown) are not running if they aren't evicted
+        not_running = pod_reason != "Evicted"
+
+    if not_running and pod.metadata:
+        pod_name, pod_ns = pod.metadata.namespace, pod.metadata.name
+        log.warning(
+            "Pod/%s/%s in phase=%s is not running because of reason=%s",
+            pod_ns,
+            pod_name,
+            pod_phase,
+            pod_reason,
+        )
+
+    return not_running

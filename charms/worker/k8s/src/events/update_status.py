@@ -9,7 +9,7 @@ This handler is responsible for updating the unit's workload version and status
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, cast
 
 import ops
 import reschedule
@@ -139,20 +139,22 @@ class Handler(ops.Object):
 
         return next(iter(feature_status), None)
 
-    def kube_system_pods_waiting(self) -> Optional[ops.WaitingStatus]:
-        """Check if kube-system pods are waiting.
+    def unready_pods_waiting(self) -> Optional[ops.WaitingStatus]:
+        """Check if pods any are not ready.
 
         Returns:
-            WaitingStatus: waiting status if kube-system pods are not ready.
+            WaitingStatus: waiting status if pods are not ready.
         """
         if self.charm.is_worker:
-            # Worker nodes don't need to check the kube-system pods
+            # Worker nodes don't need to check the unready pods
             return None
 
         waiting, inspect = None, self.charm.cluster_inspector
+        namespace_cfg = cast(str, self.charm.config["unready-pod-namespaces"])
+        namespaces = namespace_cfg.split()
 
         try:
-            if failing_pods := inspect.verify_pods_running(["kube-system"]):
+            if failing_pods := inspect.verify_pods_running(namespaces):
                 waiting = ops.WaitingStatus(f"Unready Pods: {failing_pods}")
         except ClusterInspector.ClusterInspectorError as e:
             log.exception("Failed to verify pods: %s", e)
@@ -181,7 +183,7 @@ class Handler(ops.Object):
         elif readiness != Status.READY:
             log.warning("Node %s is %s", name, readiness.value)
             final_status = ops.WaitingStatus(f"Node {name} {readiness.value}")
-        elif final_status := self.kube_system_pods_waiting():
+        elif final_status := self.unready_pods_waiting():
             log.warning("Unready pods detected: %s", final_status.message)
         if final_status:
             status.add(final_status)

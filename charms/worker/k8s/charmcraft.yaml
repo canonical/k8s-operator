@@ -407,6 +407,13 @@ config:
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.
+    unready-pod-namespaces:
+      type: string
+      default: "kube-system metallb-system"
+      description: |
+        Space-separated list of namespaces to check for unready pods. This
+        is used to determine the status of the cluster and its components.
+        If not set, no namespaces will be checked.
 
 resources:
   snap-installation:
