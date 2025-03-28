@@ -55,7 +55,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 logger = logging.getLogger(__name__)
 
@@ -87,15 +87,31 @@ class InvalidResponseError(K8sdAPIManagerError):
         code (int): HTTP Status code
     """
 
-    def __init__(self, code: int, msg: str) -> None:
+    def __init__(
+        self,
+        code: int,
+        msg: str,
+        method: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        reason: Optional[str] = None,
+        body: Optional[str] = None,
+    ) -> None:
         """Initialise the InvalidResponseError.
 
         Args:
             code (int): http response code
             msg (str): Message associated with the error
+            method (Optional[str]): The method used to make the request
+            endpoint (Optional[str]): The endpoint used to make the request
+            reason (Optional[str]): The reason for the error
+            body (Optional[str]): The body of the response
         """
         super().__init__(f"Error status {code}\n" + msg)
         self.code = code
+        self.method = method
+        self.endpoint = endpoint
+        self.reason = reason
+        self.body = body
 
 
 class BaseRequestModel(BaseModel):
@@ -838,6 +854,74 @@ class RefreshCertificatesRunResponse(BaseRequestModel):
     metadata: RefreshCertificatesRunMetadata
 
 
+class GetClusterConfigMetadata(BaseModel):
+    """Metadata containing the cluster config.
+
+    Attributes:
+        status (UserFacingClusterConfig): The configuration of the cluster.
+        datastore (UserFacingDatastoreConfig): The configuration of the datastore.
+        pod_cidr (str): The CIDR range for the pods in the cluster.
+        service_cidr (str): The CIDR range for the services in the cluster.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: UserFacingClusterConfig
+    datastore: Optional[UserFacingDatastoreConfig] = Field(default=None)
+    pod_cidr: Optional[str] = Field(default=None, alias="pod-cidr")
+    service_cidr: Optional[str] = Field(default=None, alias="service-cidr")
+
+
+class GetClusterConfigResponse(BaseRequestModel):
+    """Response model for the get cluster config endpoint.
+
+    Attributes:
+        metadata (GetClusterConfigMetadata): Metadata containing the cluster config.
+    """
+
+    metadata: GetClusterConfigMetadata
+
+
+class NodeStatus(BaseModel):
+    """Represents the status of a node in the cluster.
+
+    Attributes:
+        name (Optional[str]): The name of the node.
+        address (Optional[str]): The address of the node.
+        cluster_role (Optional[str]): The role of the node in the cluster.
+        datastore_role (Optional[str]): The role of the node in the datastore cluster.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: Optional[str] = Field(default=None)
+    address: Optional[str] = Field(default=None)
+    cluster_role: Optional[str] = Field(default=None, alias="cluster-role")
+    datastore_role: Optional[str] = Field(default=None, alias="datastore-role")
+
+
+class GetNodeStatusMetadata(BaseModel):
+    """Metadata containing the node status.
+
+    Attributes:
+        status (NodeStatus): The status of the local node.
+        taints (Optional[List[str]]): List of taints applied to the node.
+    """
+
+    status: NodeStatus
+    taints: Optional[List[str]] = Field(default=None)
+
+
+class GetNodeStatusResponse(BaseRequestModel):
+    """Response model for the get node status endpoint.
+
+    Attributes:
+        metadata (GetNodeStatusMetadata): Metadata containing the node status.
+    """
+
+    metadata: GetNodeStatusMetadata
+
+
 T = TypeVar("T", bound=BaseRequestModel)
 
 
@@ -990,6 +1074,10 @@ class K8sdAPIManager:
                         f"\tendpoint={endpoint}\n"
                         f"\treason={response.reason}\n"
                         f"\tbody={data}",
+                        method=method,
+                        endpoint=endpoint,
+                        reason=response.reason,
+                        body=data,
                     )
             return response_cls.parse_raw(data)
 
@@ -1053,6 +1141,22 @@ class K8sdAPIManager:
         endpoint = "/1.0/k8sd/cluster/config"
         body = config.model_dump(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
+
+    def get_cluster_config(self) -> GetClusterConfigResponse:
+        """Retrieve the cluster configuration.
+
+        Returns:
+            GetClusterConfigResponse: The cluster configuration.
+        """
+        return self._send_request("/1.0/k8sd/cluster/config", "GET", GetClusterConfigResponse)
+
+    def get_node_status(self) -> GetNodeStatusResponse:
+        """Retrieve the status of the local node.
+
+        Returns:
+            GetNodeStatusResponse: The status of the local node.
+        """
+        return self._send_request("/1.0/k8sd/node", "GET", GetNodeStatusResponse)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:
         """Retrieve cluster status.

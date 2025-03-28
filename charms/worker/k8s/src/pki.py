@@ -6,10 +6,12 @@
 """A module providing PKI related functionalities."""
 
 import logging
+import os
 from pathlib import Path
 from typing import List, Tuple, Union
 
 from cryptography import x509
+from literals import PKI_DIR
 
 log = logging.getLogger(__name__)
 
@@ -52,3 +54,12 @@ def get_certificate_sans(cert_path: Union[str, Path]) -> Tuple[List[str], List[s
         return [], []
 
     return sorted(dns_sans), sorted(ip_address)
+
+
+def check_ca_key():
+    """Check if the CA key exists.
+
+    Returns:
+        bool: True if the CA key exists, False otherwise.
+    """
+    return os.path.isfile(PKI_DIR / "ca.key")

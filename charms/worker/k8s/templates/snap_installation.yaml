@@ -5,9 +5,9 @@ amd64:
   - name: k8s
     install-type: store
     classic: true
-    channel: latest/edge
+    channel: latest/edge/hue-prevent-bootstrap-config-change
 arm64:
   - name: k8s
     install-type: store
     classic: true
-    channel: latest/edge
+    channel: latest/edge/hue-prevent-bootstrap-config-change
