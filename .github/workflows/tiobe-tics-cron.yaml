@@ -30,7 +30,11 @@ jobs:
         with:
           ref: ${{matrix.branch}}
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
+        name: Install uv
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
@@ -43,13 +47,8 @@ jobs:
         run: |
           set -eux -o pipefail
 
-          # tox required for running the unit tests with coverage:
-          # pylint and flake8 are required by TICSQServer
-          # pylint requires the packages to be installed.
-          pip install tox pylint flake8
-          pip install -r charms/worker/k8s/requirements.txt
-          pip install -r test_requirements.txt
-
+          uv pip install pylint flake8 --system
+          uv tool install tox --with tox-uv
           tox -e unit,coverage-xml
 
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
