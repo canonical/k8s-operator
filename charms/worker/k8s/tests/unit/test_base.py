@@ -18,7 +18,18 @@ import pytest
 from charm import K8sCharm
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
-from charms.k8s.v0.k8sd_api_manager import BootstrapConfig, UpdateClusterConfigRequest
+from charms.contextual_status import ReconcilerError
+from charms.k8s.v0.k8sd_api_manager import (
+    BootstrapConfig,
+    GetClusterConfigMetadata,
+    GetClusterConfigResponse,
+    GetNodeStatusMetadata,
+    GetNodeStatusResponse,
+    NodeStatus,
+    UpdateClusterConfigRequest,
+    UserFacingClusterConfig,
+    UserFacingDatastoreConfig,
+)
 
 
 @pytest.fixture(params=["worker", "control-plane"])
@@ -57,6 +68,7 @@ def mock_reconciler_handlers(harness):
         "_configure_cos_integration",
         "_apply_node_labels",
         "_update_kubernetes_version",
+        "_prevent_bootstrap_config_change",
     }
     if harness.charm.is_control_plane:
         handler_names |= {
@@ -99,6 +111,56 @@ def test_update_status(harness):
     harness.model.unit.status = ops.WaitingStatus("Unchanged")
     harness.charm.on.update_status.emit()
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
+
+
+def test_prevent_bootstrap_config_change(harness):
+    """Test that the bootstrap config change is prevented.
+
+    Args:
+        harness (ops.testing.Harness): The test harness
+    """
+    harness.disable_hooks()
+
+    raised, exp = False, None
+    with (
+        mock.patch.object(
+            harness.charm.api_manager, "get_cluster_config"
+        ) as mock_get_cluster_config,
+        mock.patch.object(harness.charm.api_manager, "get_node_status") as mock_get_node_status,
+    ):
+        mock_get_cluster_config.return_value = GetClusterConfigResponse(
+            error_code=0,
+            status="OK",
+            status_code=200,
+            type="",
+            metadata=GetClusterConfigMetadata(
+                status=UserFacingClusterConfig(),
+                datastore=UserFacingDatastoreConfig(type="dqlite"),
+                pod_cidr="10.0.0.0/8",
+                service_cidr="10.0.0.0/8",
+            ),
+        )
+
+        mock_get_node_status.return_value = GetNodeStatusResponse(
+            error_code=0,
+            status="OK",
+            status_code=200,
+            type="",
+            metadata=GetNodeStatusMetadata(
+                status=NodeStatus(),
+                taints=["taint1", "taint2"],
+            ),
+        )
+
+        # NOTE(Hue): taints are available for both control-plane and worker
+        harness.update_config({"bootstrap-node-taints": "newTaint1 newTaint2"})
+        try:
+            harness.charm._prevent_bootstrap_config_change()
+        except ReconcilerError as e:
+            raised, exp = True, e
+
+    assert raised, "ReconcilerError not raised, bootstrap config change not prevented"
+    assert "Bootstrap config options can not be changed" in str(exp)
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
