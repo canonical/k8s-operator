@@ -52,7 +52,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 11
+LIBPATCH = 12
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -404,12 +404,17 @@ class CertificateSigningRequest:
         )
         locality_name = csr_object.subject.get_attributes_for_oid(NameOID.LOCALITY_NAME)
         organization_name = csr_object.subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)
+        organizational_unit = csr_object.subject.get_attributes_for_oid(
+            NameOID.ORGANIZATIONAL_UNIT_NAME
+        )
         email_address = csr_object.subject.get_attributes_for_oid(NameOID.EMAIL_ADDRESS)
         try:
             sans = csr_object.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
             sans_dns = frozenset(sans.get_values_for_type(x509.DNSName))
             sans_ip = frozenset([str(san) for san in sans.get_values_for_type(x509.IPAddress)])
-            sans_oid = frozenset([str(san) for san in sans.get_values_for_type(x509.RegisteredID)])
+            sans_oid = frozenset(
+                [san.dotted_string for san in sans.get_values_for_type(x509.RegisteredID)]
+            )
         except x509.ExtensionNotFound:
             sans = frozenset()
             sans_dns = frozenset()
@@ -424,6 +429,7 @@ class CertificateSigningRequest:
             else None,
             locality_name=str(locality_name[0].value) if locality_name else None,
             organization=str(organization_name[0].value) if organization_name else None,
+            organizational_unit=str(organizational_unit[0].value) if organizational_unit else None,
             email_address=str(email_address[0].value) if email_address else None,
             sans_dns=sans_dns,
             sans_ip=sans_ip,
