@@ -1,0 +1,69 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+k8s:
+  units: 1
+  base: &base ubuntu@22.04
+  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
+  channel: latest/edge
+
+ceph-csi:
+  cluster-name: main
+  csi_integration: ceph
+  channel: latest/edge
+  base: *base
+  config:
+    provisioner-replicas: 1
+    namespace: ceph-primary
+    ceph-rbac-name-formatter: '{name}-{namespace}'
+ceph-mon:
+  cluster-name: main
+  csi_integration: ceph
+  channel: &ceph-channel quincy/stable
+  constraints: &ceph-constraints arch=amd64 cores=2 mem=4096M root-disk=4096M virt-type=virtual-machine
+  units: 1
+  config:
+    monitor-count: 1
+    expected-osd-count: 2
+ceph-osd:
+  cluster-name: main
+  csi_integration: ceph
+  channel: *ceph-channel
+  constraints: *ceph-constraints
+  units: 2
+  storage:
+    osd-devices: 1G,1
+    osd-journals: 1G,1
+
+ceph-mon-alt:
+  cluster-name: alt
+  csi_integration: ceph
+  charm: ceph-mon
+  channel: *ceph-channel
+  units: 1
+  constraints: *ceph-constraints
+  config:
+    monitor-count: 1
+    expected-osd-count: 2
+ceph-osd-alt:
+  cluster-name: alt
+  csi_integration: ceph
+  charm: ceph-osd
+  channel: *ceph-channel
+  units: 2
+  constraints: *ceph-constraints
+  storage:
+    osd-devices: 1G,2
+    osd-journals: 1G,1
+ceph-csi-alt:
+  cluster-name: alt
+  csi_integration: ceph
+  charm: ceph-csi
+  channel: latest/edge
+  config:
+    provisioner-replicas: 1
+    namespace: ceph-alt
+    csidriver-name-formatter: 'alt.{name}'
+    ceph-ext4-storage-class-name-formatter: 'ceph-ext4-{namespace}'
+    ceph-xfs-storage-class-name-formatter: 'ceph-xfs-{namespace}'
+    ceph-rbac-name-formatter: '{name}-{namespace}'

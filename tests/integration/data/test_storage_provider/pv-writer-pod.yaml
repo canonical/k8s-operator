@@ -9,13 +9,13 @@ metadata:
 spec:
   restartPolicy: Never
   volumes:
-  - name: pvc-test
+  - name: test-pv
     persistentVolumeClaim:
-      claimName: raw-block-pvc
+      claimName: test-pvc
   containers:
   - name: pv-writer
     image: rocks.canonical.com/cdk/busybox:1.36
-    command: ["/bin/sh", "-c", "echo 'PVC test data.' > /pvc/test_file"]
+    command: ["/bin/sh", "-c", "echo 'PV test data.' > /pv/test_file"]
     volumeMounts:
-    - name: pvc-test
-      mountPath: /pvc
+    - name: test-pv
+      mountPath: /pv

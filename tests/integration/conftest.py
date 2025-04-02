@@ -26,7 +26,7 @@ from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
-from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs, is_deployed
+from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -55,6 +55,8 @@ def pytest_addoption(parser: pytest.Parser):
         Apply proxy to model-config.
     --timeout
         Set timeout for tests
+    --ceph-storage-classes
+        Attributes of Ceph storage classes expected to operate test.
 
     Args:
         parser: Pytest parser.
@@ -110,7 +112,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "cos: mark COS integration tests.")
     config.addinivalue_line(
         "markers",
-        "bundle(file='', series='', apps_local={}, apps_channel={}, apps_resources={}): "
+        "bundle(file='', series='', apps_local=[], apps_channel={}, apps_resources={}): "
         "specify a YAML bundle file for a test.",
     )
     config.addinivalue_line(
@@ -232,10 +234,9 @@ async def kubernetes_cluster(
     bundle, markings = await Bundle.create(ops_test)
 
     with ops_test.model_context(model) as the_model:
-        if await is_deployed(the_model, bundle.path):
+        if await bundle.is_deployed(the_model):
             log.info("Using existing model=%s.", the_model.uuid)
-            assert ops_test.model, "Model must be present"
-            yield ops_test.model
+            yield the_model
             return
 
     if request.config.option.no_deploy:
