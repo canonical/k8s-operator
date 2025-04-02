@@ -13,6 +13,7 @@ import pytest_asyncio
 from juju import model
 from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
+from pytest_operator.plugin import OpsTest
 
 from . import storage
 
@@ -23,10 +24,11 @@ CEPH_CSI_MISSING_NS = re.compile(r"Missing namespace '(\S+)'")
 
 
 @pytest_asyncio.fixture(scope="module")
-async def ready_csi_apps(kubernetes_cluster: model.Model, api_client: ApiClient) -> None:
+async def ready_csi_apps(
+    ops_test: OpsTest, kubernetes_cluster: model.Model, api_client: ApiClient
+) -> None:
     """Wait for the CSI apps to be ready."""
     v1 = CoreV1Api(api_client)
-
     csi_apps = [
         app for app in kubernetes_cluster.applications.values() if app.charm_name == "ceph-csi"
     ]
@@ -38,9 +40,11 @@ async def ready_csi_apps(kubernetes_cluster: model.Model, api_client: ApiClient)
                     body=k8s_models.V1Namespace(metadata=k8s_models.V1ObjectMeta(name=namespace))
                 )
                 break
-    await kubernetes_cluster.wait_for_idle(
-        apps=[app.name for app in csi_apps], status="active", timeout=60 * 5
-    )
+
+    async with ops_test.fast_forward():
+        await kubernetes_cluster.wait_for_idle(
+            apps=[app.name for app in csi_apps], status="active", timeout=60 * 5
+        )
 
 
 @pytest.mark.usefixtures("ready_csi_apps")

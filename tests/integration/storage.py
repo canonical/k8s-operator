@@ -62,24 +62,24 @@ async def exec_storage_class(definition: StorageProviderTestDefinition, api_clie
         pvc_str = pvc_template.substitute(storage_class_name=sc_name)
 
         # Create PVC.
-        log.debug("Creating PVC: sc=%s", sc_name)
+        log.info("Creating PVC: sc=%s", sc_name)
         created.extend(create_from_dict(api_client, yaml.safe_load(pvc_str)))
 
         # Create a pod that writes to the PV.
-        log.debug("Creating PV writer pod: sc=%s", sc_name)
+        log.info("Creating PV writer pod: sc=%s", sc_name)
         created.extend(*create_from_yaml(api_client, str(PV_WRITER_POD)))
 
         # Wait for the pod to exit successfully.
-        log.debug("Waiting for PV writer pod: sc=%s", sc_name)
+        log.info("Waiting for PV writer pod: sc=%s", sc_name)
         await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
 
         # Create a pod that reads the PV data and writes it to the log.
-        log.debug("Creating PV reader pod: sc=%s", sc_name)
+        log.info("Creating PV reader pod: sc=%s", sc_name)
         created.extend(*create_from_yaml(api_client, str(PV_READER_POD)))
         await helpers.wait_pod_phase(k8s, "pv-reader-test", "Succeeded")
 
         # Check the logged PV data.
-        log.debug("Checking logs from reader pod: sc=%s", sc_name)
+        log.info("Checking logs from reader pod: sc=%s", sc_name)
         logs = await helpers.get_pod_logs(k8s, "pv-reader-test")
         assert "PV test data" in logs, f"PV data not found in logs: {logs}"
     finally:
