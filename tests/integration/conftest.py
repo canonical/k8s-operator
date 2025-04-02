@@ -55,8 +55,6 @@ def pytest_addoption(parser: pytest.Parser):
         Apply proxy to model-config.
     --timeout
         Set timeout for tests
-    --ceph-storage-classes
-        Attributes of Ceph storage classes expected to operate test.
 
     Args:
         parser: Pytest parser.
