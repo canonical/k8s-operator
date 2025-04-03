@@ -9,6 +9,7 @@ applications:
   k8s:
     charm: k8s
     constraints: cores=2 mem=8G root-disk=16G
+    num_units: 1
   ceph-csi:
     charm: ceph-csi
     channel: latest/stable
@@ -17,14 +18,15 @@ applications:
   ceph-mon:
     charm: ceph-mon
     channel: &ceph-channel quincy/stable
-    constraints: &ceph-constraints cores=2 mem=4G root-disk=4G
+    constraints: cores=2 mem=4G root-disk=4G
+    num_units: 1
     options:
       monitor-count: 1
       expected-osd-count: 2
   ceph-osd:
     charm: ceph-osd
     channel: *ceph-channel
-    constraints: *ceph-constraints
+    constraints: cores=2 mem=4G root-disk=8G
     num_units: 2
     storage:
       osd-devices: 1G,1

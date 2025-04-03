@@ -20,7 +20,7 @@ ceph-mon:
   cluster-name: main
   csi_integration: ceph
   channel: &ceph-channel quincy/stable
-  constraints: &ceph-constraints arch=amd64 cores=2 mem=2048M root-disk=4096M
+  constraints: &mon-constraints arch=amd64 cores=2 mem=2048M root-disk=4096M
   units: 1
   config:
     monitor-count: 1
@@ -29,7 +29,7 @@ ceph-osd:
   cluster-name: main
   csi_integration: ceph
   channel: *ceph-channel
-  constraints: *ceph-constraints
+  constraints: &osd-constraints arch=amd64 cores=2 mem=4096M root-disk=8192M virt-type=virtual-machine
   units: 2
   storage:
     osd-devices: 1G,1
@@ -40,7 +40,7 @@ ceph-mon-alt:
   csi_integration: ceph
   charm: ceph-mon
   channel: *ceph-channel
-  constraints: *ceph-constraints
+  constraints: *mon-constraints
   units: 1
   config:
     monitor-count: 1
@@ -50,7 +50,7 @@ ceph-osd-alt:
   csi_integration: ceph
   charm: ceph-osd
   channel: *ceph-channel
-  constraints: *ceph-constraints
+  constraints: *osd-constraints
   units: 2
   storage:
     osd-devices: 1G,1
