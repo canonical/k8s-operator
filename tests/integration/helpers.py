@@ -27,41 +27,6 @@ log = logging.getLogger(__name__)
 CHARMCRAFT_DIRS = {"k8s": Path("charms/worker/k8s"), "k8s-worker": Path("charms/worker")}
 
 
-async def is_deployed(model: juju.model.Model, bundle_path: Path) -> bool:
-    """Check if model has apps defined by the bundle.
-
-    If all apps are deployed, wait for model to be active/idle
-
-    Args:
-        model: juju model
-        bundle_path: path to bundle for comparison
-
-    Returns:
-        true if all apps and relations are in place and units are active/idle
-    """
-    bundle = yaml.safe_load(bundle_path.open())
-    apps = bundle["applications"]
-    for app, conf in apps.items():
-        if app not in model.applications:
-            log.warning(
-                "Cannot use existing model(%s): Application (%s) isn't deployed", model.name, app
-            )
-            return False
-        min_units = conf.get("num_units") or 1
-        num_units = len(model.applications[app].units)
-        if num_units < min_units:
-            log.warning(
-                "Cannot use existing model(%s): Application(%s) has insufficient units %d < %d",
-                model.name,
-                app,
-                num_units,
-                min_units,
-            )
-            return False
-    await model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
-    return True
-
-
 async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
     """Find unit network cidrs on a unit.
 
@@ -578,6 +543,43 @@ class Bundle:
         target.parent.mkdir(exist_ok=True, parents=True)
         yaml.dump(self.content, target.open("w"))
         return target
+
+    async def is_deployed(self, model: juju.model.Model) -> bool:
+        """Check if model has apps defined by the bundle.
+
+        If all apps are deployed, wait for model to be idle
+
+        Args:
+            self:  Bundle object
+            model: juju model
+
+        Returns:
+            true if all apps and relations are in place and units are idle
+        """
+        bundle = yaml.safe_load(self.path.open())
+        apps = bundle["applications"]
+        for app, conf in apps.items():
+            if app not in model.applications:
+                log.warning(
+                    "Cannot use existing model(%s): Application (%s) isn't deployed",
+                    model.name,
+                    app,
+                )
+                return False
+            min_units = conf.get("num_units") or 1
+            num_units = len(model.applications[app].units)
+            if num_units < min_units:
+                log.warning(
+                    "Cannot use existing model(%s): "
+                    "Application(%s) has insufficient units %d < %d",
+                    model.name,
+                    app,
+                    num_units,
+                    min_units,
+                )
+                return False
+        await model.wait_for_idle(timeout=20 * 60, raise_on_error=False)
+        return True
 
 
 async def cloud_arch(ops_test: OpsTest) -> str:
