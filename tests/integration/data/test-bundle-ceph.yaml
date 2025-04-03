@@ -17,7 +17,7 @@ applications:
   ceph-mon:
     charm: ceph-mon
     channel: &ceph-channel quincy/stable
-    constraints: &ceph-constraints cores=2 mem=2048M root-disk=2048M virt-type=virtual-machine
+    constraints: &ceph-constraints cores=2 mem=4G root-disk=4G
     options:
       monitor-count: 1
       expected-osd-count: 2
