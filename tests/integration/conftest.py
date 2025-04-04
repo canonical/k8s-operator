@@ -55,6 +55,11 @@ def pytest_addoption(parser: pytest.Parser):
         Apply proxy to model-config.
     --timeout
         Set timeout for tests
+    --clouds
+        Comma separated list of cloud providers
+        only integration tests for the specified clouds will be run
+        If left empty, no cloud specific tests will be dropped
+
 
     Args:
         parser: Pytest parser.
@@ -99,6 +104,16 @@ def pytest_addoption(parser: pytest.Parser):
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
     parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
+    parser.addoption(
+        "--clouds",
+        action="append",
+        default=[],
+        help=(
+            "Comma separated list of cloud providers"
+            "only integration tests for the specified clouds will be run."
+            "If left empty, no cloud specific tests will be dropped."
+        ),
+    )
 
 
 def pytest_configure(config):
@@ -120,7 +135,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Add cos marker parsing.
+    """Add cos marker parsing and filter based on clouds.
 
     Called after collection has been performed. May filter or re-order the items in-place.
 
@@ -133,6 +148,13 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if item.get_closest_marker("cos"):
                 item.add_marker(skip_cos)
+
+    if clouds := config.getoption("--clouds"):
+        skip_cloud = pytest.mark.skip(reason="not among the tests for the specified clouds")
+        for item in items:
+            if cloud_markers := item.get_closest_marker("clouds"):
+                if not set(clouds) & set(cloud_markers.args):
+                    item.add_marker(skip_cloud)
 
 
 async def cloud_proxied(ops_test: OpsTest):
