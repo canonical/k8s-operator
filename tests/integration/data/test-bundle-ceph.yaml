@@ -1,6 +1,7 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+
 name: integration-test-ceph
 description: |-
   Used to deploy or refresh within an integration test model
@@ -15,10 +16,17 @@ applications:
     channel: latest/stable
     options:
       provisioner-replicas: 1
+
+# The constraints on the ceph-mon and ceph-osd units are set to ensure
+# that they have enough resources to run properly as virtual-machines on
+# LXD when run in a CI environment on GH. 4G of disk is the minimum
+# required for the OS to operate. These match the constraints set in
+# the nightly tests where there are multiple ceph clusters
+# see tests/integration/terraform/ceph-manifest.yaml
   ceph-mon:
     charm: ceph-mon
     channel: &ceph-channel quincy/stable
-    constraints: cores=2 mem=4G root-disk=4G
+    constraints: cores=2 mem=2G root-disk=4G
     num_units: 1
     options:
       monitor-count: 1

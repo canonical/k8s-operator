@@ -16,6 +16,14 @@ ceph-csi:
     provisioner-replicas: 1
     namespace: ceph-primary
     ceph-rbac-name-formatter: '{name}-{namespace}'
+
+
+# The constraints on the ceph-mon and ceph-osd units are set to ensure
+# that they have enough resources to run properly as virtual-machines on
+# LXD when run in a CI environment on GH. 4G of disk is the minimum
+# required for the OS to operate. These match the constraints set in
+# the pr run tests where there is a single ceph clusters
+# see tests/integration/data/test-bundle-ceph.yaml
 ceph-mon:
   cluster-name: main
   csi_integration: ceph
