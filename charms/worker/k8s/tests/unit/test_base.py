@@ -277,9 +277,7 @@ def test_get_public_address_with_external_lb(harness):
 
     lb_address = "1.2.3.4"
 
-    with (
-        mock.patch.object(harness.charm, "external_load_balancer") as mock_elb,
-    ):
+    with mock.patch.object(harness.charm, "external_load_balancer") as mock_elb:
         mock_elb.is_available = True
         mock_elb.get_response.return_value = MockELBResponse(addr=lb_address)
         public_addr = harness.charm._get_public_address()

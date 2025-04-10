@@ -149,14 +149,11 @@ async def main() -> None:
         "--terraform-version", default="latest/stable", help="Expected Terraform version."
     )
     parser.add_argument(
-        "--terraform-module-path", default=script_dir / "data", help="Path to Terraform module."
-    )
-    parser.add_argument(
-        "--lxd-profile-path", default=script_dir / "data/k8s.profile", help="Path to LXD profile."
+        "--terraform-module-path", default=script_dir, help="Path to Terraform modules."
     )
     parser.add_argument(
         "--manifest-yaml",
-        default=script_dir / "data/k8s-manifest.yaml",
+        default=script_dir / "k8s-manifest.yaml",
         type=Path,
         help="Path to manifest.",
     )
