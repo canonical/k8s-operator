@@ -119,6 +119,30 @@ async def test_nodes_labelled(request, kubernetes_cluster: juju.model.Model):
     assert 0 == len(labelled), "Not all nodes labelled without custom-label"
 
 
+@pytest.mark.usefixtures("preserve_charm_config")
+async def test_prevent_bootstrap_config_changes(kubernetes_cluster: juju.model.Model):
+    """Test that the bootstrap config cannot be changed."""
+    k8s = kubernetes_cluster.applications["k8s"]
+    worker = kubernetes_cluster.applications["k8s-worker"]
+    worker_initial_config = await worker.get_config()
+    expected_nodes = len(k8s.units) + len(worker.units)
+    await ready_nodes(k8s.units[0], expected_nodes)
+    new_config = {"bootstrap-node-taints": "new-taint"}
+    await asyncio.gather(k8s.set_config(new_config), worker.set_config(new_config))
+    await kubernetes_cluster.wait_for_idle(timeout=5 * 60, status="blocked")
+    # NOTE(Hue): For some reason preserve_charm_config does not reset the config on worker
+    # to an empty string.
+    await asyncio.gather(
+        worker.set_config(
+            {
+                "bootstrap-node-taints": worker_initial_config["bootstrap-node-taints"].get(
+                    "value", ""
+                )
+            }
+        )
+    )
+
+
 async def test_remove_worker(kubernetes_cluster: juju.model.Model, timeout: int):
     """Deploy the charm and wait for active/idle status."""
     k8s = kubernetes_cluster.applications["k8s"]
