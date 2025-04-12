@@ -41,14 +41,16 @@ jobs:
           # built on azure, test on self-hosted
           - id: amd64
             builder-label: ubuntu-22.04
+            self-hosted: false
             tester-arch: AMD64
-            tester-size: xlarge
+            tester-label: ubuntu-latest-8-cores
             modules: '["test_k8s", "test_etcd", "test_ceph", "test_upgrade", "test_external_certs", "test_registry"]'
           # built and test on on self-hosted
           - id: arm64
             builder-label: ARM64
+            self-hosted: false
             tester-arch: ARM64
-            tester-size: large
+            tester-label: large
             modules: '["test_k8s", "test_etcd"]'
     with:
       identifier: ${{ matrix.arch.id }}
@@ -61,9 +63,10 @@ jobs:
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
-      self-hosted-runner: true
+      runs-on: ${{ matrix.arch.self-hosted && '' || matrix.arch.tester-label }}
+      self-hosted-runner: ${{ matrix.arch.self-hosted }}
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
-      self-hosted-runner-label: ${{ matrix.arch.tester-size }}
+      self-hosted-runner-label: ${{ matrix.arch.tester-label }}
       test-timeout: 600
       test-tox-env: integration
       trivy-fs-enabled: false
