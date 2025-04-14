@@ -247,6 +247,6 @@ def datastore_changed(charm_ds: str, snap_ds: str) -> bool:
     # TODO(Hue): (KU-3226) Implement a mechanism to prevent changing external DBs.
     # Maybe stored state?
     if charm_ds != "dqlite" and snap_ds == "external":
-        return True
+        return False
 
-    return charm_ds == snap_ds
+    return charm_ds != snap_ds
