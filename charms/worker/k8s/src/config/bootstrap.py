@@ -53,17 +53,11 @@ class BootstrapConfigChangeError(Exception):
 class BootstrapConfigOptions(BaseModel):
     """Charm config options that has a `bootstrap-` prefix."""
 
-    certificates: str = Field(
-        description=f"Represents {CONFIG_BOOTSTRAP_CERTIFICATES} config option."
-    )
-    datastore: str = Field(description=f"Represents {CONFIG_BOOTSTRAP_DATASTORE} config option.")
-    node_taints: str = Field(
-        description=f"Represents {CONFIG_BOOTSTRAP_NODE_TAINTS} config option."
-    )
-    pod_cidr: str = Field(description=f"Represents {CONFIG_BOOTSTRAP_POD_CIDR} config option.")
-    service_cidr: str = Field(
-        description=f"Represents {CONFIG_BOOTSTRAP_SERVICE_CIDR} config option."
-    )
+    certificates: str = Field()
+    datastore: str = Field()
+    node_taints: str = Field()
+    pod_cidr: str = Field()
+    service_cidr: str = Field()
 
     @classmethod
     def build(
@@ -134,7 +128,10 @@ class BootstrapConfigChangePreventer:
         pod_cidr = self._charm.config.get(CONFIG_BOOTSTRAP_POD_CIDR, "")
         service_cidr = self._charm.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, "")
 
-        if datastore != ref.datastore:
+        # NOTE(Hue): We need a custom check here since the snap only knows 
+        # `dqlite` and `external` as datastores.
+        # The charm config can be `dqlite`, `etcd`, etc.
+        if datastore_changed(str(datastore), ref.datastore):
             changed.append(
                 ChangedConfig(
                     name=CONFIG_BOOTSTRAP_DATASTORE,
@@ -235,3 +232,20 @@ class BootstrapConfigChangePreventer:
         """
         t1_split, t2_split = t1.split(), t2.split()
         return len(t1_split) == len(t2_split) and set(t1_split) == set(t2_split)
+
+
+def datastore_changed(charm_ds: str, snap_ds: str) -> bool:
+    """Check if the datastore has changed.
+
+    Args:
+        charm_ds: The datastore in charm config.
+        snap_ds: The datastore in snap cluster config.
+
+    Returns:
+        True if the datastore has changed, False otherwise.
+    """
+    # TODO(Hue): (KU-3226) Implement a mechanism to prevent changing external DBs. Maybe stored state?
+    if charm_ds != "dqlite" and snap_ds == "external":
+        return True
+
+    return charm_ds == snap_ds

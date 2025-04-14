@@ -1363,7 +1363,7 @@ class K8sCharm(ops.CharmBase):
         BootstrapConfigChangeError,
     )
     @on_error(
-        ops.ErrorStatus("Failed to get communicate with k8sd."),
+        ops.WaitingStatus("Failed to get communicate with k8sd."),
         InvalidResponseError,
         K8sdConnectionError,
     )
