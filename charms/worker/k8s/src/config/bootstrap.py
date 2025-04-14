@@ -128,7 +128,7 @@ class BootstrapConfigChangePreventer:
         pod_cidr = self._charm.config.get(CONFIG_BOOTSTRAP_POD_CIDR, "")
         service_cidr = self._charm.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, "")
 
-        # NOTE(Hue): We need a custom check here since the snap only knows 
+        # NOTE(Hue): We need a custom check here since the snap only knows
         # `dqlite` and `external` as datastores.
         # The charm config can be `dqlite`, `etcd`, etc.
         if datastore_changed(str(datastore), ref.datastore):
@@ -244,7 +244,8 @@ def datastore_changed(charm_ds: str, snap_ds: str) -> bool:
     Returns:
         True if the datastore has changed, False otherwise.
     """
-    # TODO(Hue): (KU-3226) Implement a mechanism to prevent changing external DBs. Maybe stored state?
+    # TODO(Hue): (KU-3226) Implement a mechanism to prevent changing external DBs.
+    # Maybe stored state?
     if charm_ds != "dqlite" and snap_ds == "external":
         return True
 
