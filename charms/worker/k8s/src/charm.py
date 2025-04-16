@@ -1371,27 +1371,18 @@ class K8sCharm(ops.CharmBase):
         """Prevent bootstrap config changes after bootstrap."""
         log.info("Preventing bootstrap config changes after bootstrap")
 
-        if self.is_control_plane:
-            try:
-                ref_config = BootstrapConfigOptions.build(
-                    cluster_config=self.api_manager.get_cluster_config().metadata,
-                    node_status=self.api_manager.get_node_status().metadata,
-                )
-            except InvalidResponseError as e:
-                if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
-                    log.info("k8sd is not ready, skipping bootstrap config check")
-                    return
-                raise
-        else:
-            try:
-                ref_config = BootstrapConfigOptions.build(
-                    node_status=self.api_manager.get_node_status().metadata,
-                )
-            except InvalidResponseError as e:
-                if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
-                    log.info("k8sd is not ready, skipping bootstrap config check")
-                    return
-                raise
+        try:
+            ref_config = BootstrapConfigOptions.build(
+                node_status=self.api_manager.get_node_status().metadata,
+                cluster_config=self.api_manager.get_cluster_config().metadata
+                if self.is_control_plane
+                else None,
+            )
+        except InvalidResponseError as e:
+            if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
+                log.info("k8sd is not ready, skipping bootstrap config check")
+                return
+            raise
 
         self.bootstrap_config_change_preventer.prevent(ref_config)
 

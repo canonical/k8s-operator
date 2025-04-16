@@ -1145,6 +1145,9 @@ class K8sdAPIManager:
     def get_cluster_config(self) -> GetClusterConfigResponse:
         """Retrieve the cluster configuration.
 
+        Worker nodes are not allowed to call this endpoint:
+        https://github.com/canonical/k8s-snap/blob/0a5edd2/src/k8s/pkg/k8sd/api/endpoints.go#L121-L126
+
         Returns:
             GetClusterConfigResponse: The cluster configuration.
         """
