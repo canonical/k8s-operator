@@ -8,7 +8,7 @@ from base64 import b64decode
 
 import ops
 import yaml
-from literals import APISERVER_PORT
+from literals import APISERVER_PORT, CONFIG_BOOTSTRAP_NODE_TAINTS
 from protocols import K8sCharmProtocol
 
 import charms.contextual_status as status
@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 
 @on_error(
-    ops.BlockedStatus("Invalid config on node-labels or bootstrap-node-taints"),
+    ops.BlockedStatus(f"Invalid config on node-labels or {CONFIG_BOOTSTRAP_NODE_TAINTS}"),
     ValueError,
     TypeError,
 )
@@ -30,7 +30,7 @@ def _share_labels_and_taints(charm: K8sCharmProtocol):
         charm (K8sCharmProtocol): The charm instance.
     """
     labels = str(charm.model.config["node-labels"])
-    taints = str(charm.model.config["bootstrap-node-taints"])
+    taints = str(charm.model.config[CONFIG_BOOTSTRAP_NODE_TAINTS])
 
     charm.kube_control.set_labels(labels.split())
     charm.kube_control.set_taints(taints.split())
