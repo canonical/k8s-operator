@@ -285,7 +285,7 @@ class K8sCharm(ops.CharmBase):
         Integration by applying the manifests for COS Cluster Roles and
         kube-state-metrics (K-S-M).
         """
-        if not self.model.get_relation(COS_RELATION):
+        if not self.model.relations[COS_RELATION]:
             return
 
         log.info("Apply COS Integrations")
@@ -319,11 +319,8 @@ class K8sCharm(ops.CharmBase):
         Returns:
             Dict[str, List[ops.Unit]]: A dictionary of versions and the units that have them.
         """
-        if not (relations := self.model.relations.get(CLUSTER_WORKER_RELATION)):
-            return {}
-
         versions = defaultdict(list)
-        for relation in relations:
+        for relation in self.model.relations[CLUSTER_WORKER_RELATION]:
             for unit in relation.units:
                 if version := relation.data[unit].get("version"):
                     versions[version].append(unit)
@@ -586,7 +583,7 @@ class K8sCharm(ops.CharmBase):
             registries = containerd.parse_registries(config)
             containerd.ensure_registry_configs(registries)
 
-        for relation in self.model.relations.get(CONTAINERD_RELATION, []):
+        for relation in self.model.relations[CONTAINERD_RELATION]:
             if self.lead_control_plane:
                 containerd.share(config, self.app, relation)
                 continue
@@ -599,7 +596,7 @@ class K8sCharm(ops.CharmBase):
 
     def _configure_cos_integration(self):
         """Retrieve the join token from secret databag and join the cluster."""
-        if not self.model.get_relation(COS_RELATION):
+        if not self.model.relations[COS_RELATION]:
             return
 
         status.add(ops.MaintenanceStatus("Updating COS integrations"))
@@ -777,7 +774,7 @@ class K8sCharm(ops.CharmBase):
                 to_remove=to_remove,
             )
 
-        for relation in self.model.relations.get(CLUSTER_WORKER_RELATION, []):
+        for relation in self.model.relations[CLUSTER_WORKER_RELATION]:
             self.distributor.revoke_tokens(
                 relation=relation,
                 token_strategy=TokenStrategy.CLUSTER,
@@ -795,7 +792,7 @@ class K8sCharm(ops.CharmBase):
                 token_type=ClusterTokenType.CONTROL_PLANE,
             )
 
-        for relation in self.model.relations.get(CLUSTER_WORKER_RELATION, []):
+        for relation in self.model.relations[CLUSTER_WORKER_RELATION]:
             self.distributor.allocate_tokens(
                 relation=relation,
                 token_strategy=TokenStrategy.CLUSTER,
@@ -808,7 +805,7 @@ class K8sCharm(ops.CharmBase):
         This method creates COS tokens and distributes them to peers and workers
         if relations exist.
         """
-        if not self.model.get_relation(COS_RELATION):
+        if not self.model.relations[COS_RELATION]:
             return
 
         log.info("Prepare cos tokens")
@@ -819,7 +816,7 @@ class K8sCharm(ops.CharmBase):
                 token_type=ClusterTokenType.CONTROL_PLANE,
             )
 
-        if rel := self.model.get_relation(COS_TOKENS_WORKER_RELATION):
+        for rel in self.model.relations[COS_TOKENS_WORKER_RELATION]:
             self.distributor.allocate_tokens(
                 relation=rel,
                 token_strategy=TokenStrategy.COS,
@@ -890,16 +887,15 @@ class K8sCharm(ops.CharmBase):
         if not (provider := self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES)):
             raise ReconcilerError("Missing certificates provider")
 
-        relation = self.model.get_relation(CLUSTER_WORKER_RELATION)
-        if not relation:
+        for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
+            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
+            kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
+            rel.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
+            domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
+            rel.data[self.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
+        else:
             log.info("Cluster (worker) relation not found, skipping certificates sharing.")
             return
-
-        relation.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
-        kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
-        relation.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
-        domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
-        relation.data[self.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
 
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
     def _announce_kubernetes_version(self) -> None:
@@ -916,8 +912,8 @@ class K8sCharm(ops.CharmBase):
             raise ReconcilerError("k8s-snap is not installed")
 
         relation_config: Dict[str, List[ops.Relation]] = {
-            "peer": self.model.relations.get(CLUSTER_RELATION, []),
-            "worker": self.model.relations.get(CLUSTER_WORKER_RELATION, []),
+            "peer": self.model.relations[CLUSTER_RELATION],
+            "worker": self.model.relations[CLUSTER_WORKER_RELATION],
         }
 
         waiting_units = dict.fromkeys(relation_config, 0)
