@@ -510,8 +510,10 @@ requires:
     interface: azure-integration
   certificates:
     interface: tls-certificates
+    limit: 1
   etcd:
     interface: etcd
+    limit: 1
   external-cloud-provider:
     interface: external_cloud_provider
   gcp:
