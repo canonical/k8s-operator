@@ -199,7 +199,7 @@ config:
       description: |
         Sets the IP address of the dns service. If omitted defaults to the IP address
         of the Kubernetes service created by the feature.
-        
+
         Can be used to point to an external dns server when feature is disabled.
     dns-upstream-nameservers:
       type: string
@@ -207,7 +207,7 @@ config:
       description: |
         Space-separated list of upstream nameservers used to forward queries for out-of-cluster
         endpoints.
-        
+
         If omitted defaults to `/etc/resolv.conf` and uses the nameservers on each node.
     gateway-enabled:
       type: boolean
@@ -392,7 +392,7 @@ config:
       type: string
       description: |
         Labels can be used to organize and to select subsets of nodes in the
-        cluster. Declare node labels in key=value format, separated by spaces.      
+        cluster. Declare node labels in key=value format, separated by spaces.
 
 resources:
   snap-installation:
@@ -401,7 +401,7 @@ resources:
     description: |
       Override charm defined snap installation script
 
-      This charm is designed to operate with a specific revision of snaps, overriding 
+      This charm is designed to operate with a specific revision of snaps, overriding
       with anything will indicate that the charm is running an unsupported configuration.
 
       Content Options:
@@ -469,6 +469,7 @@ requires:
     interface: azure-integration
   etcd:
     interface: etcd
+    limit: 1
   external-cloud-provider:
     interface: external_cloud_provider
   gcp:
