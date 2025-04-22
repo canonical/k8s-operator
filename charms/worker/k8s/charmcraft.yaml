@@ -375,7 +375,7 @@ config:
       default: true
       description: |
         Enable local storage provisioning. This will create a storage class
-        named "local-storage" that uses the hostPath provisioner. Local storage
+        named "local-storage" that uses the rawfile-localpv provisioner. Local storage
         will not survive node removal, so it may not be suitable for certain
         setups, such as production multi-node clusters.
     local-storage-local-path:
