@@ -80,6 +80,7 @@ jobs:
       matrix:
         charm: ${{ fromJson(needs.select-charms.outputs.charms) }}
     steps:
+    - uses: actions/checkout@v4
     - uses: canonical/charming-actions/promote-charm@2.7.0
       with:
         credentials: ${{ secrets.CHARMHUB_TOKEN }}
