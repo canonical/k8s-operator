@@ -75,7 +75,7 @@ snap.
 amd64:
 - install-type: store
   name: k8s
-  channel: 1.32-classic/stable
+  channel: 1.33-classic/stable
   classic: true
 ```
 
@@ -133,7 +133,7 @@ pip freeze > charms/worker/k8s/requirements.txt
 ### Build charms from the release branches
 
 The [publish-charms] job is responsible for publishing the charms either to the
-`latest/edge` OR `<release>/beta` (e.g. `1.32/beta`) channels, depending on the
+`latest/edge` OR `<release>/beta` (e.g. `1.33/beta`) channels, depending on the
 branch that is updated. If a change is merged to the `main` branch, the charm will be
 published to the `latest/edge` channel. If a change is merged to a release branch,
 the charm will be published to the `<release>/beta` channel.
