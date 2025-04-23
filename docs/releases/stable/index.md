@@ -11,10 +11,10 @@ consistent release experience. Any external or shared repositories are forked
 into the `charmed-kubernetes` github organization and have the following branches:
 
 * `main`: The primary development branch. Merges are made against this branch as they are approved.
-* `release_1.xx`: The release branch. New major releases are branched from `main`.
-* `release_1.xx`. Bugfix releases have specific commits PR'd to `release_1.xx` from a `bugfix_1.xx_<bugid>` branch.
+* `release-1.xx`: The release branch. New major releases are branched from `main`.
+* `release-1.xx`. Bugfix releases have specific commits PR'd to `release-1.xx` from a `bugfix_1.xx_<bugid>` branch.
 
-Tags are used to mark releases on the `release_1.xx` branch.
+Tags are used to mark releases on the `release-1.xx` branch.
 
 ### Feature Freeze
 
@@ -27,7 +27,7 @@ Solutions QA a solid base to test from.
 
 ### Conflict resolution
 
-At the time of the feature freeze, new `release_1.xx` branches are created to match
+At the time of the feature freeze, new `release-1.xx` branches are created to match
 the default repo branch per the documentation below. During the feature freeze and
 Solutions QA period, fixes which need to be applied to address CI or QA failures
 (and only those specific fixes) are merged to the respective release branches.
@@ -40,22 +40,21 @@ It may feel early, but part of releasing the next stable version requires
 preparing for the release that will follow. This requires opening tracks and
 building relevant snaps and charms that will be used in the new `edge` channel.
 
-Bundle/charm track requests are made by posting to the `charmhub requests` forum
-asking for new tracks to be opened for `k8s` and `k8s-worker` charms. For example:
-
-* <https://discourse.charmhub.io/t/request-new-1-30-track-for-all-charmed-k8s-charms-and-bundles/13394>
-
-ensuring to tag the request with `k8s`, `k8s-worker`, and `canonical-kubernetes`
+To create tracks for the new release, run the following commands:
+```
+charmcraft create-track k8s 1.xx
+charmcraft create-track k8s-worker 1.xx
+```
 
 ## Preparing the release
 
 ### Create release branches for this repo
 
 * **URL**: <https://github.com/canonical/k8s-operator/branches>
-* **New Branch**: release_1.XX
+* **New Branch**: release-1.xx
 * **source**:  main
 
-We need to create a `release_1.xx` branch from `main`.
+We need to create a `release-1.xx` branch from `main`.
 This will be our snapshot from which we test, fix, and subsequently
 promote to the new release.
 
@@ -75,7 +74,7 @@ snap.
 amd64:
 - install-type: store
   name: k8s
-  channel: 1.32-classic/stable
+  channel: 1.33-classic/stable
   classic: true
 ```
 
@@ -91,12 +90,11 @@ amd64:
 The [auto-update-snap-revision] job is also responsible for auto-updating the snap 
 revision in the [snap_installation.yaml] file. This job is triggered on a schedule.
 
-### Pin pip versions of all python dependencies
+### Pin python versions of all python dependencies
 
 In order to reproduce charm builds, we should pin the python dependencies of at least
 the charm code.  The pinning should take place using a specific version of python
-in order to ensure compatibility with the base os release. One can use `pyenv` to help
-create python environments locally to help freeze the requirements.txt
+in order to ensure compatibility with the base os release. 
 
 | base                     | python |
 | ---                      | ---    |
@@ -115,25 +113,25 @@ In the following example, building on focal yields packages for python 3.8.
       architectures: [amd64]
 ```
 
-Create a python 3.8 environment, and freeze the libraries.
+Create a python 3.8 environment, and update the libraries.
 Then create a PR to merge into the release branch.
 
-Task:
+The following commands are run in `k8s-operator/charms/worker/k8s`:
 
-```sh
-pyenv install 3.8
-pyenv virtualenv 3.8 k8s-operator
-pyenv activate k8s-operator
-git switch release_1.xx
-git checkout -b task/pip-pinning/release-1.xx
-pip install -r charms/worker/k8s/requirements.txt
-pip freeze > charms/worker/k8s/requirements.txt
+```shell
+snap install astral-uv --classic
+uv venv
+uv venv -p 3.8
+source .venv/bin/activate
+uv sync
+uv lock --upgrade
 ```
+For further info on `uv`, see the Contributing guide in this repo.
 
 ### Build charms from the release branches
 
 The [publish-charms] job is responsible for publishing the charms either to the
-`latest/edge` OR `<release>/beta` (e.g. `1.32/beta`) channels, depending on the
+`latest/edge` OR `<release>/beta` (e.g. `1.33/beta`) channels, depending on the
 branch that is updated. If a change is merged to the `main` branch, the charm will be
 published to the `latest/edge` channel. If a change is merged to a release branch,
 the charm will be published to the `<release>/beta` channel.
@@ -223,7 +221,7 @@ Next, open an upstream PR:
 
 **Job**: <https://github.com/canonical/k8s-operator/actions/workflows/promote_charm.yaml>
 
-Run the workflow from a branch, select `release_1.xx`,
+Run the workflow from a branch, select `release-1.xx`,
 
 * Choose `Charm` - `all`
 * Choose `Origin Channel`- `candidate`
