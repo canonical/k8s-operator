@@ -22,7 +22,7 @@ pip install 'tox>=4,<5'
 If you don't have `uv` installed, you can install it with:
 
 ```shell
-snap install astral-uv
+snap install astral-uv --classic
 ```
 
 You can create an environment for development with `uv`:
@@ -34,7 +34,7 @@ uv venv
 Or with an specific Python version:
 
 ```shell
-uv venv -p 3.8
+uv venv -p 3.10
 ```
 
 This will create a virtual environment in the `.venv` directory. You can
