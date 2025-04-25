@@ -13,7 +13,7 @@ import yaml
 
 logging.basicConfig(format="%(levelname)-8s: %(message)s", level=logging.INFO)
 log = logging.getLogger("update-snap-revision")
-TRACK = "1.32-classic"
+TRACK = "1.33-classic"
 RISK = "stable"
 ROOT = Path(__file__).parent / ".." / ".."
 INSTALLATION = ROOT / "charms/worker/k8s/templates/snap_installation.yaml"
