@@ -38,9 +38,9 @@ class TestK8sUpgrade(unittest.TestCase):
                         "version": "100",
                     },
                     "k8s_service": {
-                        "dependencies": {"k8s-worker": "^1.30, < 1.32"},
+                        "dependencies": {"k8s-worker": "^1.30, < 1.33"},
                         "name": "k8s",
-                        "upgrade_supported": "^1.30, < 1.32",
+                        "upgrade_supported": "^1.30, < 1.33",
                         "version": "1.31.1",
                     },
                 }
