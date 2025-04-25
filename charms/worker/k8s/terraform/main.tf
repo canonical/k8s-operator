@@ -18,8 +18,10 @@ resource "juju_application" "k8s" {
     spaces    = var.expose.spaces
   }
 
-  config      = var.config
-  constraints = var.constraints
-  units       = var.units
-  resources   = var.resources
+  config            = var.config
+  constraints       = var.constraints
+  endpoint_bindings = var.endpoint_bindings
+  placement         = var.placement
+  resources         = var.resources
+  units             = var.units
 }
