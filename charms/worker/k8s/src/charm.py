@@ -1048,6 +1048,7 @@ class K8sCharm(ops.CharmBase):
             self._revoke_cluster_tokens(event)
         self.update_status.run()
         self._last_gasp()
+        snap_management(self, remove=True)
 
         relation = self.model.get_relation(CLUSTER_RELATION)
         local_cluster = self.get_cluster_name()
