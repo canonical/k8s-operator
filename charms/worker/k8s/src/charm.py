@@ -1047,8 +1047,8 @@ class K8sCharm(ops.CharmBase):
         if self.lead_control_plane:
             self._revoke_cluster_tokens(event)
         self.update_status.run()
-        self._last_gasp()
-        snap_management(self, remove=True)
+        if self._last_gasp():
+            snap_management(self, remove=True)
 
         relation = self.model.get_relation(CLUSTER_RELATION)
         local_cluster = self.get_cluster_name()
@@ -1167,7 +1167,12 @@ class K8sCharm(ops.CharmBase):
             return False
 
     def _last_gasp(self):
-        """Busy wait on stop event until the unit isn't clustered anymore."""
+        """Busy wait on stop event until the unit isn't clustered anymore.
+
+        Returns:
+            bool: True if successfully unclustered within time limit, False
+                otherwise.
+        """
         busy_wait, reported_down = 30, 0
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
         while busy_wait and reported_down != 3:
@@ -1179,6 +1184,7 @@ class K8sCharm(ops.CharmBase):
                 reported_down += 1
             sleep(1)
             busy_wait -= 1
+        return reported_down == 3
 
     @status.on_error(ops.BlockedStatus("Cannot apply node-labels"), LabelMaker.NodeLabelError)
     def _apply_node_labels(self):
