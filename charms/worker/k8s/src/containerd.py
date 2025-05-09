@@ -41,7 +41,8 @@ def containerd_path() -> Path:
     """
     for line in CONTAINERD_ARGS.read_text().splitlines():
         if line.startswith("--config="):
-            return Path(line.split("=")[1]).parent
+            path = line.split("=")[1].strip('"').strip("'")
+            return Path(path).parent
     raise FileNotFoundError("Could not find containerd config path in args file.")
 
 
