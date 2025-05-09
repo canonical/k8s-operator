@@ -277,11 +277,12 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
     return args
 
 
-def management(charm: K8sCharmProtocol) -> None:
+def management(charm: K8sCharmProtocol, remove: bool = False) -> None:
     """Manage snap installations on this machine.
 
     Arguments:
         charm: The charm instance
+        remove: Whether to remove the snaps instead of installing/updating them
 
     Raises:
         SnapError: when the management issue cannot be resolved
@@ -289,6 +290,9 @@ def management(charm: K8sCharmProtocol) -> None:
     cache = snap_lib.SnapCache()
     for args in _parse_management_arguments(charm):
         which: snap_lib.Snap = cache[args.name]
+        if remove:
+            which.ensure(snap_lib.SnapState.Absent)
+            continue
         if block_refresh(which, args, charm.is_upgrade_granted):
             continue
         install_args = args.model_dump(exclude_none=True)
