@@ -28,10 +28,9 @@ from enum import Enum
 from typing import FrozenSet, List, MutableMapping, Optional, Tuple, Union
 
 from cryptography import x509
-from cryptography.hazmat._oid import ExtensionOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import ExtensionOID, NameOID
 from ops import BoundEvent, CharmBase, CharmEvents, Secret, SecretExpiredEvent, SecretRemoveEvent
 from ops.framework import EventBase, EventSource, Handle, Object
 from ops.jujuversion import JujuVersion
@@ -52,7 +51,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 15
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -801,14 +800,6 @@ def generate_ca(
     if locality_name:
         subject_name.append(x509.NameAttribute(x509.NameOID.LOCALITY_NAME, locality_name))
 
-    _sans: List[x509.GeneralName] = []
-    if sans_oid:
-        _sans.extend([x509.RegisteredID(x509.ObjectIdentifier(san)) for san in sans_oid])
-    if sans_ip:
-        _sans.extend([x509.IPAddress(ipaddress.ip_address(san)) for san in sans_ip])
-    if sans_dns:
-        _sans.extend([x509.DNSName(san) for san in sans_dns])
-
     subject_identifier_object = x509.SubjectKeyIdentifier.from_public_key(
         private_key_object.public_key()
     )
@@ -824,15 +815,15 @@ def generate_ca(
         encipher_only=False,
         decipher_only=False,
     )
-    cert = (
+
+    builder = (
         x509.CertificateBuilder()
         .subject_name(x509.Name(subject_name))
-        .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name)]))
+        .issuer_name(x509.Name(subject_name))
         .public_key(private_key_object.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.now(timezone.utc))
         .not_valid_after(datetime.now(timezone.utc) + validity)
-        .add_extension(x509.SubjectAlternativeName(set(_sans)), critical=False)
         .add_extension(x509.SubjectKeyIdentifier(digest=subject_identifier), critical=False)
         .add_extension(
             x509.AuthorityKeyIdentifier(
@@ -847,10 +838,39 @@ def generate_ca(
             x509.BasicConstraints(ca=True, path_length=None),
             critical=True,
         )
-        .sign(private_key_object, hashes.SHA256())  # type: ignore[arg-type]
     )
+    san_extension = _san_extension(
+        email_address=email_address,
+        sans_dns=sans_dns,
+        sans_ip=sans_ip,
+        sans_oid=sans_oid,
+    )
+    if san_extension:
+        builder = builder.add_extension(san_extension, critical=False)
+    cert = builder.sign(private_key_object, hashes.SHA256())  # type: ignore[arg-type]
     ca_cert_str = cert.public_bytes(serialization.Encoding.PEM).decode().strip()
     return Certificate.from_string(ca_cert_str)
+
+
+def _san_extension(
+    email_address: Optional[str] = None,
+    sans_dns: Optional[FrozenSet[str]] = frozenset(),
+    sans_ip: Optional[FrozenSet[str]] = frozenset(),
+    sans_oid: Optional[FrozenSet[str]] = frozenset(),
+) -> Optional[x509.SubjectAlternativeName]:
+    sans: List[x509.GeneralName] = []
+    if email_address:
+        # If an e-mail address was provided, it should always be in the SAN
+        sans.append(x509.RFC822Name(email_address))
+    if sans_dns:
+        sans.extend([x509.DNSName(san) for san in sans_dns])
+    if sans_ip:
+        sans.extend([x509.IPAddress(ipaddress.ip_address(san)) for san in sans_ip])
+    if sans_oid:
+        sans.extend([x509.RegisteredID(x509.ObjectIdentifier(san)) for san in sans_oid])
+    if not sans:
+        return None
+    return x509.SubjectAlternativeName(sans)
 
 
 def generate_certificate(
@@ -887,7 +907,7 @@ def generate_certificate(
         .not_valid_before(datetime.now(timezone.utc))
         .not_valid_after(datetime.now(timezone.utc) + validity)
     )
-    extensions = _get_certificate_request_extensions(
+    extensions = _generate_certificate_request_extensions(
         authority_key_identifier=ca_pem.extensions.get_extension_for_class(
             x509.SubjectKeyIdentifier
         ).value.key_identifier,
@@ -908,7 +928,7 @@ def generate_certificate(
     return Certificate.from_string(cert_bytes.decode().strip())
 
 
-def _get_certificate_request_extensions(
+def _generate_certificate_request_extensions(
     authority_key_identifier: bytes,
     csr: x509.CertificateSigningRequest,
     is_ca: bool,
@@ -944,32 +964,8 @@ def _get_certificate_request_extensions(
             value=x509.BasicConstraints(ca=is_ca, path_length=None),
         ),
     ]
-    sans: List[x509.GeneralName] = []
-    try:
-        loaded_san_ext = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        sans.extend(
-            [x509.DNSName(name) for name in loaded_san_ext.value.get_values_for_type(x509.DNSName)]
-        )
-        sans.extend(
-            [x509.IPAddress(ip) for ip in loaded_san_ext.value.get_values_for_type(x509.IPAddress)]
-        )
-        sans.extend(
-            [
-                x509.RegisteredID(oid)
-                for oid in loaded_san_ext.value.get_values_for_type(x509.RegisteredID)
-            ]
-        )
-    except x509.ExtensionNotFound:
-        pass
-
-    if sans:
-        cert_extensions_list.append(
-            x509.Extension(
-                oid=ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
-                critical=False,
-                value=x509.SubjectAlternativeName(sans),
-            )
-        )
+    if sans := _generate_subject_alternative_name_extension(csr):
+        cert_extensions_list.append(sans)
 
     if is_ca:
         cert_extensions_list.append(
@@ -1000,6 +996,51 @@ def _get_certificate_request_extensions(
         cert_extensions_list.append(extension)
 
     return cert_extensions_list
+
+
+def _generate_subject_alternative_name_extension(
+    csr: x509.CertificateSigningRequest,
+) -> Optional[x509.Extension]:
+    sans: List[x509.GeneralName] = []
+    try:
+        loaded_san_ext = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        sans.extend(
+            [x509.DNSName(name) for name in loaded_san_ext.value.get_values_for_type(x509.DNSName)]
+        )
+        sans.extend(
+            [x509.IPAddress(ip) for ip in loaded_san_ext.value.get_values_for_type(x509.IPAddress)]
+        )
+        sans.extend(
+            [
+                x509.RegisteredID(oid)
+                for oid in loaded_san_ext.value.get_values_for_type(x509.RegisteredID)
+            ]
+        )
+        sans.extend(
+            [
+                x509.RFC822Name(name)
+                for name in loaded_san_ext.value.get_values_for_type(x509.RFC822Name)
+            ]
+        )
+    except x509.ExtensionNotFound:
+        pass
+    # If email is present in the CSR Subject, make sure it is also in the SANS
+    # to conform to RFC 5280.
+    email = csr.subject.get_attributes_for_oid(NameOID.EMAIL_ADDRESS)
+    if email:
+        email_rfc822 = x509.RFC822Name(str(email[0].value))
+        if email_rfc822 not in sans:
+            sans.append(email_rfc822)
+
+    return (
+        x509.Extension(
+            oid=ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+            critical=False,
+            value=x509.SubjectAlternativeName(sans),
+        )
+        if sans
+        else None
+    )
 
 
 class CertificatesRequirerCharmEvents(CharmEvents):
