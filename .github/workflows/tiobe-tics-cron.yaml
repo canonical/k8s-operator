@@ -1,6 +1,7 @@
 name: TICS nightly quality scan
 
 on:
+  pull_request:
   workflow_dispatch:
   schedule:
     - cron: '0 10 * * *'
@@ -48,6 +49,7 @@ jobs:
           set -eux -o pipefail
 
           uv pip install pylint flake8 --system
+          uv pip install charms/worker/k8s --system
           uv tool install tox --with tox-uv
           tox -e unit,coverage-xml
 
