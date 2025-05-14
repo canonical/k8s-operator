@@ -36,6 +36,7 @@ import ops
 import utils
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
+from client.k8s import kubectl
 from cloud_integration import CloudIntegration
 from config.bootstrap import (
     BootstrapConfigChangeError,
@@ -277,6 +278,7 @@ class K8sCharm(ops.CharmBase):
     @status.on_error(
         ops.WaitingStatus("Installing COS requirements"),
         subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
     )
     def _apply_cos_requirements(self):
         """Apply COS requirements for integration.
@@ -290,8 +292,8 @@ class K8sCharm(ops.CharmBase):
 
         log.info("Apply COS Integrations")
         status.add(ops.MaintenanceStatus("Ensuring COS Integration"))
-        subprocess.check_call(shlex.split("k8s kubectl apply -f templates/cos_roles.yaml"))
-        subprocess.check_call(shlex.split("k8s kubectl apply -f templates/ksm.yaml"))
+        kubectl("apply", "-f", "templates/cos_roles.yaml")
+        kubectl("apply", "-f", "templates/ksm.yaml")
 
     @property
     def is_control_plane(self) -> bool:
@@ -1144,10 +1146,10 @@ class K8sCharm(ops.CharmBase):
             bool: True when this unit appears in the node list
         """
         node = node or self.get_node_name()
-        cmd = ["nodes", node, "-o=jsonpath={.metadata.name}"]
+        cmd = ["get", "nodes", node, "-o=jsonpath={.metadata.name}"]
         try:
-            return self.kubectl_get(*cmd) == node
-        except (subprocess.CalledProcessError, FileNotFoundError):
+            return kubectl(*cmd, kubeconfig=self._internal_kubeconfig) == node
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             return False
 
     def _is_node_ready(self, node: str = "") -> bool:
@@ -1160,10 +1162,10 @@ class K8sCharm(ops.CharmBase):
             bool: True when this unit is marked as Ready
         """
         node = node or self.get_node_name()
-        cmd = ["nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
+        cmd = ["get", "nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
         try:
-            return self.kubectl_get(*cmd) == "True"
-        except (subprocess.CalledProcessError, FileNotFoundError):
+            return kubectl(*cmd, kubeconfig=self._internal_kubeconfig) == "True"
+        except (subprocess.CalledProcessError, FileNotFoundError, TimeoutError):
             return False
 
     def _last_gasp(self):
@@ -1196,39 +1198,6 @@ class K8sCharm(ops.CharmBase):
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)
-
-    def kubectl(self, *args) -> str:
-        """Run kubectl command.
-
-        Arguments:
-            args: arguments passed to kubectl
-
-        Returns:
-            string response
-
-        Raises:
-            CalledProcessError: in the event of a failed kubectl
-        """
-        cmd = [KUBECTL_PATH, f"--kubeconfig={self._internal_kubeconfig}", *args]
-        log.info("Executing %s", cmd)
-        try:
-            return subprocess.check_output(cmd, text=True)
-        except subprocess.CalledProcessError as e:
-            log.error(
-                "Command failed: %s}\nreturncode: %s\nstdout: %s", cmd, e.returncode, e.output
-            )
-            raise
-
-    def kubectl_get(self, *args) -> str:
-        """Run kubectl get command.
-
-        Arguments:
-            args: arguments passed to kubectl get
-
-        Returns:
-            string response
-        """
-        return self.kubectl("get", *args)
 
     @property
     def _internal_kubeconfig(self) -> Path:
