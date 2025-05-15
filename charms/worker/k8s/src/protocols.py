@@ -3,6 +3,7 @@
 
 """Protocol definitions module."""
 
+from pathlib import Path
 from typing import Dict, FrozenSet, List, Tuple
 
 import ops
@@ -33,6 +34,7 @@ class K8sCharmProtocol(ops.CharmBase):
     api_manager: K8sdAPIManager
     cluster_inspector: ClusterInspector
     kube_control: KubeControlProvides
+    kubeconfig: Path
     xcp: ExternalCloudProvider
     reconciler: Reconciler
     is_upgrade_granted: bool
@@ -59,14 +61,6 @@ class K8sCharmProtocol(ops.CharmBase):
 
     def get_cloud_name(self) -> str:
         """Get the cloud name.
-
-        Raises:
-            NotImplementedError: If the method is not implemented.
-        """
-        raise NotImplementedError
-
-    def _is_node_ready(self) -> bool:
-        """Check if the node is ready.
 
         Raises:
             NotImplementedError: If the method is not implemented.

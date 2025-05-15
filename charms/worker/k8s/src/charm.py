@@ -30,6 +30,7 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
+import client.node
 import config.extra_args
 import containerd
 import ops
@@ -186,7 +187,7 @@ class K8sCharm(ops.CharmBase):
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=self.kubeconfig)
         self.upgrade = K8sUpgrade(
             self,
             cluster_inspector=self.cluster_inspector,
@@ -200,7 +201,7 @@ class K8sCharm(ops.CharmBase):
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
             self,
-            kubeconfig_path=self._internal_kubeconfig,
+            kubeconfig_path=self.kubeconfig,
             kubectl=KUBECTL_PATH,
             user_label_key="node-labels",
             timeout=15,
@@ -387,7 +388,8 @@ class K8sCharm(ops.CharmBase):
             elif any(
                 [
                     self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
-                    self._is_node_present(),
+                    client.node.present(self.kubeconfig, self.get_node_name())
+                    == client.node.Presence.AVAILABLE,
                 ]
             ):
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
@@ -1136,38 +1138,6 @@ class K8sCharm(ops.CharmBase):
             self._stored.is_dying = True
         return bool(self._stored.is_dying)
 
-    def _is_node_present(self, node: str = "") -> bool:
-        """Determine if node is in the kubernetes cluster.
-
-        Args:
-            node (str): name of node
-
-        Returns:
-            bool: True when this unit appears in the node list
-        """
-        node = node or self.get_node_name()
-        cmd = ["get", "nodes", node, "-o=jsonpath={.metadata.name}"]
-        try:
-            return kubectl(*cmd, kubeconfig=self._internal_kubeconfig) == node
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-            return False
-
-    def _is_node_ready(self, node: str = "") -> bool:
-        """Determine if node is Ready in the kubernetes cluster.
-
-        Args:
-            node (str): name of node
-
-        Returns:
-            bool: True when this unit is marked as Ready
-        """
-        node = node or self.get_node_name()
-        cmd = ["get", "nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
-        try:
-            return kubectl(*cmd, kubeconfig=self._internal_kubeconfig) == "True"
-        except (subprocess.CalledProcessError, FileNotFoundError, TimeoutError):
-            return False
-
     def _last_gasp(self):
         """Busy wait on stop event until the unit isn't clustered anymore.
 
@@ -1179,7 +1149,8 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
         while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
-            if self._is_node_ready() or self.api_manager.is_cluster_bootstrapped():
+            readiness = client.node.ready(self.kubeconfig, self.get_node_name())
+            if readiness == client.node.Status.READY or self.api_manager.is_cluster_bootstrapped():
                 log.info("Node is still reportedly clustered")
                 reported_down = 0
             else:
@@ -1200,7 +1171,7 @@ class K8sCharm(ops.CharmBase):
             log.info("Node %s not yet labelled", node)
 
     @property
-    def _internal_kubeconfig(self) -> Path:
+    def kubeconfig(self) -> Path:
         """Return the highest authority kube config for this unit."""
         return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
 
@@ -1209,7 +1180,7 @@ class K8sCharm(ops.CharmBase):
         """Write internal kubeconfig to /root/.kube/config."""
         status.add(ops.MaintenanceStatus("Regenerating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        KUBECONFIG.write_bytes(self._internal_kubeconfig.read_bytes())
+        KUBECONFIG.write_bytes(self.kubeconfig.read_bytes())
 
     def _expose_ports(self):
         """Expose ports for public clouds to access api endpoints."""

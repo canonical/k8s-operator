@@ -35,7 +35,10 @@ def kubectl(*args: str, kubeconfig: None | Path = None, **kwds) -> str:
         CalledProcessError: in the event of a failed kubectl
         TimeoutExpired: in the event of a timeout
     """
-    cmd = [KUBECTL_PATH.as_posix(), f"--kubeconfig={kubeconfig}", *args]
+    cmd = [KUBECTL_PATH.as_posix()]
+    if kubeconfig:
+        cmd += [f"--kubeconfig={kubeconfig}"]
+    cmd += args
     subprocess_kwds = {"text": True, "timeout": 30, **kwds}
     log.info("%s, %s", " ".join(cmd), subprocess_kwds)
     try:
