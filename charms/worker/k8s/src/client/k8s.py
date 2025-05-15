@@ -47,5 +47,5 @@ def kubectl(*args: str, kubeconfig: None | Path = None, **kwds) -> str:
         log.error("Command failed: %s\nreturncode: %s\nstdout: %s", cmd, e.returncode, e.output)
         raise
     except subprocess.TimeoutExpired as e:
-        log.error("Command timeout: %s\nreturncode: %s\nstdout: %s", cmd, e.output)
+        log.error("Command timeout: %s\nstdout: %s", cmd, e.output)
         raise
