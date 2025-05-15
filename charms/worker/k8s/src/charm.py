@@ -30,14 +30,13 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-import client.node
 import config.extra_args
 import containerd
+import k8s.node
 import ops
 import utils
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
-from client.k8s import kubectl
 from cloud_integration import CloudIntegration
 from config.bootstrap import (
     BootstrapConfigChangeError,
@@ -48,6 +47,7 @@ from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
 from inspector import ClusterInspector
+from k8s.client import kubectl
 from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
@@ -380,6 +380,7 @@ class K8sCharm(ops.CharmBase):
         Returns:
             the cluster name.
         """
+        unit, node = self.unit.name, self.get_node_name()
         if self._stored.cluster_name == "":
             if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
                 self._stored.cluster_name = self._generate_unique_cluster_name()
@@ -388,13 +389,11 @@ class K8sCharm(ops.CharmBase):
             elif any(
                 [
                     self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
-                    client.node.present(self.kubeconfig, self.get_node_name())
-                    == client.node.Presence.AVAILABLE,
+                    k8s.node.present(self.kubeconfig, node) == k8s.node.Presence.AVAILABLE,
                 ]
             ):
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
 
-        unit, node = self.unit.name, self.get_node_name()
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
         return str(self._stored.cluster_name)
 
@@ -1149,8 +1148,8 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
         while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
-            readiness = client.node.ready(self.kubeconfig, self.get_node_name())
-            if readiness == client.node.Status.READY or self.api_manager.is_cluster_bootstrapped():
+            readiness = k8s.node.ready(self.kubeconfig, self.get_node_name())
+            if readiness == k8s.node.Status.READY or self.api_manager.is_cluster_bootstrapped():
                 log.info("Node is still reportedly clustered")
                 reported_down = 0
             else:

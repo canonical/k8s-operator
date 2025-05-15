@@ -11,7 +11,7 @@ import enum
 import subprocess
 from pathlib import Path
 
-from client.k8s import kubectl
+from k8s.client import kubectl
 
 
 class Presence(enum.Enum):

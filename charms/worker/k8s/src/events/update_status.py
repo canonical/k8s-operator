@@ -13,8 +13,8 @@ from typing import Optional, cast
 
 import ops
 import reschedule
-from client.node import Status, ready
 from inspector import ClusterInspector
+from k8s.node import Status, ready
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
 from upgrade import K8sUpgrade
