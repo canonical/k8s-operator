@@ -16,6 +16,7 @@ certificate storage.
 """
 
 import hashlib
+import ipaddress
 import logging
 import os
 import shlex
@@ -28,6 +29,7 @@ from time import sleep
 from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
+import config.arg_files
 import config.extra_args
 import containerd
 import ops
@@ -409,6 +411,12 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
+    def _get_node_addresses(self) -> list[str]:
+        binding = self.model.get_binding(CLUSTER_RELATION)
+        addresses = binding.network.ingress_addresses if binding else []
+        uniq = {ipaddress.ip_address(addr) for addr in addresses}
+        return [str(x) for x in sorted(uniq, key=lambda x: (x.version, x))]
+
     def _get_extra_sans(self):
         """Retrieve the certificate extra SANs.
 
@@ -421,11 +429,9 @@ class K8sCharm(ops.CharmBase):
 
         # Add the ingress addresses of all units
         extra_sans.add(_get_juju_public_address())
-        binding = self.model.get_binding(CLUSTER_RELATION)
-        addresses = binding and binding.network.ingress_addresses
-        if addresses:
+        if addresses := self._get_node_addresses():
             log.info("Adding ingress addresses to extra SANs")
-            extra_sans |= {str(addr) for addr in addresses}
+            extra_sans |= set(addresses)
 
         # Add the external load balancer address
         try:
@@ -451,7 +457,8 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
-        config.extra_args.craft(self.config, bootstrap_config, cluster_name)
+        node_ips = self._get_node_addresses()
+        config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips)
         return bootstrap_config
 
     def _configure_external_load_balancer(self) -> None:
@@ -952,13 +959,14 @@ class K8sCharm(ops.CharmBase):
         cluster_addr = f"{address}:{K8SD_PORT}"
         log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_name)
         request = JoinClusterRequest(name=node_name, address=cluster_addr, token=SecretStr(token))
+        node_ips = self._get_node_addresses()
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = self._get_extra_sans()
-            config.extra_args.craft(self.config, request.config, cluster_name)
+            config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
         else:
             request.config = NodeJoinConfig()
-            config.extra_args.craft(self.config, request.config, cluster_name)
+            config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
 
             bootstrap_node_taints = str(self.config["bootstrap-node-taints"] or "").strip().split()
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
@@ -1020,6 +1028,7 @@ class K8sCharm(ops.CharmBase):
         self._configure_cos_integration()
         self.update_status.run()
         self._apply_node_labels()
+        self._apply_extra_args()
         if self.is_control_plane:
             self._copy_internal_kubeconfig()
             self._expose_ports()
@@ -1119,6 +1128,15 @@ class K8sCharm(ops.CharmBase):
             log.info("Node %s labelled successfully", node)
         else:
             log.info("Node %s not yet labelled", node)
+
+    def _apply_extra_args(self):
+        """Apply extra args to the node."""
+        if cluster_name := self.get_cluster_name():
+            status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
+            runtime_args_config = config.arg_files.FileArgsConfig()
+            node_ips = self._get_node_addresses()
+            config.extra_args.craft(self.config, runtime_args_config, cluster_name, node_ips)
+            runtime_args_config.ensure()
 
     def kubectl(self, *args) -> str:
         """Run kubectl command.

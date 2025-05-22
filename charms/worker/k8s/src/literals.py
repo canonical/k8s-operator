@@ -13,7 +13,15 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # Charm
 SNAP_COMMON = "/var/snap/k8s/common"
-CONTAINERD_ARGS = Path(SNAP_COMMON) / "args/containerd"
+SERVICE_ARGS = Path(SNAP_COMMON) / "args"
+CONTAINERD_ARGS = SERVICE_ARGS / "containerd"
+K8S_DQLITE_ARGS = SERVICE_ARGS / "k8s-dqlite"
+K8SD_ARGS = SERVICE_ARGS / "k8sd"
+KUBE_APISERVER_ARGS = SERVICE_ARGS / "kube-apiserver"
+KUBE_CONTROLLER_MANAGER_ARGS = SERVICE_ARGS / "kube-controller-manager"
+KUBE_PROXY_ARGS = SERVICE_ARGS / "kube-proxy"
+KUBE_SCHEDULER_ARGS = SERVICE_ARGS / "kube-scheduler"
+KUBELET_ARGS = SERVICE_ARGS / "kubelet"
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
