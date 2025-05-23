@@ -412,6 +412,11 @@ class K8sCharm(ops.CharmBase):
         self.api_manager.check_k8sd_ready()
 
     def _get_node_addresses(self) -> list[str]:
+        """Get the cluster node addresses for this unit.
+
+        Returns:
+            list[str]: A list of unique node addresses ordered by IP version.
+        """
         binding = self.model.get_binding(CLUSTER_RELATION)
         addresses = binding.network.ingress_addresses if binding else []
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
@@ -512,14 +517,14 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
 
-        status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
+        if not (node_ips := self._get_node_addresses()):
+            log.info("Cannot cluster yet, no node IPs found")
+            raise ReconcilerError("No node IPs found")
 
-        binding = self.model.get_binding("cluster")
-        address = binding and binding.network.ingress_address
-        node_name = self.get_node_name()
+        status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
         payload = CreateClusterRequest(
-            name=node_name,
-            address=f"{address}:{K8SD_PORT}",
+            name=self.get_node_name(),
+            address=f"{node_ips[0]}:{K8SD_PORT}",
             config=self._assemble_bootstrap_config(),
         )
 
@@ -943,23 +948,20 @@ class K8sCharm(ops.CharmBase):
         with self.collector.recover_token(relation) as token:
             remote_cluster = self.collector.cluster_name(relation, False) if relation else ""
             self.cloud_integration.integrate(remote_cluster, event)
-            self._join_with_token(relation, token, remote_cluster)
+            self._join_with_token(token, remote_cluster)
 
-    def _join_with_token(self, relation: ops.Relation, token: str, cluster_name: str):
+    def _join_with_token(self, token: str, cluster_name: str):
         """Join the cluster with the given token.
 
         Args:
-            relation (ops.Relation): The relation to use for the token.
             token (str): The token to use for joining the cluster.
             cluster_name (str): The name of the cluster to join.
         """
-        binding = self.model.get_binding(relation.name)
-        address = binding and binding.network.ingress_address
+        node_ips = self._get_node_addresses()
         node_name = self.get_node_name()
-        cluster_addr = f"{address}:{K8SD_PORT}"
+        cluster_addr = f"{node_ips[0]}:{K8SD_PORT}"
         log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_name)
         request = JoinClusterRequest(name=node_name, address=cluster_addr, token=SecretStr(token))
-        node_ips = self._get_node_addresses()
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = self._get_extra_sans()
@@ -1133,10 +1135,10 @@ class K8sCharm(ops.CharmBase):
         """Apply extra args to the node."""
         if cluster_name := self.get_cluster_name():
             status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
-            runtime_args_config = config.arg_files.FileArgsConfig()
+            file_args_config = config.arg_files.FileArgsConfig()
             node_ips = self._get_node_addresses()
-            config.extra_args.craft(self.config, runtime_args_config, cluster_name, node_ips)
-            runtime_args_config.ensure()
+            config.extra_args.craft(self.config, file_args_config, cluster_name, node_ips)
+            file_args_config.ensure()
 
     def kubectl(self, *args) -> str:
         """Run kubectl command.

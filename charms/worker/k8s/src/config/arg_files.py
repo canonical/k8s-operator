@@ -23,6 +23,7 @@ from literals import (
 import charms.operator_libs_linux.v2.snap as snap
 
 log = logging.getLogger(__name__)
+type FileArgs = dict[str, str | None]
 
 
 class FileArgsConfig:
@@ -34,11 +35,11 @@ class FileArgsConfig:
         self.extra_node_kube_scheduler_args = {}
         self.extra_node_kube_proxy_args = {}
         self.extra_node_kubelet_args = {}
-        self._existing = {}
+        self._service_args = {}
         self._hash = {}
         self._load()
 
-    def _load_file(self, file_path: Path) -> tuple[dict[str, str], bytes]:
+    def _load_file(self, file_path: Path) -> tuple[FileArgs, bytes]:
         """Load the arguments from a file.
 
         Args:
@@ -47,7 +48,7 @@ class FileArgsConfig:
         Returns:
             A dictionary of arguments and the hash of the file content.
         """
-        args = {}
+        args: FileArgs = {}
         contents = file_path.read_text()
         hash_val = sha256(contents.encode()).digest()
         for line in contents.splitlines():
@@ -56,17 +57,7 @@ class FileArgsConfig:
                 args[key] = value.strip('"').strip("'")
         return args, hash_val
 
-    def _write_file(self, file_path: Path, content: str):
-        """Save the arguments to a file.
-
-        Args:
-            file_path: the path to the file to save the arguments.
-            content: the content to save in the file.
-        """
-        with file_path.open("w") as f:
-            f.write(content)
-
-    def _file_content(self, args: dict[str, None | str]) -> tuple[str, bytes]:
+    def _file_content(self, args: FileArgs) -> tuple[str, bytes]:
         """Generate the content for the file and its hash.
 
         Args:
@@ -106,7 +97,7 @@ class FileArgsConfig:
             ("kubelet", KUBELET_ARGS),
         ]:
             if file_path.exists():
-                self._existing[service], self._hash[service] = self._load_file(file_path)
+                self._service_args[service], self._hash[service] = self._load_file(file_path)
 
     def ensure(self):
         """Ensure the arguments of each file."""
@@ -123,10 +114,10 @@ class FileArgsConfig:
         ]:
             adjusted_services = []
             if file_path.exists():
-                updated_args = {**self._existing[service], **extra_args}
+                updated_args = {**self._service_args[service], **extra_args}
                 content, hash_val = self._file_content(updated_args)
                 if hash_val != self._hash[service]:
                     log.info("Restarting '%s' to adjust %s", service, file_path)
-                    self._write_file(file_path, content)
+                    file_path.write_text(content)
                     adjusted_services += [service]
             self._restart_services(adjusted_services)
