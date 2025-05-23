@@ -85,7 +85,9 @@ def test_configure_common_extra_args(harness):
 
     harness.disable_hooks()
     harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
-    harness.add_network('10.0.0.10', endpoint='cluster', ingress_addresses=("10.0.0.10", "2001:db8:10::a00:a"))
+    harness.add_network(
+        "10.0.0.10", endpoint="cluster", ingress_addresses=("10.0.0.10", "2001:db8:10::a00:a")
+    )
     harness.update_config({"kubelet-extra-args": "v=3 foo=bar flag"})
     harness.update_config({"kube-proxy-extra-args": "v=4 foo=baz flog"})
 
