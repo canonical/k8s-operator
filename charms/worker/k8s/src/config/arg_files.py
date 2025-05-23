@@ -11,6 +11,7 @@ The format for each file is a set of key-value pairs, where each line contains a
 import logging
 from hashlib import sha256
 from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 from literals import (
     KUBE_APISERVER_ARGS,
@@ -23,7 +24,7 @@ from literals import (
 import charms.operator_libs_linux.v2.snap as snap
 
 log = logging.getLogger(__name__)
-type FileArgs = dict[str, str | None]
+FileArgs = Dict[str, Optional[str]]
 
 
 class FileArgsConfig:
@@ -39,7 +40,7 @@ class FileArgsConfig:
         self._hash = {}
         self._load()
 
-    def _load_file(self, file_path: Path) -> tuple[FileArgs, bytes]:
+    def _load_file(self, file_path: Path) -> Tuple[FileArgs, bytes]:
         """Load the arguments from a file.
 
         Args:
@@ -57,7 +58,7 @@ class FileArgsConfig:
                 args[key] = value.strip('"').strip("'")
         return args, hash_val
 
-    def _file_content(self, args: FileArgs) -> tuple[str, bytes]:
+    def _file_content(self, args: FileArgs) -> Tuple[str, bytes]:
         """Generate the content for the file and its hash.
 
         Args:
