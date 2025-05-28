@@ -47,8 +47,8 @@ def configure(charm: K8sCharmProtocol):
 
     status.add(ops.MaintenanceStatus("Configuring Kube Control"))
     ca_cert, endpoints = "", [f"https://{binding.network.bind_address}:{APISERVER_PORT}"]
-    if charm._internal_kubeconfig.exists():
-        kubeconfig = yaml.safe_load(charm._internal_kubeconfig.read_text())
+    if charm.kubeconfig.exists():
+        kubeconfig = yaml.safe_load(charm.kubeconfig.read_text())
         cluster = kubeconfig["clusters"][0]["cluster"]
         ca_cert_b64 = cluster["certificate-authority-data"]
         ca_cert = b64decode(ca_cert_b64).decode("utf-8")
