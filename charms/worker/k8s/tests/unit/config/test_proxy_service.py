@@ -13,8 +13,6 @@ import ops.testing
 import pytest
 from charm import K8sCharm
 
-from charms.contextual_status import ReconcilerError
-
 
 @pytest.fixture(params=["worker", "control-plane"])
 def harness(request):
@@ -34,25 +32,17 @@ def harness(request):
     harness.cleanup()
 
 
-def test_invalid_service(harness):
-    """Test that the proxy service config handles invalid services."""
-    harness.update_config({"proxy-applications": "invalid-service"})
-    with pytest.raises(ReconcilerError) as ie:
-        config.proxy_service.apply(harness.charm)
-    assert "'invalid-service' is not a valid ProxyApplication" in str(ie.value)
-
-
 @mock.patch("pathlib.Path.write_text")
 @mock.patch("pathlib.Path.read_text")
 @mock.patch("pathlib.Path.exists")
 @mock.patch("pathlib.Path.mkdir")
 @mock.patch("os.getenv")
 @mock.patch.object(config.proxy_service, "systemd")
-def test_valid_service(systemd, getenv, mkdir, exists, read_text, write_text, harness):
+def test_enable_containerd_proxy(systemd, getenv, mkdir, exists, read_text, write_text, harness):
     """Test that the proxy service config handles valid services."""
     juju_app = harness.charm.app.name
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
-    harness.update_config({"proxy-applications": "containerd"})
+    harness.update_config({"proxy-enable-containerd": True})
     exists.return_value = True
     read_text.return_value = "replace me"
     getenv.return_value = "value"
@@ -72,6 +62,30 @@ def test_valid_service(systemd, getenv, mkdir, exists, read_text, write_text, ha
     mkdir.assert_called_once_with(parents=True, exist_ok=True)
     exists.assert_called_once_with()
     write_text.assert_called_once_with(expected, encoding="utf-8")
+    systemd.daemon_reload.assert_called_once_with()
+    systemd.service_running.assert_called_once_with(service)
+    systemd.service_restart.assert_called_once_with(service)
+
+
+@mock.patch("pathlib.Path.write_text")
+@mock.patch("pathlib.Path.read_text")
+@mock.patch("pathlib.Path.exists")
+@mock.patch("pathlib.Path.mkdir")
+@mock.patch("os.getenv")
+@mock.patch.object(config.proxy_service, "systemd")
+def test_disable_containerd_proxy(systemd, getenv, mkdir, exists, read_text, write_text, harness):
+    """Test that the proxy service config handles valid services."""
+    service = config.proxy_service.CONTAINERD_SERVICE_NAME
+    harness.update_config({"proxy-enable-containerd": False})
+    exists.return_value = True
+    read_text.return_value = "replace me"
+    getenv.return_value = "value"
+
+    config.proxy_service.apply(harness.charm)
+
+    mkdir.assert_called_once_with(parents=True, exist_ok=True)
+    exists.assert_called_once_with()
+    write_text.assert_called_once_with("", encoding="utf-8")
     systemd.daemon_reload.assert_called_once_with()
     systemd.service_running.assert_called_once_with(service)
     systemd.service_restart.assert_called_once_with(service)

@@ -419,17 +419,13 @@ config:
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.
-    proxy-applications:
+    proxy-enable-containerd:
+      type: boolean
       description: |
-        A comma separated list of applications managed by this charm to be
-        proxied using juju's model-config juju-*-proxy settings.
+        Containerd managed by this charm unit will proxy requests based on the
+        juju's model-config juju-*-proxy settings.
         (See https://documentation.ubuntu.com/juju/latest/reference/juju-cli/list-of-juju-cli-commands/model-config/).
-
-        Available applications are "containerd", or "" (none).
-
-        * "containerd", requests from containerd managed by this charm unit will proxy
-      type: string
-      default: "containerd"
+      default: true
     unready-pod-namespaces:
       type: string
       default: "kube-system metallb-system"

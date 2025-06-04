@@ -11,31 +11,18 @@ based on the Juju model configuration.
 
 import logging
 import os
-from enum import Enum
 
 import ops
 from literals import CONTAINERD_HTTP_PROXY, CONTAINERD_SERVICE_NAME
 
-import charms.contextual_status as status
 from charms.operator_libs_linux.v1 import systemd
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
 
 
-class ProxyApplication(Enum):
-    """Enum representing applications that can be configured to use a proxy."""
-
-    CONTAINERD = "containerd"
-
-    @classmethod
-    def from_string(cls, source: str) -> set["ProxyApplication"]:
-        """Parse a comma-separated string into a set of ProxyApplication enums."""
-        split = (m.strip() for m in source.lower().split(","))
-        return {cls(m) for m in split if m}
-
-
-PROXY_SERVICES = {ProxyApplication.CONTAINERD: (CONTAINERD_SERVICE_NAME, CONTAINERD_HTTP_PROXY)}
+PROXY_SERVICES = {CONTAINERD_SERVICE_NAME: CONTAINERD_HTTP_PROXY}
+PROXY_ENABLE_CONTAINERD = "proxy-enable-containerd"
 
 
 def apply(charm: ops.CharmBase) -> None:
@@ -47,17 +34,15 @@ def apply(charm: ops.CharmBase) -> None:
     Raises:
         ops.ReconcilerError: If the proxy-application configuration is invalid.
     """
-    proxy_applications = str(charm.config.get("proxy-applications", ""))
-    with status.on_error(ops.BlockedStatus("Invalid proxy-application"), ValueError):
-        proxied = ProxyApplication.from_string(proxy_applications)
+    proxy_containerd = bool(charm.config.get(PROXY_ENABLE_CONTAINERD))
 
     juju_app = charm.app.name
-    for app, (service, path) in PROXY_SERVICES.items():
+    for service, path in PROXY_SERVICES.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        replacement = app in proxied and _get_proxy_systemd_config(juju_app, service) or ""
         existing = path.exists() and path.read_text(encoding="utf-8") or ""
+        replacement = proxy_containerd and _get_proxy_systemd_config(juju_app, service) or ""
         if written := existing != replacement:
-            log.info("Applying Proxied Environment Settings for %s", app.value)
+            log.info("Applying Proxied Environment Settings for %s", service)
             path.write_text(replacement, encoding="utf-8")
             systemd.daemon_reload()
         if written and systemd.service_running(service):
@@ -65,7 +50,7 @@ def apply(charm: ops.CharmBase) -> None:
             log.info("Restarting %s", service)
             systemd.service_restart(service)
         else:
-            log.info("No changes to proxy settings for %s, skipping reload", app.value)
+            log.info("No changes to proxy settings for %s, skipping reload", service)
 
 
 def _get_proxy_systemd_config(juju_app: str, service: str) -> str:
