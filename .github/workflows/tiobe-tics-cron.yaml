@@ -9,39 +9,37 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   TICS:
+    runs-on: [self-hosted, linux, amd64, tiobe, jammy]
     permissions:
       contents: read
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          # Latest branches
-          - { branch: main }
-
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
       - name: Checkout the Repository
         uses: actions/checkout@v4
         with:
           ref: ${{matrix.branch}}
-
-      - name: Install Astral uv
-        uses: astral-sh/setup-uv@v6
+          fetch-depth: 0
 
       - name: Install Dependencies
         run: |
-          uv sync --project charms/worker/k8s
-          source charms/worker/k8s/.venv/bin/activate
-          uv pip install pylint flake8
+          sudo snap install astral-uv --classic
           uv tool install tox --with tox-uv
 
-      - name: Run Tests With Coverage
+      - name: Install Python Tools
+        run: |
+          pushd charms/worker/k8s
+          uv sync
+          source .venv/bin/activate
+          uv pip install pylint flake8
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
+          popd
+
+      - name: Run tox tests to create coverage.xml
         run: |
           tox -e unit,coverage-xml
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
