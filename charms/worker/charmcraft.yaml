@@ -103,6 +103,13 @@ config:
           runtime-config=batch/v2alpha1=true profiling=true
         will result in kubelet being run with the following options:
           --runtime-config=batch/v2alpha1=true --profiling=true
+    model-proxy-enable-containerd:
+      type: boolean
+      description: |
+        Containerd managed by this charm unit will proxy requests based on the
+        juju's model-config juju-*-proxy settings.
+        (See https://documentation.ubuntu.com/juju/latest/reference/juju-cli/list-of-juju-cli-commands/model-config/).
+      default: true
 
 resources:
   snap-installation:
