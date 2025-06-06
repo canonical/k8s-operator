@@ -36,9 +36,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          uv venv -p 3.10
-          source .venv/bin/activate
-          uv sync --project charms/worker/k8s --active
+          uv sync --project charms/worker/k8s
+          source charms/worker/k8s/.venv/bin/activate
           uv pip install pylint flake8
           uv tool install tox --with tox-uv
 
