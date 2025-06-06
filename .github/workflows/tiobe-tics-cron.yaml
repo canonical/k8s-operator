@@ -19,29 +19,24 @@ jobs:
         include:
           # Latest branches
           - { branch: main }
-
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
       - name: Checkout the Repository
         uses: actions/checkout@v4
         with:
           ref: ${{matrix.branch}}
 
-      - name: Install Astral uv
-        uses: astral-sh/setup-uv@v6
-
       - name: Install Dependencies
         run: |
-          uv sync --project charms/worker/k8s
-          source charms/worker/k8s/.venv/bin/activate
-          uv pip install pylint flake8
+          sudo snap install astral-uv --classic
           uv tool install tox --with tox-uv
 
-      - name: Run Tests With Coverage
+      - name: Install Python Tools
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --user coverage "coverage[toml]" pylint flake8
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Run tox tests to create coverage.xml
         run: |
           tox -e unit,coverage-xml
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
