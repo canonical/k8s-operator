@@ -80,7 +80,7 @@ def _get_proxy_systemd_config(juju_app: str, service: str) -> str:
     ]
     settings = {k: os.getenv(k) for k in proxy_env_keys}
     for k, v in settings.items():
-        if "NO_PROXY" not in k:
+        if v and "HTTP" in k:
             _validate_proxy_url(v)
 
     systemd_lines = []
