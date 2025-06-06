@@ -103,7 +103,7 @@ config:
           runtime-config=batch/v2alpha1=true profiling=true
         will result in kubelet being run with the following options:
           --runtime-config=batch/v2alpha1=true --profiling=true
-    proxy-enable-containerd:
+    model-proxy-enable-containerd:
       type: boolean
       description: |
         Containerd managed by this charm unit will proxy requests based on the
