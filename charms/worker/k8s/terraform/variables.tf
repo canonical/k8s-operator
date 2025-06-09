@@ -62,7 +62,7 @@ variable "expose" {
   description = "How to expose the Kubernetes API endpoint"
   type        = map(string)
   default     = {
-    cidrs      = "0.0.0.0/32"
+    cidrs      = "0.0.0.0/0"
     endpoints  = null
     spaces     = null
   }
