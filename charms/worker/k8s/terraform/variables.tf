@@ -60,10 +60,18 @@ variable "units" {
 
 variable "expose" {
   description = "How to expose the Kubernetes API endpoint"
-  type        = map(string)
-  default     = {
-    cidrs      = "0.0.0.0/0"
-    endpoints  = null
-    spaces     = null
+  type = object({
+    cidrs     = optional(string)
+    endpoints = optional(string)
+    spaces    = optional(string)
+  })
+  default     = null
+
+  validation {
+    condition = (
+      var.expose == null ||
+      can(var.expose.cidrs) || can(var.expose.endpoints) || can(var.expose.spaces)
+    )
+    error_message = "If provided, expose must be an object with any keys: cidrs, endpoints, spaces."
   }
 }
