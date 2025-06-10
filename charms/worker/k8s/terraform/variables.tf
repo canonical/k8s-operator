@@ -60,18 +60,16 @@ variable "units" {
 
 variable "expose" {
   description = "How to expose the Kubernetes API endpoint"
-  type = object({
-    cidrs     = optional(string)
-    endpoints = optional(string)
-    spaces    = optional(string)
-  })
+  type        = map(string)
   default     = null
 
   validation {
     condition = (
+      # If expose is null, it's valid
       var.expose == null ||
-      can(var.expose.cidrs) || can(var.expose.endpoints) || can(var.expose.spaces)
+      # If expose is a map, it can only contain specific keys
+      length(setsubtract(keys(var.expose), ["cidrs", "endpoints", "spaces"])) == 0
     )
-    error_message = "If provided, expose must be an object with any keys: cidrs, endpoints, spaces."
+    error_message = "If provided, expose must only contain the keys: cidrs, endpoints, spaces."
   }
 }
