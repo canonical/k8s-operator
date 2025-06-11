@@ -34,7 +34,7 @@ def test_registry_parse_all_fields():
     parsed = containerd.parse_registries(
         """[{
         "host": "ghcr.io",
-        "url": "http://ghcr.io",
+        "url": "https://custom-registry/v2/ghcr.io",
         "ca_file": "Y2FfZmlsZQ==",
         "cert_file": "Y2VydF9maWxl",
         "key_file": "a2V5X2ZpbGU=",
@@ -47,7 +47,7 @@ def test_registry_parse_all_fields():
     )
     expected = containerd.Registry(
         host="ghcr.io",
-        url="http://ghcr.io",
+        url="https://custom-registry/v2/ghcr.io",
         ca_file="Y2FfZmlsZQ==",
         cert_file="Y2VydF9maWxl",
         key_file="a2V5X2ZpbGU=",
@@ -63,7 +63,7 @@ def test_registry_parse_all_fields():
 @pytest.mark.parametrize(
     "registry_errors",
     [
-        ("{", "not valid JSON"),
+        ("{", "not valid YAML"),
         ("{}", "Input should be a valid list"),
         ("[1]", "Input should be a valid dictionary"),
         ("[{}]", "url\n  Field required"),
@@ -79,7 +79,7 @@ def test_registry_parse_all_fields():
         ),
     ],
     ids=[
-        "Invalid JSON",
+        "Invalid YAML",
         "Not a List",
         "List Item not an object",
         "Missing required field",

@@ -14,16 +14,18 @@ https://github.com/containerd/containerd/blob/main/docs/cri/registry.md
 
 import base64
 import collections
-import json
 import logging
 import os
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import ops
 import pydantic
 import tomli_w
+import yaml
 from literals import CONTAINERD_ARGS
 
 log = logging.getLogger(__name__)
@@ -86,7 +88,7 @@ def _ensure_file(
     return changed
 
 
-class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
+class Registry(pydantic.BaseModel):
     """Represents a containerd registry.
 
     Attrs:
@@ -107,6 +109,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         auth_config_header (Dict[str, Any]):
         hosts_toml (Dict[str, Any]):
     """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
 
     # e.g. "https://registry-1.docker.io"
     url: str
@@ -136,8 +140,8 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
             kwargs: construction keyword arguments
         """
         super().__init__(*args, **kwargs)
-        url = pydantic.AnyHttpUrl(self.url)
-        if not self.host and (host := url.host):
+        url = urlparse(self.url)
+        if not self.host and (host := url.netloc):
             self.host = host
 
     @pydantic.field_validator("url")
@@ -278,48 +282,39 @@ class Registry(pydantic.BaseModel, extra=pydantic.Extra.forbid):
         _ensure_file(hosts_toml_path, tomli_w.dumps(self.hosts_toml), 0o600, 0, 0)
 
 
-class RegistryConfigs(pydantic.BaseModel, extra=pydantic.Extra.forbid):
-    """Represents a set of containerd registries.
-
-    Attrs:
-        registries (List[Registry]):
-    """
-
-    registries: List[Registry]
+Registries = List[Registry]
+registry_list = pydantic.TypeAdapter(Registries)
 
 
-def parse_registries(json_str: str) -> List[Registry]:
+def parse_registries(yaml_str: str) -> Registries:
     """Parse registry configurations from json string.
 
     Args:
-        json_str (str): raw user supplied content
+        yaml_str (str): raw user supplied content
 
     Returns:
-        RegistryConfigs parsed from json_str
+        List[Registries] parsed from yaml_str
 
     Raises:
         ValueError: if configuration is not valid
     """
-    if not json_str:
-        return []
-
     try:
-        parsed = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"not valid JSON: {e}") from e
+        parsed = yaml.safe_load(yaml_str or "[]")
+    except yaml.error.YAMLError as e:
+        raise ValueError(f"not valid YAML: {e}") from e
 
-    parsed = RegistryConfigs(registries=parsed)
-    dupes = [x for x, y in collections.Counter(x.host for x in parsed.registries).items() if y > 1]
+    registries = registry_list.validate_python(parsed)
+    dupes = [x for x, y in collections.Counter(x.host for x in registries).items() if y > 1]
     if len(dupes):
         raise ValueError(f"duplicate host definitions: {','.join(dupes)}")
-    return parsed.registries
+    return registries
 
 
-def ensure_registry_configs(registries: List[Registry]):
+def ensure_registry_configs(registries: Registries):
     """Ensure containerd configuration files match the specified registries.
 
     Args:
-        registries (List[Registry]): list of registries
+        registries (Registries): list of registries
     """
     unneeded = {host.parent.name for host in hostsd_path().glob("**/hosts.toml")}
     for r in registries:
@@ -330,7 +325,7 @@ def ensure_registry_configs(registries: List[Registry]):
 
     for h in unneeded:
         log.info("Removing unneeded registry %s", h)
-        (hostsd_path() / h / "hosts.toml").unlink(missing_ok=True)
+        shutil.rmtree(hostsd_path() / h, ignore_errors=True)
 
 
 def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):
@@ -347,7 +342,7 @@ def share(config: str, app: ops.Application, relation: Optional[ops.Relation]):
     relation.data[app]["custom-registries"] = config
 
 
-def recover(relation: Optional[ops.Relation]) -> List[Registry]:
+def recover(relation: Optional[ops.Relation]) -> Registries:
     """Share containerd configuration over relation application databag.
 
     Args:
@@ -358,12 +353,11 @@ def recover(relation: Optional[ops.Relation]) -> List[Registry]:
     """
     if not relation:
         log.info("No relation to recover containerd config.")
-        return []
-    if not (app_databag := relation.data.get(relation.app)):
+    elif not (app_databag := relation.data.get(relation.app)):
         log.warning("No application data to recover containerd config.")
-        return []
-    if not (config := app_databag.get("custom-registries")):
+    elif not (config := app_databag.get("custom-registries")):
         log.warning("No 'custom-registries' to recover containerd config.")
-        return []
-    log.info("Recovering containerd from relation %s", relation.id)
-    return parse_registries(config)
+    else:
+        log.info("Recovering containerd from relation %s", relation.id)
+        return parse_registries(config)
+    return []
