@@ -73,9 +73,15 @@ variable "units" {
 variable "expose" {
   description = "How to expose the Kubernetes API endpoint"
   type        = map(string)
-  default     = {
-    cidrs      = "0.0.0.0/32"
-    endpoints  = null
-    spaces     = null
+  default     = null
+
+  validation {
+    condition = (
+      # If expose is null, it's valid
+      var.expose == null ||
+      # If expose is a map, it can only contain specific keys
+      length(setsubtract(keys(var.expose), ["cidrs", "endpoints", "spaces"])) == 0
+    )
+    error_message = "If provided, expose must only contain the keys: cidrs, endpoints, spaces."
   }
 }
