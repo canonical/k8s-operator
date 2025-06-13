@@ -166,6 +166,12 @@ config:
           For ssl/tls communication these should be a base64 encoded file
           e.g.:  "ca_file": "'"$(base64 -w 0 < my.custom.registry.pem)"'"
 
+        override_path: OPTIONAL boolean - default false
+          used to indicate the host's API root endpoint is defined in the URL
+          path rather than by the API specification.
+
+          This is useful when trying to set a nested path of a mirror registry.
+
         skip_verify: OPTIONAL bool - default false
           For situations where the registry has self-signed or expired certs and a quick work-around is necessary.
           e.g.: "skip_verify": true
