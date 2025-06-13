@@ -13,9 +13,13 @@ resource "juju_application" "k8s" {
   }
 
   expose {
-    cidrs     = var.expose.cidrs
-    endpoints = var.expose.endpoints
-    spaces    = var.expose.spaces
+    # if var.expose doesn't have a cidrs key, default to "0.0.0.0/0"
+    # if var.expose.cidrs = null, don't expose the application
+    cidrs = contains(try(keys(var.expose), []), "cidrs") ? var.expose.cidrs : "0.0.0.0/0"
+    # if var.expose.endpoints exists, expose via endpoints
+    endpoints = try(var.expose.endpoints, null)
+    # if var.expose.spaces exists, expose via spaces
+    spaces    = try(var.expose.spaces, null)
   }
 
   config      = var.config

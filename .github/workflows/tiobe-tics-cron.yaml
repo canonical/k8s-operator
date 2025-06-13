@@ -1,72 +1,57 @@
 name: TICS nightly quality scan
 
 on:
-  pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: '0 10 * * *'
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   TICS:
+    runs-on: [self-hosted, linux, amd64, tiobe, jammy]
     permissions:
       contents: read
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          # Latest branches
-          - { branch: main }
-
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
-      - name: Checking out repo
+      - name: Checkout the Repository
         uses: actions/checkout@v4
         with:
           ref: ${{matrix.branch}}
+          fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v6
-        name: Install uv
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Go for Cobertura Coverage Converter
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-
-      - name: Run Tests With Coverage
+      - name: Install Dependencies
         run: |
-          set -eux -o pipefail
-
-          uv pip install pylint flake8 --system
-          uv pip install charms/worker/k8s --system
+          sudo snap install astral-uv --classic
           uv tool install tox --with tox-uv
-          tox -e unit,coverage-xml
 
+      - name: Install Python Tools
+        run: |
+          pushd charms/worker/k8s
+          uv sync
+          source .venv/bin/activate
+          uv pip install pylint flake8
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
+          popd
+
+      - name: Run tox tests to create coverage.xml
+        run: |
+          tox -e unit,coverage-xml
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
           mkdir -p "$GITHUB_WORKSPACE/cover"
           GENERATED_COVERAGE_XML="$GITHUB_WORKSPACE/charms/worker/k8s/coverage.xml"
           mv "$GENERATED_COVERAGE_XML" cover/coverage.xml
 
       - name: Run TICS
-        run: |
-          export TICSAUTHTOKEN=${{ secrets.TICSAUTHTOKEN }}
-
-          # NOTE(aznashwan): TiCS install script doesn't define defaults; cannot '-u'
-          set -ex -o pipefail
-
-          # Install the TiCS and staticcheck
-          go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
-          . <(curl --silent --show-error 'https://canonical.tiobe.com/tiobeweb/TICS/api/public/v1/fapi/installtics/Script?cfg=default&platform=linux&url=https://canonical.tiobe.com/tiobeweb/TICS/')
-
-          TICSQServer -project k8s-operator -tmpdir /tmp/tics -branchdir "$GITHUB_WORKSPACE"
+        uses: tiobe/tics-github-action@v3
+        with:
+          mode: qserver
+          project: ${{ github.event.repository.name }}
+          viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=default
+          ticsAuthToken: ${{ secrets.TICSAUTHTOKEN }}
+          installTics: true
