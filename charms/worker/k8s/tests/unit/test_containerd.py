@@ -34,7 +34,7 @@ def test_registry_parse_all_fields():
     parsed = containerd.parse_registries(
         """[{
         "host": "ghcr.io",
-        "url": "http://ghcr.io",
+        "url": "https://custom-registry/v2/ghcr.io",
         "ca_file": "Y2FfZmlsZQ==",
         "cert_file": "Y2VydF9maWxl",
         "key_file": "a2V5X2ZpbGU=",
@@ -47,7 +47,7 @@ def test_registry_parse_all_fields():
     )
     expected = containerd.Registry(
         host="ghcr.io",
-        url="http://ghcr.io",
+        url="https://custom-registry/v2/ghcr.io",
         ca_file="Y2FfZmlsZQ==",
         cert_file="Y2VydF9maWxl",
         key_file="a2V5X2ZpbGU=",
@@ -63,7 +63,7 @@ def test_registry_parse_all_fields():
 @pytest.mark.parametrize(
     "registry_errors",
     [
-        ("{", "not valid JSON"),
+        ("{", "not valid YAML"),
         ("{}", "Input should be a valid list"),
         ("[1]", "Input should be a valid dictionary"),
         ("[{}]", "url\n  Field required"),
@@ -77,9 +77,13 @@ def test_registry_parse_all_fields():
             '[{"url": "http://ghcr.io"}, {"url": "http://ghcr.io"}]',
             "duplicate host definitions: ghcr.io",
         ),
+        (
+            '[{"url": "http://ghcr.io:443"}, {"url": "http://ghcr.io:443"}]',
+            "duplicate host definitions: ghcr.io:443",
+        ),
     ],
     ids=[
-        "Invalid JSON",
+        "Invalid YAML",
         "Not a List",
         "List Item not an object",
         "Missing required field",
@@ -87,6 +91,7 @@ def test_registry_parse_all_fields():
         "Invalid URL",
         "Restricted field",
         "Duplicate host",
+        "Duplicate host with port",
     ],
 )
 def test_registry_parse_failures(registry_errors):
@@ -175,8 +180,8 @@ def test_registry_methods(hostsd_path, tmp_path):
         )
 
 
-@mock.patch("containerd._ensure_file")
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
+@mock.patch("containerd._ensure_file")
 def test_ensure_registry_configs(mock_ensure_file):
     """Test registry methods."""
     registry = containerd.Registry(
@@ -194,3 +199,18 @@ def test_ensure_registry_configs(mock_ensure_file):
 
     containerd.ensure_registry_configs([registry])
     assert mock_ensure_file.call_count == 4, "4 files should be written"
+
+
+def test_ensure_registry_host_mapped_from_url():
+    """Test registry methods."""
+    registry = containerd.Registry(url="http://ghcr.io")
+    assert registry.host == "ghcr.io", "Host from URL"
+    assert registry.auth_config_header == {}
+
+    registry = containerd.Registry(url="http://ghcr.io:443")
+    assert registry.host == "ghcr.io:443", "Host from URL with port"
+    assert registry.auth_config_header == {}
+
+    registry = containerd.Registry(url="http://ghcr.io/v2/my-path")
+    assert registry.host == "ghcr.io", "Host from URL without path"
+    assert registry.auth_config_header == {}
