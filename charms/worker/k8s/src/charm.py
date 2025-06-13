@@ -634,70 +634,82 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _assemble_cluster_config(self) -> UserFacingClusterConfig:
+    def _assemble_cluster_config(
+        self, current: Optional[UserFacingClusterConfig] = None
+    ) -> UserFacingClusterConfig:
         """Retrieve the cluster config from charm configuration and charm relations.
 
         Returns:
             UserFacingClusterConfig: The expected cluster configuration.
         """
-        local_storage = LocalStorageConfig(
-            enabled=self.config.get("local-storage-enabled"),
-            local_path=self.config.get("local-storage-local-path"),
-            reclaim_policy=self.config.get("local-storage-reclaim-policy"),
-            # Note(ben): set_default is intentionally omitted, see:
-            # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
-        )
+        if not current:
+            assembled = UserFacingClusterConfig()
+        else:
+            assembled = current.model_copy(deep=True)
 
-        dns = DNSConfig(
-            enabled=self.config.get("dns-enabled"),
-        )
-        if cfg := self.config.get("dns-cluster-domain"):
+        self._assemble_local_storage(assembled)
+        self._assemble_dns(assembled)
+        self._assemble_gateway(assembled)
+        self._assemble_network(assembled)
+        self._assemble_ingress(assembled)
+        self._assemble_metrics_server(assembled)
+        self._assemble_load_balancer(assembled)
+        assembled.cloud_provider = "external" if self.xcp.has_xcp else None
+        return assembled
+
+    def _assemble_local_storage(self, assembled: UserFacingClusterConfig):
+        if not (ls := assembled.local_storage):
+            ls = assembled.local_storage = LocalStorageConfig()
+        ls.enabled = bool(self.config["local-storage-enabled"])
+        ls.local_path = str(self.config["local-storage-local-path"])
+        ls.reclaim_policy = str(self.config["local-storage-reclaim-policy"])
+
+    def _assemble_dns(self, assembled: UserFacingClusterConfig):
+        if not (dns := assembled.dns):
+            dns = assembled.dns = DNSConfig()
+        dns.enabled = bool(self.config["dns-enabled"])
+
+        if cfg := self.config["dns-cluster-domain"]:
             dns.cluster_domain = str(cfg)
-        if cfg := self.config.get("dns-service-ip"):
+        if cfg := self.config["dns-service-ip"]:
             dns.service_ip = str(cfg)
-        if cfg := self.config.get("dns-upstream-nameservers"):
+        if cfg := self.config["dns-upstream-nameservers"]:
             dns.upstream_nameservers = str(cfg).split()
+        return dns
 
-        gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
+    def _assemble_gateway(self, assembled: UserFacingClusterConfig):
+        if not (gateway := assembled.gateway):
+            gateway = assembled.gateway = GatewayConfig()
+        gateway.enabled = bool(self.config["gateway-enabled"])
 
-        network = NetworkConfig(
-            enabled=self.config.get("network-enabled"),
-        )
+    def _assemble_network(self, assembled: UserFacingClusterConfig):
+        if not (network := assembled.network):
+            network = assembled.network = NetworkConfig()
+        network.enabled = bool(self.config["network-enabled"])
 
-        ingress = IngressConfig(
-            enabled=self.config.get("ingress-enabled"),
-            enable_proxy_protocol=self.config.get("ingress-enable-proxy-protocol"),
-        )
+    def _assemble_ingress(self, assembled: UserFacingClusterConfig):
+        if not (ingress := assembled.ingress):
+            ingress = assembled.ingress = IngressConfig()
+        ingress.enabled = bool(self.config["ingress-enabled"])
+        ingress.enable_proxy_protocol = bool(self.config["ingress-enable-proxy-protocol"])
 
-        metrics_server = MetricsServerConfig(enabled=self.config.get("metrics-server-enabled"))
+    def _assemble_metrics_server(self, assembled: UserFacingClusterConfig):
+        if not (metrics_server := assembled.metrics_server):
+            metrics_server = assembled.metrics_server = MetricsServerConfig()
+        metrics_server.enabled = bool(self.config["metrics-server-enabled"])
 
-        load_balancer = LoadBalancerConfig(
-            enabled=self.config.get("load-balancer-enabled"),
-            cidrs=str(self.config.get("load-balancer-cidrs")).split(),
-            l2_mode=self.config.get("load-balancer-l2-mode"),
-            l2_interfaces=str(self.config.get("load-balancer-l2-interfaces")).split(),
-            bgp_mode=self.config.get("load-balancer-bgp-mode"),
-            bgp_local_asn=self.config.get("load-balancer-bgp-local-asn"),
-            bgp_peer_address=self.config.get("load-balancer-bgp-peer-address"),
-            bgp_peer_asn=self.config.get("load-balancer-bgp-peer-asn"),
-            bgp_peer_port=self.config.get("load-balancer-bgp-peer-port"),
-        )
-
-        cloud_provider = None
-        if self.xcp.has_xcp:
-            cloud_provider = "external"
-
-        return UserFacingClusterConfig(
-            annotations=self._get_valid_annotations(),
-            cloud_provider=cloud_provider,
-            dns=dns,
-            gateway=gateway,
-            ingress=ingress,
-            local_storage=local_storage,
-            load_balancer=load_balancer,
-            metrics_server=metrics_server,
-            network=network,
-        )
+    def _assemble_load_balancer(self, assembled: UserFacingClusterConfig):
+        if not (load_balancer := assembled.load_balancer):
+            load_balancer = assembled.load_balancer = LoadBalancerConfig()
+        load_balancer.enabled = bool(self.config["load-balancer-enabled"])
+        load_balancer.cidrs = str(self.config["load-balancer-cidrs"]).split()
+        load_balancer.l2_mode = bool(self.config["load-balancer-l2-mode"])
+        load_balancer.l2_interfaces = str(self.config["load-balancer-l2-interfaces"]).split()
+        load_balancer.bgp_mode = bool(self.config["load-balancer-bgp-mode"])
+        load_balancer.bgp_local_asn = int(self.config["load-balancer-bgp-local-asn"])
+        load_balancer.bgp_peer_address = str(self.config["load-balancer-bgp-peer-address"])
+        load_balancer.bgp_peer_asn = int(self.config["load-balancer-bgp-peer-asn"])
+        load_balancer.bgp_peer_port = int(self.config["load-balancer-bgp-peer-port"])
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
@@ -841,9 +853,11 @@ class K8sCharm(ops.CharmBase):
         update_request = UpdateClusterConfigRequest()
 
         self._configure_datastore(update_request)
-        update_request.config = self._assemble_cluster_config()
+        current_config = self.api_manager.get_cluster_config()
+        update_request.config = self._assemble_cluster_config(current_config.metadata.status)
         configure_kube_control(self)
-        self.api_manager.update_cluster_config(update_request)
+        if update_request.config != current_config.metadata.status:
+            self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
