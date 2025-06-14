@@ -43,6 +43,7 @@ from config.bootstrap import (
     BootstrapConfigChangePreventer,
     BootstrapConfigOptions,
 )
+from config.cluster import assemble_cluster_config
 from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
@@ -102,21 +103,13 @@ from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
-    DNSConfig,
-    GatewayConfig,
-    IngressConfig,
     InvalidResponseError,
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
-    LoadBalancerConfig,
-    LocalStorageConfig,
-    MetricsServerConfig,
-    NetworkConfig,
     NodeJoinConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
-    UserFacingClusterConfig,
     UserFacingDatastoreConfig,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
@@ -493,10 +486,12 @@ class K8sCharm(ops.CharmBase):
         Returns:
             BootstrapConfig: The bootstrap configuration object.
         """
-        bootstrap_config = BootstrapConfig.construct()
+        bootstrap_config = BootstrapConfig.model_construct()
         self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
-        bootstrap_config.cluster_config = self._assemble_cluster_config()
+        bootstrap_config.cluster_config = assemble_cluster_config(
+            self, "external" if self.xcp.has_xcp else None
+        )
         bootstrap_config.service_cidr = str(self.config[CONFIG_BOOTSTRAP_SERVICE_CIDR])
         bootstrap_config.pod_cidr = str(self.config[CONFIG_BOOTSTRAP_POD_CIDR])
         bootstrap_config.control_plane_taints = str(
@@ -637,71 +632,6 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _assemble_cluster_config(self) -> UserFacingClusterConfig:
-        """Retrieve the cluster config from charm configuration and charm relations.
-
-        Returns:
-            UserFacingClusterConfig: The expected cluster configuration.
-        """
-        local_storage = LocalStorageConfig(
-            enabled=self.config.get("local-storage-enabled"),
-            local_path=self.config.get("local-storage-local-path"),
-            reclaim_policy=self.config.get("local-storage-reclaim-policy"),
-            # Note(ben): set_default is intentionally omitted, see:
-            # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
-        )
-
-        dns = DNSConfig(
-            enabled=self.config.get("dns-enabled"),
-        )
-        if cfg := self.config.get("dns-cluster-domain"):
-            dns.cluster_domain = str(cfg)
-        if cfg := self.config.get("dns-service-ip"):
-            dns.service_ip = str(cfg)
-        if cfg := self.config.get("dns-upstream-nameservers"):
-            dns.upstream_nameservers = str(cfg).split()
-
-        gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
-
-        network = NetworkConfig(
-            enabled=self.config.get("network-enabled"),
-        )
-
-        ingress = IngressConfig(
-            enabled=self.config.get("ingress-enabled"),
-            enable_proxy_protocol=self.config.get("ingress-enable-proxy-protocol"),
-        )
-
-        metrics_server = MetricsServerConfig(enabled=self.config.get("metrics-server-enabled"))
-
-        load_balancer = LoadBalancerConfig(
-            enabled=self.config.get("load-balancer-enabled"),
-            cidrs=str(self.config.get("load-balancer-cidrs")).split(),
-            l2_mode=self.config.get("load-balancer-l2-mode"),
-            l2_interfaces=str(self.config.get("load-balancer-l2-interfaces")).split(),
-            bgp_mode=self.config.get("load-balancer-bgp-mode"),
-            bgp_local_asn=self.config.get("load-balancer-bgp-local-asn"),
-            bgp_peer_address=self.config.get("load-balancer-bgp-peer-address"),
-            bgp_peer_asn=self.config.get("load-balancer-bgp-peer-asn"),
-            bgp_peer_port=self.config.get("load-balancer-bgp-peer-port"),
-        )
-
-        cloud_provider = None
-        if self.xcp.has_xcp:
-            cloud_provider = "external"
-
-        return UserFacingClusterConfig(
-            annotations=self._get_valid_annotations(),
-            cloud_provider=cloud_provider,
-            dns=dns,
-            gateway=gateway,
-            ingress=ingress,
-            local_storage=local_storage,
-            load_balancer=load_balancer,
-            metrics_server=metrics_server,
-            network=network,
-        )
-
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
 
@@ -841,12 +771,20 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensure cluster config"))
         log.info("Ensure cluster-config")
 
-        update_request = UpdateClusterConfigRequest()
+        current_config = self.api_manager.get_cluster_config()
 
+        update_request = UpdateClusterConfigRequest()
         self._configure_datastore(update_request)
-        update_request.config = self._assemble_cluster_config()
+        replace_datastore = update_request.datastore != current_config.metadata.datastore
+
+        update_request.config = assemble_cluster_config(
+            self, "external" if self.xcp.has_xcp else None, current_config.metadata.status
+        )
+        new_config = update_request.config != current_config.metadata.status
+
         configure_kube_control(self)
-        self.api_manager.update_cluster_config(update_request)
+        if new_config or replace_datastore:
+            self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.

@@ -370,6 +370,12 @@ config:
       description: |
         Address of the BGP peer for the load balancer. This is only used if
         load-balancer-bgp-mode is set to true.
+    load-balancer-bgp-peer-asn:
+      type: int
+      default: 64513
+      description: |
+        ASN of the BGP peer for the load balancer. This is required if
+        load-balancer-bgp-mode is set to true.
     load-balancer-bgp-peer-port:
       type: int
       default: 179
