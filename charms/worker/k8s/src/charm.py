@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 
 import config.extra_args
 import containerd
+import k8s.node
 import ops
 import utils
 import yaml
@@ -47,6 +48,7 @@ from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
 from inspector import ClusterInspector
+from k8s.client import kubectl
 from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
@@ -178,7 +180,7 @@ class K8sCharm(ops.CharmBase):
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
         self.xcp = ExternalCloudProvider(self, xcp_relation)
-        self.cluster_inspector = ClusterInspector(kubeconfig_path=self._internal_kubeconfig)
+        self.cluster_inspector = ClusterInspector(kubeconfig_path=self.kubeconfig)
         self.upgrade = K8sUpgrade(
             self,
             cluster_inspector=self.cluster_inspector,
@@ -192,7 +194,7 @@ class K8sCharm(ops.CharmBase):
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
             self,
-            kubeconfig_path=self._internal_kubeconfig,
+            kubeconfig_path=self.kubeconfig,
             kubectl=KUBECTL_PATH,
             user_label_key="node-labels",
             timeout=15,
@@ -270,6 +272,7 @@ class K8sCharm(ops.CharmBase):
     @status.on_error(
         ops.WaitingStatus("Installing COS requirements"),
         subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
     )
     def _apply_cos_requirements(self):
         """Apply COS requirements for integration.
@@ -283,8 +286,8 @@ class K8sCharm(ops.CharmBase):
 
         log.info("Apply COS Integrations")
         status.add(ops.MaintenanceStatus("Ensuring COS Integration"))
-        subprocess.check_call(shlex.split("k8s kubectl apply -f templates/cos_roles.yaml"))
-        subprocess.check_call(shlex.split("k8s kubectl apply -f templates/ksm.yaml"))
+        kubectl("apply", "-f", "templates/cos_roles.yaml")
+        kubectl("apply", "-f", "templates/ksm.yaml")
 
     @property
     def is_control_plane(self) -> bool:
@@ -370,6 +373,7 @@ class K8sCharm(ops.CharmBase):
         Returns:
             the cluster name.
         """
+        unit, node = self.unit.name, self.get_node_name()
         if self._stored.cluster_name == "":
             if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
                 self._stored.cluster_name = self._generate_unique_cluster_name()
@@ -378,12 +382,11 @@ class K8sCharm(ops.CharmBase):
             elif any(
                 [
                     self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
-                    self._is_node_present(),
+                    k8s.node.present(self.kubeconfig, node) == k8s.node.Presence.AVAILABLE,
                 ]
             ):
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
 
-        unit, node = self.unit.name, self.get_node_name()
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
         return str(self._stored.cluster_name)
 
@@ -1072,38 +1075,6 @@ class K8sCharm(ops.CharmBase):
             self._stored.is_dying = True
         return bool(self._stored.is_dying)
 
-    def _is_node_present(self, node: str = "") -> bool:
-        """Determine if node is in the kubernetes cluster.
-
-        Args:
-            node (str): name of node
-
-        Returns:
-            bool: True when this unit appears in the node list
-        """
-        node = node or self.get_node_name()
-        cmd = ["nodes", node, "-o=jsonpath={.metadata.name}"]
-        try:
-            return self.kubectl_get(*cmd) == node
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-
-    def _is_node_ready(self, node: str = "") -> bool:
-        """Determine if node is Ready in the kubernetes cluster.
-
-        Args:
-            node (str): name of node
-
-        Returns:
-            bool: True when this unit is marked as Ready
-        """
-        node = node or self.get_node_name()
-        cmd = ["nodes", node, '-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}']
-        try:
-            return self.kubectl_get(*cmd) == "True"
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-
     def _last_gasp(self):
         """Busy wait on stop event until the unit isn't clustered anymore.
 
@@ -1115,7 +1086,8 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
         while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
-            if self._is_node_ready() or self.api_manager.is_cluster_bootstrapped():
+            readiness = k8s.node.ready(self.kubeconfig, self.get_node_name())
+            if readiness == k8s.node.Status.READY or self.api_manager.is_cluster_bootstrapped():
                 log.info("Node is still reportedly clustered")
                 reported_down = 0
             else:
@@ -1135,41 +1107,8 @@ class K8sCharm(ops.CharmBase):
         else:
             log.info("Node %s not yet labelled", node)
 
-    def kubectl(self, *args) -> str:
-        """Run kubectl command.
-
-        Arguments:
-            args: arguments passed to kubectl
-
-        Returns:
-            string response
-
-        Raises:
-            CalledProcessError: in the event of a failed kubectl
-        """
-        cmd = [KUBECTL_PATH, f"--kubeconfig={self._internal_kubeconfig}", *args]
-        log.info("Executing %s", cmd)
-        try:
-            return subprocess.check_output(cmd, text=True)
-        except subprocess.CalledProcessError as e:
-            log.error(
-                "Command failed: %s}\nreturncode: %s\nstdout: %s", cmd, e.returncode, e.output
-            )
-            raise
-
-    def kubectl_get(self, *args) -> str:
-        """Run kubectl get command.
-
-        Arguments:
-            args: arguments passed to kubectl get
-
-        Returns:
-            string response
-        """
-        return self.kubectl("get", *args)
-
     @property
-    def _internal_kubeconfig(self) -> Path:
+    def kubeconfig(self) -> Path:
         """Return the highest authority kube config for this unit."""
         return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
 
@@ -1178,7 +1117,7 @@ class K8sCharm(ops.CharmBase):
         """Write internal kubeconfig to /root/.kube/config."""
         status.add(ops.MaintenanceStatus("Regenerating KubeConfig"))
         KUBECONFIG.parent.mkdir(parents=True, exist_ok=True)
-        KUBECONFIG.write_bytes(self._internal_kubeconfig.read_bytes())
+        KUBECONFIG.write_bytes(self.kubeconfig.read_bytes())
 
     def _expose_ports(self):
         """Expose ports for public clouds to access api endpoints."""
