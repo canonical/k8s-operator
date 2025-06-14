@@ -42,6 +42,7 @@ from config.bootstrap import (
     BootstrapConfigChangePreventer,
     BootstrapConfigOptions,
 )
+from config.cluster import assemble_cluster_config
 from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
@@ -100,21 +101,13 @@ from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
-    DNSConfig,
-    GatewayConfig,
-    IngressConfig,
     InvalidResponseError,
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
-    LoadBalancerConfig,
-    LocalStorageConfig,
-    MetricsServerConfig,
-    NetworkConfig,
     NodeJoinConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
-    UserFacingClusterConfig,
     UserFacingDatastoreConfig,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
@@ -490,10 +483,12 @@ class K8sCharm(ops.CharmBase):
         Returns:
             BootstrapConfig: The bootstrap configuration object.
         """
-        bootstrap_config = BootstrapConfig.construct()
+        bootstrap_config = BootstrapConfig.model_construct()
         self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
-        bootstrap_config.cluster_config = self._assemble_cluster_config()
+        bootstrap_config.cluster_config = assemble_cluster_config(
+            self, "external" if self.xcp.has_xcp else None
+        )
         bootstrap_config.service_cidr = str(self.config[CONFIG_BOOTSTRAP_SERVICE_CIDR])
         bootstrap_config.pod_cidr = str(self.config[CONFIG_BOOTSTRAP_POD_CIDR])
         bootstrap_config.control_plane_taints = str(
@@ -634,83 +629,6 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _assemble_cluster_config(
-        self, current: Optional[UserFacingClusterConfig] = None
-    ) -> UserFacingClusterConfig:
-        """Retrieve the cluster config from charm configuration and charm relations.
-
-        Returns:
-            UserFacingClusterConfig: The expected cluster configuration.
-        """
-        if not current:
-            assembled = UserFacingClusterConfig()
-        else:
-            assembled = current.model_copy(deep=True)
-
-        self._assemble_local_storage(assembled)
-        self._assemble_dns(assembled)
-        self._assemble_gateway(assembled)
-        self._assemble_network(assembled)
-        self._assemble_ingress(assembled)
-        self._assemble_metrics_server(assembled)
-        self._assemble_load_balancer(assembled)
-        assembled.cloud_provider = "external" if self.xcp.has_xcp else None
-        return assembled
-
-    def _assemble_local_storage(self, assembled: UserFacingClusterConfig):
-        if not (ls := assembled.local_storage):
-            ls = assembled.local_storage = LocalStorageConfig()
-        ls.enabled = bool(self.config["local-storage-enabled"])
-        ls.local_path = str(self.config["local-storage-local-path"])
-        ls.reclaim_policy = str(self.config["local-storage-reclaim-policy"])
-
-    def _assemble_dns(self, assembled: UserFacingClusterConfig):
-        if not (dns := assembled.dns):
-            dns = assembled.dns = DNSConfig()
-        dns.enabled = bool(self.config["dns-enabled"])
-
-        if cfg := self.config["dns-cluster-domain"]:
-            dns.cluster_domain = str(cfg)
-        if cfg := self.config["dns-service-ip"]:
-            dns.service_ip = str(cfg)
-        if cfg := self.config["dns-upstream-nameservers"]:
-            dns.upstream_nameservers = str(cfg).split()
-        return dns
-
-    def _assemble_gateway(self, assembled: UserFacingClusterConfig):
-        if not (gateway := assembled.gateway):
-            gateway = assembled.gateway = GatewayConfig()
-        gateway.enabled = bool(self.config["gateway-enabled"])
-
-    def _assemble_network(self, assembled: UserFacingClusterConfig):
-        if not (network := assembled.network):
-            network = assembled.network = NetworkConfig()
-        network.enabled = bool(self.config["network-enabled"])
-
-    def _assemble_ingress(self, assembled: UserFacingClusterConfig):
-        if not (ingress := assembled.ingress):
-            ingress = assembled.ingress = IngressConfig()
-        ingress.enabled = bool(self.config["ingress-enabled"])
-        ingress.enable_proxy_protocol = bool(self.config["ingress-enable-proxy-protocol"])
-
-    def _assemble_metrics_server(self, assembled: UserFacingClusterConfig):
-        if not (metrics_server := assembled.metrics_server):
-            metrics_server = assembled.metrics_server = MetricsServerConfig()
-        metrics_server.enabled = bool(self.config["metrics-server-enabled"])
-
-    def _assemble_load_balancer(self, assembled: UserFacingClusterConfig):
-        if not (load_balancer := assembled.load_balancer):
-            load_balancer = assembled.load_balancer = LoadBalancerConfig()
-        load_balancer.enabled = bool(self.config["load-balancer-enabled"])
-        load_balancer.cidrs = str(self.config["load-balancer-cidrs"]).split()
-        load_balancer.l2_mode = bool(self.config["load-balancer-l2-mode"])
-        load_balancer.l2_interfaces = str(self.config["load-balancer-l2-interfaces"]).split()
-        load_balancer.bgp_mode = bool(self.config["load-balancer-bgp-mode"])
-        load_balancer.bgp_local_asn = int(self.config["load-balancer-bgp-local-asn"])
-        load_balancer.bgp_peer_address = str(self.config["load-balancer-bgp-peer-address"])
-        load_balancer.bgp_peer_asn = int(self.config["load-balancer-bgp-peer-asn"])
-        load_balancer.bgp_peer_port = int(self.config["load-balancer-bgp-peer-port"])
-
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
 
@@ -850,13 +768,19 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensure cluster config"))
         log.info("Ensure cluster-config")
 
-        update_request = UpdateClusterConfigRequest()
-
-        self._configure_datastore(update_request)
         current_config = self.api_manager.get_cluster_config()
-        update_request.config = self._assemble_cluster_config(current_config.metadata.status)
+
+        update_request = UpdateClusterConfigRequest()
+        self._configure_datastore(update_request)
+        replace_datastore = update_request.datastore != current_config.metadata.datastore
+
+        update_request.config = assemble_cluster_config(
+            self, "external" if self.xcp.has_xcp else None, current_config.metadata.status
+        )
+        new_config = update_request.config != current_config.metadata.status
+
         configure_kube_control(self)
-        if update_request.config != current_config.metadata.status:
+        if new_config or replace_datastore:
             self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
