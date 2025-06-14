@@ -14,6 +14,7 @@ from typing import Optional
 import ops
 import reschedule
 from inspector import ClusterInspector
+from k8s.node import Status, ready
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
 from upgrade import K8sUpgrade
@@ -126,9 +127,11 @@ class Handler(ops.Object):
             status.add(ops.WaitingStatus("Node not Clustered"))
             return
 
+        name = self.charm.get_node_name()
         trigger = reschedule.PeriodicEvent(self.charm)
-        if not self.charm._is_node_ready():
-            status.add(ops.WaitingStatus("Node not Ready"))
+        readiness = ready(self.charm.kubeconfig, name)
+        if readiness != Status.READY:
+            status.add(ops.WaitingStatus(f"Node {name} {readiness.value}"))
             trigger.create(reschedule.Period(seconds=30))
             return
 
