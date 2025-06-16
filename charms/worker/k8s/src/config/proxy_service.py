@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 PROXY_SERVICES = {CONTAINERD_SERVICE_NAME: CONTAINERD_HTTP_PROXY}
-PROXY_ENABLE_CONTAINERD = "model-proxy-enable-containerd"
+PROXY_ENABLE_CONTAINERD = "juju-model-proxy-enable-containerd"
 
 
 class ProxyUrlError(Exception):

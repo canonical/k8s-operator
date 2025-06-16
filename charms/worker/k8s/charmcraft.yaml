@@ -425,7 +425,7 @@ config:
       description: |
         Labels can be used to organize and to select subsets of nodes in the
         cluster. Declare node labels in key=value format, separated by spaces.
-    model-proxy-enable-containerd:
+    juju-model-proxy-enable-containerd:
       type: boolean
       description: |
         Containerd managed by this charm unit will proxy requests based on the
