@@ -17,7 +17,13 @@ import juju.unit
 import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
-from tenacity import before_sleep_log, retry, stop_after_delay
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_not_exception_type,
+    stop_after_delay,
+    wait_fixed,
+)
 
 from .helpers import CHARMCRAFT_DIRS, Bundle, get_leader, wait_pod_phase
 
@@ -77,8 +83,10 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
     """
 
     @retry(
+        wait=wait_fixed(5),
         stop=stop_after_delay(datetime.timedelta(minutes=30)),
         before_sleep=before_sleep_log(log, logging.WARNING),
+        retry=retry_if_not_exception_type(juju.model.JujuUnitError),
     )
     async def _wait_for_upgrade_complete() -> None:
         """Wait for the model to become idle."""
@@ -97,6 +105,8 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
             for idx, unit in enumerate(app.units):
                 err = f"{unit.name} has not completed upgrade: {unit.workload_status_message}"
                 status, message = unit.workload_status, unit.workload_status_message
+                if status == "error":
+                    raise juju.model.JujuUnitError(message)
                 if name == CONTROL_PLANE_APP and idx == leader_idx and worker_count > 0:
                     assert status in ["waiting", "active"], err
                     assert message in [
