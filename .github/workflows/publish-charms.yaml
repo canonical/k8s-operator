@@ -41,7 +41,7 @@ jobs:
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
   publish-to-edge:
     needs: [configure-channel, charmcraft-channel]
-    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@40fb3c5dc1b8e7d04ca9034564383b9d5faddfac
+    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@17a133e4507daf7bd9f037da4429671e4cced8cb
     strategy:
       matrix:
         charm:
