@@ -125,7 +125,34 @@ def move_processed_files(temp_dir):
 
 
 def apply_patches():
-    """Apply patches to the downloaded and processed rule files."""
+    """Apply patches to the downloaded and processed rule files.
+
+    The following patches are applied to the upstream rules:
+        001_core_alert_rules: Modifies alerting rules for core K8s components
+            The original rules use the absent() function to alert when a
+            target is missing from Prometheus. In our environment,
+            targets are always present, but their health is indicated by the
+            "up" metric. This patch changes the alert expressions to trigger
+            when up == 0.
+        002_cpu_utilization: Updates the CPU utilization recording rule to
+            support charmed environments where the node-exporter job name may
+            differ from the one used upstream. The patch changes the job filter
+            to a regular expression to match any job ending with
+            "node-exporter", and uses `label_replace` to extract the cluster
+            name from the Juju model.
+            It also adjusts the aggregation and joins with `kube_node_info`
+            to ensure the resulting metric is compatible with the expected
+            node labels.
+        003_mem_node_exporter: Similar to 002, this patch applies
+            `label_replace` to ensure compatibility with expected labels.
+        004_node_network_iface: Similar to 002, this patch adjusts the network
+            interface recording rules to match the actual job and label
+            conventions  used in charmed environments,
+        005_num_cpu: Similar to 002. Updates the CPU count recording rule
+            to support charmed environments The patch adjusts the join logic
+            to use the instance label instead of node. It also uses
+            `label_replace` to align labels between metrics.
+    """
     for patch_file in PATCHES_DIR.glob("*"):
         logging.info("Applying patch %s", patch_file)
         subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])

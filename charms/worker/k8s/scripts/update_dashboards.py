@@ -51,7 +51,14 @@ PATCHES_DIR = Path("scripts/dashboard-patches")
 
 
 def apply_patches():
-    """Apply patches to the downloaded and processed rule files."""
+    """Apply patches to the downloaded and processed dashboard files.
+
+    The following patches are applied to the upstream dashboards:
+
+        001_node_memory_job: The patch changes the job filter
+            to a regular expression to match any job ending with
+            "node-exporter".
+    """
     for patch_file in PATCHES_DIR.glob("*"):
         logging.info("Applying patch %s", patch_file)
         subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
