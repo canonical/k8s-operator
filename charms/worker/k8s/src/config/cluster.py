@@ -8,6 +8,7 @@
 from typing import Optional
 
 import ops
+from config import option
 
 from charms.k8s.v0.k8sd_api_manager import (
     DNSConfig,
@@ -50,59 +51,59 @@ def assemble_cluster_config(
 def _assemble_local_storage(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (ls := assembled.local_storage):
         ls = assembled.local_storage = LocalStorageConfig()
-    ls.enabled = bool(charm.config["local-storage-enabled"])
-    ls.local_path = str(charm.config["local-storage-local-path"])
-    ls.reclaim_policy = str(charm.config["local-storage-reclaim-policy"])
+    ls.enabled = option.LOCAL_STORAGE_ENABLED.load(charm)
+    ls.local_path = option.LOCAL_STORAGE_LOCAL_PATH.load(charm)
+    ls.reclaim_policy = option.LOCAL_STORAGE_RECLAIM_POLICY.load(charm)
 
 
 def _assemble_dns(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (dns := assembled.dns):
         dns = assembled.dns = DNSConfig()
-    dns.enabled = bool(charm.config["dns-enabled"])
+    dns.enabled = option.DNS_ENABLED.load(charm)
 
-    if cfg := charm.config["dns-cluster-domain"]:
-        dns.cluster_domain = str(cfg)
-    if cfg := charm.config["dns-service-ip"]:
-        dns.service_ip = str(cfg)
-    if cfg := charm.config["dns-upstream-nameservers"]:
-        dns.upstream_nameservers = str(cfg).split()
+    if cfg := option.DNS_CLUSTER_DOMAIN.load(charm):
+        dns.cluster_domain = cfg
+    if cfg := option.DNS_SERVICE_IP.load(charm):
+        dns.service_ip = cfg
+    if cfg := option.DNS_UPSTREAM_NAMESERVERS.load(charm):
+        dns.upstream_nameservers = cfg.split()
     return dns
 
 
 def _assemble_gateway(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (gateway := assembled.gateway):
         gateway = assembled.gateway = GatewayConfig()
-    gateway.enabled = bool(charm.config["gateway-enabled"])
+    gateway.enabled = option.GATEWAY_ENABLED.load(charm)
 
 
 def _assemble_network(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (network := assembled.network):
         network = assembled.network = NetworkConfig()
-    network.enabled = bool(charm.config["network-enabled"])
+    network.enabled = option.NETWORK_ENABLED.load(charm)
 
 
 def _assemble_ingress(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (ingress := assembled.ingress):
         ingress = assembled.ingress = IngressConfig()
-    ingress.enabled = bool(charm.config["ingress-enabled"])
-    ingress.enable_proxy_protocol = bool(charm.config["ingress-enable-proxy-protocol"])
+    ingress.enabled = option.INGRESS_ENABLED.load(charm)
+    ingress.enable_proxy_protocol = option.INGRESS_ENABLE_PROXY_PROTOCOL.load(charm)
 
 
 def _assemble_metrics_server(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (metrics_server := assembled.metrics_server):
         metrics_server = assembled.metrics_server = MetricsServerConfig()
-    metrics_server.enabled = bool(charm.config["metrics-server-enabled"])
+    metrics_server.enabled = option.METRICS_SERVER_ENABLED.load(charm)
 
 
 def _assemble_load_balancer(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (load_balancer := assembled.load_balancer):
         load_balancer = assembled.load_balancer = LoadBalancerConfig()
-    load_balancer.enabled = bool(charm.config["load-balancer-enabled"])
-    load_balancer.cidrs = str(charm.config["load-balancer-cidrs"]).split()
-    load_balancer.l2_mode = bool(charm.config["load-balancer-l2-mode"])
-    load_balancer.l2_interfaces = str(charm.config["load-balancer-l2-interfaces"]).split()
-    load_balancer.bgp_mode = bool(charm.config["load-balancer-bgp-mode"])
-    load_balancer.bgp_local_asn = int(charm.config["load-balancer-bgp-local-asn"])
-    load_balancer.bgp_peer_address = str(charm.config["load-balancer-bgp-peer-address"])
-    load_balancer.bgp_peer_asn = int(charm.config["load-balancer-bgp-peer-asn"])
-    load_balancer.bgp_peer_port = int(charm.config["load-balancer-bgp-peer-port"])
+    load_balancer.enabled = option.LOAD_BALANCER_ENABLED.load(charm)
+    load_balancer.cidrs = option.LOAD_BALANCER_CIDRS.load(charm).split()
+    load_balancer.l2_mode = option.LOAD_BALANCER_L2_MODE.load(charm)
+    load_balancer.l2_interfaces = option.LOAD_BALANCER_L2_INTERFACES.load(charm).split()
+    load_balancer.bgp_mode = option.LOAD_BALANCER_BGP_MODE.load(charm)
+    load_balancer.bgp_local_asn = option.LOAD_BALANCER_BGP_LOCAL_ASN.load(charm)
+    load_balancer.bgp_peer_address = option.LOAD_BALANCER_BGP_PEER_ADDRESS.load(charm)
+    load_balancer.bgp_peer_asn = option.LOAD_BALANCER_BGP_PEER_ASN.load(charm)
+    load_balancer.bgp_peer_port = option.LOAD_BALANCER_BGP_PEER_PORT.load(charm)

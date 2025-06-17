@@ -775,15 +775,15 @@ class K8sCharm(ops.CharmBase):
 
         update_request = UpdateClusterConfigRequest()
         self._configure_datastore(update_request)
-        replace_datastore = update_request.datastore != current_config.metadata.datastore
+        config_changed = update_request.datastore != current_config.metadata.datastore
 
         update_request.config = assemble_cluster_config(
             self, "external" if self.xcp.has_xcp else None, current_config.metadata.status
         )
-        new_config = update_request.config != current_config.metadata.status
+        config_changed |= update_request.config != current_config.metadata.status
 
         configure_kube_control(self)
-        if new_config or replace_datastore:
+        if config_changed:
             self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
