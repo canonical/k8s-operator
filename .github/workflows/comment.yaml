@@ -8,5 +8,5 @@ on:
 
 jobs:
   comment-on-pr:
-    uses: canonical/operator-workflows/.github/workflows/comment.yaml@17a133e4507daf7bd9f037da4429671e4cced8cb
+    uses: addyess/operator-workflows/.github/workflows/comment.yaml@issue/683/pinnable-workflows
     secrets: inherit
