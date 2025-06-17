@@ -28,22 +28,25 @@ class CharmOption:
             charm (ops.CharmBase): The charm instance from which to load the configuration.
 
         Returns:
-            str | bool | int | float: The value of the configuration option,
+            str | bool | int : The value of the configuration option,
             converted to the appropriate type.
 
         Raises:
-            ValueError: If the configuration option is not found in the charmcraft.
+            ValueError: If the charm does not have the configuration option.
+            TypeError: If the configuration option type doesn't match charmcraft.yaml
         """
-        option = charm.meta.config[self.value]
+        option = charm.meta.config.get(self.value)
+        if option is None:
+            raise ValueError(f"Unsupported configuration option '{self.value}'.")
         convert: Type
-        if isinstance(self, CharmStrOption):
+        if option.type == "string" and isinstance(self, CharmStrOption):
             convert = str
-        elif isinstance(self, CharmBoolOption):
+        elif option.type == "boolean" and isinstance(self, CharmBoolOption):
             convert = bool
-        elif isinstance(self, CharmIntOption):
+        elif option.type == "int" and isinstance(self, CharmIntOption):
             convert = int
         else:
-            raise ValueError(f"Unsupported type '{option.type}' for option '{self.value}'.")
+            raise TypeError(f"Unsupported type '{option.type}' for option '{self.value}'.")
 
         return convert(charm.config[self.value])
 
@@ -83,10 +86,8 @@ DNS_CLUSTER_DOMAIN = CharmStrOption("dns-cluster-domain")
 DNS_SERVICE_IP = CharmStrOption("dns-service-ip")
 DNS_UPSTREAM_NAMESERVERS = CharmStrOption("dns-upstream-nameservers")
 GATEWAY_ENABLED = CharmBoolOption("gateway-enabled")
-NETWORK_ENABLED = CharmBoolOption("network-enabled")
 INGRESS_ENABLED = CharmBoolOption("ingress-enabled")
 INGRESS_ENABLE_PROXY_PROTOCOL = CharmBoolOption("ingress-enable-proxy-protocol")
-METRICS_SERVER_ENABLED = CharmBoolOption("metrics-server-enabled")
 LOAD_BALANCER_ENABLED = CharmBoolOption("load-balancer-enabled")
 LOAD_BALANCER_CIDRS = CharmStrOption("load-balancer-cidrs")
 LOAD_BALANCER_L2_MODE = CharmBoolOption("load-balancer-l2-mode")
@@ -99,3 +100,5 @@ LOAD_BALANCER_BGP_PEER_PORT = CharmIntOption("load-balancer-bgp-peer-port")
 LOCAL_STORAGE_ENABLED = CharmBoolOption("local-storage-enabled")
 LOCAL_STORAGE_LOCAL_PATH = CharmStrOption("local-storage-local-path")
 LOCAL_STORAGE_RECLAIM_POLICY = CharmStrOption("local-storage-reclaim-policy")
+NETWORK_ENABLED = CharmBoolOption("network-enabled")
+METRICS_SERVER_ENABLED = CharmBoolOption("metrics-server-enabled")
