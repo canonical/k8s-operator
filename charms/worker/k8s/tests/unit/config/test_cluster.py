@@ -23,9 +23,9 @@ def harness(request):
     Args:
         request: pytest request object
     """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
+    meta = Path(__file__).parent / "../../../charmcraft.yaml"
     if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
+        meta = Path(__file__).parent / "../../../../charmcraft.yaml"
     harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
     harness.begin()
     harness.charm.is_worker = request.param == "worker"
