@@ -12,6 +12,8 @@ import json
 import logging
 import os
 import shutil
+import subprocess
+from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -19,7 +21,7 @@ import yaml
 
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "v0.13.0"
+VERSION = "v0.15.0"
 SOURCE_URL = (
     "https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/"
     f"{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
@@ -45,6 +47,14 @@ DASHBOARDS = {
     "workload-total.json",
 }
 TARGET_DIR = "src/grafana_dashboards"
+PATCHES_DIR = Path("scripts/dashboard-patches")
+
+
+def apply_patches():
+    """Apply patches to the downloaded and processed rule files."""
+    for patch_file in PATCHES_DIR.glob("*"):
+        logging.info("Applying patch %s", patch_file)
+        subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
 
 
 def fetch_dashboards(source_url: str):
@@ -98,7 +108,11 @@ def prepare_dashboard(json_value):
         for item in json_value.get("templating", {}).get("list", [])
         if not (item.get("name") == "datasource" and item.get("type") == "datasource")
     ]
-    return json.dumps(json_value, indent=4).replace("$datasource", "$prometheusds")
+    return (
+        json.dumps(json_value, indent=4)
+        .replace("$datasource", "$prometheusds")
+        .replace("${datasource}", "${prometheusds}")
+    )
 
 
 def save_dashboard_to_file(name, data: str):
@@ -125,6 +139,7 @@ def main():
         for name, data in dashboards_data(dashboards):
             dashboard = prepare_dashboard(data)
             save_dashboard_to_file(name, dashboard)
+        apply_patches()
     else:
         logging.info("No data fetched. Exiting.")
 
