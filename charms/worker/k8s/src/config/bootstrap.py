@@ -9,11 +9,11 @@ import logging
 from typing import List, Optional
 
 from literals import (
-    CONFIG_BOOTSTRAP_CERTIFICATES,
-    CONFIG_BOOTSTRAP_DATASTORE,
-    CONFIG_BOOTSTRAP_NODE_TAINTS,
-    CONFIG_BOOTSTRAP_POD_CIDR,
-    CONFIG_BOOTSTRAP_SERVICE_CIDR,
+    BOOTSTRAP_CERTIFICATES,
+    BOOTSTRAP_DATASTORE,
+    BOOTSTRAP_NODE_TAINTS,
+    BOOTSTRAP_POD_CIDR,
+    BOOTSTRAP_SERVICE_CIDR,
 )
 from pki import check_ca_key
 from protocols import K8sCharmProtocol
@@ -122,11 +122,11 @@ class BootstrapConfigChangePreventer:
         """
         changed: List[ChangedConfig] = []
 
-        datastore = self._charm.config.get(CONFIG_BOOTSTRAP_DATASTORE, "")
-        certificates = self._charm.config.get(CONFIG_BOOTSTRAP_CERTIFICATES, "")
-        taints = self._charm.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, "")
-        pod_cidr = self._charm.config.get(CONFIG_BOOTSTRAP_POD_CIDR, "")
-        service_cidr = self._charm.config.get(CONFIG_BOOTSTRAP_SERVICE_CIDR, "")
+        datastore = BOOTSTRAP_DATASTORE.get(self._charm)
+        certificates = BOOTSTRAP_CERTIFICATES.get(self._charm)
+        taints = BOOTSTRAP_NODE_TAINTS.get(self._charm)
+        pod_cidr = BOOTSTRAP_POD_CIDR.get(self._charm)
+        service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self._charm)
 
         # NOTE(Hue): We need a custom check here since the snap only knows
         # `dqlite` and `external` as datastores.
@@ -134,7 +134,7 @@ class BootstrapConfigChangePreventer:
         if datastore_changed(str(datastore), ref.datastore):
             changed.append(
                 ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_DATASTORE,
+                    name=BOOTSTRAP_DATASTORE.name,
                     old=ref.datastore,
                     new=datastore,
                 )
@@ -143,16 +143,16 @@ class BootstrapConfigChangePreventer:
         if certificates != ref.certificates:
             changed.append(
                 ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_CERTIFICATES,
+                    name=BOOTSTRAP_CERTIFICATES.name,
                     old=ref.certificates,
                     new=certificates,
                 )
             )
 
-        if not self._equal_taints(ref.node_taints, str(taints)):
+        if not self._equal_taints(ref.node_taints, taints):
             changed.append(
                 ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_NODE_TAINTS,
+                    name=BOOTSTRAP_NODE_TAINTS.name,
                     old=ref.node_taints,
                     new=taints,
                 )
@@ -161,7 +161,7 @@ class BootstrapConfigChangePreventer:
         if pod_cidr != ref.pod_cidr:
             changed.append(
                 ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_POD_CIDR,
+                    name=BOOTSTRAP_POD_CIDR.name,
                     old=ref.pod_cidr,
                     new=pod_cidr,
                 )
@@ -170,7 +170,7 @@ class BootstrapConfigChangePreventer:
         if service_cidr != ref.service_cidr:
             changed.append(
                 ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_SERVICE_CIDR,
+                    name=BOOTSTRAP_SERVICE_CIDR.name,
                     old=ref.service_cidr,
                     new=service_cidr,
                 )
@@ -189,12 +189,12 @@ class BootstrapConfigChangePreventer:
         """
         changed: List[ChangedConfig] = []
 
-        taints = self._charm.config.get(CONFIG_BOOTSTRAP_NODE_TAINTS, "")
+        taints = BOOTSTRAP_NODE_TAINTS.get(self._charm)
 
-        if not self._equal_taints(ref.node_taints, str(taints)):
+        if not self._equal_taints(ref.node_taints, taints):
             changed.append(
                 ChangedConfig(
-                    name=CONFIG_BOOTSTRAP_NODE_TAINTS,
+                    name=BOOTSTRAP_NODE_TAINTS.name,
                     old=ref.node_taints,
                     new=taints,
                 )

@@ -53,17 +53,17 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
+    BOOTSTRAP_CERTIFICATES,
+    BOOTSTRAP_DATASTORE,
+    BOOTSTRAP_NODE_TAINTS,
+    BOOTSTRAP_POD_CIDR,
+    BOOTSTRAP_SERVICE_CIDR,
     CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     COMMON_NAME_CONFIG_KEY,
-    CONFIG_BOOTSTRAP_CERTIFICATES,
-    CONFIG_BOOTSTRAP_DATASTORE,
-    CONFIG_BOOTSTRAP_NODE_TAINTS,
-    CONFIG_BOOTSTRAP_POD_CIDR,
-    CONFIG_BOOTSTRAP_SERVICE_CIDR,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
     CONTAINERD_SERVICE_NAME,
@@ -304,11 +304,6 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
 
-    @property
-    def datastore(self) -> str:
-        """Return the datastore type."""
-        return str(self.config.get(CONFIG_BOOTSTRAP_DATASTORE))
-
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
 
@@ -492,11 +487,9 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.cluster_config = assemble_cluster_config(
             self, "external" if self.xcp.has_xcp else None
         )
-        bootstrap_config.service_cidr = str(self.config[CONFIG_BOOTSTRAP_SERVICE_CIDR])
-        bootstrap_config.pod_cidr = str(self.config[CONFIG_BOOTSTRAP_POD_CIDR])
-        bootstrap_config.control_plane_taints = str(
-            self.config[CONFIG_BOOTSTRAP_NODE_TAINTS]
-        ).split()
+        bootstrap_config.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self)
+        bootstrap_config.pod_cidr = BOOTSTRAP_POD_CIDR.get(self)
+        bootstrap_config.control_plane_taints = BOOTSTRAP_NODE_TAINTS.get(self).split()
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
@@ -640,7 +633,7 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = self.config.get(CONFIG_BOOTSTRAP_DATASTORE)
+        datastore = BOOTSTRAP_DATASTORE.get(self)
 
         if datastore not in SUPPORTED_DATASTORES:
             log.error(
@@ -825,11 +818,11 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
     def _announce_certificates_config(self) -> None:
-        if not (provider := self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES)):
+        if not (provider := BOOTSTRAP_CERTIFICATES.get(self)):
             raise ReconcilerError("Missing certificates provider")
 
         for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
-            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
+            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = provider
             kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
             rel.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
             domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
@@ -966,9 +959,7 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name)
 
-            bootstrap_node_taints = (
-                str(self.config[CONFIG_BOOTSTRAP_NODE_TAINTS] or "").strip().split()
-            )
+            bootstrap_node_taints = BOOTSTRAP_NODE_TAINTS.get(self).strip().split()
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
         self.certificates.configure_certificates(request.config)
@@ -1198,7 +1189,7 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-        if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "external":
+        if BOOTSTRAP_CERTIFICATES.get(self) == "external":
             # TODO: This should be implemented once k8s-snap offers an API endpoint
             # to update the certificates in the node.
             log.info("External certificates are used, skipping SANs update")
@@ -1219,9 +1210,9 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "self-signed":
+            if BOOTSTRAP_CERTIFICATES.get(self) == "self-signed":
                 self.api_manager.refresh_certs(all_sans)
-            elif self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "external":
+            elif BOOTSTRAP_CERTIFICATES.get(self) == "external":
                 self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")
 

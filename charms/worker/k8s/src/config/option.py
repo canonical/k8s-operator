@@ -13,16 +13,16 @@ import ops
 class CharmOption:
     """Enum representing various configuration options for the charms."""
 
-    def __init__(self, value: str):
-        """Initialize a CharmOption with the given value.
+    def __init__(self, name: str):
+        """Initialize a CharmOption with the given name.
 
         Args:
-            value (str): The name of the configuration option.
+            name (str): The name of the configuration option.
         """
-        self.value = value
+        self.name = name
 
-    def load(self, charm: ops.CharmBase) -> str | bool | int:
-        """Load the value of the configuration option from the charm.
+    def get(self, charm: ops.CharmBase) -> str | bool | int:
+        """Get the value of the configuration option from the charm.
 
         Args:
             charm (ops.CharmBase): The charm instance from which to load the configuration.
@@ -35,70 +35,47 @@ class CharmOption:
             ValueError: If the charm does not have the configuration option.
             TypeError: If the configuration option type doesn't match charmcraft.yaml
         """
-        option = charm.meta.config.get(self.value)
+        option = charm.meta.config.get(self.name)
         if option is None:
-            raise ValueError(f"Unsupported configuration option '{self.value}'.")
+            raise ValueError(f"Unsupported configuration option '{self.name}'.")
         convert: Type
-        if option.type == "string" and isinstance(self, CharmStrOption):
+        if option.type == "string" and isinstance(self, StrOption):
             convert = str
-        elif option.type == "boolean" and isinstance(self, CharmBoolOption):
+        elif option.type == "boolean" and isinstance(self, BoolOption):
             convert = bool
-        elif option.type == "int" and isinstance(self, CharmIntOption):
+        elif option.type == "int" and isinstance(self, IntOption):
             convert = int
         else:
-            raise TypeError(f"Unsupported type '{option.type}' for option '{self.value}'.")
+            raise TypeError(f"Unsupported type '{option.type}' for option '{self.name}'.")
 
-        return convert(charm.config[self.value])
+        return convert(charm.config[self.name])
 
 
-class CharmStrOption(CharmOption):
+class StrOption(CharmOption):
     """Configuration option of type string."""
 
     if TYPE_CHECKING:  # pragma: no cover
 
-        def load(self: "CharmStrOption", charm: ops.CharmBase) -> str:
-            """Type hint for the load method to return a string."""
+        def get(self: "StrOption", charm: ops.CharmBase) -> str:
+            """Type hint for the get method to return a string."""
             ...
 
 
-class CharmBoolOption(CharmOption):
+class BoolOption(CharmOption):
     """Configuration option of type boolean."""
 
     if TYPE_CHECKING:  # pragma: no cover
 
-        def load(self: "CharmBoolOption", charm: ops.CharmBase) -> bool:
-            """Type hint for the load method to return a boolean."""
+        def get(self: "BoolOption", charm: ops.CharmBase) -> bool:
+            """Type hint for the get method to return a boolean."""
             ...
 
 
-class CharmIntOption(CharmOption):
+class IntOption(CharmOption):
     """Configuration option of type integer."""
 
     if TYPE_CHECKING:  # pragma: no cover
 
-        def load(self: "CharmIntOption", charm: ops.CharmBase) -> int:
-            """Type hint for the load method to return an integer."""
+        def get(self: "IntOption", charm: ops.CharmBase) -> int:
+            """Type hint for the get method to return an integer."""
             ...
-
-
-DNS_ENABLED = CharmBoolOption("dns-enabled")
-DNS_CLUSTER_DOMAIN = CharmStrOption("dns-cluster-domain")
-DNS_SERVICE_IP = CharmStrOption("dns-service-ip")
-DNS_UPSTREAM_NAMESERVERS = CharmStrOption("dns-upstream-nameservers")
-GATEWAY_ENABLED = CharmBoolOption("gateway-enabled")
-INGRESS_ENABLED = CharmBoolOption("ingress-enabled")
-INGRESS_ENABLE_PROXY_PROTOCOL = CharmBoolOption("ingress-enable-proxy-protocol")
-LOAD_BALANCER_ENABLED = CharmBoolOption("load-balancer-enabled")
-LOAD_BALANCER_CIDRS = CharmStrOption("load-balancer-cidrs")
-LOAD_BALANCER_L2_MODE = CharmBoolOption("load-balancer-l2-mode")
-LOAD_BALANCER_L2_INTERFACES = CharmStrOption("load-balancer-l2-interfaces")
-LOAD_BALANCER_BGP_MODE = CharmBoolOption("load-balancer-bgp-mode")
-LOAD_BALANCER_BGP_LOCAL_ASN = CharmIntOption("load-balancer-bgp-local-asn")
-LOAD_BALANCER_BGP_PEER_ADDRESS = CharmStrOption("load-balancer-bgp-peer-address")
-LOAD_BALANCER_BGP_PEER_ASN = CharmIntOption("load-balancer-bgp-peer-asn")
-LOAD_BALANCER_BGP_PEER_PORT = CharmIntOption("load-balancer-bgp-peer-port")
-LOCAL_STORAGE_ENABLED = CharmBoolOption("local-storage-enabled")
-LOCAL_STORAGE_LOCAL_PATH = CharmStrOption("local-storage-local-path")
-LOCAL_STORAGE_RECLAIM_POLICY = CharmStrOption("local-storage-reclaim-policy")
-NETWORK_ENABLED = CharmBoolOption("network-enabled")
-METRICS_SERVER_ENABLED = CharmBoolOption("metrics-server-enabled")
