@@ -111,7 +111,13 @@ class K8sUpgrade(DataUpgrade):
         unready_nodes = nodes or []
 
         if unready_nodes:
-            joined = ", ".join([node.metadata.name for node in unready_nodes])
+            joined = ", ".join(
+                [
+                    node.metadata.name
+                    for node in unready_nodes
+                    if node.metadata and node.metadata.name
+                ]
+            )
             raise ClusterNotReadyError(
                 message="Cluster is not ready for an upgrade",
                 cause=f"Nodes not ready: {joined}",
@@ -204,14 +210,12 @@ class K8sUpgrade(DataUpgrade):
                 return
 
         self.charm.grant_upgrade()
-
-        services = (
-            K8S_CONTROL_PLANE_SERVICES if self.charm.is_control_plane else K8S_WORKER_SERVICES
-        )
-
-        datastore = BOOTSTRAP_DATASTORE.get(self.charm)
-        if K8S_DQLITE_SERVICE in services and datastore != "dqlite":
-            services.remove(K8S_DQLITE_SERVICE)
+        if self.charm.is_control_plane:
+            services = list(K8S_CONTROL_PLANE_SERVICES)
+            if BOOTSTRAP_DATASTORE.get(self.charm) != "dqlite":
+                services.remove(K8S_DQLITE_SERVICE)
+        else:
+            services = list(K8S_WORKER_SERVICES)
 
         try:
             self._perform_upgrade(services=services)
