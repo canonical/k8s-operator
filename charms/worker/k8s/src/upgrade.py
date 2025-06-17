@@ -10,6 +10,7 @@ import ops
 import reschedule
 from inspector import ClusterInspector
 from literals import (
+    BOOTSTRAP_DATASTORE,
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
     K8S_WORKER_SERVICES,
@@ -208,7 +209,8 @@ class K8sUpgrade(DataUpgrade):
             K8S_CONTROL_PLANE_SERVICES if self.charm.is_control_plane else K8S_WORKER_SERVICES
         )
 
-        if K8S_DQLITE_SERVICE in services and self.charm.datastore != "dqlite":
+        datastore = BOOTSTRAP_DATASTORE.get(self.charm)
+        if K8S_DQLITE_SERVICE in services and datastore != "dqlite":
             services.remove(K8S_DQLITE_SERVICE)
 
         try:
