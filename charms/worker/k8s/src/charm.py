@@ -201,6 +201,7 @@ class K8sCharm(ops.CharmBase):
                 self.on.cos_tokens_relation_changed,
                 self.on.config_changed,
                 self.on.upgrade_charm,
+                self.cos.refresh_event,
             ],
         )
 
@@ -265,8 +266,9 @@ class K8sCharm(ops.CharmBase):
 
         log.info("Apply COS Integrations")
         status.add(ops.MaintenanceStatus("Ensuring COS Integration"))
-        kubectl("apply", "-f", "templates/cos_roles.yaml")
-        kubectl("apply", "-f", "templates/ksm.yaml")
+        kubectl("apply", "-f", "templates/cos_roles.yaml", kubeconfig=self.kubeconfig)
+        kubectl("apply", "-f", "templates/ksm.yaml", kubeconfig=self.kubeconfig)
+        self.cos.trigger_jobs_refresh()
 
     @property
     def is_control_plane(self) -> bool:
