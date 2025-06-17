@@ -21,6 +21,7 @@ header:
       - 'charms/worker/k8s/lib/charms/**'
       - 'tests/integration/data/*.tar.gz'
       - '.github/**'
+      - '**/*.patch'
       - '**/.gitkeep'
       - '**/*.cfg'
       - '**/*.conf'
