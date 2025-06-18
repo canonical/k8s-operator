@@ -6,12 +6,12 @@ on:
 
 jobs:
   unit-tests:
-    uses: canonical/operator-workflows/.github/workflows/test.yaml@20a9453a27acff804bebcad630cee0f07ef9e450
+    uses: canonical/operator-workflows/.github/workflows/test.yaml@main
     secrets: inherit
     strategy:
       fail-fast: false
       matrix:
-        python-version: 
+        python-version:
         - '3.10'
         - '3.12'
     with:
