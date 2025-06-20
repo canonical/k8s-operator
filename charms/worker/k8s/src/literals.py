@@ -5,6 +5,8 @@
 
 from pathlib import Path
 
+import config.option as option
+
 # Snap
 SNAP_NAME = "k8s"
 
@@ -28,6 +30,37 @@ EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
 EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
 EXTERNAL_LOAD_BALANCER_PORT = 443
 APISERVER_PORT = 6443
+
+# Control-Plane Options
+BOOTSTRAP_DATASTORE = option.StrOption("bootstrap-datastore")
+BOOTSTRAP_CERTIFICATES = option.StrOption("bootstrap-certificates")
+BOOTSTRAP_POD_CIDR = option.StrOption("bootstrap-pod-cidr")
+BOOTSTRAP_SERVICE_CIDR = option.StrOption("bootstrap-service-cidr")
+DNS_ENABLED = option.BoolOption("dns-enabled")
+DNS_CLUSTER_DOMAIN = option.StrOption("dns-cluster-domain")
+DNS_SERVICE_IP = option.StrOption("dns-service-ip")
+DNS_UPSTREAM_NAMESERVERS = option.StrOption("dns-upstream-nameservers")
+GATEWAY_ENABLED = option.BoolOption("gateway-enabled")
+INGRESS_ENABLED = option.BoolOption("ingress-enabled")
+INGRESS_ENABLE_PROXY_PROTOCOL = option.BoolOption("ingress-enable-proxy-protocol")
+LOAD_BALANCER_ENABLED = option.BoolOption("load-balancer-enabled")
+LOAD_BALANCER_CIDRS = option.StrOption("load-balancer-cidrs")
+LOAD_BALANCER_L2_MODE = option.BoolOption("load-balancer-l2-mode")
+LOAD_BALANCER_L2_INTERFACES = option.StrOption("load-balancer-l2-interfaces")
+LOAD_BALANCER_BGP_MODE = option.BoolOption("load-balancer-bgp-mode")
+LOAD_BALANCER_BGP_LOCAL_ASN = option.IntOption("load-balancer-bgp-local-asn")
+LOAD_BALANCER_BGP_PEER_ADDRESS = option.StrOption("load-balancer-bgp-peer-address")
+LOAD_BALANCER_BGP_PEER_ASN = option.IntOption("load-balancer-bgp-peer-asn")
+LOAD_BALANCER_BGP_PEER_PORT = option.IntOption("load-balancer-bgp-peer-port")
+LOCAL_STORAGE_ENABLED = option.BoolOption("local-storage-enabled")
+LOCAL_STORAGE_LOCAL_PATH = option.StrOption("local-storage-local-path")
+LOCAL_STORAGE_RECLAIM_POLICY = option.StrOption("local-storage-reclaim-policy")
+NETWORK_ENABLED = option.BoolOption("network-enabled")
+METRICS_SERVER_ENABLED = option.BoolOption("metrics-server-enabled")
+
+# Worker and Control Plane Options
+BOOTSTRAP_NODE_TAINTS = option.StrOption("bootstrap-node-taints")
+NODE_LABELS = option.StrOption("node-labels")
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
