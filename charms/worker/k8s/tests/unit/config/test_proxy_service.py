@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 import config.proxy_service
+import literals
 import ops.testing
 import pytest
 from charm import K8sCharm
@@ -83,7 +84,7 @@ def test_enable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, 
     """Test that the proxy service config handles valid services."""
     juju_app = harness.charm.app.name
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
-    harness.update_config({config.proxy_service.PROXY_ENABLE_CONTAINERD: True})
+    harness.update_config({literals.JUJU_MODEL_PROXY_ENABLE_CONTAINERD.name: True})
     exists.return_value = True
     read_text.return_value = "replace me"
     expected = (
@@ -133,7 +134,7 @@ def test_enable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, 
 def test_disable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, harness):
     """Test that the proxy service config handles valid services."""
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
-    harness.update_config({config.proxy_service.PROXY_ENABLE_CONTAINERD: False})
+    harness.update_config({literals.JUJU_MODEL_PROXY_ENABLE_CONTAINERD.name: False})
     exists.return_value = True
     read_text.return_value = "replace me"
 

@@ -15,7 +15,11 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import ops
-from literals import CONTAINERD_HTTP_PROXY, CONTAINERD_SERVICE_NAME
+from literals import (
+    CONTAINERD_HTTP_PROXY,
+    CONTAINERD_SERVICE_NAME,
+    JUJU_MODEL_PROXY_ENABLE_CONTAINERD,
+)
 
 from charms.contextual_status import on_error
 from charms.operator_libs_linux.v1 import systemd
@@ -25,7 +29,6 @@ log = logging.getLogger(__name__)
 
 
 PROXY_SERVICES = {CONTAINERD_SERVICE_NAME: CONTAINERD_HTTP_PROXY}
-PROXY_ENABLE_CONTAINERD = "juju-model-proxy-enable-containerd"
 
 
 class ProxyUrlError(Exception):
@@ -106,7 +109,7 @@ def apply(charm: ops.CharmBase) -> None:
         charm (ops.CharmBase): The charm instance to apply the proxy settings to.
 
     """
-    proxy_containerd = bool(charm.config.get(PROXY_ENABLE_CONTAINERD))
+    proxy_containerd = JUJU_MODEL_PROXY_ENABLE_CONTAINERD.get(charm)
 
     juju_app = charm.app.name
     for service, path in PROXY_SERVICES.items():
