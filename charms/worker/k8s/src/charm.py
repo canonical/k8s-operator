@@ -43,6 +43,7 @@ from config.bootstrap import (
     BootstrapConfigChangePreventer,
     BootstrapConfigOptions,
 )
+from config.cluster import assemble_cluster_config
 from cos_integration import COSIntegration
 from endpoints import build_url
 from events import update_status
@@ -52,17 +53,17 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
+    BOOTSTRAP_CERTIFICATES,
+    BOOTSTRAP_DATASTORE,
+    BOOTSTRAP_NODE_TAINTS,
+    BOOTSTRAP_POD_CIDR,
+    BOOTSTRAP_SERVICE_CIDR,
     CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     COMMON_NAME_CONFIG_KEY,
-    CONFIG_BOOTSTRAP_CERTIFICATES,
-    CONFIG_BOOTSTRAP_DATASTORE,
-    CONFIG_BOOTSTRAP_NODE_TAINTS,
-    CONFIG_BOOTSTRAP_POD_CIDR,
-    CONFIG_BOOTSTRAP_SERVICE_CIDR,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
     CONTAINERD_SERVICE_NAME,
@@ -102,21 +103,13 @@ from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
-    DNSConfig,
-    GatewayConfig,
-    IngressConfig,
     InvalidResponseError,
     JoinClusterRequest,
     K8sdAPIManager,
     K8sdConnectionError,
-    LoadBalancerConfig,
-    LocalStorageConfig,
-    MetricsServerConfig,
-    NetworkConfig,
     NodeJoinConfig,
     UnixSocketConnectionFactory,
     UpdateClusterConfigRequest,
-    UserFacingClusterConfig,
     UserFacingDatastoreConfig,
 )
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
@@ -313,11 +306,6 @@ class K8sCharm(ops.CharmBase):
         """Returns true if the unit is a worker."""
         return self.meta.name == "k8s-worker"
 
-    @property
-    def datastore(self) -> str:
-        """Return the datastore type."""
-        return str(self.config.get(CONFIG_BOOTSTRAP_DATASTORE))
-
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
 
@@ -495,15 +483,15 @@ class K8sCharm(ops.CharmBase):
         Returns:
             BootstrapConfig: The bootstrap configuration object.
         """
-        bootstrap_config = BootstrapConfig.construct()
+        bootstrap_config = BootstrapConfig.model_construct()
         self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
-        bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config[CONFIG_BOOTSTRAP_SERVICE_CIDR])
-        bootstrap_config.pod_cidr = str(self.config[CONFIG_BOOTSTRAP_POD_CIDR])
-        bootstrap_config.control_plane_taints = str(
-            self.config[CONFIG_BOOTSTRAP_NODE_TAINTS]
-        ).split()
+        bootstrap_config.cluster_config = assemble_cluster_config(
+            self, "external" if self.xcp.has_xcp else None
+        )
+        bootstrap_config.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self)
+        bootstrap_config.pod_cidr = BOOTSTRAP_POD_CIDR.get(self)
+        bootstrap_config.control_plane_taints = BOOTSTRAP_NODE_TAINTS.get(self).split()
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name)
@@ -639,71 +627,6 @@ class K8sCharm(ops.CharmBase):
 
         return annotations
 
-    def _assemble_cluster_config(self) -> UserFacingClusterConfig:
-        """Retrieve the cluster config from charm configuration and charm relations.
-
-        Returns:
-            UserFacingClusterConfig: The expected cluster configuration.
-        """
-        local_storage = LocalStorageConfig(
-            enabled=self.config.get("local-storage-enabled"),
-            local_path=self.config.get("local-storage-local-path"),
-            reclaim_policy=self.config.get("local-storage-reclaim-policy"),
-            # Note(ben): set_default is intentionally omitted, see:
-            # https://github.com/canonical/k8s-operator/pull/169/files#r1847378214
-        )
-
-        dns = DNSConfig(
-            enabled=self.config.get("dns-enabled"),
-        )
-        if cfg := self.config.get("dns-cluster-domain"):
-            dns.cluster_domain = str(cfg)
-        if cfg := self.config.get("dns-service-ip"):
-            dns.service_ip = str(cfg)
-        if cfg := self.config.get("dns-upstream-nameservers"):
-            dns.upstream_nameservers = str(cfg).split()
-
-        gateway = GatewayConfig(enabled=self.config.get("gateway-enabled"))
-
-        network = NetworkConfig(
-            enabled=self.config.get("network-enabled"),
-        )
-
-        ingress = IngressConfig(
-            enabled=self.config.get("ingress-enabled"),
-            enable_proxy_protocol=self.config.get("ingress-enable-proxy-protocol"),
-        )
-
-        metrics_server = MetricsServerConfig(enabled=self.config.get("metrics-server-enabled"))
-
-        load_balancer = LoadBalancerConfig(
-            enabled=self.config.get("load-balancer-enabled"),
-            cidrs=str(self.config.get("load-balancer-cidrs")).split(),
-            l2_mode=self.config.get("load-balancer-l2-mode"),
-            l2_interfaces=str(self.config.get("load-balancer-l2-interfaces")).split(),
-            bgp_mode=self.config.get("load-balancer-bgp-mode"),
-            bgp_local_asn=self.config.get("load-balancer-bgp-local-asn"),
-            bgp_peer_address=self.config.get("load-balancer-bgp-peer-address"),
-            bgp_peer_asn=self.config.get("load-balancer-bgp-peer-asn"),
-            bgp_peer_port=self.config.get("load-balancer-bgp-peer-port"),
-        )
-
-        cloud_provider = None
-        if self.xcp.has_xcp:
-            cloud_provider = "external"
-
-        return UserFacingClusterConfig(
-            annotations=self._get_valid_annotations(),
-            cloud_provider=cloud_provider,
-            dns=dns,
-            gateway=gateway,
-            ingress=ingress,
-            local_storage=local_storage,
-            load_balancer=load_balancer,
-            metrics_server=metrics_server,
-            network=network,
-        )
-
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
 
@@ -712,7 +635,7 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = self.config.get(CONFIG_BOOTSTRAP_DATASTORE)
+        datastore = BOOTSTRAP_DATASTORE.get(self)
 
         if datastore not in SUPPORTED_DATASTORES:
             log.error(
@@ -843,12 +766,20 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensure cluster config"))
         log.info("Ensure cluster-config")
 
-        update_request = UpdateClusterConfigRequest()
+        current_config = self.api_manager.get_cluster_config()
 
+        update_request = UpdateClusterConfigRequest()
         self._configure_datastore(update_request)
-        update_request.config = self._assemble_cluster_config()
+        config_changed = update_request.datastore != current_config.metadata.datastore
+
+        update_request.config = assemble_cluster_config(
+            self, "external" if self.xcp.has_xcp else None, current_config.metadata.status
+        )
+        config_changed |= update_request.config != current_config.metadata.status
+
         configure_kube_control(self)
-        self.api_manager.update_cluster_config(update_request)
+        if config_changed:
+            self.api_manager.update_cluster_config(update_request)
 
     def _get_scrape_jobs(self):
         """Retrieve the Prometheus Scrape Jobs.
@@ -889,11 +820,11 @@ class K8sCharm(ops.CharmBase):
 
     @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
     def _announce_certificates_config(self) -> None:
-        if not (provider := self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES)):
+        if not (provider := BOOTSTRAP_CERTIFICATES.get(self)):
             raise ReconcilerError("Missing certificates provider")
 
         for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
-            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = str(provider)
+            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = provider
             kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
             rel.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
             domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
@@ -1030,9 +961,7 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name)
 
-            bootstrap_node_taints = (
-                str(self.config[CONFIG_BOOTSTRAP_NODE_TAINTS] or "").strip().split()
-            )
+            bootstrap_node_taints = BOOTSTRAP_NODE_TAINTS.get(self).strip().split()
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
         self.certificates.configure_certificates(request.config)
@@ -1262,7 +1191,7 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-        if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "external":
+        if BOOTSTRAP_CERTIFICATES.get(self) == "external":
             # TODO: This should be implemented once k8s-snap offers an API endpoint
             # to update the certificates in the node.
             log.info("External certificates are used, skipping SANs update")
@@ -1283,9 +1212,9 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "self-signed":
+            if BOOTSTRAP_CERTIFICATES.get(self) == "self-signed":
                 self.api_manager.refresh_certs(all_sans)
-            elif self.config.get(CONFIG_BOOTSTRAP_CERTIFICATES) == "external":
+            elif BOOTSTRAP_CERTIFICATES.get(self) == "external":
                 self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")
 

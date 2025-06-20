@@ -4,13 +4,18 @@
 """Tests for the upgrade module."""
 
 import unittest
-from unittest.mock import MagicMock
+import unittest.mock as mock
 
 import ops
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
-from literals import UPGRADE_RELATION
+from literals import (
+    K8S_CONTROL_PLANE_SERVICES,
+    K8S_DQLITE_SERVICE,
+    K8S_WORKER_SERVICES,
+    UPGRADE_RELATION,
+)
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
 from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
@@ -21,16 +26,16 @@ class TestK8sUpgrade(unittest.TestCase):
 
     def setUp(self):
         """Set up common test fixtures."""
-        self.charm = MagicMock()
+        self.charm = mock.MagicMock()
         self.charm.is_worker = False
-        self.node_manager = MagicMock(spec=ClusterInspector)
+        self.node_manager = mock.MagicMock(spec=ClusterInspector)
         self.upgrade = K8sUpgrade(
             self.charm,
             cluster_inspector=self.node_manager,
             relation_name="upgrade",
             substrate="vm",
-            dependency_model=K8sDependenciesModel(
-                **{
+            dependency_model=K8sDependenciesModel.parse_obj(
+                {
                     "k8s_charm": {
                         "dependencies": {"k8s-worker": ">50"},
                         "name": "k8s",
@@ -109,10 +114,10 @@ class TestK8sUpgrade(unittest.TestCase):
     def test_build_upgrade_stack_with_relation(self):
         """Test build_upgrade_stack with cluster relation."""
         self.charm.unit.name = "k8s/0"
-        relation = MagicMock()
-        unit_1 = MagicMock()
+        relation = mock.MagicMock()
+        unit_1 = mock.MagicMock()
         unit_1.name = "k8s/1"
-        unit_2 = MagicMock()
+        unit_2 = mock.MagicMock()
         unit_2.name = "k8s/2"
         relation.units = {unit_1, unit_2}
         self.charm.model.get_relation.return_value = relation
@@ -124,9 +129,9 @@ class TestK8sUpgrade(unittest.TestCase):
 
     def test_verify_worker_versions_compatible(self):
         """Test _verify_worker_versions returns True when worker versions is compatible."""
-        unit_1 = MagicMock(spec=ops.Unit)
+        unit_1 = mock.MagicMock(spec=ops.Unit)
         unit_1.name = "k8s-worker/0"
-        unit_2 = MagicMock(spec=ops.Unit)
+        unit_2 = mock.MagicMock(spec=ops.Unit)
         unit_2.name = "k8s-worker/1"
         self.charm.get_worker_versions.return_value = {"1.31.0": [unit_1], "1.31.5": [unit_2]}
 
@@ -136,12 +141,70 @@ class TestK8sUpgrade(unittest.TestCase):
 
     def test_verify_worker_versions_incompatible(self):
         """Test _verify_worker_versions returns False when worker versions is incompatible."""
-        unit_1 = MagicMock(spec=ops.Unit)
+        unit_1 = mock.MagicMock(spec=ops.Unit)
         unit_1.name = "k8s-worker/0"
-        unit_2 = MagicMock(spec=ops.Unit)
+        unit_2 = mock.MagicMock(spec=ops.Unit)
         unit_2.name = "k8s-worker/1"
         self.charm.get_worker_versions.return_value = {"1.32.0": [unit_1], "1.33.0": [unit_2]}
 
         result = self.upgrade._verify_worker_versions()
 
         self.assertFalse(result)
+
+    @mock.patch("upgrade.start")
+    @mock.patch("upgrade.stop")
+    @mock.patch("upgrade.snap_management")
+    def test_perform_upgrade(self, management, stop, start):
+        """Test perform_upgrade method."""
+        services = mock.MagicMock()
+
+        self.upgrade._perform_upgrade(services)
+        management.assert_called_once_with(self.charm)
+        stop.assert_called_once_with("k8s", services)
+        start.assert_called_once_with("k8s", services)
+
+    @mock.patch("upgrade.K8sUpgrade._upgrade")
+    def test_on_upgrade_granted(self, mock_upgrade):
+        """Test _on_upgrade_granted method."""
+        event = mock.MagicMock()
+        self.upgrade._on_upgrade_granted(event)
+
+        mock_upgrade.assert_called_once_with(event)
+
+    @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
+    @mock.patch(
+        "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
+    )
+    @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
+    @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
+    def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade):
+        """Test _upgrade method for control plane."""
+        event = mock.MagicMock()
+        self.charm.meta.config = {
+            "bootstrap-datastore": ops.ConfigMeta("bootstrap-datastore", "string", None, None)
+        }
+        self.charm.config = {"bootstrap-datastore": "etcd"}
+        self.charm.is_control_plane = True
+        self.charm.is_worker = False
+
+        self.upgrade._upgrade(event)
+        services = [s for s in K8S_CONTROL_PLANE_SERVICES if s != K8S_DQLITE_SERVICE]
+        perform_upgrade.assert_called_once_with(services=services)
+        on_upgrade_changed.assert_called_once_with(event)
+
+    @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
+    @mock.patch(
+        "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
+    )
+    @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
+    @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
+    def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade):
+        """Test _upgrade method for control plane."""
+        event = mock.MagicMock()
+        self.charm.meta.config = {}
+        self.charm.is_control_plane = False
+        self.charm.is_worker = True
+
+        self.upgrade._upgrade(event)
+        perform_upgrade.assert_called_once_with(services=K8S_WORKER_SERVICES)
+        on_upgrade_changed.assert_called_once_with(event)
