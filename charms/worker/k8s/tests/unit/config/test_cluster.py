@@ -13,6 +13,7 @@ import ops
 import ops.testing
 import pytest
 from charm import K8sCharm
+from config.cluster import assemble_cluster_config
 
 
 @pytest.fixture(params=["worker", "control-plane"])
@@ -22,9 +23,9 @@ def harness(request):
     Args:
         request: pytest request object
     """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
+    meta = Path(__file__).parent / "../../../charmcraft.yaml"
     if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
+        meta = Path(__file__).parent / "../../../../charmcraft.yaml"
     harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
     harness.begin()
     harness.charm.is_worker = request.param == "worker"
@@ -44,11 +45,11 @@ def test_configure_network_options(harness):
     harness.disable_hooks()
 
     harness.update_config({"network-enabled": False})
-    ufcg = harness.charm._assemble_cluster_config()
+    ufcg = assemble_cluster_config(harness.charm, None)
     assert not ufcg.network.enabled, "Network should be disabled"
 
     harness.update_config({"network-enabled": True})
-    ufcg = harness.charm._assemble_cluster_config()
+    ufcg = assemble_cluster_config(harness.charm, None)
     assert ufcg.network.enabled, "Network should be enabled"
 
 
@@ -69,7 +70,7 @@ def test_configure_ingress_options(harness):
     harness.update_config({"ingress-enabled": enabled})
     harness.update_config({"ingress-enable-proxy-protocol": proxy_protocol_enabled})
 
-    ufcg = harness.charm._assemble_cluster_config()
+    ufcg = assemble_cluster_config(harness.charm, None)
     assert ufcg.ingress.enabled == enabled
     assert ufcg.ingress.enable_proxy_protocol == proxy_protocol_enabled
 
