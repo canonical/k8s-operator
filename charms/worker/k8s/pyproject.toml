@@ -26,6 +26,7 @@ dependencies = [
     "loadbalancer_interface",
     "cryptography>=44.0.0",
     "ops-interface-kube-control==0.3.1",
+    "jmodelproxylib @ git+https://github.com/addyess/jmodelproxylib@main",
 ]
 
 [dependency-groups]

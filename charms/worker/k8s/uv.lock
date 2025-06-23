@@ -363,6 +363,11 @@ wheels = [
 ]
 
 [[package]]
+name = "jmodelproxylib"
+version = "0.0.1"
+source = { git = "https://github.com/addyess/jmodelproxylib?rev=main#76b37e0ff4aa53f81ed5dee5d75206af94697ecb" }
+
+[[package]]
 name = "k8s"
 version = "0.0.0"
 source = { virtual = "." }
@@ -374,6 +379,7 @@ dependencies = [
     { name = "cosl" },
     { name = "cryptography" },
     { name = "httpx" },
+    { name = "jmodelproxylib" },
     { name = "lightkube" },
     { name = "loadbalancer-interface" },
     { name = "ops" },
@@ -406,6 +412,7 @@ requires-dist = [
     { name = "cosl" },
     { name = "cryptography", specifier = ">=44.0.0" },
     { name = "httpx" },
+    { name = "jmodelproxylib", git = "https://github.com/addyess/jmodelproxylib?rev=main" },
     { name = "lightkube" },
     { name = "loadbalancer-interface" },
     { name = "ops" },
