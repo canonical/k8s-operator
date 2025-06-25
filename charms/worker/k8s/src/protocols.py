@@ -4,7 +4,7 @@
 """Protocol definitions module."""
 
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Tuple
+from typing import Dict, List
 
 import ops
 from inspector import ClusterInspector
