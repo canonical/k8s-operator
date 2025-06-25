@@ -34,8 +34,8 @@ class TestK8sUpgrade(unittest.TestCase):
             cluster_inspector=self.node_manager,
             relation_name="upgrade",
             substrate="vm",
-            dependency_model=K8sDependenciesModel.parse_obj(
-                {
+            dependency_model=K8sDependenciesModel(
+                **{
                     "k8s_charm": {
                         "dependencies": {"k8s-worker": ">50"},
                         "name": "k8s",
@@ -171,6 +171,7 @@ class TestK8sUpgrade(unittest.TestCase):
 
         mock_upgrade.assert_called_once_with(event)
 
+    @mock.patch("upgrade.reschedule", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
@@ -192,6 +193,7 @@ class TestK8sUpgrade(unittest.TestCase):
         perform_upgrade.assert_called_once_with(services=services)
         on_upgrade_changed.assert_called_once_with(event)
 
+    @mock.patch("upgrade.reschedule", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)

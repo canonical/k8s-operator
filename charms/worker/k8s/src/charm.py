@@ -440,7 +440,7 @@ class K8sCharm(ops.CharmBase):
         Returns:
             BootstrapConfig: The bootstrap configuration object.
         """
-        bootstrap_config = BootstrapConfig.model_construct()
+        bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = assemble_cluster_config(
             self, "external" if self.xcp.has_xcp else None
