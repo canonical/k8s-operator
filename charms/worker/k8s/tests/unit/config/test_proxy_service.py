@@ -62,10 +62,10 @@ def mock_getenv(harness):
         yield getenv
 
 
-@mock.patch("jmodelproxylib.environ")
+@mock.patch("charms.proxylib.environ")
 def test_invalid_url_blocks(environ, harness):
     """Test that the proxy service config handles valid services."""
-    harness.update_config({literals.JUJU_MODEL_PROXY_ENABLE_CONTAINERD.name: True})
+    harness.update_config({literals.WEB_PROXY_ENABLE_CONTAINERD.name: True})
     environ.return_value.error = "invalid url"
     with pytest.raises(status.ReconcilerError):
         config.proxy_service.apply(harness.charm)
@@ -80,7 +80,7 @@ def test_enable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, 
     """Test that the proxy service config handles valid services."""
     juju_app = harness.charm.app.name
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
-    harness.update_config({literals.JUJU_MODEL_PROXY_ENABLE_CONTAINERD.name: True})
+    harness.update_config({literals.WEB_PROXY_ENABLE_CONTAINERD.name: True})
     exists.return_value = True
     read_text.return_value = "replace me"
     expected = (
@@ -130,7 +130,7 @@ def test_enable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, 
 def test_disable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, harness):
     """Test that the proxy service config handles valid services."""
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
-    harness.update_config({literals.JUJU_MODEL_PROXY_ENABLE_CONTAINERD.name: False})
+    harness.update_config({literals.WEB_PROXY_ENABLE_CONTAINERD.name: False})
     exists.return_value = True
     read_text.return_value = "replace me"
 

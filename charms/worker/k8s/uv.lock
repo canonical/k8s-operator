@@ -130,6 +130,15 @@ wheels = [
 ]
 
 [[package]]
+name = "charms-proxylib"
+version = "0.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/93/d29f2db7e8b486fa95be67289bd38ac06e6388ce253b820d13dd3d994605/charms_proxylib-0.0.0.tar.gz", hash = "sha256:6406d07605b74a458d83d567e4973c85c6d61340806a234662bbc882f6496980", size = 10483, upload-time = "2025-06-26T21:06:30.154Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/41/546217c84a019d93e500a3a646821e87865bf37ac6ebab5a34da2534aa1e/charms_proxylib-0.0.0-py3-none-any.whl", hash = "sha256:775860a8f3db74e45d85a26ab369299cd0fd744a220600ce8a630aa8b9a2b22f", size = 11210, upload-time = "2025-06-26T21:06:29.215Z" },
+]
+
+[[package]]
 name = "charms-reconciler"
 version = "0.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -363,11 +372,6 @@ wheels = [
 ]
 
 [[package]]
-name = "jmodelproxylib"
-version = "0.0.1"
-source = { git = "https://github.com/addyess/jmodelproxylib?rev=main#76b37e0ff4aa53f81ed5dee5d75206af94697ecb" }
-
-[[package]]
 name = "k8s"
 version = "0.0.0"
 source = { virtual = "." }
@@ -375,11 +379,11 @@ dependencies = [
     { name = "charm-lib-interface-external-cloud-provider" },
     { name = "charm-lib-node-base" },
     { name = "charms-contextual-status" },
+    { name = "charms-proxylib" },
     { name = "charms-reconciler" },
     { name = "cosl" },
     { name = "cryptography" },
     { name = "httpx" },
-    { name = "jmodelproxylib" },
     { name = "lightkube" },
     { name = "loadbalancer-interface" },
     { name = "ops" },
@@ -408,11 +412,11 @@ requires-dist = [
     { name = "charm-lib-interface-external-cloud-provider", git = "https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider?rev=e9cadd749ff8e2a6c81fadb0268a8b10e26876be" },
     { name = "charm-lib-node-base", git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=1bd8506cf1fdfcb584c50388c7082cc23a5ee14f" },
     { name = "charms-contextual-status" },
+    { name = "charms-proxylib", specifier = "==0.0.0" },
     { name = "charms-reconciler" },
     { name = "cosl" },
     { name = "cryptography", specifier = ">=44.0.0" },
     { name = "httpx" },
-    { name = "jmodelproxylib", git = "https://github.com/addyess/jmodelproxylib?rev=main" },
     { name = "lightkube" },
     { name = "loadbalancer-interface" },
     { name = "ops" },
