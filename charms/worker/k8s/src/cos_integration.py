@@ -41,6 +41,10 @@ class JobConfig:
     static_configs: Optional[List[Any]] = None
 
 
+class RefreshCOSAgent(ops.EventBase):
+    """Event to trigger a refresh of the scrape jobs."""
+
+
 class COSIntegration(ops.Object):
     """Utility class that handles the integration with COS.
 
@@ -51,6 +55,8 @@ class COSIntegration(ops.Object):
     Attributes:
         charm (CharmBase): Reference to the base charm instance.
     """
+
+    refresh_event = ops.EventSource(RefreshCOSAgent)
 
     def __init__(self, charm: CharmBase) -> None:
         """Initialize a COSIntegration instance.
@@ -204,3 +210,7 @@ class COSIntegration(ops.Object):
             jobs += control_plane_jobs + kube_state_metrics
 
         return [self._create_scrape_job(job, node_name, token) for job in jobs]
+
+    def trigger_jobs_refresh(self):
+        """Trigger a custom event to refresh all the scrape jobs."""
+        self.refresh_event.emit()
