@@ -119,8 +119,8 @@ def test_set_leader(harness):
     assert len(called) == len(handlers)
 
 
-def test_configure_datastore_bootstrap_config_dqlite(harness):
-    """Test configuring the datastore=dqlite on bootstrap.
+def test_configure_datastore_bootstrap_config_managed_etcd(harness):
+    """Test configuring the datastore=managed-etcd on bootstrap.
 
     Args:
         harness: the harness under test
@@ -134,7 +134,26 @@ def test_configure_datastore_bootstrap_config_dqlite(harness):
     assert bs_config.datastore_client_cert is None
     assert bs_config.datastore_client_key is None
     assert bs_config.datastore_servers is None
-    assert bs_config.datastore_type is None
+    assert bs_config.datastore_type == "etcd"
+
+
+def test_configure_datastore_bootstrap_config_dqlite(harness):
+    """Test configuring the datastore=dqlite on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    bs_config = BootstrapConfig()
+    harness.update_config({"bootstrap-datastore": "dqlite"})
+    harness.charm._configure_datastore(bs_config)
+    assert bs_config.datastore_ca_cert is None
+    assert bs_config.datastore_client_cert is None
+    assert bs_config.datastore_client_key is None
+    assert bs_config.datastore_servers is None
+    assert bs_config.datastore_type == "k8s-dqlite"
 
 
 def test_configure_datastore_bootstrap_config_etcd(harness):
