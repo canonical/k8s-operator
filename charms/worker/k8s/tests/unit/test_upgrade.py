@@ -188,7 +188,7 @@ class TestK8sUpgrade(unittest.TestCase):
         self.charm.is_worker = False
 
         self.upgrade._upgrade(event)
-        services = [s for s in K8S_CONTROL_PLANE_SERVICES if s != K8S_DQLITE_SERVICE]
+        services = K8S_CONTROL_PLANE_SERVICES("etcd")
         perform_upgrade.assert_called_once_with(services=services)
         on_upgrade_changed.assert_called_once_with(event)
 
