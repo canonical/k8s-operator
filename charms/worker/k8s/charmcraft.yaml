@@ -79,8 +79,8 @@ config:
       type: string
       description: |
         The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
-        chosen, the charm should be integrated with the etcd charm.
+        after deployment. Allowed values are "embedded-etcd", "dqlite" and "etcd". 
+        If "etcd" is chosen, the charm should be integrated with the etcd charm.
     bootstrap-certificates:
       type: string
       default: "self-signed"

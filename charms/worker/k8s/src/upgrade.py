@@ -211,9 +211,7 @@ class K8sUpgrade(DataUpgrade):
 
         self.charm.grant_upgrade()
         if self.charm.is_control_plane:
-            services = list(K8S_CONTROL_PLANE_SERVICES)
-            if BOOTSTRAP_DATASTORE.get(self.charm) != "dqlite":
-                services.remove(K8S_DQLITE_SERVICE)
+            services = K8S_CONTROL_PLANE_SERVICES(BOOTSTRAP_DATASTORE.get(self.charm))
         else:
             services = list(K8S_WORKER_SERVICES)
 

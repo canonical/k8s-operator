@@ -25,7 +25,7 @@ KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = f"{SNAP_COMMON}/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
-SUPPORTED_DATASTORES = ["dqlite", "etcd"]
+SUPPORTED_DATASTORES = ["embedded-etcd", "dqlite", "etcd"]
 EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
 EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
 EXTERNAL_LOAD_BALANCER_PORT = 443
@@ -111,14 +111,24 @@ K8S_COMMON_SERVICES = [
 ]
 
 K8S_DQLITE_SERVICE = "k8s-dqlite"
+# TODO: modify the name of the service
+EMBEDDED_ETCD_SERVICE = "etcd" 
 
-K8S_CONTROL_PLANE_SERVICES = [
-    "kube-apiserver",
-    K8S_DQLITE_SERVICE,
-    "kube-controller-manager",
-    "kube-scheduler",
-    *K8S_COMMON_SERVICES,
-]
+def K8S_CONTROL_PLANE_SERVICES(datastore: str) -> list[str]:
+    k8s_control_plane_services = [
+        "kube-apiserver",
+        "kube-controller-manager",
+        "kube-scheduler",
+        *K8S_COMMON_SERVICES,
+    ]
+
+    if datastore == "dqlite":
+        k8s_control_plane_services.append(K8S_DQLITE_SERVICE)
+    elif datastore == "embedded-etcd":
+        k8s_control_plane_services.append(EMBEDDED_ETCD_SERVICE)
+
+    return k8s_control_plane_services
+
 
 K8S_WORKER_SERVICES = [
     "k8s-apiserver-proxy",
