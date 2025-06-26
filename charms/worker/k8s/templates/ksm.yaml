@@ -8,7 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/component: exporter
     app.kubernetes.io/name: kube-state-metrics
-    app.kubernetes.io/version: 2.9.2
+    app.kubernetes.io/version: 2.15.0
   name: kube-state-metrics
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -26,7 +26,7 @@ metadata:
   labels:
     app.kubernetes.io/component: exporter
     app.kubernetes.io/name: kube-state-metrics
-    app.kubernetes.io/version: 2.9.2
+    app.kubernetes.io/version: 2.15.0
   name: kube-state-metrics
 rules:
 - apiGroups:
@@ -156,7 +156,7 @@ metadata:
   labels:
     app.kubernetes.io/component: exporter
     app.kubernetes.io/name: kube-state-metrics
-    app.kubernetes.io/version: 2.9.2
+    app.kubernetes.io/version: 2.15.0
   name: kube-state-metrics
   namespace: kube-system
 spec:
@@ -169,15 +169,15 @@ spec:
       labels:
         app.kubernetes.io/component: exporter
         app.kubernetes.io/name: kube-state-metrics
-        app.kubernetes.io/version: 2.9.2
+        app.kubernetes.io/version: 2.15.0
     spec:
       automountServiceAccountToken: true
       containers:
-      - image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.9.2
+      - image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.15.0
         livenessProbe:
           httpGet:
-            path: /healthz
-            port: 8080
+            path: /livez
+            port: http-metrics
           initialDelaySeconds: 5
           timeoutSeconds: 5
         name: kube-state-metrics
@@ -188,8 +188,8 @@ spec:
           name: telemetry
         readinessProbe:
           httpGet:
-            path: /
-            port: 8081
+            path: /readyz
+            port: telemetry
           initialDelaySeconds: 5
           timeoutSeconds: 5
         securityContext:
@@ -214,7 +214,7 @@ metadata:
   labels:
     app.kubernetes.io/component: exporter
     app.kubernetes.io/name: kube-state-metrics
-    app.kubernetes.io/version: 2.9.2
+    app.kubernetes.io/version: 2.15.0
   name: kube-state-metrics
   namespace: kube-system
 ---
@@ -225,7 +225,7 @@ metadata:
   labels:
     app.kubernetes.io/component: exporter
     app.kubernetes.io/name: kube-state-metrics
-    app.kubernetes.io/version: 2.9.2
+    app.kubernetes.io/version: 2.15.0
   name: kube-state-metrics
   namespace: kube-system
 spec:
