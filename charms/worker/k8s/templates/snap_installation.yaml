@@ -8,4 +8,4 @@ amd64:
 arm64:
 - install-type: store
   name: k8s
-  revision: 3791
+  revision: 3724
