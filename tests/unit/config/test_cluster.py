@@ -16,22 +16,6 @@ from charm import K8sCharm
 from config.cluster import assemble_cluster_config
 
 
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
-
 
 def test_configure_network_options(harness):
     """Test configuring the network options.
