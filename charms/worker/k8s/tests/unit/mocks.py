@@ -4,7 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 """Mocks for unit tests."""
 
-from typing import Optional, TypedDict
+from typing import Dict, List, Optional, TypedDict
 
 
 class MockELBRequest:
@@ -44,9 +44,9 @@ class MockELBRequest:
         self.name = ""
         self.protocol = ""
         self.protocols = protocols
-        self.port_mapping: dict[int, int] = {}
+        self.port_mapping: Dict[int, int] = {}
         self.public = False
-        self.health_checks: list[HealthCheck] = []
+        self.health_checks: List[HealthCheck] = []
 
     def add_health_check(self, protocol: str, port: int, path: str):
         """Add health check.
