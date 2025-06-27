@@ -3,13 +3,9 @@
 
 """Unit tests cloud-integration module."""
 
-from pathlib import Path
 from unittest import mock
 
-import ops
-import ops.testing
 import pytest
-from charm import K8sCharm
 from ops.interface_aws.requires import AWSIntegrationRequires
 from ops.interface_azure.requires import AzureIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
@@ -29,11 +25,7 @@ def vendor_name():
 
 @pytest.fixture()
 def harness(harness):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
+    """Adjust ops test harness."""
     with mock.patch.object(harness.charm, "get_cloud_name"):
         with mock.patch.object(harness.charm.reconciler, "reconcile"):
             yield harness
@@ -42,7 +34,6 @@ def harness(harness):
 @pytest.mark.parametrize(
     "cloud_name, cloud_relation",
     [
-        
         ("aws", "aws"),
         ("gce", "gcp"),
         ("azure", "azure"),

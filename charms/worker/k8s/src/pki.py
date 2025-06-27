@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Tuple, Union
 
 from cryptography import x509
+
 from literals import PKI_DIR
 
 log = logging.getLogger(__name__)

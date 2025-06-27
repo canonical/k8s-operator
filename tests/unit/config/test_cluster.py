@@ -6,15 +6,11 @@
 # pylint: disable=duplicate-code,missing-function-docstring
 """Unit tests."""
 
-from pathlib import Path
 from unittest import mock
 
-import ops
-import ops.testing
 import pytest
-from charm import K8sCharm
-from config.cluster import assemble_cluster_config
 
+from config.cluster import assemble_cluster_config
 
 
 def test_configure_network_options(harness):

@@ -9,9 +9,10 @@ from os import getgid, getuid
 from pathlib import Path
 from unittest import mock
 
-import containerd
 import pytest
 import tomli_w
+
+import containerd
 
 
 def test_ensure_file(tmp_path):
