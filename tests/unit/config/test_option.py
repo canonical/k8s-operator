@@ -8,10 +8,9 @@
 
 import unittest.mock as mock
 
+import config.option
 import ops
 import pytest
-
-import config.option
 
 
 def test_charm_option_load():

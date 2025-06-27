@@ -12,9 +12,12 @@ from pathlib import Path
 from unittest import mock
 
 import config.bootstrap
+import containerd
 import ops
 import ops.testing
 import pytest
+from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
+
 from charms.contextual_status import ReconcilerError
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
@@ -27,9 +30,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     UserFacingClusterConfig,
     UserFacingDatastoreConfig,
 )
-from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
-
-import containerd
 
 
 @contextlib.contextmanager

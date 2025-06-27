@@ -6,10 +6,9 @@
 
 from pathlib import Path
 
+import charm
 import ops.testing
 import pytest
-
-import charm
 
 
 @pytest.fixture(params=["worker", "control-plane"])

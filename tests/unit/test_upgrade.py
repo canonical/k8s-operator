@@ -7,11 +7,9 @@ import unittest
 import unittest.mock as mock
 
 import ops
-from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
+from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
-
-from inspector import ClusterInspector
 from literals import (
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
@@ -20,6 +18,8 @@ from literals import (
     UPGRADE_RELATION,
 )
 from upgrade import K8sDependenciesModel, K8sUpgrade
+
+from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
 
 
 class TestK8sUpgrade(unittest.TestCase):

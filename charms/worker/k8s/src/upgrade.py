@@ -6,21 +6,7 @@
 import logging
 from typing import List, Union
 
-import charms.contextual_status as status
 import ops
-from charms.data_platform_libs.v0.upgrade import (
-    ClusterNotReadyError,
-    DataUpgrade,
-    DependencyModel,
-    UpgradeGrantedEvent,
-    verify_requirements,
-)
-from charms.operator_libs_linux.v2.snap import SnapError
-
-# TODO: (mateoflorido) We are using the compatibility layer for pydantic.v1
-#  because the upgrade model does not support pydantic v2 yet.
-from pydantic.v1 import BaseModel
-
 import reschedule
 from inspector import ClusterInspector
 from literals import (
@@ -35,9 +21,23 @@ from literals import (
     UPGRADE_RELATION,
 )
 from protocols import K8sCharmProtocol
+
+# TODO: (mateoflorido) We are using the compatibility layer for pydantic.v1
+#  because the upgrade model does not support pydantic v2 yet.
+from pydantic.v1 import BaseModel
 from snap import management as snap_management
 from snap import start, stop
 from snap import version as snap_version
+
+import charms.contextual_status as status
+from charms.data_platform_libs.v0.upgrade import (
+    ClusterNotReadyError,
+    DataUpgrade,
+    DependencyModel,
+    UpgradeGrantedEvent,
+    verify_requirements,
+)
+from charms.operator_libs_linux.v2.snap import SnapError
 
 log = logging.getLogger(__name__)
 

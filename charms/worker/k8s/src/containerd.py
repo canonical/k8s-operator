@@ -26,7 +26,6 @@ import ops
 import pydantic
 import tomli_w
 import yaml
-
 from literals import CONTAINERD_ARGS
 
 log = logging.getLogger(__name__)

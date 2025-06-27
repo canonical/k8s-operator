@@ -11,9 +11,7 @@ This handler is responsible for updating the unit's workload version and status
 import logging
 from typing import List, Optional, cast
 
-import charms.contextual_status as status
 import ops
-
 import reschedule
 from inspector import ClusterInspector
 from k8s.node import Status, ready

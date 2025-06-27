@@ -9,8 +9,11 @@ import re
 from enum import Enum, auto
 from typing import Dict, Generator, Optional, Union
 
-import charms.contextual_status as status
 import ops
+from protocols import K8sCharmProtocol
+from pydantic import SecretStr
+
+import charms.contextual_status as status
 from charms.contextual_status import ReconcilerError
 from charms.k8s.v0.k8sd_api_manager import (
     ErrorCodes,
@@ -18,9 +21,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     K8sdAPIManager,
     K8sdConnectionError,
 )
-from pydantic import SecretStr
-
-from protocols import K8sCharmProtocol
 
 log = logging.getLogger(__name__)
 
