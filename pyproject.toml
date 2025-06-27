@@ -1,3 +1,10 @@
+[project]
+name = "k8s-operator"
+version = "0.0.0"
+description = "Charmed Operators for Canonical Kubernetes"
+readme = "README.md"
+requires-python = ">=3.8"
+
 [tool.bandit]
 exclude_dirs = ["/venv/", "tests"]
 skips = ["B404","B603"]
