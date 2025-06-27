@@ -44,7 +44,7 @@ lint = [
 ]
 
 [tool.bandit]
-exclude_dirs = ["lib/"]
+exclude_dirs = ["charms/worker/k8s/lib/"]
 skips = ["B404","B603"]
 [tool.bandit.assert_used]
 skips = ["*/*test.py", "*/test_*.py", "*tests/*.py"]
@@ -83,7 +83,7 @@ docstring-convention = "google"
 # Linting tools configuration
 [tool.ruff]
 line-length = 99
-exclude = ["lib/"]
+exclude = ["charms/worker/k8s/lib/"]
 extend-exclude = ["__pycache__", "*.egg_info"]
 
 [tool.ruff.lint]
@@ -122,7 +122,7 @@ max-complexity = 10
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
 
 [tool.mypy]
-exclude = "^lib/"
+exclude = "^charms/worker/k8s/lib/"
 ignore_missing_imports = true
 explicit_package_bases = true
 namespace_packages = true

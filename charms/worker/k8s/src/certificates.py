@@ -8,22 +8,7 @@ import logging
 from string import Template
 from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
 
-import charms.contextual_status as status
 import ops
-from charms.k8s.v0.k8sd_api_manager import (
-    BootstrapConfig,
-    ControlPlaneNodeJoinConfig,
-    NodeJoinConfig,
-)
-from charms.tls_certificates_interface.v4.tls_certificates import (
-    CertificateRequestAttributes,
-    CertificatesRequirerCharmEvents,
-    Mode,
-    PrivateKey,
-    ProviderCertificate,
-    TLSCertificatesRequiresV4,
-)
-
 from literals import (
     APISERVER_CN_FORMATTER_CONFIG_KEY,
     APISERVER_CSR_KEY,
@@ -40,6 +25,21 @@ from literals import (
     SUPPORTED_CERTIFICATES,
 )
 from protocols import K8sCharmProtocol
+
+import charms.contextual_status as status
+from charms.k8s.v0.k8sd_api_manager import (
+    BootstrapConfig,
+    ControlPlaneNodeJoinConfig,
+    NodeJoinConfig,
+)
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    CertificateRequestAttributes,
+    CertificatesRequirerCharmEvents,
+    Mode,
+    PrivateKey,
+    ProviderCertificate,
+    TLSCertificatesRequiresV4,
+)
 
 log = logging.getLogger(__name__)
 

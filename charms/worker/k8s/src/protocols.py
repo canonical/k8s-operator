@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Dict, FrozenSet, List, Tuple
 
 import ops
+from inspector import ClusterInspector
+from ops.interface_kube_control import KubeControlProvides
+
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import K8sdAPIManager
 from charms.reconciler import Reconciler
-from ops.interface_kube_control import KubeControlProvides
-
-from inspector import ClusterInspector
 
 
 class K8sCharmProtocol(ops.CharmBase):

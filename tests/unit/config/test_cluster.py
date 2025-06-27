@@ -9,7 +9,6 @@
 from unittest import mock
 
 import pytest
-
 from config.cluster import assemble_cluster_config
 
 

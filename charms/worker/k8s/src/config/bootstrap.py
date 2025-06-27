@@ -8,9 +8,6 @@
 import logging
 from typing import List, Optional
 
-from charms.k8s.v0.k8sd_api_manager import GetClusterConfigMetadata, GetNodeStatusMetadata
-from pydantic import BaseModel, Field
-
 from literals import (
     BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
@@ -20,6 +17,9 @@ from literals import (
 )
 from pki import check_ca_key
 from protocols import K8sCharmProtocol
+from pydantic import BaseModel, Field
+
+from charms.k8s.v0.k8sd_api_manager import GetClusterConfigMetadata, GetNodeStatusMetadata
 
 log = logging.getLogger(__name__)
 
