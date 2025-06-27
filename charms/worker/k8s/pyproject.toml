@@ -122,9 +122,10 @@ max-complexity = 10
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
 
 [tool.mypy]
-ignore-missing-imports = true
-explicit-package-bases = true
-namespace-packages = true
+exclude = "^lib/"
+ignore_missing_imports = true
+explicit_package_bases = true
+namespace_packages = true
 plugins = "pydantic.mypy"
 
 [tool.pylint.typecheck]

@@ -1,6 +1,14 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Learn more about testing at: https://juju.is/docs/sdk/testing
+"""configure unit tests."""
+
 from pathlib import Path
+
 import ops.testing
 import pytest
+
 import charm
 
 
@@ -11,7 +19,6 @@ def harness(request):
     Args:
         request: pytest request object
     """
-
     meta = Path(charm.__file__).parent / "../charmcraft.yaml"
     if request.param == "worker":
         meta = Path(charm.__file__).parent / "../../charmcraft.yaml"
@@ -20,7 +27,6 @@ def harness(request):
     harness.charm.is_worker = request.param == "worker"
     yield harness
     harness.cleanup()
-
 
 
 @pytest.fixture(autouse=True)

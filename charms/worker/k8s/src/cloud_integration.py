@@ -6,13 +6,13 @@
 import logging
 from typing import Mapping, Optional, Union
 
+import charms.contextual_status as status
 import ops
 from ops.interface_aws.requires import AWSIntegrationRequires
 from ops.interface_azure.requires import AzureIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
-from protocols import K8sCharmProtocol
 
-import charms.contextual_status as status
+from protocols import K8sCharmProtocol
 
 log = logging.getLogger(__name__)
 

@@ -6,13 +6,11 @@
 """Unit tests reschedule module."""
 
 import subprocess
-from pathlib import Path
 from unittest import mock
 
-import ops
 import pytest
+
 import reschedule
-from charm import K8sCharm
 
 
 @pytest.fixture

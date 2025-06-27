@@ -6,13 +6,7 @@
 # pylint: disable=duplicate-code,missing-function-docstring
 """Unit tests token_distributor module."""
 
-from pathlib import Path
-
-import ops
-import ops.testing
-import pytest
 import token_distributor
-from charm import K8sCharm
 from literals import CLUSTER_RELATION
 
 

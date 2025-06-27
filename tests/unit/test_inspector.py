@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import List
 from unittest.mock import MagicMock
 
-from inspector import ClusterInspector
 from lightkube.core.exceptions import ApiError
 from lightkube.models.core_v1 import NodeCondition
 from lightkube.resources.core_v1 import Node, Pod
+
+from inspector import ClusterInspector
 
 
 class TestClusterInspector(unittest.TestCase):

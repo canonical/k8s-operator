@@ -10,12 +10,11 @@ import re
 
 import pytest
 import pytest_asyncio
+import storage
 from juju import model
 from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
 from pytest_operator.plugin import OpsTest
-
-from . import storage
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
