@@ -38,7 +38,12 @@ async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
     docker_registry_ip = await docker_registry_unit.get_public_address()
 
     config_string = json.dumps(
-        [{"url": f"http://{docker_registry_ip}:5000", "host": f"{docker_registry_ip}:5000"}]
+        [
+            {
+                "url": f"http://{docker_registry_ip}:5000",
+                "host": f"{docker_registry_ip}:5000",
+            }
+        ]
     )
 
     custom_registry_config = {"containerd-custom-registries": config_string}
