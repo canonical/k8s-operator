@@ -27,28 +27,22 @@ def vendor_name():
         yield mock_vendor_name
 
 
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
+@pytest.fixture()
+def harness(harness):
     """Craft a ops test harness.
 
     Args:
         request: pytest request object
     """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
     with mock.patch.object(harness.charm, "get_cloud_name"):
         with mock.patch.object(harness.charm.reconciler, "reconcile"):
             yield harness
-    harness.cleanup()
 
 
 @pytest.mark.parametrize(
     "cloud_name, cloud_relation",
     [
+        
         ("aws", "aws"),
         ("gce", "gcp"),
         ("azure", "azure"),
