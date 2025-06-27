@@ -1,0 +1,150 @@
+[project]
+name = "k8s"
+version = "0.0.0"
+description = "Charmed Operators for Canonical Kubernetes"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e9cadd749ff8e2a6c81fadb0268a8b10e26876be",
+    "charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@3d7b34bd10aa5ef8dfca4f671a6e4757ec6c153a#subdirectory=ops",
+    "charms.contextual-status",
+    "charms.reconciler",
+    "ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops",
+    "ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops",
+    "ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops",
+    "cosl",
+    "ops",
+    "pydantic",
+    "PyYAML",
+    "tomli",
+    "tomli-w",
+    "typing_extensions",
+    "websocket-client",
+    "poetry-core",
+    "lightkube",
+    "httpx",
+    "loadbalancer_interface",
+    "cryptography>=44.0.0",
+    "ops-interface-kube-control==0.3.1",
+]
+
+[dependency-groups]
+unit = [
+    "coverage[toml]>=7.6.1",
+    "pytest>=8.3.4",
+    "pytest-sugar"
+]
+static = ["bandit"]
+update = ["pyyaml"]
+lint = [
+    "mypy",
+    "ruff",
+    "pydantic[mypy]",
+    "types-PyYAML"
+]
+integration = [
+    "juju",
+    "pydantic",
+    "pylxd",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-operator",
+    "pytest-sugar",
+    "tenacity",
+    "requests < 2.32",  # https://github.com/canonical/pylxd/issues/579
+]
+
+[tool.bandit]
+exclude_dirs = ["charms/worker/k8s/lib"]
+skips = ["B404","B603"]
+[tool.bandit.assert_used]
+skips = ["*/*test.py", "*/test_*.py", "*tests/*.py"]
+
+# Testing tools configuration
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+
+[tool.isort]
+line_length = 99
+profile = "black"
+
+# Linting tools configuration
+[tool.flake8]
+max-line-length = 99
+max-doc-length = 99
+max-complexity = 10
+exclude = [".git", "__pycache__", ".tox", "build", "dist", "*.egg_info", "venv"]
+select = ["E", "W", "F", "C", "N", "R", "D", "H"]
+# Ignore W503, E501 because using black creates errors with this
+# Ignore D107 Missing docstring in __init__
+# Ignore N805 first argument should be named self. Pydantic validators do not comply.
+ignore = ["W503", "E501", "D107", "N805"]
+
+# D100, D101, D102, D103: Ignore missing docstrings in tests
+per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,D205,D212,D415"]
+docstring-convention = "google"
+
+# Linting tools configuration
+[tool.ruff]
+line-length = 99
+exclude = ["charms/worker/k8s/lib/"]
+extend-exclude = ["__pycache__", "*.egg_info"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "C", "N", "D", "I001"]
+ignore = [
+    "D203",
+    "D204",
+    "D213",
+    "D215",
+    "D400",
+    "D404",
+    "D406",
+    "D407",
+    "D408",
+    "D409",
+    "D413",
+    "D107",
+    "N805",
+#    "E503",
+]
+per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
+
+[tool.pylint]
+# Ignore too-few-public-methods due to pydantic models
+# Ignore no-self-argument due to pydantic validators
+disable = "wrong-import-order,redefined-outer-name,too-many-instance-attributes,too-few-public-methods,no-self-argument,fixme,protected-access"
+# Ignore Pydantic check: https://github.com/pydantic/pydantic/issues/1961
+extension-pkg-whitelist = "pydantic" # wokeignore:rule=whitelist
+# Modules can be bigger than 1000 lines
+max-module-lines = 1500
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.codespell]
+skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+
+[tool.mypy]
+exclude = "^charms/worker/k8s/lib/"
+ignore_missing_imports = true
+explicit_package_bases = true
+namespace_packages = true
+plugins = "pydantic.mypy"
+
+[tool.pylint.typecheck]
+# Ignore typechecking on pylxd manager classes
+ignored-classes = "ProfileManager,InstanceManager,NetworkManager,FieldInfo"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+
+[tool.pyright]
+extraPaths = ["src", "lib"]
