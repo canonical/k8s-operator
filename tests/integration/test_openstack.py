@@ -8,11 +8,10 @@ from typing import Dict
 
 import juju.model
 import pytest
+import storage
 import yaml
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
-
-from . import storage
 
 CLOUD_TYPE = "openstack"
 CONTROLLER_NAME = "openstack-cloud-controller-manager"

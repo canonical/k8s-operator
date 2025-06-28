@@ -9,12 +9,11 @@ from pathlib import Path
 from string import Template
 from typing import List
 
+import helpers
 import yaml
 from juju import model, unit
 from kubernetes.client import ApiClient
 from kubernetes.utils import create_from_dict, create_from_yaml
-
-from . import helpers
 
 log = logging.getLogger(__name__)
 
