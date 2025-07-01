@@ -24,6 +24,13 @@ pytestmark = [
 ]
 
 
+def removeprefix(text: str, prefix: str) -> str:
+    """Remove prefix from a string if it exists."""
+    if text.startswith(prefix):
+        return text[len(prefix) :]
+    return text
+
+
 async def test_cloud_provider(api_client: ApiClient):
     """Verify the cloud controller is running."""
     v1 = AppsV1Api(api_client)
@@ -70,7 +77,7 @@ async def test_external_load_balancer(kubernetes_cluster: juju.model.Model, api_
     kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
 
-    server_endpoint = server_endpoint.removeprefix("https://")
+    server_endpoint = removeprefix(server_endpoint, "https://")
     server_endpoint = server_endpoint[: server_endpoint.rfind(":")]
     server_endpoint = server_endpoint.strip("[")
     server_endpoint = server_endpoint.strip("]")
@@ -103,7 +110,7 @@ async def test_extra_sans(kubernetes_cluster: juju.model.Model):
     kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
 
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
-    server_endpoint = server_endpoint.removeprefix("https://")
+    server_endpoint = removeprefix(server_endpoint, "https://")
 
     result = await k8s.units[0].run(
         f"echo | openssl s_client -connect {server_endpoint} -servername {extra_san} | "
