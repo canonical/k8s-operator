@@ -9,7 +9,7 @@ This handler is responsible for updating the unit's workload version and status
 """
 
 import logging
-from typing import Optional
+from typing import List, Optional
 
 import ops
 import reschedule
@@ -20,6 +20,7 @@ from snap import version as snap_version
 from upgrade import K8sUpgrade
 
 import charms.contextual_status as status
+import charms.k8s.v0.k8sd_api_manager as api_manager
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -94,6 +95,39 @@ class Handler(ops.Object):
         except status.ReconcilerError:
             log.exception("Can't update_status")
 
+    def failed_features(self) -> Optional[ops.StatusBase]:
+        """Check if any features have failed.
+
+        Returns:
+            BlockedStatus: blocked status if any features have failed.
+            WaitingStatus: waiting status if the API Manager is unavailable.
+        """
+        if self.charm.is_worker:
+            # Worker nodes don't need to check the failed features
+            log.debug("Skipping feature verification for worker node")
+            return None
+
+        try:
+            cluster_status = self.charm.api_manager.get_cluster_status()
+        except api_manager.K8sdAPIManagerError as e:
+            log.exception("Failed to verify features: %s", e)
+            return ops.WaitingStatus("Waiting to verify features")
+
+        feature_status: List[ops.StatusBase] = []
+        if meta := cluster_status.metadata:
+            for name, feature in meta.status.feature_statuses:
+                if not feature:
+                    log.warning("Feature '%s' has no status", name)
+                elif not feature.enabled and feature.message.lower().startswith("failed"):
+                    log.error("Feature '%s' is not ready: %s", name, feature.message)
+                    feature_status.append(ops.BlockedStatus(f"Feature '{name}' is not ready"))
+                else:
+                    log.info("Feature %s ver=%s: %s", name, feature.version, feature.message)
+        else:
+            log.warning("Cluster status is missing feature statuses")
+
+        return next(iter(feature_status), None)
+
     def kube_system_pods_waiting(self) -> Optional[ops.WaitingStatus]:
         """Check if kube-system pods are waiting.
 
@@ -130,13 +164,16 @@ class Handler(ops.Object):
         name = self.charm.get_node_name()
         trigger = reschedule.PeriodicEvent(self.charm)
         readiness = ready(self.charm.kubeconfig, name)
-        if readiness != Status.READY:
-            status.add(ops.WaitingStatus(f"Node {name} {readiness.value}"))
+        final_status: Optional[ops.StatusBase] = None
+        if final_status := self.failed_features():
+            log.error("Failed features detected: %s", final_status.message)
+        elif readiness != Status.READY:
+            log.warning("Node %s is %s", name, readiness.value)
+            final_status = ops.WaitingStatus(f"Node {name} {readiness.value}")
+        elif final_status := self.kube_system_pods_waiting():
+            log.warning("Unready pods detected: %s", final_status.message)
+        if final_status:
+            status.add(final_status)
             trigger.create(reschedule.Period(seconds=30))
-            return
-
-        if waiting := self.kube_system_pods_waiting():
-            status.add(waiting)
-            trigger.create(reschedule.Period(seconds=30))
-            return
-        trigger.cancel()
+        else:
+            trigger.cancel()

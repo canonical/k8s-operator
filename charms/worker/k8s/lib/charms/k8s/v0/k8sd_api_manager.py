@@ -34,7 +34,7 @@ import socket
 from contextlib import contextmanager
 from datetime import datetime
 from http.client import HTTPConnection, HTTPException
-from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
+from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar
 
 import yaml
 from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
@@ -543,6 +543,27 @@ class DatastoreStatus(BaseModel):
     servers: Optional[List[str]] = Field(default=None, alias="servers")
 
 
+class FeatureStatus(BaseModel):
+    """Represents the status of a feature in the k8sd cluster.
+
+    Attributes:
+        enabled (bool):
+            Enabled shows whether or not the deployment of manifests for a status
+            was successful.
+        version (str): Version shows the version of the deployed feature.
+        message (str):
+            Message contains information about the status of a feature.
+            It is only supposed to be human readable and informative and should
+            not be programmatically parsed.
+        updated_at (str): UpdatedAt shows when the last update was done.
+    """
+
+    enabled: bool = Field(default=False)
+    version: str = Field(default="")
+    message: str = Field(default="")
+    updated_at: str = Field(default="")
+
+
 class ClusterStatus(BaseModel):
     """Represents the overall status of the k8sd cluster.
 
@@ -551,12 +572,45 @@ class ClusterStatus(BaseModel):
         members (List[ClusterMember]): List of members in the cluster.
         config (UserFacingClusterConfig): information about the cluster configuration.
         datastore (DatastoreStatus): information regarding the active datastore.
+        dns (FeatureStatus): Status of the DNS feature.
+        ingress (FeatureStatus): Status of the Ingress feature.
+        load_balancer (FeatureStatus): Status of the Load Balancer feature.
+        local_storage (FeatureStatus): Status of the Local Storage feature.
+        gateway (FeatureStatus): Status of the Gateway feature.
+        metrics_server (FeatureStatus): Status of the Metrics Server feature.
+        network (FeatureStatus): Status of the Network feature.
+        feature_statuses (Iterable[FeatureStatus]): An iterable of all feature statuses.
     """
 
     ready: bool = Field(False)
     members: Optional[List[ClusterMember]] = Field(default=None)
     config: Optional[UserFacingClusterConfig] = Field(default=None)
     datastore: Optional[DatastoreStatus] = Field(default=None)
+    dns: Optional[FeatureStatus] = Field(default=None)
+    ingress: Optional[FeatureStatus] = Field(default=None)
+    load_balancer: Optional[FeatureStatus] = Field(default=None, alias="load-balancer")
+    local_storage: Optional[FeatureStatus] = Field(default=None, alias="local-storage")
+    gateway: Optional[FeatureStatus] = Field(default=None)
+    metrics_server: Optional[FeatureStatus] = Field(default=None, alias="metrics-server")
+    network: Optional[FeatureStatus] = Field(default=None)
+
+    @property
+    def feature_statuses(self) -> List[Tuple[str, Optional[FeatureStatus]]]:
+        """Cluster features and their status.
+
+        Returns:
+            List[Tuple[str, Optional[FeatureStatus]]]: A list of tuples where each tuple
+            contains the feature name and its status.
+        """
+        return [
+            ("dns", self.dns),
+            ("ingress", self.ingress),
+            ("load-balancer", self.load_balancer),
+            ("local-storage", self.local_storage),
+            ("gateway", self.gateway),
+            ("metrics-server", self.metrics_server),
+            ("network", self.network),
+        ]
 
 
 class ClusterMetadata(BaseModel):
