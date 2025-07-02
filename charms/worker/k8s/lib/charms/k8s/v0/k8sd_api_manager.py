@@ -196,39 +196,44 @@ class ClusterMember(BaseModel):
     datastore_role: Optional[str] = Field(default=None, alias="datastore-role")
 
 
-class DNSConfig(BaseModel, allow_population_by_field_name=True):
+class FeatureConfig(BaseModel, allow_population_by_field_name=True):
+    """Configuration for a specific feature in the cluster.
+
+    Attributes:
+        enabled: Optional flag which represents the status of the feature.
+    """
+
+    enabled: Optional[bool] = Field(default=None)
+
+
+class DNSConfig(FeatureConfig):
     """Configuration for the DNS settings of the cluster.
 
     Attributes:
-        enabled: Optional flag which.
         cluster_domain: The domain name of the cluster.
         service_ip: The IP address of the DNS service within the cluster.
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    enabled: Optional[bool] = Field(default=None)
     cluster_domain: Optional[str] = Field(default=None, alias="cluster-domain")
     service_ip: Optional[str] = Field(default=None, alias="service-ip")
     upstream_nameservers: Optional[List[str]] = Field(default=None, alias="upstream-nameservers")
 
 
-class IngressConfig(BaseModel, allow_population_by_field_name=True):
+class IngressConfig(FeatureConfig):
     """Configuration for the ingress settings of the cluster.
 
     Attributes:
-        enabled: Optional flag which represents the status of Ingress.
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
-    enabled: Optional[bool] = Field(default=None)
     enable_proxy_protocol: Optional[bool] = Field(default=None, alias="enable-proxy-protocol")
 
 
-class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
+class LoadBalancerConfig(FeatureConfig):
     """Configuration for the load balancer settings of the cluster.
 
     Attributes:
-        enabled: Optional flag which represents the status of LoadBalancer.
         cidrs: List of CIDR blocks for the load balancer.
         l2_mode: Optional flag to enable or disable layer 2 mode.
         l2_interfaces: List of layer 2 interfaces for the load balancer.
@@ -239,7 +244,6 @@ class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
         bgp_peer_port: The port for BGP peering.
     """
 
-    enabled: Optional[bool] = Field(default=None)
     cidrs: Optional[List[str]] = Field(default=None)
     l2_mode: Optional[bool] = Field(default=None, alias="l2-mode")
     l2_interfaces: Optional[List[str]] = Field(default=None, alias="l2-interfaces")
@@ -250,50 +254,30 @@ class LoadBalancerConfig(BaseModel, allow_population_by_field_name=True):
     bgp_peer_port: Optional[int] = Field(default=None, alias="bgp-peer-port")
 
 
-class LocalStorageConfig(BaseModel, allow_population_by_field_name=True):
+class LocalStorageConfig(FeatureConfig):
     """Configuration for the local storage settings of the cluster.
 
     Attributes:
-        enabled: Optional flag which represents the status of Storage.
         local_path: The local path for storage.
         reclaim_policy: The policy for reclaiming local storage.
         set_default: Optional flag to set this as the default storage option.
     """
 
-    enabled: Optional[bool] = Field(default=None)
     local_path: Optional[str] = Field(default=None, alias="local-path")
     reclaim_policy: Optional[str] = Field(default=None, alias="reclaim-policy")
     set_default: Optional[bool] = Field(default=None, alias="set-default")
 
 
-class NetworkConfig(BaseModel, allow_population_by_field_name=True):
-    """Configuration for the network settings of the cluster.
-
-    Attributes:
-        enabled: Optional flag which represents the status of Network.
-    """
-
-    enabled: Optional[bool] = Field(default=None)
+class NetworkConfig(FeatureConfig):
+    """Configuration for the network settings of the cluster."""
 
 
-class GatewayConfig(BaseModel, allow_population_by_field_name=True):
-    """Configuration for the gateway settings of the cluster.
-
-    Attributes:
-        enabled: Optional flag which represents the status of Gateway.
-    """
-
-    enabled: Optional[bool] = Field(default=None)
+class GatewayConfig(FeatureConfig):
+    """Configuration for the gateway settings of the cluster."""
 
 
-class MetricsServerConfig(BaseModel, allow_population_by_field_name=True):
-    """Configuration for the metrics server settings of the cluster.
-
-    Attributes:
-        enabled: Optional flag which represents the status of MetricsServer.
-    """
-
-    enabled: Optional[bool] = Field(default=None)
+class MetricsServerConfig(FeatureConfig):
+    """Configuration for the metrics server settings of the cluster."""
 
 
 class UserFacingClusterConfig(BaseModel, allow_population_by_field_name=True):
@@ -595,21 +579,23 @@ class ClusterStatus(BaseModel):
     network: Optional[FeatureStatus] = Field(default=None)
 
     @property
-    def feature_statuses(self) -> List[Tuple[str, Optional[FeatureStatus]]]:
+    def by_feature(self) -> List[Tuple[str, Optional[FeatureConfig], Optional[FeatureStatus]]]:
         """Cluster features and their status.
 
         Returns:
-            List[Tuple[str, Optional[FeatureStatus]]]: A list of tuples where each tuple
-            contains the feature name and its status.
+            List[Tuple[str, Optional[FeatureConfig], Optional[FeatureStatus]]]:
+               A list of tuples where each tuple contains the feature name,
+               its config, and its status.
         """
+        c = self.config
         return [
-            ("dns", self.dns),
-            ("ingress", self.ingress),
-            ("load-balancer", self.load_balancer),
-            ("local-storage", self.local_storage),
-            ("gateway", self.gateway),
-            ("metrics-server", self.metrics_server),
-            ("network", self.network),
+            ("dns", c.dns if c else None, self.dns),
+            ("ingress", c.ingress if c else None, self.ingress),
+            ("load-balancer", c.load_balancer if c else None, self.load_balancer),
+            ("local-storage", c.local_storage if c else None, self.local_storage),
+            ("gateway", c.gateway if c else None, self.gateway),
+            ("metrics-server", c.metrics_server if c else None, self.metrics_server),
+            ("network", c.network if c else None, self.network),
         ]
 
 

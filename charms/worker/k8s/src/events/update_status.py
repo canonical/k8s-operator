@@ -115,14 +115,18 @@ class Handler(ops.Object):
 
         feature_status: List[ops.StatusBase] = []
         if meta := cluster_status.metadata:
-            for name, feature in meta.status.feature_statuses:
-                if not feature:
+            for name, f_config, f_status in meta.status.by_feature:
+                if not f_config:
+                    log.warning("Feature '%s' has no config", name)
+                elif not f_status:
                     log.warning("Feature '%s' has no status", name)
-                elif not feature.enabled and feature.message.lower().startswith("failed"):
-                    log.error("Feature '%s' is not ready: %s", name, feature.message)
+                elif not f_config.enabled:
+                    log.info("Feature '%s' not enabled", name)
+                elif f_config.enabled and not f_status.enabled:
+                    log.error("Feature '%s' is not ready: %s", name, f_status.message)
                     feature_status.append(ops.BlockedStatus(f"Feature '{name}' is not ready"))
                 else:
-                    log.info("Feature %s ver=%s: %s", name, feature.version, feature.message)
+                    log.info("Feature %s ver=%s: %s", name, f_status.version, f_status.message)
         else:
             log.warning("Cluster status is missing feature statuses")
 
@@ -164,7 +168,7 @@ class Handler(ops.Object):
         name = self.charm.get_node_name()
         trigger = reschedule.PeriodicEvent(self.charm)
         readiness = ready(self.charm.kubeconfig, name)
-        final_status: Optional[ops.StatusBase] = None
+        final_status = None
         if final_status := self.failed_features():
             log.error("Failed features detected: %s", final_status.message)
         elif readiness != Status.READY:

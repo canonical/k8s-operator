@@ -51,9 +51,22 @@ def test_feature_failures(mock_status, charm, upgrader, worker, expected_status)
     charm.is_worker = worker
 
     cluster_status = charm.api_manager.get_cluster_status.return_value
-    cluster_status.metadata.status.feature_statuses = [
-        ("test-feature", mock.MagicMock(enabled=False, message="Failed to do something here.")),
-        ("working-feature", mock.MagicMock(enabled=True, message="Working fine.")),
+    cluster_status.metadata.status.by_feature = [
+        (
+            "test-feature",
+            mock.MagicMock(enabled=True),
+            mock.MagicMock(enabled=False, message="Failed to do something here."),
+        ),
+        (
+            "working-feature",
+            mock.MagicMock(enabled=True),
+            mock.MagicMock(enabled=False, message="Working fine."),
+        ),
+        (
+            "disabled-feature",
+            mock.MagicMock(enabled=False),
+            mock.MagicMock(enabled=False, message="Not deployed."),
+        ),
     ]
     handler.run()
     mock_status.add.assert_called_once_with(expected_status)
