@@ -532,14 +532,14 @@ class FeatureStatus(BaseModel):
 
     Attributes:
         enabled (bool):
-            Enabled shows whether or not the deployment of manifests for a status
+            shows whether or not the deployment of manifests for a status
             was successful.
-        version (str): Version shows the version of the deployed feature.
+        version (str): shows the version of the deployed feature.
         message (str):
-            Message contains information about the status of a feature.
+            contains information about the status of a feature.
             It is only supposed to be human readable and informative and should
             not be programmatically parsed.
-        updated_at (str): UpdatedAt shows when the last update was done.
+        updated_at (datetime): shows when the last update was done.
     """
 
     enabled: bool = Field(default=False)
@@ -580,7 +580,7 @@ class ClusterStatus(BaseModel):
 
     @property
     def by_feature(self) -> List[Tuple[str, Optional[FeatureConfig], Optional[FeatureStatus]]]:
-        """Cluster features and their status.
+        """Cluster features and their config + status.
 
         Returns:
             List[Tuple[str, Optional[FeatureConfig], Optional[FeatureStatus]]]:
