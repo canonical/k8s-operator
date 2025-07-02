@@ -545,7 +545,7 @@ class FeatureStatus(BaseModel):
     enabled: bool = Field(default=False)
     version: str = Field(default="")
     message: str = Field(default="")
-    updated_at: str = Field(default="")
+    updated_at: datetime = Field(default_factory=datetime.now, alias="updated-at")
 
 
 class ClusterStatus(BaseModel):

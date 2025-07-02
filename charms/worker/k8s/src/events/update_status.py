@@ -120,13 +120,20 @@ class Handler(ops.Object):
                     log.warning("Feature '%s' has no config", name)
                 elif not f_status:
                     log.warning("Feature '%s' has no status", name)
-                elif not f_config.enabled:
-                    log.info("Feature '%s' not enabled", name)
-                elif f_config.enabled and not f_status.enabled:
-                    log.error("Feature '%s' is not ready: %s", name, f_status.message)
-                    feature_status.append(ops.BlockedStatus(f"Feature '{name}' is not ready"))
                 else:
-                    log.info("Feature %s ver=%s: %s", name, f_status.version, f_status.message)
+                    to_log = log.info
+                    if f_config.enabled and not f_status.enabled:
+                        to_log = log.error
+                        feature_status.append(ops.BlockedStatus(f"Feature '{name}' is not ready"))
+                    to_log(
+                        "Feature '%s' enabled=%s,deployed=%s,ver=%s,updated_at=%s: %s",
+                        name,
+                        f_config.enabled,
+                        f_status.enabled,
+                        f_status.version,
+                        f_status.updated_at,
+                        f_status.message,
+                    )
         else:
             log.warning("Cluster status is missing feature statuses")
 
@@ -170,7 +177,7 @@ class Handler(ops.Object):
         readiness = ready(self.charm.kubeconfig, name)
         final_status = None
         if final_status := self.failed_features():
-            log.error("Failed features detected: %s", final_status.message)
+            log.error("Failed features reported: %s", final_status.message)
         elif readiness != Status.READY:
             log.warning("Node %s is %s", name, readiness.value)
             final_status = ops.WaitingStatus(f"Node {name} {readiness.value}")
