@@ -34,7 +34,6 @@ import config.extra_args
 import containerd
 import k8s.node
 import ops
-import ops.log
 import utils
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
@@ -122,14 +121,6 @@ from charms.reconciler import Reconciler
 log = logging.getLogger(__name__)
 
 
-def _improve_logger():
-    """Improve the JujuLogHandler to include logger name."""
-    root_logger = logging.getLogger()
-    for handler in root_logger.handlers:
-        if isinstance(handler, ops.log.JujuLogHandler):
-            handler.setFormatter(logging.Formatter("%(name)s:%(message)s"))
-
-
 def _get_juju_public_address() -> str:
     """Get public address from juju.
 
@@ -183,7 +174,7 @@ class K8sCharm(ops.CharmBase):
         Args:
             args: Arguments passed to the CharmBase parent constructor.
         """
-        _improve_logger()
+        utils.setup_root_logger()
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.api_manager = K8sdAPIManager(factory)

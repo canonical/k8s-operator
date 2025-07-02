@@ -3,7 +3,10 @@
 
 """Utility functions."""
 
+import logging
 import re
+
+import ops.log
 
 # Constants for time calculations
 YEAR_SECONDS = 365 * 24 * 60 * 60  # seconds in a year
@@ -45,3 +48,11 @@ def ttl_to_seconds(ttl: str):
         raise ValueError(f"Invalid TTL unit: {unit}")
 
     return value * multipliers[unit]
+
+
+def setup_root_logger():
+    """Improve the JujuLogHandler to include logger name and lineno."""
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        if isinstance(handler, ops.log.JujuLogHandler):
+            handler.setFormatter(logging.Formatter("%(name)s:%(lineno)d %(message)s"))
