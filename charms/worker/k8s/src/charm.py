@@ -372,17 +372,23 @@ class K8sCharm(ops.CharmBase):
         """
         unit, node = self.unit.name, self.get_node_name()
         if self._stored.cluster_name == "":
-            if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
+            if self.lead_control_plane:
+                log.info("Lead control plane node %s generating unique cluster name.", node)
                 self._stored.cluster_name = self._generate_unique_cluster_name()
             elif not (relation := self.model.get_relation(CLUSTER_RELATION)):
-                pass
-            elif any(
-                [
-                    self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
-                    k8s.node.present(self.kubeconfig, node) == k8s.node.Presence.AVAILABLE,
-                ]
-            ):
+                log.warning(
+                    "Node %s has no '%s' relation, cannot determine cluster name.",
+                    node,
+                    CLUSTER_RELATION,
+                )
+            elif (
+                result := k8s.node.present(self.kubeconfig, node)
+            ) != k8s.node.Presence.AVAILABLE:
+                log.warning("Node %s, is not available in cluster (status %s).", node, result)
+            elif self.is_worker or self.api_manager.is_cluster_bootstrapped():
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
+            else:
+                log.warning("Node %s isn't bootstrapped, skipping cluster name.", node)
 
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
         return str(self._stored.cluster_name)
