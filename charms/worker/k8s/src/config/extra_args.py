@@ -46,6 +46,8 @@ def craft(
         - extra_node_kube_scheduler_args: arguments for kube-scheduler.
         - extra_node_kube_proxy_args: arguments for kube-proxy.
         - extra_node_kubelet_args: arguments for kubelet.
+        - extra_node_etcd_args: arguments for etcd.
+        - extra_node_k8s_dqlite_args: arguments for k8s-dqlite
 
     Args:
         src (ops.ConfigData): the charm instance to get the configuration from.
@@ -66,6 +68,13 @@ def craft(
 
         cmd = _parse(src["kube-scheduler-extra-args"])
         dest.extra_node_kube_scheduler_args = cmd
+        
+        cmd = _parse(src["datastore-extra-args"])
+        match src["bootstrap-datastore"]:
+            case "dqlite":
+                dest.extra_node_k8s_dqlite_args = cmd
+            case "managed-etcd":
+                dest.extra_node_etcd_args = cmd
 
     cmd = _parse(src["kube-proxy-extra-args"])
     dest.extra_node_kube_proxy_args = cmd

@@ -58,11 +58,6 @@ LOCAL_STORAGE_RECLAIM_POLICY = option.StrOption("local-storage-reclaim-policy")
 NETWORK_ENABLED = option.BoolOption("network-enabled")
 METRICS_SERVER_ENABLED = option.BoolOption("metrics-server-enabled")
 
-# Managed ETCD Options
-BOOTSTRAP_ETCD_PORT = option.IntOption("bootstrap-etcd-port")
-BOOTSTRAP_ETCD_PEER_PORT = option.IntOption("bootstrap-etcd-peer-port")
-
-
 # Worker and Control Plane Options
 BOOTSTRAP_NODE_TAINTS = option.StrOption("bootstrap-node-taints")
 NODE_LABELS = option.StrOption("node-labels")
