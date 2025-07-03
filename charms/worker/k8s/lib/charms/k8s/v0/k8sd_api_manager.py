@@ -634,6 +634,10 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
 
     Attributes:
         model_config: ConfigDict instance for the model.
+        etcd_server_cert (str): The server certificate to be used for etcd.
+        etcd_server_key (str): The server key to be used for etcd.
+        etcd_peer_cert (str): The server peer certificate to be used for etcd.
+        etcd_peer_key (str): The server peer key to be used for etcd.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
         apiserver_crt (str): API server certificate
         apiserver_key (str): API server certificate key
@@ -650,11 +654,16 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
         extra_node_kube_controller_manager_args (Dict[str, Optional[str]]): Controller manager args
         extra_node_kube_scheduler_args (Dict[str, Optional[str]]): Scheduler args
         extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): Dqlite args
+        extra_node_etcd_args (Dict[str, Optional[str]]): ETCD args
         extra_node_containerd_config (Dict[str, Any]): Containerd config
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
+    etcd_server_cert: Optional[str] = Field(default=None, alias="etcd-server-crt")
+    etcd_server_key: Optional[str] = Field(default=None, alias="etcd-server-key")
+    etcd_peer_cert: Optional[str] = Field(default=None, alias="etcd-peer-crt")
+    etcd_peer_key: Optional[str] = Field(default=None, alias="etcd-peer-key")
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
     apiserver_crt: Optional[str] = Field(default=None, alias="apiserver-crt")
     apiserver_key: Optional[str] = Field(default=None, alias="apiserver-key")
@@ -688,6 +697,9 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
     )
     extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+        default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
