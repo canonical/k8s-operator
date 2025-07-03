@@ -30,35 +30,6 @@ from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import config.bootstrap
-import charms.contextual_status as status
-import charms.operator_libs_linux.v2.snap as snap_lib
-import ops
-import yaml
-from charms.contextual_status import ReconcilerError, on_error
-from charms.grafana_agent.v0.cos_agent import COSAgentProvider
-from charms.interface_external_cloud_provider import ExternalCloudProvider
-from charms.k8s.v0.k8sd_api_manager import (
-    BootstrapConfig,
-    ControlPlaneNodeJoinConfig,
-    CreateClusterRequest,
-    InvalidResponseError,
-    JoinClusterRequest,
-    K8sdAPIManager,
-    K8sdConnectionError,
-    NodeJoinConfig,
-    UnixSocketConnectionFactory,
-    UpdateClusterConfigRequest,
-    UserFacingDatastoreConfig,
-)
-from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
-from charms.node_base import LabelMaker
-from charms.operator_libs_linux.v1 import systemd
-from charms.reconciler import Reconciler
-from loadbalancer_interface import LBProvider
-from ops.interface_kube_control import KubeControlProvides
-from pydantic import SecretStr
-from typing_extensions import Literal
-
 import config.extra_args
 import containerd
 import k8s.node

@@ -13,7 +13,6 @@ from typing import Optional
 import ops
 import pki
 from config.option import CharmOption
-
 from literals import (
     BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
