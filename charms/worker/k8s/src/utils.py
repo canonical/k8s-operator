@@ -52,6 +52,7 @@ def ttl_to_seconds(ttl: str):
 
 def setup_root_logger():
     """Improve the JujuLogHandler to include logger name and lineno."""
+    # TODO https://github.com/canonical/operator/issues/1880
     root_logger = logging.getLogger()
     for handler in root_logger.handlers:
         if isinstance(handler, ops.log.JujuLogHandler):
