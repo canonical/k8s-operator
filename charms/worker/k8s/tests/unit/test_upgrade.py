@@ -13,6 +13,7 @@ from lightkube.models.meta_v1 import ObjectMeta
 from literals import (
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
+    MANAGED_ETCD_SERVICE,
     K8S_WORKER_SERVICES,
     UPGRADE_RELATION,
 )
@@ -188,7 +189,7 @@ class TestK8sUpgrade(unittest.TestCase):
         self.charm.is_worker = False
 
         self.upgrade._upgrade(event)
-        services = K8S_CONTROL_PLANE_SERVICES("etcd")
+        services = [s for s in K8S_CONTROL_PLANE_SERVICES if s != K8S_DQLITE_SERVICE or s != MANAGED_ETCD_SERVICE]
         perform_upgrade.assert_called_once_with(services=services)
         on_upgrade_changed.assert_called_once_with(event)
 
