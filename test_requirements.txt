@@ -1,9 +1,0 @@
-juju
-pydantic
-pylxd
-pytest
-pytest-asyncio
-pytest-operator
-pytest-sugar
-tenacity
-requests < 2.32  # https://github.com/canonical/pylxd/issues/579

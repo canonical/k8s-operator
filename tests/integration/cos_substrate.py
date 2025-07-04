@@ -42,7 +42,9 @@ class LXDSubstrate(COSSubstrate):
         self.network_name = network_name
 
     def apply_profile(
-        self, profile_name: str = "microk8s.profile", target_profile_name: str = "cos-profile"
+        self,
+        profile_name: str = "microk8s.profile",
+        target_profile_name: str = "cos-profile",
     ):
         """Apply LXD profile.
 
@@ -105,7 +107,10 @@ class LXDSubstrate(COSSubstrate):
             return None
 
     def create_network(
-        self, network_name: str, subnet_cidr: str = "10.10.0.0/24", reserved_addresses: int = 5
+        self,
+        network_name: str,
+        subnet_cidr: str = "10.10.0.0/24",
+        reserved_addresses: int = 5,
     ) -> Tuple[IPAddress, IPAddress]:
         """Create a network.
 
@@ -278,7 +283,14 @@ class LXDSubstrate(COSSubstrate):
         """
         return self.execute_command(
             container,
-            ["sudo", "snap", "install", "microk8s", "--channel=1.28/stable", "--classic"],
+            [
+                "sudo",
+                "snap",
+                "install",
+                "microk8s",
+                "--channel=1.28/stable",
+                "--classic",
+            ],
         )
 
     def remove_profile(self, profile_name: str = "cos-profile"):

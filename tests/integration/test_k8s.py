@@ -14,11 +14,10 @@ import juju.model
 import juju.unit
 import pytest
 import pytest_asyncio
+from grafana import Grafana
+from helpers import get_leader, get_rsc, ready_nodes, wait_pod_phase
+from prometheus import Prometheus
 from tenacity import retry, stop_after_attempt, wait_fixed
-
-from .grafana import Grafana
-from .helpers import get_leader, get_rsc, ready_nodes, wait_pod_phase
-from .prometheus import Prometheus
 
 log = logging.getLogger(__name__)
 
