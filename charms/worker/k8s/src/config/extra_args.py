@@ -68,7 +68,7 @@ def craft(
 
         cmd = _parse(src["kube-scheduler-extra-args"])
         dest.extra_node_kube_scheduler_args = cmd
-        
+
         cmd = _parse(src["datastore-extra-args"])
         match src["bootstrap-datastore"]:
             case "dqlite":

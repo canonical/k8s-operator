@@ -415,8 +415,8 @@ class BootstrapConfig(BaseModel):
         etcd_server_key (str): The server key to be used for etcd.
         etcd_peer_cert (str): The server peer certificate to be used for etcd.
         etcd_peer_key (str): The server peer key to be used for etcd.
-        etcd_apiserver_client_cert (str): The client certificate to be used by the kube-apiserver to communicate with etcd.
-        etcd_apiserver_client_key (str): The client key to be used by the kube-apiserver to communicate with etcd.
+        etcd_apiserver_client_cert (str): The client certificate to be used by the kube-apiserver.
+        etcd_apiserver_client_key (str): The client key to be used by the kube-apiserver.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
         ca_cert (str): The CA certificate for Kubernetes services.
         ca_key (str): The CA key for Kubernetes services.
@@ -484,8 +484,12 @@ class BootstrapConfig(BaseModel):
     etcd_server_key: Optional[str] = Field(default=None, alias="etcd-server-key")
     etcd_peer_cert: Optional[str] = Field(default=None, alias="etcd-peer-crt")
     etcd_peer_key: Optional[str] = Field(default=None, alias="etcd-peer-key")
-    etcd_apiserver_client_cert: Optional[str] = Field(default=None, alias="etcd-apiserver-client-crt")
-    etcd_apiserver_client_key: Optional[str] = Field(default=None, alias="etcd-apiserver-client-key")
+    etcd_apiserver_client_cert: Optional[str] = Field(
+        default=None, alias="etcd-apiserver-client-crt"
+    )
+    etcd_apiserver_client_key: Optional[str] = Field(
+        default=None, alias="etcd-apiserver-client-key"
+    )
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
     # Cluster-wide external certificates
     ca_cert: Optional[str] = Field(default=None, alias="ca-crt")

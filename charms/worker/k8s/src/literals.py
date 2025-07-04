@@ -111,7 +111,7 @@ K8S_COMMON_SERVICES = [
 ]
 
 K8S_DQLITE_SERVICE = "k8s-dqlite"
-MANAGED_ETCD_SERVICE = "etcd" 
+MANAGED_ETCD_SERVICE = "etcd"
 
 K8S_CONTROL_PLANE_SERVICES = [
     "kube-apiserver",
