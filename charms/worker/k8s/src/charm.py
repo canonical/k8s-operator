@@ -644,7 +644,6 @@ class K8sCharm(ops.CharmBase):
                 ", ".join(SUPPORTED_DATASTORES),
             )
             status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-        if datastore not in SUPPORTED_DATASTORES:
             raise ReconcilerError(f"Invalid datastore: {datastore}")
 
         if datastore == "etcd":
