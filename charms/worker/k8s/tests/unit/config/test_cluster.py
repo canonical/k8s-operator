@@ -137,3 +137,27 @@ def test_configure_controller_extra_args(harness):
         "--foo": "bat",
         "--blog": "true",
     }
+
+
+def test_configure_datastore_extra_args(harness):
+    """Test configuring the datastore extra options.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
+    harness.update_config({"bootstrap-datastore": "managed-etcd"})
+    harness.update_config({"datastore-extra-args": "v=6 foo=ban clog"})
+
+    bootstrap_config = harness.charm._assemble_bootstrap_config()
+
+    assert bootstrap_config.extra_node_etcd_args == {
+        "--v": "6",
+        "--foo": "ban",
+        "--clog": "true",
+    }
+    assert bootstrap_config.extra_node_k8s_dqlite_args is None

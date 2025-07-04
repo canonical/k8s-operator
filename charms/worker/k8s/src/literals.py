@@ -25,7 +25,7 @@ KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = f"{SNAP_COMMON}/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
-SUPPORTED_DATASTORES = ["dqlite", "etcd"]
+SUPPORTED_DATASTORES = ["managed-etcd", "dqlite", "etcd"]
 EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
 EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
 EXTERNAL_LOAD_BALANCER_PORT = 443
@@ -111,10 +111,12 @@ K8S_COMMON_SERVICES = [
 ]
 
 K8S_DQLITE_SERVICE = "k8s-dqlite"
+MANAGED_ETCD_SERVICE = "etcd"
 
 K8S_CONTROL_PLANE_SERVICES = [
     "kube-apiserver",
     K8S_DQLITE_SERVICE,
+    MANAGED_ETCD_SERVICE,
     "kube-controller-manager",
     "kube-scheduler",
     *K8S_COMMON_SERVICES,

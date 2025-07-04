@@ -14,6 +14,7 @@ from literals import (
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
     K8S_WORKER_SERVICES,
+    MANAGED_ETCD_SERVICE,
     SNAP_NAME,
     UPGRADE_RELATION,
 )
@@ -212,8 +213,11 @@ class K8sUpgrade(DataUpgrade):
         self.charm.grant_upgrade()
         if self.charm.is_control_plane:
             services = list(K8S_CONTROL_PLANE_SERVICES)
-            if BOOTSTRAP_DATASTORE.get(self.charm) != "dqlite":
+            bootstrap_datastore = BOOTSTRAP_DATASTORE.get(self.charm)
+            if bootstrap_datastore != "dqlite":
                 services.remove(K8S_DQLITE_SERVICE)
+            if bootstrap_datastore != "managed-etcd":
+                services.remove(MANAGED_ETCD_SERVICE)
         else:
             services = list(K8S_WORKER_SERVICES)
 
