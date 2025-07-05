@@ -275,7 +275,7 @@ from ops.charm import (
 )
 from ops.framework import EventBase, EventSource, Object
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, Relation, Unit, WaitingStatus
-from pydantic.v1 import BaseModel, root_validator, validator
+from pydantic import BaseModel, root_validator, validator
 
 # The unique Charmhub library identifier, never change it
 LIBID = "156258aefb79435a93d933409a8c8684"
@@ -285,7 +285,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 18
+LIBPATCH = 19
 
 PYDEPS = ["pydantic>=1.10,<2", "poetry-core"]
 
@@ -929,7 +929,7 @@ class DataUpgrade(Object, ABC):
             # for k8s run version checks only on highest ordinal unit
             if (
                 self.charm.unit.name
-                == f"{self.charm.app.name}/{self.charm.app.planned_units() -1}"
+                == f"{self.charm.app.name}/{self.charm.app.planned_units() - 1}"
             ):
                 try:
                     self._upgrade_supported_check()
