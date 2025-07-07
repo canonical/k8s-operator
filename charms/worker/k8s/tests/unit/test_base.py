@@ -198,6 +198,7 @@ def test_configure_datastore_bootstrap_config_managed_etcd(harness):
     assert bs_config.datastore_servers is None
     assert bs_config.datastore_type is None
 
+
 def test_configure_datastore_bootstrap_config_dqlite(harness):
     """Test configuring the datastore=dqlite on bootstrap.
 
