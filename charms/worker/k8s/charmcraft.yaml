@@ -75,7 +75,7 @@ config:
         Example:
           e.g.: key1=value1 key2=value2
     bootstrap-datastore:
-      default: dqlite
+      default: managed-etcd
       type: string
       description: |
         The datastore to use in Canonical Kubernetes. This cannot be changed
