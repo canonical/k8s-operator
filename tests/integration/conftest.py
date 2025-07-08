@@ -25,8 +25,9 @@ from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from pytest_operator.plugin import OpsTest
 
-from .cos_substrate import LXDSubstrate
+from .cos_substrate import COSSubstrate
 from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
+from .lxd_substrate import LXDSubstrate
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -161,12 +162,28 @@ async def cloud_profile(ops_test: OpsTest):
         ops_test (OpsTest): ops_test plugin
     """
     _type, _vms = await cloud_type(ops_test)
-    if _type == "lxd" and not _vms and ops_test.model:
+    if _type == "lxd" and ops_test.model:
         # lxd-profile to the model if the juju cloud is lxd.
-        lxd = LXDSubstrate("", "")
+        lxd = LXDSubstrate()
+
+        lxd_profiles, lxd_networks = [], []
+        if not _vms:
+            # If we're using LXD containers, apply the container profile.
+            lxd_profiles.append("k8s.profile")
+
+        # -- Setup LXD networks and profiles for the model.
+        cloud_mark = ops_test.request.node.get_closest_marker("clouds")
+        if cloud_mark and "lxd" in cloud_mark.args:
+            if networks := cloud_mark.kwargs.get("networks"):
+                lxd_networks.extend(networks)
+            if profiles := cloud_mark.kwargs.get("profiles"):
+                lxd_profiles.extend(profiles)
+
         profile_name = f"juju-{ops_test.model.name}"
+        lxd.configure_networks(lxd_networks)
         lxd.remove_profile(profile_name)
-        lxd.apply_profile("k8s.profile", profile_name)
+        lxd.apply_profile(lxd_profiles, profile_name)
+
     elif _type in ("ec2", "openstack") and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
@@ -324,11 +341,11 @@ async def cos_model(
     """Create a COS substrate and a K8s model."""
     container_name = "cos-substrate"
     network_name = "cos-network"
-    manager = LXDSubstrate(container_name, network_name)
+    manager = COSSubstrate(container_name, network_name)
 
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_text(config)
+    kubeconfig_path.write_bytes(config)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
 
