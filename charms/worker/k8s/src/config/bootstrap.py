@@ -81,12 +81,6 @@ class BootstrapConfigOptions(BaseModel):
         datastore = (
             cluster_config and cluster_config.datastore and cluster_config.datastore.type or ""
         )
-        # NOTE(Hue): datastore type names (in charm) are not exactly the name set in the snap.
-        # We change the snap datastore name here to conform with the charm config.
-        for charm_ds_name, snap_ds_name in DATASTORE_NAME_MAPPING.items():
-            if datastore == snap_ds_name:
-                datastore = charm_ds_name
-                break
 
         return BootstrapConfigOptions(
             certificates=certificates,
