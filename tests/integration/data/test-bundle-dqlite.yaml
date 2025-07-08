@@ -14,7 +14,7 @@ applications:
     options:
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
       node-labels: "node-role.kubernetes.io/control-plane= k8sd.io/role=control-plane"
-      bootstrap-datastore: managed-etcd
+      bootstrap-datastore: dqlite
       datastore-extra-args: "v=3"
   k8s-worker:
     charm: k8s-worker

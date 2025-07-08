@@ -172,6 +172,7 @@ class TestK8sUpgrade(unittest.TestCase):
 
         mock_upgrade.assert_called_once_with(event)
 
+    @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
@@ -197,6 +198,7 @@ class TestK8sUpgrade(unittest.TestCase):
         perform_upgrade.assert_called_once_with(services=services)
         on_upgrade_changed.assert_called_once_with(event)
 
+    @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)

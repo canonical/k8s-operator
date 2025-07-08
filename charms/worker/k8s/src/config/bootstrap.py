@@ -14,6 +14,7 @@ from literals import (
     BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
     BOOTSTRAP_SERVICE_CIDR,
+    DATASTORE_NAME_MAPPING,
 )
 from pki import check_ca_key
 from protocols import K8sCharmProtocol
@@ -80,10 +81,12 @@ class BootstrapConfigOptions(BaseModel):
         datastore = (
             cluster_config and cluster_config.datastore and cluster_config.datastore.type or ""
         )
-        # NOTE(Hue): datastore type `dqlite` (in charm) is equal to `k8s-dqlite` in the snap.
-        # We change it to `dqlite` here to conform with the charm config.
-        if datastore == "k8s-dqlite":
-            datastore = "dqlite"
+        # NOTE(Hue): datastore type names (in charm) are not exactly the name set in the snap.
+        # We change the snap datastore name here to conform with the charm config.
+        for charm_ds_name, snap_ds_name in DATASTORE_NAME_MAPPING.items():
+            if datastore == snap_ds_name:
+                datastore = charm_ds_name
+                break
 
         return BootstrapConfigOptions(
             certificates=certificates,
@@ -246,7 +249,5 @@ def datastore_changed(charm_ds: str, snap_ds: str) -> bool:
     """
     # TODO(Hue): (KU-3226) Implement a mechanism to prevent changing external DBs.
     # Maybe stored state?
-    if charm_ds != "dqlite" and snap_ds == "external":
-        return False
 
-    return charm_ds != snap_ds
+    return snap_ds != DATASTORE_NAME_MAPPING.get(charm_ds)

@@ -7,6 +7,7 @@
 
 from typing import Dict, List, Union
 
+import literals
 import ops
 
 from charms.k8s.v0.k8sd_api_manager import (
@@ -71,9 +72,9 @@ def craft(
 
         cmd = _parse(src["datastore-extra-args"])
         match src["bootstrap-datastore"]:
-            case "dqlite":
+            case literals.DATASTORE_TYPE_K8S_DQLITE:
                 dest.extra_node_k8s_dqlite_args = cmd
-            case "managed-etcd":
+            case literals.DATASTORE_TYPE_ETCD:
                 dest.extra_node_etcd_args = cmd
 
     cmd = _parse(src["kube-proxy-extra-args"])

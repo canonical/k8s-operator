@@ -11,6 +11,8 @@ import reschedule
 from inspector import ClusterInspector
 from literals import (
     BOOTSTRAP_DATASTORE,
+    DATASTORE_TYPE_ETCD,
+    DATASTORE_TYPE_K8S_DQLITE,
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
     K8S_WORKER_SERVICES,
@@ -214,9 +216,9 @@ class K8sUpgrade(DataUpgrade):
         if self.charm.is_control_plane:
             services = list(K8S_CONTROL_PLANE_SERVICES)
             bootstrap_datastore = BOOTSTRAP_DATASTORE.get(self.charm)
-            if bootstrap_datastore != "dqlite":
+            if bootstrap_datastore != DATASTORE_TYPE_K8S_DQLITE:
                 services.remove(K8S_DQLITE_SERVICE)
-            if bootstrap_datastore != "managed-etcd":
+            if bootstrap_datastore != DATASTORE_TYPE_ETCD:
                 services.remove(MANAGED_ETCD_SERVICE)
         else:
             services = list(K8S_WORKER_SERVICES)

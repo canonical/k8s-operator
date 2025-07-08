@@ -196,7 +196,7 @@ def test_configure_datastore_bootstrap_config_managed_etcd(harness):
     assert bs_config.datastore_client_cert is None
     assert bs_config.datastore_client_key is None
     assert bs_config.datastore_servers is None
-    assert bs_config.datastore_type is None
+    assert bs_config.datastore_type == "etcd"
 
 
 def test_configure_datastore_bootstrap_config_dqlite(harness):
@@ -208,13 +208,14 @@ def test_configure_datastore_bootstrap_config_dqlite(harness):
     if harness.charm.is_worker:
         pytest.skip("Not applicable on workers")
 
-    bs_config = BootstrapConfig(**{"datastore-type": "dqlite"})
+    bs_config = BootstrapConfig()
+    harness.update_config({"bootstrap-datastore": "dqlite"})
     harness.charm._configure_datastore(bs_config)
     assert bs_config.datastore_ca_cert is None
     assert bs_config.datastore_client_cert is None
     assert bs_config.datastore_client_key is None
     assert bs_config.datastore_servers is None
-    assert bs_config.datastore_type == "dqlite"
+    assert bs_config.datastore_type == "k8s-dqlite"
 
 
 def test_configure_datastore_bootstrap_config_etcd(harness):

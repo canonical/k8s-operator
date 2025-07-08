@@ -70,6 +70,10 @@ from literals import (
     COS_RELATION,
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
+    DATASTORE_NAME_MAPPING,
+    DATASTORE_TYPE_ETCD,
+    DATASTORE_TYPE_EXTERNAL,
+    DATASTORE_TYPE_K8S_DQLITE,
     DEPENDENCIES,
     ETC_KUBERNETES,
     ETCD_RELATION,
@@ -372,17 +376,23 @@ class K8sCharm(ops.CharmBase):
         """
         unit, node = self.unit.name, self.get_node_name()
         if self._stored.cluster_name == "":
-            if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
+            if self.lead_control_plane:
+                log.info("Lead control plane node %s generating unique cluster name.", node)
                 self._stored.cluster_name = self._generate_unique_cluster_name()
             elif not (relation := self.model.get_relation(CLUSTER_RELATION)):
-                pass
-            elif any(
-                [
-                    self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
-                    k8s.node.present(self.kubeconfig, node) == k8s.node.Presence.AVAILABLE,
-                ]
-            ):
+                log.warning(
+                    "Node %s has no '%s' relation, cannot determine cluster name.",
+                    node,
+                    CLUSTER_RELATION,
+                )
+            elif (
+                result := k8s.node.present(self.kubeconfig, node)
+            ) != k8s.node.Presence.AVAILABLE:
+                log.warning("Node %s, is not available in cluster (status %s).", node, result)
+            elif self.is_worker or self.api_manager.is_cluster_bootstrapped():
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
+            else:
+                log.warning("Node %s isn't bootstrapped, skipping cluster name.", node)
 
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
         return str(self._stored.cluster_name)
@@ -646,7 +656,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
             raise ReconcilerError(f"Invalid datastore: {datastore}")
 
-        if datastore == "etcd":
+        if datastore == DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation(ETCD_RELATION)
 
@@ -658,7 +668,7 @@ class K8sCharm(ops.CharmBase):
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
-                config.datastore_type = "external"
+                config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_EXTERNAL)
                 config.datastore_ca_cert = etcd_config.get("client_ca", "")
                 config.datastore_client_cert = etcd_config.get("client_cert", "")
                 config.datastore_client_key = etcd_config.get("client_key", "")
@@ -666,17 +676,18 @@ class K8sCharm(ops.CharmBase):
                 log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
                 config.datastore = UserFacingDatastoreConfig()
-                config.datastore.type = "external"
+                config.datastore.type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_EXTERNAL)
                 config.datastore.servers = self.etcd.get_connection_string().split(",")
                 config.datastore.ca_crt = etcd_config.get("client_ca", "")
                 config.datastore.client_crt = etcd_config.get("client_cert", "")
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
 
-        elif datastore == "managed-etcd" and isinstance(config, BootstrapConfig):
+        elif datastore == DATASTORE_TYPE_ETCD and isinstance(config, BootstrapConfig):
+            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_ETCD)
             log.info("Using managed etcd as datastore")
-        elif datastore == "dqlite" and isinstance(config, BootstrapConfig):
-            config.datastore_type = "k8s-dqlite"
+        elif datastore == DATASTORE_TYPE_K8S_DQLITE and isinstance(config, BootstrapConfig):
+            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_K8S_DQLITE)
             log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
