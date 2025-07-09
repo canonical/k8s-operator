@@ -13,6 +13,7 @@ applications:
     expose: true
     options:
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
+      bootstrap-datastore: managed-etcd
       node-labels: "node-role.kubernetes.io/control-plane= k8sd.io/role=control-plane"
       kube-apiserver-extra-args: "v=3"
       kube-controller-manager-extra-args: "v=3"

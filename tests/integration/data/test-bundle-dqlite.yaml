@@ -8,14 +8,13 @@ series: jammy
 applications:
   k8s:
     charm: k8s
-    num_units: 2
+    num_units: 3
     constraints: cores=2 mem=8G root-disk=16G
     expose: true
     options:
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
       node-labels: "node-role.kubernetes.io/control-plane= k8sd.io/role=control-plane"
       bootstrap-datastore: dqlite
-      datastore-extra-args: "debug=true"
   k8s-worker:
     charm: k8s-worker
     num_units: 2
