@@ -31,6 +31,7 @@ from charms.data_platform_libs.v0.upgrade import (
     ClusterNotReadyError,
     DataUpgrade,
     DependencyModel,
+    UpgradeFinishedEvent,
     UpgradeGrantedEvent,
     verify_requirements,
 )
@@ -65,6 +66,32 @@ class K8sUpgrade(DataUpgrade):
         super().__init__(charm, **kwargs)
         self.charm = charm
         self.cluster_inspector = cluster_inspector
+
+    def block_pre_upgrade_check(self, event: ops.EventBase):
+        """Block reconciler if the unit was upgraded without a pre-upgrade-check.
+
+        Args:
+            event: ops.EventBase - event that triggered the check
+        """
+        if isinstance(event, UpgradeGrantedEvent):
+            log.info("Upgrade granted, proceeding with reconciliation")
+            return
+        if isinstance(event, UpgradeFinishedEvent):
+            log.info("Upgrade finished, proceeding with reconciliation")
+            return
+        if isinstance(event, ops.UpgradeCharmEvent) and not super().upgrade_stack:
+            message = "Unit was upgraded without a pre-upgrade-check"
+            log.warning(message)
+            self.set_unit_failed(message)
+            if self.charm.unit.is_leader():
+                self.upgrade_stack = self.build_upgrade_stack()
+            status.add(self.charm.unit.status)
+            raise status.ReconcilerError(message)
+        if self.state != "idle":
+            message = "Unit is in a busy upgrade state, don't reconcile"
+            log.warning(message)
+            status.add(self.charm.unit.status)
+            raise status.ReconcilerError(message)
 
     def set_upgrade_status(self, event: ops.UpdateStatusEvent) -> None:
         """Set the Juju upgrade status.

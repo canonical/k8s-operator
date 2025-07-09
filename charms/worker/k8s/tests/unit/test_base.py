@@ -171,6 +171,7 @@ def test_set_leader(harness):
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
+    harness.charm.upgrade = mock.MagicMock()
     harness.charm._ensure_cert_sans = mock.MagicMock()
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
