@@ -33,7 +33,7 @@ async def test_check_right_datastore_config(kubernetes_cluster: model.Model):
     result = await event.wait()
     status = json.loads(result.results["stdout"])
     assert status["ready"], "Cluster isn't ready"
-    assert status["datastore"]["type"] == "dqlite", "Datastore type is not set to dqlite"
+    assert status["datastore"]["type"] == "k8s-dqlite", "Datastore type is not set to dqlite"
 
 
 async def test_kube_system_pods(kubernetes_cluster: model.Model):

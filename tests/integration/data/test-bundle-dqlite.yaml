@@ -1,7 +1,7 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-name: integration-managed-etcd-test
+name: integration-dqlite-test
 description: |-
   Used to deploy or refresh within an integration test model
 series: jammy
@@ -15,7 +15,7 @@ applications:
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
       node-labels: "node-role.kubernetes.io/control-plane= k8sd.io/role=control-plane"
       bootstrap-datastore: dqlite
-      datastore-extra-args: "v=3"
+      datastore-extra-args: "debug=true"
   k8s-worker:
     charm: k8s-worker
     num_units: 2
