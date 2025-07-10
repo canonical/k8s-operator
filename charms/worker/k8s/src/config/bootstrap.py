@@ -7,10 +7,11 @@
 
 import http
 import logging
-from typing import List, Optional
+from typing import Optional
 
 import ops
 import pki
+from config.option import CharmOption
 from literals import (
     BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
@@ -28,34 +29,54 @@ import charms.k8s.v0.k8sd_api_manager as k8sd_api_manager
 log = logging.getLogger(__name__)
 
 
-class ChangedConfig:
+class ConfigComparison:
     """A class to represent a changed configuration."""
 
-    def __init__(self, name: str, old, new) -> None:
-        """Create a new instance of the ChangedConfig class."""
-        self._name = name
-        self._old = old
-        self._new = new
+    def __init__(
+        self, charm: ops.CharmBase, option: CharmOption, current, eq=None, mapping=None
+    ) -> None:
+        """Initialize the ConfigComparison instance.
 
-    def __str__(self) -> str:
-        """Return a string representation of the ChangedConfig instance."""
-        return f"{self._name}: {self._old=}, {self._new=}"
+        Args:
+            charm: The charm instance to fetch the current config
+            option: The charm option to compare against.
+            current: The current value of the configuration option from the snap.
+            eq: A function to compare the current and configured values. Defaults to equality.
+            mapping: A mapping of charm values to snap values.
+        """
+        self._charm = charm
+        self._option = option
+        self._mapping = mapping or {}
+        # The equality function to compare the charm and current values
+        self._eq = eq or (lambda x, y: x == y)
+        # Represents the model's config value
+        self._charm_val = self._option.get(self._charm)
+        # Represents the charm config which would set this in the snap
+        self._cur_val = self._unmapped(current)
+
+    def _unmapped(self, snap_value: str) -> str:
+        """Return the charm value for the given snap value."""
+        return {v: k for k, v in self._mapping.items()}.get(snap_value, snap_value)
+
+    @property
+    def matching(self) -> bool:
+        """Check if the configuration has matches."""
+        if not (matches := self._eq(self._cur_val, self._charm_val)):
+            log.warning(
+                "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
+                self._option.name,
+                self._charm_val,
+                self._charm.app.name,
+                self._option.name,
+                self._cur_val,
+            )
+        return matches
 
     @property
     def user_status(self) -> ops.BlockedStatus:
         """Return a user-friendly block status."""
-        return ops.BlockedStatus(f"Cannot config {self._name}='{self._new}'. Check logs")
-
-
-class BootstrapConfigChangeError(Exception):
-    """An exception raised when a bootstrap config is changed."""
-
-    def __init__(self, changed: List[ChangedConfig]):
-        self.changed = changed
-        self._changed_str = "\n".join(str(c) for c in changed)
-        super().__init__(
-            "Bootstrap config options can not be changed. "
-            f"Change the charm config options to match the cluster config:\n{self._changed_str}"
+        return ops.BlockedStatus(
+            f"Expected {self._option.name}='{self._cur_val}' not '{self._charm_val}'"
         )
 
 
@@ -98,6 +119,53 @@ class BootstrapConfigOptions(BaseModel):
             service_cidr=cluster_config and cluster_config.service_cidr or "",
         )
 
+    def prevent(self, charm: K8sCharmProtocol) -> Optional[ops.BlockedStatus]:
+        """Prevent bootstrap config changes after bootstrap.
+
+        Args:
+            charm: The charm instance to check the bootstrap config options for.
+            ref_config: The reference bootstrap config options to compare against.
+
+        Returns:
+            An ops.BlockedStatus if any bootstrap options have changed, None otherwise.
+        """
+        test = []
+        if charm.is_control_plane:
+            test.append(
+                ConfigComparison(
+                    charm,
+                    BOOTSTRAP_DATASTORE,
+                    self.datastore,
+                    mapping=DATASTORE_NAME_MAPPING,
+                )
+            )
+            test.append(ConfigComparison(charm, BOOTSTRAP_CERTIFICATES, self.certificates))
+            test.append(ConfigComparison(charm, BOOTSTRAP_POD_CIDR, self.pod_cidr))
+            test.append(ConfigComparison(charm, BOOTSTRAP_SERVICE_CIDR, self.service_cidr))
+        test += [
+            ConfigComparison(charm, BOOTSTRAP_NODE_TAINTS, self.node_taints, eq=_equal_taints)
+        ]
+
+        if reports := [c for c in test if not c.matching]:
+            return reports[0].user_status
+        return None
+
+
+def _equal_taints(t1: str, t2: str) -> bool:
+    """Check if two taint strings are equal.
+
+    The strings can be in any order and individual taints can be separated by spaces.
+
+    Args:
+        t1: The first taint string.
+        t2: The second taint string.
+
+    Returns:
+        True if the two taint strings are equal, False otherwise.
+    """
+    t1_split, t2_split = t1.split(), t2.split()
+    return len(t1_split) == len(t2_split) and set(t1_split) == set(t2_split)
+
 
 @context_status.on_error(
     ops.WaitingStatus("Failed to get communicate with k8sd."),
@@ -121,156 +189,6 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
             return
         raise
 
-    if blocked := prevent(charm, ref_config):
-        log.info("Bootstrap config changes are blocked: %s", blocked.message)
+    if blocked := ref_config.prevent(charm):
         context_status.add(blocked)
         raise context_status.ReconcilerError(blocked.message)
-
-
-def prevent(
-    charm: K8sCharmProtocol, ref_config: BootstrapConfigOptions
-) -> Optional[ops.BlockedStatus]:
-    """Prevent bootstrap config changes after bootstrap.
-
-    Args:
-        charm: The charm instance to check the bootstrap config options for.
-        ref_config: The reference bootstrap config options to compare against.
-
-    Returns:
-        An ops.BlockedStatus if any bootstrap options have changed, None otherwise.
-    """
-    changes = []
-    if charm.is_control_plane:
-        changes += _prevent_control_plane_bootstrap_config_change(charm, ref_config)
-    changes += _prevent_worker_bootstrap_config_change(charm, ref_config)
-    return _prevent(changes)
-
-
-def _prevent_control_plane_bootstrap_config_change(charm, ref: BootstrapConfigOptions):
-    """Prevent control-plane bootstrap config changes after bootstrap.
-
-    Args:
-        charm: The charm instance to check the bootstrap config options for.
-        ref: The reference bootstrap config options to compare against.
-
-    Raises:
-        BootstrapConfigChangeError: If any of the bootstrap config options have changed.
-    """
-    changes: List[ChangedConfig] = []
-
-    datastore = BOOTSTRAP_DATASTORE.get(charm)
-    certificates = BOOTSTRAP_CERTIFICATES.get(charm)
-    pod_cidr = BOOTSTRAP_POD_CIDR.get(charm)
-    service_cidr = BOOTSTRAP_SERVICE_CIDR.get(charm)
-
-    # NOTE(Hue): We need a custom check here since the snap only knows
-    # `dqlite` and `external` as datastores.
-    # The charm config can be `dqlite`, `etcd`, etc.
-    if _datastore_changed(datastore, ref.datastore):
-        changes.append(
-            ChangedConfig(
-                name=BOOTSTRAP_DATASTORE.name,
-                old=ref.datastore,
-                new=datastore,
-            )
-        )
-
-    if certificates != ref.certificates:
-        changes.append(
-            ChangedConfig(
-                name=BOOTSTRAP_CERTIFICATES.name,
-                old=ref.certificates,
-                new=certificates,
-            )
-        )
-
-    if pod_cidr != ref.pod_cidr:
-        changes.append(
-            ChangedConfig(
-                name=BOOTSTRAP_POD_CIDR.name,
-                old=ref.pod_cidr,
-                new=pod_cidr,
-            )
-        )
-
-    if service_cidr != ref.service_cidr:
-        changes.append(
-            ChangedConfig(
-                name=BOOTSTRAP_SERVICE_CIDR.name,
-                old=ref.service_cidr,
-                new=service_cidr,
-            )
-        )
-    return changes
-
-
-def _prevent_worker_bootstrap_config_change(charm, ref: BootstrapConfigOptions):
-    """Prevent worker bootstrap config changes after bootstrap.
-
-    Args:
-        charm: The charm instance to check the bootstrap config options for.
-        ref: The reference bootstrap config options to compare against.
-
-    Raises:
-        BootstrapConfigChangeError: If any of the bootstrap config options have changed.
-    """
-    changes: List[ChangedConfig] = []
-
-    taints = BOOTSTRAP_NODE_TAINTS.get(charm)
-
-    if not _equal_taints(ref.node_taints, taints):
-        changes.append(
-            ChangedConfig(
-                name=BOOTSTRAP_NODE_TAINTS.name,
-                old=ref.node_taints,
-                new=taints,
-            )
-        )
-    return changes
-
-
-def _prevent(changes: List[ChangedConfig]):
-    """Prevent bootstrap config changes after bootstrap.
-
-    Args:
-        changes: A list of changed configuration options.
-
-    Raises:
-        BootstrapConfigChangeError: If any of the bootstrap config options have changed.
-    """
-    for c in changes:
-        log.error("Bootstrap config '%s' should NOT be changed after bootstrap. %s", c._name, c)
-    if changes:
-        return changes[0].user_status
-
-
-def _equal_taints(t1: str, t2: str) -> bool:
-    """Check if two taint strings are equal.
-
-    The strings can be in any order and individual taints can be separated by spaces.
-
-    Args:
-        t1: The first taint string.
-        t2: The second taint string.
-
-    Returns:
-        True if the two taint strings are equal, False otherwise.
-    """
-    t1_split, t2_split = t1.split(), t2.split()
-    return len(t1_split) == len(t2_split) and set(t1_split) == set(t2_split)
-
-
-def _datastore_changed(charm_ds: str, snap_ds: str) -> bool:
-    """Check if the datastore has changed.
-
-    Args:
-        charm_ds: The datastore in charm config.
-        snap_ds: The datastore in snap cluster config.
-
-    Returns:
-        True if the datastore has changed, False otherwise.
-    """
-    # TODO(Hue): (KU-3226) Implement a mechanism to prevent changing external DBs.
-    # Maybe stored state?
-
-    return snap_ds != DATASTORE_NAME_MAPPING.get(charm_ds)

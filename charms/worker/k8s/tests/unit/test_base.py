@@ -160,16 +160,16 @@ def test_detect_bootstrap_config_change(harness, caplog):
             config.bootstrap.detect_bootstrap_config_changes(harness.charm)
 
     assert "Preventing bootstrap config changes after bootstrap" in caplog.text
-    assert "Bootstrap config 'bootstrap-node-taints' should NOT be changed" in caplog.text
-    assert "Bootstrap config changes are blocked: Cannot config" in caplog.text
+    assert "Cannot satisfy configuration bootstrap-node-taints=" in caplog.text
+    assert f"Run `juju config {harness.charm.app.name} bootstrap-node-taints=" in caplog.text
     if harness.charm.is_worker:
         assert (
             str(ie.value)
-            == "Cannot config bootstrap-node-taints='newTaint1 newTaint2'. Check logs"
+            == "Expected bootstrap-node-taints='taint1 taint2' not 'newTaint1 newTaint2'"
         )
     else:
         assert all(
-            f"Bootstrap config '{msg}'" in caplog.text
+            f"Cannot satisfy configuration {msg}=" in caplog.text
             for msg in [
                 "bootstrap-certificates",
                 "bootstrap-datastore",
@@ -177,7 +177,7 @@ def test_detect_bootstrap_config_change(harness, caplog):
                 "bootstrap-service-cidr",
             ]
         )
-        assert str(ie.value) == "Cannot config bootstrap-datastore='managed-etcd'. Check logs"
+        assert str(ie.value) == "Expected bootstrap-datastore='dqlite' not 'managed-etcd'"
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
