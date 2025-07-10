@@ -7,6 +7,7 @@
 
 import http
 import logging
+from collections import Counter
 from typing import Optional
 
 import ops
@@ -163,8 +164,7 @@ def _equal_taints(t1: str, t2: str) -> bool:
     Returns:
         True if the two taint strings are equal, False otherwise.
     """
-    t1_split, t2_split = t1.split(), t2.split()
-    return len(t1_split) == len(t2_split) and set(t1_split) == set(t2_split)
+    return Counter(t1.split()) == Counter(t2.split())
 
 
 @context_status.on_error(
