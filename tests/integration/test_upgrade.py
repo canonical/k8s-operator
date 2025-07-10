@@ -67,7 +67,7 @@ not_found, not_found_reason = charm_channel_missing(CHARMCRAFT_DIRS, CHARM_UPGRA
 pytestmark = [
     pytest.mark.skipif(not_found, reason=not_found_reason),
     pytest.mark.bundle(
-        file="test-bundle.yaml",
+        file="test-bundle-dqlite.yaml",
         apps_channel={CONTROL_PLANE_APP: CHARM_UPGRADE_FROM, "k8s-worker": CHARM_UPGRADE_FROM},
     ),
 ]

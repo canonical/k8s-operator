@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
+import config.bootstrap
 import containerd
 import ops
 import ops.testing
@@ -68,7 +69,6 @@ def mock_reconciler_handlers(harness):
         "_configure_cos_integration",
         "_apply_node_labels",
         "_update_kubernetes_version",
-        "_prevent_bootstrap_config_change",
     }
     if harness.charm.is_control_plane:
         handler_names |= {
@@ -113,15 +113,17 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
-def test_prevent_bootstrap_config_change(harness):
+@mock.patch("pki.check_ca_key", mock.Mock(return_value=False))
+def test_detect_bootstrap_config_change(harness, caplog):
     """Test that the bootstrap config change is prevented.
 
     Args:
         harness (ops.testing.Harness): The test harness
+        caplog: pytest fixture for capturing logs
     """
     harness.disable_hooks()
+    caplog.set_level("INFO")
 
-    raised, exp = False, None
     with (
         mock.patch.object(
             harness.charm.api_manager, "get_cluster_config"
@@ -135,7 +137,7 @@ def test_prevent_bootstrap_config_change(harness):
             type="",
             metadata=GetClusterConfigMetadata(
                 status=UserFacingClusterConfig(),
-                datastore=UserFacingDatastoreConfig(type="dqlite"),
+                datastore=UserFacingDatastoreConfig(type="k8s-dqlite"),
                 pod_cidr="10.0.0.0/8",
                 service_cidr="10.0.0.0/8",
             ),
@@ -154,20 +156,37 @@ def test_prevent_bootstrap_config_change(harness):
 
         # NOTE(Hue): taints are available for both control-plane and worker
         harness.update_config({"bootstrap-node-taints": "newTaint1 newTaint2"})
-        try:
-            harness.charm._prevent_bootstrap_config_change()
-        except ReconcilerError as e:
-            raised, exp = True, e
+        with pytest.raises(ReconcilerError) as ie:
+            config.bootstrap.detect_bootstrap_config_changes(harness.charm)
 
-    assert raised, "ReconcilerError not raised, bootstrap config change not prevented"
-    assert "Bootstrap config options can not be changed" in str(exp)
+    assert "Preventing bootstrap config changes after bootstrap" in caplog.text
+    assert "Cannot satisfy configuration bootstrap-node-taints=" in caplog.text
+    assert f"Run `juju config {harness.charm.app.name} bootstrap-node-taints=" in caplog.text
+    if harness.charm.is_worker:
+        assert (
+            str(ie.value)
+            == "Expected bootstrap-node-taints='taint1 taint2' not 'newTaint1 newTaint2'"
+        )
+    else:
+        assert all(
+            f"Cannot satisfy configuration {msg}=" in caplog.text
+            for msg in [
+                "bootstrap-certificates",
+                "bootstrap-datastore",
+                "bootstrap-pod-cidr",
+                "bootstrap-service-cidr",
+            ]
+        )
+        assert str(ie.value) == "Expected bootstrap-datastore='dqlite' not 'managed-etcd'"
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
-def test_set_leader(harness):
+@mock.patch("config.bootstrap.detect_bootstrap_config_changes")
+def test_set_leader(mock_detect_bootstrap, harness):
     """Test emitting the set_leader hook while not reconciled.
 
     Args:
+        mock_detect_bootstrap: mock for detect_bootstrap_config_changes
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
@@ -179,6 +198,25 @@ def test_set_leader(harness):
     assert harness.charm.reconciler.stored.reconciled
     called = {name: h for name, h in handlers.items() if h.called}
     assert len(called) == len(handlers)
+    mock_detect_bootstrap.assert_called_once_with(harness.charm)
+
+
+def test_configure_datastore_bootstrap_config_managed_etcd(harness):
+    """Test configuring the datastore=managed-etcd on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    bs_config = BootstrapConfig()
+    harness.charm._configure_datastore(bs_config)
+    assert bs_config.datastore_ca_cert is None
+    assert bs_config.datastore_client_cert is None
+    assert bs_config.datastore_client_key is None
+    assert bs_config.datastore_servers is None
+    assert bs_config.datastore_type == "etcd"
 
 
 def test_configure_datastore_bootstrap_config_dqlite(harness):
@@ -191,6 +229,7 @@ def test_configure_datastore_bootstrap_config_dqlite(harness):
         pytest.skip("Not applicable on workers")
 
     bs_config = BootstrapConfig()
+    harness.update_config({"bootstrap-datastore": "dqlite"})
     harness.charm._configure_datastore(bs_config)
     assert bs_config.datastore_ca_cert is None
     assert bs_config.datastore_client_cert is None
