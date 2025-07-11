@@ -86,12 +86,12 @@ config:
         Example:
           e.g.: key1=value1 key2=value2
     bootstrap-datastore:
-      default: dqlite
+      default: managed-etcd
       type: string
       description: |
         The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "dqlite" and "etcd". If "etcd" is
-        chosen, the charm should be integrated with the etcd charm.
+        after deployment. Allowed values are "managed-etcd", "dqlite" and "etcd".
+        If "etcd" is chosen, the charm should be integrated with the etcd charm.
     bootstrap-node-taints:
       type: string
       default: ""
@@ -268,6 +268,20 @@ config:
           runtime-config=batch/v2alpha1=true profiling=true
         will result in kube-proxy being run with the following options:
           --runtime-config=batch/v2alpha1=true --profiling=true
+    datastore-extra-args:
+      type: string
+      default: ""
+      description: |
+        Space separated list of flags and key=value pairs that will be passed as arguments to
+        datastore if managed-etcd or dqlite is set as datastore.
+
+        Notes:
+          Options may only be set on charm deployment
+
+        For example a value like this:
+          --heartbeat-interval=100 listen-peer-urls=http://10.0.0.1:2380
+        will result in kube-controller-manager being run with the following options:
+          --heartbeat-interval=100 --listen-peer-urls=http://10.0.0.1:2380
     kube-scheduler-extra-args:
       type: string
       default: ""
