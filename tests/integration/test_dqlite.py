@@ -8,9 +8,8 @@
 import json
 
 import pytest
+from helpers import get_leader, ready_nodes, wait_pod_phase
 from juju import model, unit
-
-from .helpers import get_leader, ready_nodes, wait_pod_phase
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with managed etcd, for all the test within this module.

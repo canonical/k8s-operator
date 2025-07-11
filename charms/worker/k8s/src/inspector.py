@@ -119,8 +119,8 @@ def is_not_running(pod: Pod) -> bool:
         True if the pod is not running, False otherwise.
     """
     if not (status := pod.status):
-        pod_phase = "Unknown"
-        pod_reason = "Unknown"
+        pod_phase: Optional[str] = "Unknown"
+        pod_reason: Optional[str] = "Unknown"
     else:
         pod_phase, pod_reason = status.phase, status.reason
 

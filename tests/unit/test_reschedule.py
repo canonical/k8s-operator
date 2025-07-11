@@ -6,23 +6,18 @@
 """Unit tests reschedule module."""
 
 import subprocess
-from pathlib import Path
 from unittest import mock
 
-import ops
 import pytest
 import reschedule
-from charm import K8sCharm
 
 
 @pytest.fixture
-def harness():
-    """Craft a ops test harness."""
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
+def harness(harness):
+    """Craft a ops test harness only for the control-plane."""
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
     yield harness
-    harness.cleanup()
 
 
 @mock.patch("reschedule.subprocess.run")

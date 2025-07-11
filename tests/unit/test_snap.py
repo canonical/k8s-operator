@@ -14,27 +14,8 @@ from pathlib import Path
 from textwrap import dedent
 from unittest import mock
 
-import ops.testing
 import pytest
 import snap
-from charm import K8sCharm
-
-
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
 
 
 @pytest.fixture

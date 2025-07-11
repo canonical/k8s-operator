@@ -16,7 +16,6 @@ import containerd
 import ops
 import ops.testing
 import pytest
-from charm import K8sCharm
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 from charms.contextual_status import ReconcilerError
@@ -31,23 +30,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     UserFacingClusterConfig,
     UserFacingDatastoreConfig,
 )
-
-
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
 
 
 @contextlib.contextmanager

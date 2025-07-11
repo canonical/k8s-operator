@@ -3,13 +3,9 @@
 
 """Unit tests cloud-integration module."""
 
-from pathlib import Path
 from unittest import mock
 
-import ops
-import ops.testing
 import pytest
-from charm import K8sCharm
 from ops.interface_aws.requires import AWSIntegrationRequires
 from ops.interface_azure.requires import AzureIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
@@ -27,23 +23,12 @@ def vendor_name():
         yield mock_vendor_name
 
 
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
+@pytest.fixture()
+def harness(harness):
+    """Adjust ops test harness."""
     with mock.patch.object(harness.charm, "get_cloud_name"):
         with mock.patch.object(harness.charm.reconciler, "reconcile"):
             yield harness
-    harness.cleanup()
 
 
 @pytest.mark.parametrize(

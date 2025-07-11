@@ -74,7 +74,15 @@ def ensure_terraform(expected_version: str) -> None:
     if not installed_version:
         print(f"Terraform is not installed. Installing version {expected_version}...")
         run_command(
-            ["sudo", "snap", "install", "terraform", "--channel", expected_version, "--classic"]
+            [
+                "sudo",
+                "snap",
+                "install",
+                "terraform",
+                "--channel",
+                expected_version,
+                "--classic",
+            ]
         )
     elif installed_version != expected_version:
         print(
@@ -146,7 +154,9 @@ async def main() -> None:
 
     parser = argparse.ArgumentParser(description="Terraform and Juju setup script.")
     parser.add_argument(
-        "--terraform-version", default="latest/stable", help="Expected Terraform version."
+        "--terraform-version",
+        default="latest/stable",
+        help="Expected Terraform version.",
     )
     parser.add_argument(
         "--terraform-module-path", default=script_dir, help="Path to Terraform modules."
@@ -173,7 +183,10 @@ async def main() -> None:
     # Import Existing Model if it exists
     if await model_exists(args.model):
         print("Import existing model...")
-        tf_run(args.terraform_module_path, ["import", "module.k8s.juju_model.this", args.model])
+        tf_run(
+            args.terraform_module_path,
+            ["import", "module.k8s.juju_model.this", args.model],
+        )
 
     print(f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}...")
     print(os.environ.get("TF_VAR_csi_integration"))
