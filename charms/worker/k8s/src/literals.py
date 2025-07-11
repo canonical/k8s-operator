@@ -76,6 +76,7 @@ NODE_LABELS = option.StrOption("node-labels")
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
+SNAP_RESOURCE_NAME = "snap-installation"
 
 # Relations
 CERTIFICATES_RELATION = "certificates"

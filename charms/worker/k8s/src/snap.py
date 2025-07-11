@@ -15,8 +15,8 @@ import tarfile
 from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 
-import ops
 import yaml
+from config.resource import CharmResource
 from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE
 from protocols import K8sCharmProtocol
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
@@ -173,11 +173,11 @@ def _normalize_paths(snap_installation):
         _yaml_write(snap_installation, content)
 
 
-def _select_snap_installation(charm: ops.CharmBase) -> Path:
+def _select_snap_installation(resource: CharmResource) -> Path:
     """Select the snap_installation manifest.
 
     Arguments:
-        charm: The charm instance necessary to check the unit resources
+        resource: The charm resource
 
     Returns:
         path: The path to the snap_installation manifest
@@ -189,9 +189,7 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
         log.error("Unavailable feature: overriding 'snap-installation' resource.")
         return _default_snap_installation()
 
-    try:
-        resource_path = charm.model.resources.fetch("snap-installation")
-    except (ops.ModelError, NameError):
+    if not (resource_path := resource.fetch()).exists():
         log.error("Something went wrong when claiming 'snap-installation' resource.")
         return _default_snap_installation()
 
@@ -240,11 +238,11 @@ def _select_snap_installation(charm: ops.CharmBase) -> Path:
     raise snap_lib.SnapError("Failed to find snap_installation manifest")
 
 
-def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
+def _parse_management_arguments(resource: CharmResource) -> List[SnapArgument]:
     """Parse snap management arguments.
 
     Arguments:
-        charm: The charm instance necessary to check the unit resources
+        resource: The charm resource containing the snap installation manifest
 
     Raises:
         SnapError: when the management issue cannot be resolved
@@ -252,7 +250,7 @@ def _parse_management_arguments(charm: ops.CharmBase) -> List[SnapArgument]:
     Returns:
         Parsed arguments list for the specific host architecture
     """
-    revision = _select_snap_installation(charm)
+    revision = _select_snap_installation(resource)
     if not revision.exists():
         raise snap_lib.SnapError(f"Failed to find file={revision}")
     try:
@@ -288,7 +286,7 @@ def management(charm: K8sCharmProtocol, remove: bool = False) -> None:
         SnapError: when the management issue cannot be resolved
     """
     cache = snap_lib.SnapCache()
-    for args in _parse_management_arguments(charm):
+    for args in _parse_management_arguments(charm.snap_installation_resource):
         which: snap_lib.Snap = cache[args.name]
         if remove:
             which.ensure(snap_lib.SnapState.Absent)

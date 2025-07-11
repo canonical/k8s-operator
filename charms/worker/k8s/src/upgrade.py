@@ -69,6 +69,7 @@ class K8sUpgrade(DataUpgrade):
         super().__init__(charm, **kwargs)
         self.charm = charm
         self.cluster_inspector = cluster_inspector
+        self.upgrade_complete = False
 
     def block_pre_upgrade_check(self, event: ops.EventBase):
         """Block reconciler if the unit was upgraded without a pre-upgrade-check.
@@ -82,19 +83,29 @@ class K8sUpgrade(DataUpgrade):
         if isinstance(event, UpgradeFinishedEvent):
             log.info("Upgrade finished, proceeding with reconciliation")
             return
-        if isinstance(event, ops.UpgradeCharmEvent) and not super().upgrade_stack:
-            message = "Unit was upgraded without a pre-upgrade-check"
-            log.warning(message)
-            self.set_unit_failed(message)
-            if self.charm.unit.is_leader():
-                self.upgrade_stack = self.build_upgrade_stack()
-            status.add(self.charm.unit.status)
-            raise status.ReconcilerError(message)
         if self.state != "idle":
-            message = "Unit is in a busy upgrade state, don't reconcile"
+            message = f"Unit is in a {self.state} upgrade state"
             log.warning(message)
             status.add(self.charm.unit.status)
             raise status.ReconcilerError(message)
+        if isinstance(event, ops.UpgradeCharmEvent):
+            # A resource attachment can trigger this event
+            if self.charm.snap_installation_resource.is_updated:
+                log.debug("Resource Attachment, proceeding with reconciliation.")
+            # or it's a charm upgrade, maybe a single node upgrade that's done?
+            elif len(self.app_units) == 1 and self.upgrade_complete:
+                log.debug("Single node upgrade completed, proceeding with reconciliation.")
+            # or maybe a multi-unit upgrade that is underway?
+            elif super().upgrade_stack:
+                log.debug("Upgrade stack exists, proceeding with reconciliation.")
+            else:
+                reason = "Unit was upgraded without a pre-upgrade-check"
+                log.warning(reason)
+                self.set_unit_failed(reason)
+                if self.charm.unit.is_leader():
+                    self.upgrade_stack = self.build_upgrade_stack()
+                status.add(self.charm.unit.status)
+                raise status.ReconcilerError(reason)
 
     def set_upgrade_status(self, event: ops.UpdateStatusEvent) -> None:
         """Set the Juju upgrade status.
@@ -216,6 +227,7 @@ class K8sUpgrade(DataUpgrade):
         """
         with status.context(self.charm.unit, exit_status=ops.ActiveStatus("Ready")):
             self._upgrade(event)
+        self.upgrade_complete = True
 
     def _upgrade(self, event: Union[ops.EventBase, ops.HookEvent]) -> None:
         """Upgrade the snap workload."""

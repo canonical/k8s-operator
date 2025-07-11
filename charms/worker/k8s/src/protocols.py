@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, FrozenSet, List, Tuple
 
 import ops
+from config.resource import CharmResource
 from inspector import ClusterInspector
 from ops.interface_kube_control import KubeControlProvides
 
@@ -35,6 +36,7 @@ class K8sCharmProtocol(ops.CharmBase):
     kube_control: KubeControlProvides
     kubeconfig: Path
     xcp: ExternalCloudProvider
+    snap_installation_resource: CharmResource
     reconciler: Reconciler
     is_upgrade_granted: bool
     lead_control_plane: bool
