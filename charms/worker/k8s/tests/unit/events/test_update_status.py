@@ -44,6 +44,9 @@ def upgrader() -> K8sUpgrade:
     "events.update_status.ready", new=mock.MagicMock(return_value=k8s.node.Status.NOT_READY)
 )
 @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
+@mock.patch(
+    "events.update_status.detect_bootstrap_config_changes", new=mock.MagicMock(return_value=None)
+)
 @mock.patch("events.update_status.status")
 def test_feature_failures(mock_status, charm, upgrader, worker, expected_status):
     """Test the update_status function."""
@@ -76,6 +79,9 @@ def test_feature_failures(mock_status, charm, upgrader, worker, expected_status)
     "events.update_status.ready", new=mock.MagicMock(return_value=k8s.node.Status.NOT_READY)
 )
 @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
+@mock.patch(
+    "events.update_status.detect_bootstrap_config_changes", new=mock.MagicMock(return_value=None)
+)
 @mock.patch("events.update_status.status")
 def test_cant_get_features(mock_status, charm, upgrader):
     """Test the update_status function when features cannot be retrieved."""

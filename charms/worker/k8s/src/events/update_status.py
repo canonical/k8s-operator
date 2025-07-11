@@ -13,6 +13,7 @@ from typing import List, Optional, cast
 
 import ops
 import reschedule
+from config.bootstrap import detect_bootstrap_config_changes
 from inspector import ClusterInspector
 from k8s.node import Status, ready
 from protocols import K8sCharmProtocol
@@ -178,7 +179,10 @@ class Handler(ops.Object):
         trigger = reschedule.PeriodicEvent(self.charm)
         readiness = ready(self.charm.kubeconfig, name)
         final_status = None
-        if final_status := self.failed_features():
+
+        if final_status := detect_bootstrap_config_changes(self.charm):
+            log.error("Bootstrap config changes detected: %s", final_status.message)
+        elif final_status := self.failed_features():
             log.error("Failed features reported: %s", final_status.message)
         elif readiness != Status.READY:
             log.warning("Node %s is %s", name, readiness.value)
