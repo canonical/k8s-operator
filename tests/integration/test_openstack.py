@@ -21,6 +21,7 @@ STORAGE_CLASS_NAME = "csi-cinder-default"
 pytestmark = [
     pytest.mark.bundle(file="test-bundle-openstack.yaml", apps_local=["k8s"]),
     pytest.mark.clouds(CLOUD_TYPE),
+    pytest.mark.architecture("amd64"),
 ]
 
 
