@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@e9cadd749ff8e2a6c81fadb0268a8b10e26876be",
-    "charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@1bd8506cf1fdfcb584c50388c7082cc23a5ee14f#subdirectory=ops",
+    "charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@3d7b34bd10aa5ef8dfca4f671a6e4757ec6c153a#subdirectory=ops",
     "charms.contextual-status",
     "charms.reconciler",
     "ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops",
