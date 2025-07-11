@@ -180,6 +180,7 @@ def test_detect_bootstrap_config_change(harness, caplog):
         assert str(ie.value) == "Expected bootstrap-datastore='dqlite' not 'managed-etcd'"
 
 
+@mock.patch("config.proxy_service.PROXY_SERVICES", {})
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 @mock.patch("config.bootstrap.detect_bootstrap_config_changes")
 def test_set_leader(mock_detect_bootstrap, harness):
@@ -303,6 +304,7 @@ def test_configure_datastore_runtime_config_etcd(harness):
     assert uccr_config.datastore.type == "external"
 
 
+@mock.patch("config.proxy_service.PROXY_SERVICES", {})
 def test_configure_bootstrap_extra_sans(harness):
     """Test configuring kube-apiserver-extra-sans on bootstrap.
 

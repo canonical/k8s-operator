@@ -179,6 +179,7 @@ class TestK8sUpgrade(unittest.TestCase):
     )
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
+    @mock.patch("reschedule.PeriodicEvent.cancel", new=mock.MagicMock(return_value=None))
     def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
@@ -205,6 +206,7 @@ class TestK8sUpgrade(unittest.TestCase):
     )
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
+    @mock.patch("reschedule.PeriodicEvent.cancel", new=mock.MagicMock(return_value=None))
     def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
