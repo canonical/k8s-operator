@@ -98,7 +98,6 @@ from upgrade import K8sDependenciesModel, K8sUpgrade
 import charms.contextual_status as status
 import charms.operator_libs_linux.v2.snap as snap_lib
 from charms.contextual_status import ReconcilerError, on_error
-from charms.data_platform_libs.v0.upgrade import UpgradeFinishedEvent, UpgradeGrantedEvent
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.k8s.v0.k8sd_api_manager import (
@@ -202,8 +201,7 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._upgrade_snap = False
-        self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
+        self._stored.set_default(is_dying=False, cluster_name=str())
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -319,15 +317,6 @@ class K8sCharm(ops.CharmBase):
                 if version := relation.data[unit].get("version"):
                     versions[version].append(unit)
         return versions
-
-    def grant_upgrade(self):
-        """Grant the upgrade to the charm."""
-        self._upgrade_snap = True
-
-    @property
-    def is_upgrade_granted(self) -> bool:
-        """Check if the upgrade has been granted."""
-        return self._upgrade_snap
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
@@ -1002,32 +991,6 @@ class K8sCharm(ops.CharmBase):
 
         raise NodeRemovedError()
 
-    def _confirm_upgrade_pre_check(self, event: ops.EventBase):
-        """Check if the unit is in a pre-upgrade state and needs to be removed.
-
-        Args:
-            event: ops.EventBase - event that triggered the check
-        """
-        if isinstance(event, UpgradeGrantedEvent):
-            log.info("Upgrade granted, proceeding with reconciliation")
-            return
-        if isinstance(event, UpgradeFinishedEvent):
-            log.info("Upgrade finished, proceeding with reconciliation")
-            return
-        if isinstance(event, ops.UpgradeCharmEvent) and not self.upgrade.upgrade_stack:
-            message = "Unit was upgraded without a pre-upgrade-check"
-            log.warning(message)
-            self.upgrade.set_unit_failed(message)
-            if self.unit.is_leader():
-                self.upgrade.upgrade_stack = self.upgrade.build_upgrade_stack()
-            status.add(self.unit.status)
-            raise ReconcilerError(message)
-        elif self.upgrade.state != "idle":
-            message = "Unit is in a busy upgrade state, don't reconcile"
-            log.warning(message)
-            status.add(self.unit.status)
-            raise ReconcilerError(message)
-
     def _reconcile(self, event: ops.EventBase):
         """Reconcile state change events.
 
@@ -1039,7 +1002,7 @@ class K8sCharm(ops.CharmBase):
         if self._evaluate_removal(event):
             self._death_handler(event)
 
-        self.upgrade.block_pre_upgrade_check(event)
+        self.upgrade.handler(event)
         self._apply_proxy_environment()
         self._install_snaps()
         self._apply_snap_requirements()

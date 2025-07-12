@@ -90,7 +90,7 @@ class Handler(ops.Object):
 
         try:
             with status.context(self.charm.unit, exit_status=self.active_status):
-                self.upgrade.set_upgrade_status(event)
+                self.upgrade.handler(event)
                 self.run()
         except status.ReconcilerError:
             log.exception("Can't update_status")

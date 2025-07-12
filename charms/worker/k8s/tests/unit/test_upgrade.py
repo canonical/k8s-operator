@@ -19,7 +19,7 @@ from literals import (
 )
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
-from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
+import charms.data_platform_libs.v0.upgrade as upgrade_lib
 
 
 class TestK8sUpgrade(unittest.TestCase):
@@ -82,7 +82,7 @@ class TestK8sUpgrade(unittest.TestCase):
             Node(metadata=ObjectMeta(name="k8s-3")),
         ]
 
-        with self.assertRaises(ClusterNotReadyError):
+        with self.assertRaises(upgrade_lib.ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
 
     def test_pre_upgrade_check_cluster_inspector_error(self):
@@ -91,7 +91,7 @@ class TestK8sUpgrade(unittest.TestCase):
             "test error"
         )
 
-        with self.assertRaises(ClusterNotReadyError):
+        with self.assertRaises(upgrade_lib.ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
 
     def test_pre_upgrade_check_pods_not_ready(self):
@@ -99,7 +99,7 @@ class TestK8sUpgrade(unittest.TestCase):
         self.node_manager.get_nodes.return_value = None
         self.node_manager.verify_pods_running.return_value = "kube-system/pod-1"
 
-        with self.assertRaises(ClusterNotReadyError):
+        with self.assertRaises(upgrade_lib.ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
 
     def test_build_upgrade_stack_no_relation(self):
@@ -177,24 +177,33 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
     )
+    @mock.patch("upgrade.list_services")
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
-    def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade):
+    def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade, list_services):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
-        self.charm.meta.config = {
-            "bootstrap-datastore": ops.ConfigMeta("bootstrap-datastore", "string", None, None)
+        list_services.return_value = {
+            "containerd": {"enabled": True, "active": True},
+            "k8s-apiserver-proxy": {"enabled": False, "active": False},
+            "k8s-dqlite": {"enabled": False, "active": False},
+            "k8sd": {"enabled": True, "active": True},
+            "kube-apiserver": {"enabled": True, "active": True},
+            "kube-controller-manager": {"enabled": True, "active": True},
+            "kube-proxy": {"enabled": True, "active": True},
+            "kube-scheduler": {"enabled": True, "active": True},
+            "kubelet": {"enabled": True, "active": True},
+            "etcd": {"enabled": False, "active": False},
         }
-        self.charm.config = {"bootstrap-datastore": "etcd"}
         self.charm.is_control_plane = True
         self.charm.is_worker = False
 
         self.upgrade._upgrade(event)
-        services = [
+        services = sorted(
             s
             for s in K8S_CONTROL_PLANE_SERVICES
             if s != K8S_DQLITE_SERVICE and s != MANAGED_ETCD_SERVICE
-        ]
+        )
         perform_upgrade.assert_called_once_with(services=services)
         on_upgrade_changed.assert_called_once_with(event)
 
@@ -203,15 +212,38 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
     )
+    @mock.patch("upgrade.list_services")
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
-    def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade):
+    def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade, list_services):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
-        self.charm.meta.config = {}
+        list_services.return_value = {
+            "containerd": {"enabled": True, "active": True},
+            "k8s-apiserver-proxy": {"enabled": True, "active": True},
+            "k8s-dqlite": {"enabled": False, "active": False},
+            "k8sd": {"enabled": True, "active": True},
+            "kube-apiserver": {"enabled": False, "active": True},
+            "kube-controller-manager": {"enabled": False, "active": True},
+            "kube-proxy": {"enabled": True, "active": True},
+            "kube-scheduler": {"enabled": False, "active": True},
+            "kubelet": {"enabled": True, "active": True},
+            "etcd": {"enabled": False, "active": False},
+        }
         self.charm.is_control_plane = False
         self.charm.is_worker = True
 
         self.upgrade._upgrade(event)
-        perform_upgrade.assert_called_once_with(services=K8S_WORKER_SERVICES)
+        perform_upgrade.assert_called_once_with(services=sorted(K8S_WORKER_SERVICES))
         on_upgrade_changed.assert_called_once_with(event)
+
+    def test_handler_proceed(self):
+        """Test handler method allows reconciliation."""
+        cases = [
+            upgrade_lib.UpgradeGrantedEvent,
+            upgrade_lib.UpgradeFinishedEvent,
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                event = mock.MagicMock(spec=case)
+                self.upgrade.handler(event)

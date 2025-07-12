@@ -60,10 +60,13 @@ class CharmResource:
     @property
     def is_updated(self) -> bool:
         """Check if the resource has been updated."""
-        log.info(
-            "Has resource '%s' been updated. Originally=%s, Now=%s",
-            self.metadata.resource_name,
-            self.original_hash,
-            self.current_hash,
-        )
-        return self.current_hash != self.original_hash
+        if diff := self.current_hash != self.original_hash:
+            log.info(
+                "Resource '%s' has been updated. Original hash: %s, Current hash: %s",
+                self.metadata.resource_name,
+                self.original_hash,
+                self.current_hash,
+            )
+        else:
+            log.info("Resource '%s' is unchanged.", self.metadata.resource_name)
+        return diff

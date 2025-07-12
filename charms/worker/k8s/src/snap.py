@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import tarfile
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import yaml
 from config.resource import CharmResource
@@ -291,7 +291,7 @@ def management(charm: K8sCharmProtocol, remove: bool = False) -> None:
         if remove:
             which.ensure(snap_lib.SnapState.Absent)
             continue
-        if block_refresh(which, args, charm.is_upgrade_granted):
+        if block_refresh(which, args, charm.upgrade.upgrade_granted):
             continue
         install_args = args.model_dump(exclude_none=True)
         if isinstance(args, SnapFileArgument):
@@ -406,3 +406,23 @@ def start(snap_name: str, services: List[str]) -> None:
         raise snap_lib.SnapError(message)
     snap = cache[snap_name]
     snap.start(services=services)
+
+
+def list(snap_name: str) -> Dict[str, snap_lib.SnapServiceDict]:
+    """List the services of the snap on this machine.
+
+    Arguments:
+        snap_name: The name of the snap
+
+    Returns:
+        Dict[str, snap_lib.SnapServiceDict]: The list of services of the snap
+
+    Raises:
+        SnapError: If the snap isn't installed
+    """
+    cache = snap_lib.SnapCache()
+    if snap_name not in cache:
+        message = f"Snap '{snap_name}' not installed"
+        log.error(message)
+        raise snap_lib.SnapError(message)
+    return cache[snap_name].services

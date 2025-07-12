@@ -118,6 +118,7 @@ LEADER_CONTROL_PLANE_CERTIFICATES = ["apiserver-kubelet-client"] + CONTROL_PLANE
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [
+    "containerd",
     "kubelet",
     "kube-proxy",
     "k8sd",
