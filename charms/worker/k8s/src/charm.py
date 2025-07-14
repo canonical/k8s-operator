@@ -16,7 +16,6 @@ certificate storage.
 """
 
 import hashlib
-import ipaddress
 import logging
 import os
 import shlex
@@ -75,6 +74,7 @@ from typing_extensions import Literal
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
 import charms.contextual_status as status
+import charms.node_base.address as node_address
 import charms.operator_libs_linux.v2.snap as snap_lib
 from charms.contextual_status import ReconcilerError, WaitingStatus, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -411,16 +411,14 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
-    def _get_node_addresses(self) -> list[str]:
+    def _get_node_ips(self) -> list[str]:
         """Get the cluster node addresses for this unit.
 
         Returns:
-            list[str]: A list of unique node addresses ordered by IP version.
+            list[str]: A list containing up to two IP addresses for each IP
+                version.
         """
-        binding = self.model.get_binding(CLUSTER_RELATION)
-        addresses = binding.network.ingress_addresses if binding else []
-        uniq = {ipaddress.ip_address(addr) for addr in addresses}
-        return [str(x) for x in sorted(uniq, key=lambda x: (x.version, x))]
+        return node_address.by_relation_preferred(self, CLUSTER_RELATION, True)
 
     def _get_extra_sans(self):
         """Retrieve the certificate extra SANs.
@@ -434,7 +432,7 @@ class K8sCharm(ops.CharmBase):
 
         # Add the ingress addresses of all units
         extra_sans.add(_get_juju_public_address())
-        if addresses := self._get_node_addresses():
+        if addresses := node_address.by_relation(self, CLUSTER_RELATION, True):
             log.info("Adding ingress addresses to extra SANs")
             extra_sans |= set(addresses)
 
@@ -462,7 +460,7 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
-        node_ips = self._get_node_addresses()
+        node_ips = self._get_node_ips()
         config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips)
         return bootstrap_config
 
@@ -517,7 +515,7 @@ class K8sCharm(ops.CharmBase):
             log.info("K8s cluster already bootstrapped")
             return
 
-        if not (node_ips := self._get_node_addresses()):
+        if not (node_ips := self._get_node_ips()):
             log.info("Cannot cluster yet, no node IPs found")
             raise ReconcilerError("No node IPs found")
 
@@ -957,7 +955,7 @@ class K8sCharm(ops.CharmBase):
             token (str): The token to use for joining the cluster.
             cluster_name (str): The name of the cluster to join.
         """
-        node_ips = self._get_node_addresses()
+        node_ips = self._get_node_ips()
         node_name = self.get_node_name()
         cluster_addr = f"{node_ips[0]}:{K8SD_PORT}"
         log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_name)
@@ -1136,7 +1134,7 @@ class K8sCharm(ops.CharmBase):
         if cluster_name := self.get_cluster_name():
             status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
             file_args_config = config.arg_files.FileArgsConfig()
-            node_ips = self._get_node_addresses()
+            node_ips = self._get_node_ips()
             config.extra_args.craft(self.config, file_args_config, cluster_name, node_ips)
             file_args_config.ensure()
 

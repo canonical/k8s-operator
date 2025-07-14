@@ -97,7 +97,8 @@ def test_configure_common_extra_args(harness):
     assert bootstrap_config.extra_node_kubelet_args == {
         "--v": "3",
         "--foo": "bar",
-        "--node-ip": "10.0.0.10,2001:db8:10::a00:a",
+        # NOTE: (mateoflorido): IPv6 addrs are exploded.
+        "--node-ip": "10.0.0.10,2001:0db8:0010:0000:0000:0000:0a00:000a",
         "--flag": "true",
     }
     assert bootstrap_config.extra_node_kube_proxy_args == {

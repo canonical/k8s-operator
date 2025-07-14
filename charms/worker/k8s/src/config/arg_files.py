@@ -9,22 +9,41 @@ The format for each file is a set of key-value pairs, where each line contains a
 """
 
 import logging
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from literals import (
-    KUBE_APISERVER_ARGS,
-    KUBE_CONTROLLER_MANAGER_ARGS,
-    KUBE_PROXY_ARGS,
-    KUBE_SCHEDULER_ARGS,
-    KUBELET_ARGS,
+    CHARM_SYSD_ARGS_FILE,
+    KUBE_APISERVER_ARGS_PATH,
+    KUBE_APISERVER_SYSD_PATH,
+    KUBE_CONTROLLER_MANAGER_ARGS_PATH,
+    KUBE_CONTROLLER_MANAGER_SYSD_PATH,
+    KUBE_PROXY_ARGS_PATH,
+    KUBE_PROXY_SYSD_PATH,
+    KUBE_SCHEDULER_ARGS_PATH,
+    KUBE_SCHEDULER_SYSD_PATH,
+    KUBELET_ARGS_PATH,
+    KUBELET_SYSD_PATH,
+    SNAP_NAME,
+    SNAP_SYSD_ARGS_FILE,
 )
 
 import charms.operator_libs_linux.v2.snap as snap
 
 log = logging.getLogger(__name__)
 FileArgs = Dict[str, Optional[str]]
+
+
+@dataclass
+class ServiceConfig:
+    """Configuration for a single Kubernetes service."""
+
+    name: str
+    args_path: Path
+    systemd_args_path: Path
+    extra_args: FileArgs
 
 
 class FileArgsConfig:
@@ -36,9 +55,51 @@ class FileArgsConfig:
         self.extra_node_kube_scheduler_args = {}
         self.extra_node_kube_proxy_args = {}
         self.extra_node_kubelet_args = {}
-        self._service_args = {}
-        self._hash = {}
+
+        self._service_args: Dict[str, FileArgs] = {}
+        self._file_hashes: Dict[str, bytes] = {}
         self._load()
+
+    def _get_service_configs(self) -> List[ServiceConfig]:
+        """Get the k8s service configurations."""
+        return [
+            ServiceConfig(
+                name="kube-apiserver",
+                args_path=KUBE_APISERVER_ARGS_PATH,
+                systemd_args_path=KUBE_APISERVER_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_kube_apiserver_args,
+            ),
+            ServiceConfig(
+                name="kube-controller-manager",
+                args_path=KUBE_CONTROLLER_MANAGER_ARGS_PATH,
+                systemd_args_path=KUBE_CONTROLLER_MANAGER_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_kube_controller_manager_args,
+            ),
+            ServiceConfig(
+                name="kube-scheduler",
+                args_path=KUBE_SCHEDULER_ARGS_PATH,
+                systemd_args_path=KUBE_SCHEDULER_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_kube_scheduler_args,
+            ),
+            ServiceConfig(
+                name="kube-proxy",
+                args_path=KUBE_PROXY_ARGS_PATH,
+                systemd_args_path=KUBE_PROXY_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_kube_proxy_args,
+            ),
+            ServiceConfig(
+                name="kubelet",
+                args_path=KUBELET_ARGS_PATH,
+                systemd_args_path=KUBELET_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_kubelet_args,
+            ),
+        ]
+
+    def _get_effective_args_path(self, service: ServiceConfig) -> Path:
+        """Get the effective arguments file path for a service."""
+        if service.systemd_args_path.exists():
+            return service.systemd_args_path.parent / CHARM_SYSD_ARGS_FILE
+        return service.args_path
 
     def _load_file(self, file_path: Path) -> Tuple[FileArgs, bytes]:
         """Load the arguments from a file.
@@ -58,7 +119,7 @@ class FileArgsConfig:
                 args[key] = value.strip('"').strip("'")
         return args, hash_val
 
-    def _file_content(self, args: FileArgs) -> Tuple[str, bytes]:
+    def _generate_file_content(self, args: FileArgs) -> Tuple[str, bytes]:
         """Generate the content for the file and its hash.
 
         Args:
@@ -86,39 +147,31 @@ class FileArgsConfig:
         """
         if services:
             cache = snap.SnapCache()
-            cache["k8s"].restart(services)
+            log.info("Restarting services: %s", ", ".join(services))
+            cache[SNAP_NAME].restart(services)
 
     def _load(self):
         """Load the arguments for each service from the files."""
-        for service, file_path in [
-            ("kube-apiserver", KUBE_APISERVER_ARGS),
-            ("kube-controller-manager", KUBE_CONTROLLER_MANAGER_ARGS),
-            ("kube-scheduler", KUBE_SCHEDULER_ARGS),
-            ("kube-proxy", KUBE_PROXY_ARGS),
-            ("kubelet", KUBELET_ARGS),
-        ]:
+        for service in self._get_service_configs():
+            file_path = self._get_effective_args_path(service)
             if file_path.exists():
-                self._service_args[service], self._hash[service] = self._load_file(file_path)
+                args, file_hash = self._load_file(file_path)
+                self._service_args[service.name] = args
+                self._file_hashes[service.name] = file_hash
 
     def ensure(self):
         """Ensure the arguments of each file."""
-        for service, file_path, extra_args in [
-            ("kube-apiserver", KUBE_APISERVER_ARGS, self.extra_node_kube_apiserver_args),
-            (
-                "kube-controller-manager",
-                KUBE_CONTROLLER_MANAGER_ARGS,
-                self.extra_node_kube_controller_manager_args,
-            ),
-            ("kube-scheduler", KUBE_SCHEDULER_ARGS, self.extra_node_kube_scheduler_args),
-            ("kube-proxy", KUBE_PROXY_ARGS, self.extra_node_kube_proxy_args),
-            ("kubelet", KUBELET_ARGS, self.extra_node_kubelet_args),
-        ]:
-            adjusted_services = []
-            if file_path.exists():
-                updated_args = {**self._service_args[service], **extra_args}
-                content, hash_val = self._file_content(updated_args)
-                if hash_val != self._hash[service]:
-                    log.info("Restarting '%s' to adjust %s", service, file_path)
-                    file_path.write_text(content)
-                    adjusted_services += [service]
-            self._restart_services(adjusted_services)
+        adjusted_services: List[str] = []
+        for service in self._get_service_configs():
+            file_path = self._get_effective_args_path(service)
+            if not file_path.exists():
+                log.debug("Skipping non-existent arguments file: %s", file_path)
+                continue
+
+            updated_args = {**self._service_args[service.name], **service.extra_args}
+            content, hash_val = self._generate_file_content(updated_args)
+            if hash_val != self._file_hashes[service.name]:
+                log.info("Updating arguments for %s at %s", service.name, file_path)
+                file_path.write_text(content)
+                adjusted_services.append(service.name)
+        self._restart_services(adjusted_services)

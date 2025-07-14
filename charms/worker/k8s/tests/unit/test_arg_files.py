@@ -22,7 +22,7 @@ def test_file_args_config():
     assert config.extra_node_kube_proxy_args == {}
     assert config.extra_node_kubelet_args == {}
     assert config._service_args == {}
-    assert config._hash == {}
+    assert config._file_hashes == {}
 
 
 @mock.patch("pathlib.Path.exists", mock.Mock(return_value=True))
@@ -41,7 +41,7 @@ def test_file_args_config_with_file(read_text):
         "kube-proxy": expected,
         "kubelet": expected,
     }
-    assert config._hash == {
+    assert config._file_hashes == {
         "kube-apiserver": arg_hash,
         "kube-controller-manager": arg_hash,
         "kube-scheduler": arg_hash,
