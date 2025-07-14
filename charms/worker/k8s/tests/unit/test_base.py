@@ -277,9 +277,7 @@ def test_get_public_address_with_external_lb(harness):
 
     lb_address = "1.2.3.4"
 
-    with (
-        mock.patch.object(harness.charm, "external_load_balancer") as mock_elb,
-    ):
+    with mock.patch.object(harness.charm, "external_load_balancer") as mock_elb:
         mock_elb.is_available = True
         mock_elb.get_response.return_value = MockELBResponse(addr=lb_address)
         public_addr = harness.charm._get_public_address()
@@ -311,11 +309,9 @@ def test_ensure_cert_sans(harness):
     if harness.charm.is_worker:
         pytest.skip("Not applicable on workers")
 
-    with (
-        mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans,
-        mock.patch("charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])),
-        mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_api_manager,
-    ):
+    with mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans, mock.patch(
+        "charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])
+    ), mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_api_manager:
         mock_extra_sans.return_value = ["sans1", "sans2"]
         harness.charm._ensure_cert_sans()
         mock_api_manager.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])
@@ -331,10 +327,9 @@ def test_get_external_kubeconfig(harness):
         pytest.skip("Not applicable on workers")
 
     public_addr = "1.2.3.4"
-    with (
-        mock.patch.object(harness.charm, "_get_public_address"),
-        mock.patch.object(harness.charm.api_manager, "get_kubeconfig") as mock_api_manager,
-    ):
+    with mock.patch.object(harness.charm, "_get_public_address"), mock.patch.object(
+        harness.charm.api_manager, "get_kubeconfig"
+    ) as mock_api_manager:
         event = MockEvent(MockEvent.Params())
         mock_api_manager.return_value = {"server": public_addr}
         harness.charm._get_external_kubeconfig(event)

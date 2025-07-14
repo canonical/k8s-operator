@@ -1,43 +1,40 @@
-# Copyright 2025 Canonical Ltd.
-# See LICENSE file for licensing details.
-
 diff --git a/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
-index 5a01ef2..b582e63 100644
+index 129f859..ce614e8 100644
 --- a/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
 +++ b/charms/worker/k8s/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
-@@ -581,7 +581,7 @@ groups:
-       description: KubeAPI has disappeared from Prometheus target discovery.
+@@ -663,7 +663,7 @@ groups:
        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeapidown
        summary: Target disappeared from Prometheus target discovery.
--    expr: 'absent(up{job="apiserver"} == 1)
-+    expr: 'up{job="apiserver"} == 0
- 
-       '
+     expr: |
+-      absent(up{job="apiserver"} == 1)
++      up{job="apiserver"} == 0
      for: 15m
-@@ -758,7 +758,7 @@ groups:
-       description: Kubelet has disappeared from Prometheus target discovery.
+     labels:
+       severity: critical
+@@ -865,7 +865,7 @@ groups:
        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeletdown
        summary: Target disappeared from Prometheus target discovery.
--    expr: 'absent(up{job="kubelet", metrics_path="/metrics"} == 1)
-+    expr: 'up{job="kubelet", metrics_path="/metrics"} == 0
- 
-       '
+     expr: |
+-      absent(up{job="kubelet", metrics_path="/metrics"} == 1)
++      up{job="kubelet", metrics_path="/metrics"} == 0
      for: 15m
-@@ -771,7 +771,7 @@ groups:
-       description: KubeScheduler has disappeared from Prometheus target discovery.
+     labels:
+       severity: critical
+@@ -877,7 +877,7 @@ groups:
        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeschedulerdown
        summary: Target disappeared from Prometheus target discovery.
--    expr: 'absent(up{job="kube-scheduler"} == 1)
-+    expr: 'up{job="kube-scheduler"} == 0
- 
-       '
+     expr: |
+-      absent(up{job="kube-scheduler"} == 1)
++      up{job="kube-scheduler"} == 0
      for: 15m
-@@ -784,7 +784,7 @@ groups:
-       description: KubeControllerManager has disappeared from Prometheus target discovery.
+     labels:
+       severity: critical
+@@ -889,7 +889,7 @@ groups:
        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubecontrollermanagerdown
        summary: Target disappeared from Prometheus target discovery.
--    expr: 'absent(up{job="kube-controller-manager"} == 1)
-+    expr: 'up{job="kube-controller-manager"} == 0
- 
-       '
+     expr: |
+-      absent(up{job="kube-controller-manager"} == 1)
++      up{job="kube-controller-manager"} == 0
      for: 15m
+     labels:
+       severity: critical
