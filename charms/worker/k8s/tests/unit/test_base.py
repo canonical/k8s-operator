@@ -196,7 +196,7 @@ def test_configure_datastore_bootstrap_config_dqlite(harness):
     assert bs_config.datastore_client_cert is None
     assert bs_config.datastore_client_key is None
     assert bs_config.datastore_servers is None
-    assert bs_config.datastore_type is None
+    assert bs_config.datastore_type == "k8s-dqlite"
 
 
 def test_configure_datastore_bootstrap_config_etcd(harness):

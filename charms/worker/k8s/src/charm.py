@@ -751,7 +751,8 @@ class K8sCharm(ops.CharmBase):
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
 
-        elif datastore == "dqlite":
+        elif datastore == "dqlite" and isinstance(config, BootstrapConfig):
+            config.datastore_type = "k8s-dqlite"
             log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
