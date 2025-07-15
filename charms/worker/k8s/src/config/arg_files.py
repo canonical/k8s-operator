@@ -139,7 +139,7 @@ class FileArgsConfig:
         hash_val = sha256(content.encode()).digest()
         return content, hash_val
 
-    def _restart_services(self, services: list[str]):
+    def _restart_services(self, services: List[str]):
         """Restart the k8s services.
 
         Args:
