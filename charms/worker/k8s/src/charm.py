@@ -422,7 +422,7 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring snap readiness"))
         self.api_manager.check_k8sd_ready()
 
-    def _get_node_ips(self) -> list[str]:
+    def _get_node_ips(self) -> List[str]:
         """Get the cluster node addresses for this unit.
 
         Returns:

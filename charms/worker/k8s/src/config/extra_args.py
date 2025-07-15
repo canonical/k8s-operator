@@ -38,7 +38,7 @@ def craft(
     src: ops.ConfigData,
     dest: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig],
     cluster_name: str,
-    node_ips: list[str],
+    node_ips: List[str],
 ):
     """Set extra arguments for Kubernetes components based on the provided configuration.
 
