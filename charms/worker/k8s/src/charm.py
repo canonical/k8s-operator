@@ -52,6 +52,10 @@ from literals import (
     COS_RELATION,
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
+    DATASTORE_NAME_MAPPING,
+    DATASTORE_TYPE_ETCD,
+    DATASTORE_TYPE_EXTERNAL,
+    DATASTORE_TYPE_K8S_DQLITE,
     DEPENDENCIES,
     ETC_KUBERNETES,
     ETCD_RELATION,
@@ -687,10 +691,9 @@ class K8sCharm(ops.CharmBase):
                 ", ".join(SUPPORTED_DATASTORES),
             )
             status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-        if datastore not in SUPPORTED_DATASTORES:
             raise ReconcilerError(f"Invalid datastore: {datastore}")
 
-        if datastore == "etcd":
+        if datastore == DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation(ETCD_RELATION)
 
@@ -702,22 +705,26 @@ class K8sCharm(ops.CharmBase):
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
-                config.datastore_type = "external"
+                config.datastore_type = DATASTORE_NAME_MAPPING.get(datastore)
+                config.datastore_servers = self.etcd.get_connection_string().split(",")
                 config.datastore_ca_cert = etcd_config.get("client_ca", "")
                 config.datastore_client_cert = etcd_config.get("client_cert", "")
                 config.datastore_client_key = etcd_config.get("client_key", "")
-                config.datastore_servers = self.etcd.get_connection_string().split(",")
                 log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
                 config.datastore = UserFacingDatastoreConfig()
-                config.datastore.type = "external"
+                config.datastore.type = DATASTORE_NAME_MAPPING.get(datastore)
                 config.datastore.servers = self.etcd.get_connection_string().split(",")
                 config.datastore.ca_crt = etcd_config.get("client_ca", "")
                 config.datastore.client_crt = etcd_config.get("client_cert", "")
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
 
-        elif datastore == "dqlite":
+        elif datastore == DATASTORE_TYPE_ETCD and isinstance(config, BootstrapConfig):
+            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_ETCD)
+            log.info("Using managed etcd as datastore")
+        elif datastore == DATASTORE_TYPE_K8S_DQLITE and isinstance(config, BootstrapConfig):
+            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_K8S_DQLITE)
             log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):

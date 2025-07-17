@@ -340,15 +340,34 @@ class BootstrapConfig(BaseModel):
         datastore_ca_cert (str): The CA certificate for the datastore.
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
+        etcd_port (int): The port number for etcd to use.
+        etcd_peer_port (int): The port number for etcd peer communication to use.
+        etcd_ca_cert (str): The CA certificate to be used for etcd.
+        etcd_ca_key (str): The CA key to be used for etcd.
+        etcd_server_cert (str): The server certificate to be used for etcd.
+        etcd_server_key (str): The server key to be used for etcd.
+        etcd_peer_cert (str): The server peer certificate to be used for etcd.
+        etcd_peer_key (str): The server peer key to be used for etcd.
+        etcd_apiserver_client_cert (str): The client certificate to be used by the kube-apiserver.
+        etcd_apiserver_client_key (str): The client key to be used by the kube-apiserver.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
-        extra_node_kube_apiserver_args ([Dict[str,str]]): key-value service args
-        extra_node_kube_controller_manager_args ([Dict[str,str]]): key-value service args
-        extra_node_kube_scheduler_args ([Dict[str,str]]): key-value service args
-        extra_node_kube_proxy_args ([Dict[str,str]]): key-value service args
-        extra_node_kubelet_args ([Dict[str,str]]): key-value service args
-        extra_node_containerd_args ([Dict[str,str]]): key-value service args
-        extra_node_k8s_dqlite_args ([Dict[str,str]]): key-value service args
-        extra_node_containerd_config ([Dict[str,Any]]): key-value config args
+        extra_node_kube_apiserver_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_kube_controller_manager_args (Dict[str, Optional[str]]):
+            key-value service args .
+        extra_node_kube_scheduler_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_kube_proxy_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_kubelet_args (Dict[str, Optional[str]]): key-value service
+            args .
+        extra_node_containerd_args (Dict[str, Optional[str]]): key-value
+            service args .
+        extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): key-value
+            service args
+        extra_node_etcd_args (Dict[str, Optional[str]]): key-value
+            service args
+        extra_node_containerd_config (Dict[str, Any]): key-value config args
         containerd_base_dir (str): The base directory for containerd.
     """
 
@@ -364,6 +383,20 @@ class BootstrapConfig(BaseModel):
     datastore_ca_cert: Optional[str] = Field(default=None, alias="datastore-ca-crt")
     datastore_client_cert: Optional[str] = Field(default=None, alias="datastore-client-crt")
     datastore_client_key: Optional[str] = Field(default=None, alias="datastore-client-key")
+    etcd_port: Optional[int] = Field(default=None, alias="etcd-port")
+    etcd_peer_port: Optional[int] = Field(default=None, alias="etcd-peer-port")
+    etcd_ca_cert: Optional[str] = Field(default=None, alias="etcd-ca-crt")
+    etcd_ca_key: Optional[str] = Field(default=None, alias="etcd-ca-key")
+    etcd_server_cert: Optional[str] = Field(default=None, alias="etcd-server-crt")
+    etcd_server_key: Optional[str] = Field(default=None, alias="etcd-server-key")
+    etcd_peer_cert: Optional[str] = Field(default=None, alias="etcd-peer-crt")
+    etcd_peer_key: Optional[str] = Field(default=None, alias="etcd-peer-key")
+    etcd_apiserver_client_cert: Optional[str] = Field(
+        default=None, alias="etcd-apiserver-client-crt"
+    )
+    etcd_apiserver_client_key: Optional[str] = Field(
+        default=None, alias="etcd-apiserver-client-key"
+    )
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
     extra_node_kube_apiserver_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
@@ -385,6 +418,9 @@ class BootstrapConfig(BaseModel):
     )
     extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+        default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
@@ -453,6 +489,10 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     """Request model for the config on a control-plane node joining the cluster.
 
     Attributes:
+        etcd_server_cert (str): The server certificate to be used for etcd.
+        etcd_server_key (str): The server key to be used for etcd.
+        etcd_peer_cert (str): The server peer certificate to be used for etcd.
+        etcd_peer_key (str): The server peer key to be used for etcd.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
         apiserver_crt (str): apiserver certificate
         apiserver_client_key (str): apiserver certificate key
@@ -464,6 +504,10 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
         extra_node_k8s_dqlite_args ([Dict[str,str]]): key-value service args
     """
 
+    etcd_server_cert: Optional[str] = Field(default=None, alias="etcd-server-crt")
+    etcd_server_key: Optional[str] = Field(default=None, alias="etcd-server-key")
+    etcd_peer_cert: Optional[str] = Field(default=None, alias="etcd-peer-crt")
+    etcd_peer_key: Optional[str] = Field(default=None, alias="etcd-peer-key")
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
 
     apiserver_crt: Optional[str] = Field(default=None, alias="apiserver-crt")
@@ -481,6 +525,12 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     )
     extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+        default=None, alias="extra-node-etcd-args"
+    )
+    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+        default=None, alias="extra-node-containerd-config"
     )
 
 
