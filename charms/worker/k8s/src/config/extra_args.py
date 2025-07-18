@@ -9,6 +9,7 @@ from typing import Dict, List, Union
 
 import literals
 import ops
+from config.arg_files import FileArgsConfig
 
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
@@ -36,8 +37,9 @@ def _parse(config_data) -> Dict[str, str]:
 
 def craft(
     src: ops.ConfigData,
-    dest: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, NodeJoinConfig],
+    dest: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig],
     cluster_name: str,
+    node_ips: List[str],
 ):
     """Set extra arguments for Kubernetes components based on the provided configuration.
 
@@ -52,9 +54,10 @@ def craft(
 
     Args:
         src (ops.ConfigData): the charm instance to get the configuration from.
-        dest (Union[BootstrapConfig, ControlPlaneNodeJoinConfig, NodeJoinConfig]):
+        dest (Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig]):
             The configuration object to be updated with extra arguments.
         cluster_name (str): the name of the cluster to override in the extra arguments.
+        node_ips (list[str]): the IP address of the node to override in the extra arguments.
     """
     if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
         cmd = _parse(src["kube-apiserver-extra-args"])
@@ -80,6 +83,10 @@ def craft(
     dest.extra_node_kube_proxy_args = cmd
 
     cmd = _parse(src["kubelet-extra-args"])
+    if node_ips:
+        cmd.update(**{"--node-ip": ",".join(node_ips)})
+    else:
+        cmd.pop("--node-ip", None)
     dest.extra_node_kubelet_args = cmd
 
 
