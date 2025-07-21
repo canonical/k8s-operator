@@ -7,14 +7,14 @@ import logging
 import time
 from typing import Tuple, Union
 
-from .lxd_substrate import LXDSubstrate
+from lxd_substrate import LXDSubstrate
 
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
 class COSSubstrate(LXDSubstrate):
-    """A LXD substrate."""
+    """A COS substrate."""
 
     def __init__(self, container_name: str, network_name: str) -> None:
         """Initialize LXDSubstrate instance.
@@ -28,7 +28,10 @@ class COSSubstrate(LXDSubstrate):
         self.network_name = network_name
 
     def create_network(
-        self, network_name: str, subnet_cidr: str = "10.10.0.0/24", reserved_addresses: int = 5
+        self,
+        network_name: str,
+        subnet_cidr: str = "10.10.0.0/24",
+        reserved_addresses: int = 5,
     ) -> Tuple[IPAddress, IPAddress]:
         """Create a network.
 
@@ -147,7 +150,14 @@ class COSSubstrate(LXDSubstrate):
         """
         return self.execute_command(
             container,
-            ["sudo", "snap", "install", "microk8s", "--channel=1.28/stable", "--classic"],
+            [
+                "sudo",
+                "snap",
+                "install",
+                "microk8s",
+                "--channel=1.28/stable",
+                "--classic",
+            ],
         )
 
     def teardown_substrate(self):

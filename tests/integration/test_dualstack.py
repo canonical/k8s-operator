@@ -12,10 +12,9 @@ from pathlib import Path
 
 import juju.model
 import pytest
+from helpers import get_leader, ready_nodes, wait_pod_phase
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.utils import create_from_yaml
-
-from .helpers import get_leader, ready_nodes, wait_pod_phase
 
 log = logging.getLogger(__name__)
 

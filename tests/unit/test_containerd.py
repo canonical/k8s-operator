@@ -174,7 +174,11 @@ def test_registry_methods(hostsd_path, tmp_path):
         ensure_file.assert_has_calls(
             [
                 mock.call(
-                    registry.hosts_toml_path, tomli_w.dumps(registry.hosts_toml), 0o600, 0, 0
+                    registry.hosts_toml_path,
+                    tomli_w.dumps(registry.hosts_toml),
+                    0o600,
+                    0,
+                    0,
                 ),
             ]
         )

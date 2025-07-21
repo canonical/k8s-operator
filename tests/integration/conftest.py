@@ -18,16 +18,15 @@ import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
+from cos_substrate import COSSubstrate
+from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
 from juju.url import URL
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
+from lxd_substrate import LXDSubstrate
 from pytest_operator.plugin import OpsTest
-
-from .cos_substrate import COSSubstrate
-from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
-from .lxd_substrate import LXDSubstrate
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -85,7 +84,10 @@ def pytest_addoption(parser: pytest.Parser):
     )
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
     parser.addoption(
-        "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
+        "--apply-proxy",
+        action="store_true",
+        default=False,
+        help="Apply proxy to model-config",
     )
     parser.addoption(
         "--lxd-containers",
@@ -97,7 +99,10 @@ def pytest_addoption(parser: pytest.Parser):
         ),
     )
     parser.addoption(
-        "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
+        "--upgrade-from",
+        dest="upgrade_from",
+        default=None,
+        help="Charms channel to upgrade from",
     )
     parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
 
@@ -364,7 +369,14 @@ async def cos_model(
 async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
     """Install COS Lite bundle."""
     log.info("Deploying COS bundle ...")
-    cos_charms = ["alertmanager", "catalogue", "grafana", "loki", "prometheus", "traefik"]
+    cos_charms = [
+        "alertmanager",
+        "catalogue",
+        "grafana",
+        "loki",
+        "prometheus",
+        "traefik",
+    ]
     bundles = (
         ops_test.Bundle("cos-lite", "edge"),
         "tests/integration/data/cos-offers-overlay.yaml",
@@ -393,7 +405,8 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
             log.info("%s", stdout or stderr)
             assert rc == 0
         await cos_model.block_until(
-            lambda: all(app not in cos_model.applications for app in cos_charms), timeout=60 * 10
+            lambda: all(app not in cos_model.applications for app in cos_charms),
+            timeout=60 * 10,
         )
 
 
