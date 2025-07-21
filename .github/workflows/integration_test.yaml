@@ -39,10 +39,12 @@ jobs:
       arm64: ${{ steps.select.outputs.arm64 }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Setup Astral UV
+        uses: astral-sh/setup-uv@v6.4.1
         with:
           python-version: "3.12"
-      - run: python -m pip install tox-uv
+      - name: Install tox with UV
+        run: uv tool install tox --with tox-uv
       - name: Select tests
         id: select
         run: |
