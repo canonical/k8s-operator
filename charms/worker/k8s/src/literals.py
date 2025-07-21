@@ -69,6 +69,7 @@ LOCAL_STORAGE_LOCAL_PATH = option.StrOption("local-storage-local-path")
 LOCAL_STORAGE_RECLAIM_POLICY = option.StrOption("local-storage-reclaim-policy")
 NETWORK_ENABLED = option.BoolOption("network-enabled")
 METRICS_SERVER_ENABLED = option.BoolOption("metrics-server-enabled")
+WEB_PROXY_ENABLE_CONTAINERD = option.BoolOption("web-proxy-enable-containerd")
 
 # Worker and Control Plane Options
 BOOTSTRAP_NODE_TAINTS = option.StrOption("bootstrap-node-taints")
