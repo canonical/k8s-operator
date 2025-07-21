@@ -69,4 +69,5 @@ jobs:
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
+      with-uv: true
       zap-enabled: false

@@ -53,7 +53,9 @@ class TestBaseRequestModel(unittest.TestCase):
         model = BaseRequestModel(**valid_data)
         for key, value in valid_data.items():
             self.assertEqual(
-                getattr(model, key), value, f"Model attribute {key} did not match expected value"
+                getattr(model, key),
+                value,
+                f"Model attribute {key} did not match expected value",
             )
 
     def test_invalid_status_code(self):
@@ -258,7 +260,10 @@ class TestK8sdAPIManager(unittest.TestCase):
     def test_create_join_token(self, mock_send_request):
         """Test successful request for join token."""
         mock_send_request.return_value = CreateJoinTokenResponse(
-            status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="test-token")
+            status_code=200,
+            type="test",
+            error_code=0,
+            metadata=TokenMetadata(token="test-token"),
         )
 
         self.api_manager.create_join_token("test-node")
@@ -273,7 +278,10 @@ class TestK8sdAPIManager(unittest.TestCase):
     def test_create_join_token_worker(self, mock_send_request):
         """Test successful request for join token for a worker."""
         mock_send_request.return_value = CreateJoinTokenResponse(
-            status_code=200, type="test", error_code=0, metadata=TokenMetadata(token="test-token")
+            status_code=200,
+            type="test",
+            error_code=0,
+            metadata=TokenMetadata(token="test-token"),
         )
 
         self.api_manager.create_join_token("test-node", worker=True)
@@ -329,7 +337,10 @@ class TestK8sdAPIManager(unittest.TestCase):
 
         self.api_manager.remove_node("test-node")
         mock_send_request.assert_called_once_with(
-            "/1.0/k8sd/cluster/remove", "POST", EmptyResponse, {"name": "test-node", "force": True}
+            "/1.0/k8sd/cluster/remove",
+            "POST",
+            EmptyResponse,
+            {"name": "test-node", "force": True},
         )
 
     @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")
@@ -354,7 +365,10 @@ class TestK8sdAPIManager(unittest.TestCase):
             "PUT",
             EmptyResponse,
             {
-                "config": {"dns": {"enabled": True}, "local-storage": {"enabled": True}},
+                "config": {
+                    "dns": {"enabled": True},
+                    "local-storage": {"enabled": True},
+                },
                 "datastore": {
                     "type": "external",
                     "servers": ["localhost:123"],
@@ -370,7 +384,10 @@ class TestK8sdAPIManager(unittest.TestCase):
         """Test successfully requesting auth-token."""
         test_token = "foo:mytoken"
         mock_send_request.return_value = AuthTokenResponse(
-            status_code=200, type="test", error_code=0, metadata=TokenMetadata(token=test_token)
+            status_code=200,
+            type="test",
+            error_code=0,
+            metadata=TokenMetadata(token=test_token),
         )
 
         test_user = "test_user"
@@ -413,7 +430,9 @@ class TestK8sdAPIManager(unittest.TestCase):
             run_body,
         )  # type: ignore
 
-        def mock_send_request_se(*args) -> Union[RefreshCertificatesPlanResponse, EmptyResponse]:
+        def mock_send_request_se(
+            *args,
+        ) -> Union[RefreshCertificatesPlanResponse, EmptyResponse]:
             """Mock send_request side effect.
 
             Args:
