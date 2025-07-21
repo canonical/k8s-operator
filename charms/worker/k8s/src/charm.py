@@ -16,7 +16,6 @@ certificate storage.
 """
 
 import hashlib
-import http
 import ipaddress
 import logging
 import shlex
@@ -29,6 +28,7 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
+import config.bootstrap
 import config.extra_args
 import config.proxy_service
 import containerd
@@ -38,11 +38,6 @@ import utils
 import yaml
 from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
-from config.bootstrap import (
-    BootstrapConfigChangeError,
-    BootstrapConfigChangePreventer,
-    BootstrapConfigOptions,
-)
 from config.cluster import assemble_cluster_config
 from cos_integration import COSIntegration
 from endpoints import build_url
@@ -68,6 +63,10 @@ from literals import (
     COS_RELATION,
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
+    DATASTORE_NAME_MAPPING,
+    DATASTORE_TYPE_ETCD,
+    DATASTORE_TYPE_EXTERNAL,
+    DATASTORE_TYPE_K8S_DQLITE,
     DEPENDENCIES,
     ETC_KUBERNETES,
     ETCD_RELATION,
@@ -213,8 +212,6 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
-        self.bootstrap_config_change_preventer = BootstrapConfigChangePreventer(self)
-
         if self.is_control_plane:
             self.etcd = EtcdReactiveRequires(self)
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
@@ -345,17 +342,23 @@ class K8sCharm(ops.CharmBase):
         """
         unit, node = self.unit.name, self.get_node_name()
         if self._stored.cluster_name == "":
-            if self.lead_control_plane and self.api_manager.is_cluster_bootstrapped():
+            if self.lead_control_plane:
+                log.info("Lead control plane node %s generating unique cluster name.", node)
                 self._stored.cluster_name = self._generate_unique_cluster_name()
             elif not (relation := self.model.get_relation(CLUSTER_RELATION)):
-                pass
-            elif any(
-                [
-                    self.is_control_plane and self.api_manager.is_cluster_bootstrapped(),
-                    k8s.node.present(self.kubeconfig, node) == k8s.node.Presence.AVAILABLE,
-                ]
-            ):
+                log.warning(
+                    "Node %s has no '%s' relation, cannot determine cluster name.",
+                    node,
+                    CLUSTER_RELATION,
+                )
+            elif (
+                result := k8s.node.present(self.kubeconfig, node)
+            ) != k8s.node.Presence.AVAILABLE:
+                log.warning("Node %s, is not available in cluster (status %s).", node, result)
+            elif self.is_worker or self.api_manager.is_cluster_bootstrapped():
                 self._stored.cluster_name = self.collector.cluster_name(relation, True)
+            else:
+                log.warning("Node %s isn't bootstrapped, skipping cluster name.", node)
 
         log.info("%s(%s) current cluster-name=%s", unit, node, self._stored.cluster_name)
         return str(self._stored.cluster_name)
@@ -617,10 +620,9 @@ class K8sCharm(ops.CharmBase):
                 ", ".join(SUPPORTED_DATASTORES),
             )
             status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-        if datastore not in SUPPORTED_DATASTORES:
             raise ReconcilerError(f"Invalid datastore: {datastore}")
 
-        if datastore == "etcd":
+        if datastore == DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation(ETCD_RELATION)
 
@@ -632,22 +634,26 @@ class K8sCharm(ops.CharmBase):
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
-                config.datastore_type = "external"
+                config.datastore_type = DATASTORE_NAME_MAPPING.get(datastore)
+                config.datastore_servers = self.etcd.get_connection_string().split(",")
                 config.datastore_ca_cert = etcd_config.get("client_ca", "")
                 config.datastore_client_cert = etcd_config.get("client_cert", "")
                 config.datastore_client_key = etcd_config.get("client_key", "")
-                config.datastore_servers = self.etcd.get_connection_string().split(",")
                 log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
                 config.datastore = UserFacingDatastoreConfig()
-                config.datastore.type = "external"
+                config.datastore.type = DATASTORE_NAME_MAPPING.get(datastore)
                 config.datastore.servers = self.etcd.get_connection_string().split(",")
                 config.datastore.ca_crt = etcd_config.get("client_ca", "")
                 config.datastore.client_crt = etcd_config.get("client_cert", "")
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
 
-        elif datastore == "dqlite":
+        elif datastore == DATASTORE_TYPE_ETCD and isinstance(config, BootstrapConfig):
+            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_ETCD)
+            log.info("Using managed etcd as datastore")
+        elif datastore == DATASTORE_TYPE_K8S_DQLITE and isinstance(config, BootstrapConfig):
+            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_K8S_DQLITE)
             log.info("Using dqlite as datastore")
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
@@ -954,7 +960,7 @@ class K8sCharm(ops.CharmBase):
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
-        self._prevent_bootstrap_config_change()
+        config.bootstrap.detect_bootstrap_config_changes(self)
         self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
@@ -1177,34 +1183,6 @@ class K8sCharm(ops.CharmBase):
                 self.api_manager.refresh_certs(extra_sans=sans, expiration_seconds=ttl_seconds)
             except (InvalidResponseError, K8sdConnectionError) as e:
                 event.fail(f"Failed to refresh certificates: {e}")
-
-    @on_error(
-        ops.BlockedStatus("Cannot change bootstrap config after bootstrap. Check logs."),
-        BootstrapConfigChangeError,
-    )
-    @on_error(
-        ops.WaitingStatus("Failed to get communicate with k8sd."),
-        InvalidResponseError,
-        K8sdConnectionError,
-    )
-    def _prevent_bootstrap_config_change(self):
-        """Prevent bootstrap config changes after bootstrap."""
-        log.info("Preventing bootstrap config changes after bootstrap")
-
-        try:
-            ref_config = BootstrapConfigOptions.build(
-                node_status=self.api_manager.get_node_status().metadata,
-                cluster_config=self.api_manager.get_cluster_config().metadata
-                if self.is_control_plane
-                else None,
-            )
-        except InvalidResponseError as e:
-            if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
-                log.info("k8sd is not ready, skipping bootstrap config check")
-                return
-            raise
-
-        self.bootstrap_config_change_preventer.prevent(ref_config)
 
 
 if __name__ == "__main__":  # pragma: nocover

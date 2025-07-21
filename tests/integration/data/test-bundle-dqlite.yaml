@@ -1,7 +1,7 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-name: integration-test
+name: integration-dqlite-test
 description: |-
   Used to deploy or refresh within an integration test model
 series: jammy
@@ -13,20 +13,12 @@ applications:
     expose: true
     options:
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
-      bootstrap-datastore: managed-etcd
       node-labels: "node-role.kubernetes.io/control-plane= k8sd.io/role=control-plane"
-      kube-apiserver-extra-args: "v=3"
-      kube-controller-manager-extra-args: "v=3"
-      kube-proxy-extra-args: "v=3"
-      kube-scheduler-extra-args: "v=3"
-      kubelet-extra-args: "v=3"
+      bootstrap-datastore: dqlite
   k8s-worker:
     charm: k8s-worker
     num_units: 2
     constraints: cores=2 mem=8G root-disk=16G
-    options:
-      kube-proxy-extra-args: "v=3"
-      kubelet-extra-args: "v=3"
 relations:
   - [k8s, k8s-worker:cluster]
   - [k8s, k8s-worker:containerd]

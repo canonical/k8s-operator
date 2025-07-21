@@ -14,6 +14,7 @@ from literals import (
     K8S_CONTROL_PLANE_SERVICES,
     K8S_DQLITE_SERVICE,
     K8S_WORKER_SERVICES,
+    MANAGED_ETCD_SERVICE,
     UPGRADE_RELATION,
 )
 from upgrade import K8sDependenciesModel, K8sUpgrade
@@ -171,6 +172,7 @@ class TestK8sUpgrade(unittest.TestCase):
 
         mock_upgrade.assert_called_once_with(event)
 
+    @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
@@ -189,10 +191,15 @@ class TestK8sUpgrade(unittest.TestCase):
         self.charm.is_worker = False
 
         self.upgrade._upgrade(event)
-        services = [s for s in K8S_CONTROL_PLANE_SERVICES if s != K8S_DQLITE_SERVICE]
+        services = [
+            s
+            for s in K8S_CONTROL_PLANE_SERVICES
+            if s != K8S_DQLITE_SERVICE and s != MANAGED_ETCD_SERVICE
+        ]
         perform_upgrade.assert_called_once_with(services=services)
         on_upgrade_changed.assert_called_once_with(event)
 
+    @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
         "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)

@@ -34,7 +34,7 @@ import socket
 from contextlib import contextmanager
 from datetime import datetime
 from http.client import HTTPConnection, HTTPException
-from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
+from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar
 
 import yaml
 from pydantic import (
@@ -220,46 +220,46 @@ class ClusterMember(BaseModel):
     datastore_role: Optional[str] = Field(default=None, alias="datastore-role")
 
 
-class DNSConfig(BaseModel):
-    """Configuration for the DNS settings of the cluster.
+class FeatureConfig(BaseModel):
+    """Configuration for a specific feature in the cluster.
 
     Attributes:
         model_config: ConfigDict instance for the model.
-        enabled: Optional flag which.
+        enabled: Optional flag which represents the status of the feature.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+    enabled: Optional[bool] = Field(default=None)
+
+
+class DNSConfig(FeatureConfig):
+    """Configuration for the DNS settings of the cluster.
+
+    Attributes:
         cluster_domain: The domain name of the cluster.
         service_ip: The IP address of the DNS service within the cluster.
         upstream_nameservers: List of upstream nameservers for DNS resolution.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
     cluster_domain: Optional[str] = Field(default=None, alias="cluster-domain")
     service_ip: Optional[str] = Field(default=None, alias="service-ip")
     upstream_nameservers: Optional[List[str]] = Field(default=None, alias="upstream-nameservers")
 
 
-class IngressConfig(BaseModel):
+class IngressConfig(FeatureConfig):
     """Configuration for the ingress settings of the cluster.
 
     Attributes:
-        model_config: ConfigDict instance for the model.
-        enabled: Optional flag which represents the status of Ingress.
         enable_proxy_protocol: Optional flag to enable or disable proxy protocol.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
     enable_proxy_protocol: Optional[bool] = Field(default=None, alias="enable-proxy-protocol")
 
 
-class LoadBalancerConfig(BaseModel):
+class LoadBalancerConfig(FeatureConfig):
     """Configuration for the load balancer settings of the cluster.
 
     Attributes:
-        model_config: ConfigDict instance for the model.
-        enabled: Optional flag which represents the status of LoadBalancer.
         cidrs: List of CIDR blocks for the load balancer.
         l2_mode: Optional flag to enable or disable layer 2 mode.
         l2_interfaces: List of layer 2 interfaces for the load balancer.
@@ -270,9 +270,6 @@ class LoadBalancerConfig(BaseModel):
         bgp_peer_port: The port for BGP peering.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
     cidrs: Optional[List[str]] = Field(default=None)
     l2_mode: Optional[bool] = Field(default=None, alias="l2-mode")
     l2_interfaces: Optional[List[str]] = Field(default=None, alias="l2-interfaces")
@@ -283,62 +280,30 @@ class LoadBalancerConfig(BaseModel):
     bgp_peer_port: Optional[int] = Field(default=None, alias="bgp-peer-port")
 
 
-class LocalStorageConfig(BaseModel):
+class LocalStorageConfig(FeatureConfig):
     """Configuration for the local storage settings of the cluster.
 
     Attributes:
-        model_config: ConfigDict instance for the model.
-        enabled: Optional flag which represents the status of Storage.
         local_path: The local path for storage.
         reclaim_policy: The policy for reclaiming local storage.
         set_default: Optional flag to set this as the default storage option.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
     local_path: Optional[str] = Field(default=None, alias="local-path")
     reclaim_policy: Optional[str] = Field(default=None, alias="reclaim-policy")
     set_default: Optional[bool] = Field(default=None, alias="set-default")
 
 
-class NetworkConfig(BaseModel):
-    """Configuration for the network settings of the cluster.
-
-    Attributes:
-        model_config: ConfigDict instance for the model.
-        enabled: Optional flag which represents the status of Network.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
+class NetworkConfig(FeatureConfig):
+    """Configuration for the network settings of the cluster."""
 
 
-class GatewayConfig(BaseModel):
-    """Configuration for the gateway settings of the cluster.
-
-    Attributes:
-        model_config: ConfigDict instance for the model.
-        enabled: Optional flag which represents the status of Gateway.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
+class GatewayConfig(FeatureConfig):
+    """Configuration for the gateway settings of the cluster."""
 
 
-class MetricsServerConfig(BaseModel):
-    """Configuration for the metrics server settings of the cluster.
-
-    Attributes:
-        model_config: ConfigDict instance for the model.
-        enabled: Optional flag which represents the status of MetricsServer.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    enabled: Optional[bool] = Field(default=None)
+class MetricsServerConfig(FeatureConfig):
+    """Configuration for the metrics server settings of the cluster."""
 
 
 class UserFacingClusterConfig(BaseModel):
@@ -407,6 +372,16 @@ class BootstrapConfig(BaseModel):
         datastore_ca_cert (str): The CA certificate for the datastore.
         datastore_client_cert (str): The client certificate for accessing the datastore.
         datastore_client_key (str): The client key for accessing the datastore.
+        etcd_port (int): The port number for etcd to use.
+        etcd_peer_port (int): The port number for etcd peer communication to use.
+        etcd_ca_cert (str): The CA certificate to be used for etcd.
+        etcd_ca_key (str): The CA key to be used for etcd.
+        etcd_server_cert (str): The server certificate to be used for etcd.
+        etcd_server_key (str): The server key to be used for etcd.
+        etcd_peer_cert (str): The server peer certificate to be used for etcd.
+        etcd_peer_key (str): The server peer key to be used for etcd.
+        etcd_apiserver_client_cert (str): The client certificate to be used by the kube-apiserver.
+        etcd_apiserver_client_key (str): The client key to be used by the kube-apiserver.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
         ca_cert (str): The CA certificate for Kubernetes services.
         ca_key (str): The CA key for Kubernetes services.
@@ -448,6 +423,8 @@ class BootstrapConfig(BaseModel):
             service args .
         extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): key-value
             service args
+        extra_node_etcd_args (Dict[str, Optional[str]]): key-value
+            service args
         extra_node_containerd_config (Dict[str, Any]): key-value config args
         containerd_base_dir (str): The base directory for containerd.
     """
@@ -464,6 +441,20 @@ class BootstrapConfig(BaseModel):
     datastore_ca_cert: Optional[str] = Field(default=None, alias="datastore-ca-crt")
     datastore_client_cert: Optional[str] = Field(default=None, alias="datastore-client-crt")
     datastore_client_key: Optional[str] = Field(default=None, alias="datastore-client-key")
+    etcd_port: Optional[int] = Field(default=None, alias="etcd-port")
+    etcd_peer_port: Optional[int] = Field(default=None, alias="etcd-peer-port")
+    etcd_ca_cert: Optional[str] = Field(default=None, alias="etcd-ca-crt")
+    etcd_ca_key: Optional[str] = Field(default=None, alias="etcd-ca-key")
+    etcd_server_cert: Optional[str] = Field(default=None, alias="etcd-server-crt")
+    etcd_server_key: Optional[str] = Field(default=None, alias="etcd-server-key")
+    etcd_peer_cert: Optional[str] = Field(default=None, alias="etcd-peer-crt")
+    etcd_peer_key: Optional[str] = Field(default=None, alias="etcd-peer-key")
+    etcd_apiserver_client_cert: Optional[str] = Field(
+        default=None, alias="etcd-apiserver-client-crt"
+    )
+    etcd_apiserver_client_key: Optional[str] = Field(
+        default=None, alias="etcd-apiserver-client-key"
+    )
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
     # Cluster-wide external certificates
     ca_cert: Optional[str] = Field(default=None, alias="ca-crt")
@@ -529,6 +520,9 @@ class BootstrapConfig(BaseModel):
     )
     extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+        default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
@@ -609,6 +603,10 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
 
     Attributes:
         model_config: ConfigDict instance for the model.
+        etcd_server_cert (str): The server certificate to be used for etcd.
+        etcd_server_key (str): The server key to be used for etcd.
+        etcd_peer_cert (str): The server peer certificate to be used for etcd.
+        etcd_peer_key (str): The server peer key to be used for etcd.
         extra_sans (List[str]): List of extra sans for the self-signed certificates
         apiserver_crt (str): API server certificate
         apiserver_key (str): API server certificate key
@@ -625,11 +623,16 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
         extra_node_kube_controller_manager_args (Dict[str, Optional[str]]): Controller manager args
         extra_node_kube_scheduler_args (Dict[str, Optional[str]]): Scheduler args
         extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): Dqlite args
+        extra_node_etcd_args (Dict[str, Optional[str]]): ETCD args
         extra_node_containerd_config (Dict[str, Any]): Containerd config
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
+    etcd_server_cert: Optional[str] = Field(default=None, alias="etcd-server-crt")
+    etcd_server_key: Optional[str] = Field(default=None, alias="etcd-server-key")
+    etcd_peer_cert: Optional[str] = Field(default=None, alias="etcd-peer-crt")
+    etcd_peer_key: Optional[str] = Field(default=None, alias="etcd-peer-key")
     extra_sans: Optional[List[str]] = Field(default=None, alias="extra-sans")
     apiserver_crt: Optional[str] = Field(default=None, alias="apiserver-crt")
     apiserver_key: Optional[str] = Field(default=None, alias="apiserver-key")
@@ -663,6 +666,9 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
     )
     extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
+    )
+    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+        default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
@@ -726,6 +732,27 @@ class DatastoreStatus(BaseModel):
     servers: Optional[List[str]] = Field(default=None, alias="servers")
 
 
+class FeatureStatus(BaseModel):
+    """Represents the status of a feature in the k8sd cluster.
+
+    Attributes:
+        enabled (bool):
+            shows whether or not the deployment of manifests for a status
+            was successful.
+        version (str): shows the version of the deployed feature.
+        message (str):
+            contains information about the status of a feature.
+            It is only supposed to be human readable and informative and should
+            not be programmatically parsed.
+        updated_at (datetime): shows when the last update was done.
+    """
+
+    enabled: bool = Field(default=False)
+    version: str = Field(default="")
+    message: str = Field(default="")
+    updated_at: datetime = Field(default_factory=datetime.now, alias="updated-at")
+
+
 class ClusterStatus(BaseModel):
     """Represents the overall status of the k8sd cluster.
 
@@ -734,12 +761,47 @@ class ClusterStatus(BaseModel):
         members (List[ClusterMember]): List of members in the cluster.
         config (UserFacingClusterConfig): information about the cluster configuration.
         datastore (DatastoreStatus): information regarding the active datastore.
+        dns (FeatureStatus): Status of the DNS feature.
+        ingress (FeatureStatus): Status of the Ingress feature.
+        load_balancer (FeatureStatus): Status of the Load Balancer feature.
+        local_storage (FeatureStatus): Status of the Local Storage feature.
+        gateway (FeatureStatus): Status of the Gateway feature.
+        metrics_server (FeatureStatus): Status of the Metrics Server feature.
+        network (FeatureStatus): Status of the Network feature.
+        feature_statuses (Iterable[FeatureStatus]): An iterable of all feature statuses.
     """
 
     ready: bool = Field(False)
     members: Optional[List[ClusterMember]] = Field(default=None)
     config: Optional[UserFacingClusterConfig] = Field(default=None)
     datastore: Optional[DatastoreStatus] = Field(default=None)
+    dns: Optional[FeatureStatus] = Field(default=None)
+    ingress: Optional[FeatureStatus] = Field(default=None)
+    load_balancer: Optional[FeatureStatus] = Field(default=None, alias="load-balancer")
+    local_storage: Optional[FeatureStatus] = Field(default=None, alias="local-storage")
+    gateway: Optional[FeatureStatus] = Field(default=None)
+    metrics_server: Optional[FeatureStatus] = Field(default=None, alias="metrics-server")
+    network: Optional[FeatureStatus] = Field(default=None)
+
+    @property
+    def by_feature(self) -> List[Tuple[str, Optional[FeatureConfig], Optional[FeatureStatus]]]:
+        """Cluster features and their config + status.
+
+        Returns:
+            List[Tuple[str, Optional[FeatureConfig], Optional[FeatureStatus]]]:
+               A list of tuples where each tuple contains the feature name,
+               its config, and its status.
+        """
+        c = self.config
+        return [
+            ("dns", c.dns if c else None, self.dns),
+            ("ingress", c.ingress if c else None, self.ingress),
+            ("load-balancer", c.load_balancer if c else None, self.load_balancer),
+            ("local-storage", c.local_storage if c else None, self.local_storage),
+            ("gateway", c.gateway if c else None, self.gateway),
+            ("metrics-server", c.metrics_server if c else None, self.metrics_server),
+            ("network", c.network if c else None, self.network),
+        ]
 
 
 class ClusterMetadata(BaseModel):
