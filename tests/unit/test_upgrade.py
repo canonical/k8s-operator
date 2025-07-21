@@ -134,7 +134,10 @@ class TestK8sUpgrade(unittest.TestCase):
         unit_1.name = "k8s-worker/0"
         unit_2 = mock.MagicMock(spec=ops.Unit)
         unit_2.name = "k8s-worker/1"
-        self.charm.get_worker_versions.return_value = {"1.31.0": [unit_1], "1.31.5": [unit_2]}
+        self.charm.get_worker_versions.return_value = {
+            "1.31.0": [unit_1],
+            "1.31.5": [unit_2],
+        }
 
         result = self.upgrade._verify_worker_versions()
 
@@ -146,7 +149,10 @@ class TestK8sUpgrade(unittest.TestCase):
         unit_1.name = "k8s-worker/0"
         unit_2 = mock.MagicMock(spec=ops.Unit)
         unit_2.name = "k8s-worker/1"
-        self.charm.get_worker_versions.return_value = {"1.32.0": [unit_1], "1.33.0": [unit_2]}
+        self.charm.get_worker_versions.return_value = {
+            "1.32.0": [unit_1],
+            "1.33.0": [unit_2],
+        }
 
         result = self.upgrade._verify_worker_versions()
 
@@ -175,7 +181,8 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
-        "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
+        "upgrade.K8sUpgrade._verify_worker_versions",
+        new=mock.MagicMock(return_value=True),
     )
     @mock.patch("upgrade.list_services")
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
@@ -210,7 +217,8 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
-        "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
+        "upgrade.K8sUpgrade._verify_worker_versions",
+        new=mock.MagicMock(return_value=True),
     )
     @mock.patch("upgrade.list_services")
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
