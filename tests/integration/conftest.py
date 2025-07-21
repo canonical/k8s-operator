@@ -18,15 +18,14 @@ import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
+from cos_substrate import LXDSubstrate
+from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
 from juju.url import URL
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from pytest_operator.plugin import OpsTest
-
-from .cos_substrate import LXDSubstrate
-from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -360,7 +359,14 @@ async def cos_model(
 async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
     """Install COS Lite bundle."""
     log.info("Deploying COS bundle ...")
-    cos_charms = ["alertmanager", "catalogue", "grafana", "loki", "prometheus", "traefik"]
+    cos_charms = [
+        "alertmanager",
+        "catalogue",
+        "grafana",
+        "loki",
+        "prometheus",
+        "traefik",
+    ]
     bundles = (
         ops_test.Bundle("cos-lite", "edge"),
         "tests/integration/data/cos-offers-overlay.yaml",
@@ -389,7 +395,8 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
             log.info("%s", stdout or stderr)
             assert rc == 0
         await cos_model.block_until(
-            lambda: all(app not in cos_model.applications for app in cos_charms), timeout=60 * 10
+            lambda: all(app not in cos_model.applications for app in cos_charms),
+            timeout=60 * 10,
         )
 
 

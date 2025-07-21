@@ -8,9 +8,8 @@
 import json
 
 import pytest
+from helpers import ready_nodes
 from juju import model, unit
-
-from .helpers import ready_nodes
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with etcd, for all the test within this module.
