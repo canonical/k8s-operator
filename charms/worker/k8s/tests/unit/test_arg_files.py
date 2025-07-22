@@ -61,3 +61,20 @@ def test_file_args_config_ensure_content(snap_cache, write_text):
     config.ensure()
     snap_cache()["k8s"].restart.assert_called_once_with(["kubelet"])
     write_text.assert_called_once_with('--some-arg="value"\n')
+
+
+@mock.patch("pathlib.Path.exists", mock.Mock(return_value=True))
+@mock.patch("pathlib.Path.read_text", mock.Mock(return_value='--remove-arg="bar"\n'))
+@mock.patch("pathlib.Path.write_text")
+@mock.patch("charms.operator_libs_linux.v2.snap.SnapCache")
+def test_file_args_config_ensure_content_removal(snap_cache, write_text: mock.MagicMock):
+    """Test the FileArgsConfig class with a file."""
+    config = FileArgsConfig()
+    config.extra_node_kubelet_args = {
+        "--some-arg": "value",
+        "--remove-arg-": "true",
+        "--alpha": "true",
+    }
+    config.ensure()
+    snap_cache()["k8s"].restart.assert_called_once_with(["kubelet"])
+    write_text.assert_called_once_with('--alpha="true"\n--some-arg="value"\n')

@@ -135,7 +135,7 @@ class FileArgsConfig:
             if value is not None:
                 quoted = value.strip("'").strip('"')
                 lines.append(f'{key}="{quoted}"\n')
-        content = "".join(lines)
+        content = "".join(sorted(lines))
         hash_val = sha256(content.encode()).digest()
         return content, hash_val
 
@@ -168,8 +168,16 @@ class FileArgsConfig:
                 log.debug("Skipping non-existent arguments file: %s", file_path)
                 continue
 
-            updated_args = {**self._service_args[service.name], **service.extra_args}
-            content, hash_val = self._generate_file_content(updated_args)
+            updated_args = {**self._service_args.get(service.name, {}), **service.extra_args}
+
+            args_to_remove = {key.rstrip("-") for key in updated_args if key.endswith("-")}
+            filtered_args = {
+                arg: value
+                for arg, value in updated_args.items()
+                if arg.rstrip("-") not in args_to_remove
+            }
+
+            content, hash_val = self._generate_file_content(filtered_args)
             if hash_val != self._file_hashes[service.name]:
                 log.info("Updating arguments for %s at %s", service.name, file_path)
                 file_path.write_text(content)
