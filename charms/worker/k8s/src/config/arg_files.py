@@ -168,15 +168,13 @@ class FileArgsConfig:
                 log.debug("Skipping non-existent arguments file: %s", file_path)
                 continue
 
-            updated_args = self._service_args.get(service.name, {}).copy()
-            if service.extra_args:
-                updated_args.update(service.extra_args)
+            updated_args = {**self._service_args.get(service.name, {}), **service.extra_args}
 
             args_to_remove = {key.rstrip("-") for key in updated_args if key.endswith("-")}
             filtered_args = {
                 arg: value
                 for arg, value in updated_args.items()
-                if arg not in args_to_remove and arg.rstrip("-") not in args_to_remove
+                if arg.rstrip("-") not in args_to_remove
             }
 
             content, hash_val = self._generate_file_content(filtered_args)
