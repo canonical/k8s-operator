@@ -173,6 +173,13 @@ def test_set_leader(mock_detect_bootstrap, harness):
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
     harness.charm._ensure_cert_sans = mock.MagicMock()
+    public_addr = "11.12.13.14"
+    remote_addr = "11.12.13.15"
+    if harness.charm.is_control_plane:
+        harness.add_network(
+            public_addr, endpoint="cluster", ingress_addresses=[public_addr, remote_addr]
+        )
+        harness.add_relation("cluster", "remote")
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
@@ -180,7 +187,12 @@ def test_set_leader(mock_detect_bootstrap, harness):
     assert harness.charm.reconciler.stored.reconciled
     called = {name: h for name, h in handlers.items() if h.called}
     assert len(called) == len(handlers)
-    mock_detect_bootstrap.assert_called_once_with(harness.charm)
+    # NOTE: This account for adding the new relation and the leadership change.
+    if harness.charm.is_control_plane:
+        mock_detect_bootstrap.assert_has_calls([mock.call(harness.charm)] * 2)
+        assert mock_detect_bootstrap.call_count == 2
+    else:
+        mock_detect_bootstrap.assert_called_once_with(harness.charm)
 
 
 def test_configure_datastore_bootstrap_config_managed_etcd(harness):
