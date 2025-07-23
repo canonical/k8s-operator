@@ -34,6 +34,8 @@ jobs:
   select-tests:
     runs-on: ubuntu-24.04
     needs: [extra-args]
+    permissions:
+      contents: read
     outputs:
       amd64: ${{ steps.select.outputs.amd64 }}
       arm64: ${{ steps.select.outputs.arm64 }}
@@ -64,6 +66,9 @@ jobs:
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
     needs: [charmcraft-channel, extra-args, select-tests]
+    permissions:
+      contents: read
+      actions: write
     secrets: inherit
     strategy:
       matrix:
