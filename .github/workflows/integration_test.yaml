@@ -31,9 +31,44 @@ jobs:
       - id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
+  select-tests:
+    runs-on: ubuntu-24.04
+    needs: [extra-args]
+    permissions:
+      contents: read
+    outputs:
+      amd64: ${{ steps.select.outputs.amd64 }}
+      arm64: ${{ steps.select.outputs.arm64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Astral UV
+        uses: astral-sh/setup-uv@v6.4.1
+        with:
+          python-version: "3.12"
+      - name: Install tox with UV
+        run: uv tool install tox --with tox-uv
+      - name: Select tests
+        id: select
+        run: |
+          list_modules() {
+            ARCH=$1
+            MODULES=$(tox -e integration -- --arch "$ARCH" --collect-only -q 2>/dev/null \
+              | grep -E '<Module test_.*\.py>' \
+              | sed -E 's/.*<Module (test_[^.]*)\.py>.*/\1/' \
+              | sort -u)
+            jq -c -R -s 'split("\n")[:-1]' <<< "${MODULES}"
+          }
+          amd64=$(list_modules amd64)
+          arm64=$(list_modules arm64)
+          echo "amd64=${amd64}" >> "$GITHUB_OUTPUT"
+          echo "arm64=${arm64}" >> "$GITHUB_OUTPUT"
+
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
-    needs: [charmcraft-channel, extra-args]
+    needs: [charmcraft-channel, extra-args, select-tests]
+    permissions:
+      contents: read
+      actions: write
     secrets: inherit
     strategy:
       matrix:
@@ -43,13 +78,13 @@ jobs:
             builder-label: ubuntu-22.04
             tester-arch: AMD64
             tester-size: xlarge
-            modules: '["test_k8s", "test_etcd", "test_dqlite", "test_ceph", "test_upgrade", "test_external_certs", "test_registry", "test_dualstack"]'
+            modules: ${{ needs.select-tests.outputs.amd64 }}
           # built and test on on self-hosted
           - id: arm64
             builder-label: ARM64
             tester-arch: ARM64
             tester-size: large
-            modules: '["test_k8s", "test_etcd", "test_dqlite", "test_dualstack"]'
+            modules: ${{ needs.select-tests.outputs.arm64 }}
     with:
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
