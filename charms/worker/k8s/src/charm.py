@@ -1024,9 +1024,6 @@ class K8sCharm(ops.CharmBase):
             event: ops.EventBase - event that triggered the reconciliation
         """
         log.info("Reconcile event=%s", event)
-        import pdb
-
-        pdb.set_trace()
         if self._evaluate_removal(event):
             self._death_handler(event)
 
