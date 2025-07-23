@@ -29,74 +29,11 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-import config.arg_files
-import config.bootstrap
-import config.extra_args
-import containerd
-import k8s.node
-import ops
-import utils
-import yaml
-from certificates import K8sCertificates, RefreshCertificates
-from cloud_integration import CloudIntegration
-from config.cluster import assemble_cluster_config
-from cos_integration import COSIntegration
-from endpoints import build_url
-from events import update_status
-from inspector import ClusterInspector
-from k8s.client import kubectl
-from kube_control import configure as configure_kube_control
-from literals import (
-    APISERVER_CERT,
-    APISERVER_PORT,
-    BOOTSTRAP_CERTIFICATES,
-    BOOTSTRAP_DATASTORE,
-    BOOTSTRAP_NODE_TAINTS,
-    BOOTSTRAP_POD_CIDR,
-    BOOTSTRAP_SERVICE_CIDR,
-    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
-    CLUSTER_CERTIFICATES_KEY,
-    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
-    CLUSTER_RELATION,
-    CLUSTER_WORKER_RELATION,
-    COMMON_NAME_CONFIG_KEY,
-    CONTAINERD_HTTP_PROXY,
-    CONTAINERD_RELATION,
-    CONTAINERD_SERVICE_NAME,
-    COS_RELATION,
-    COS_TOKENS_RELATION,
-    COS_TOKENS_WORKER_RELATION,
-    DATASTORE_NAME_MAPPING,
-    DATASTORE_TYPE_ETCD,
-    DATASTORE_TYPE_EXTERNAL,
-    DATASTORE_TYPE_K8S_DQLITE,
-    DEPENDENCIES,
-    ETC_KUBERNETES,
-    ETCD_RELATION,
-    EXTERNAL_LOAD_BALANCER_PORT,
-    EXTERNAL_LOAD_BALANCER_RELATION,
-    EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
-    EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
-    K8SD_PORT,
-    K8SD_SNAP_SOCKET,
-    KUBECONFIG,
-    KUBECTL_PATH,
-    KUBELET_CN_FORMATTER_CONFIG_KEY,
-    SUPPORTED_DATASTORES,
-)
-from loadbalancer_interface import LBProvider
-from ops.interface_kube_control import KubeControlProvides
-from pki import get_certificate_sans
-from pydantic import SecretStr
-from snap import management as snap_management
-from snap import version as snap_version
-from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
-from typing_extensions import Literal
-from upgrade import K8sDependenciesModel, K8sUpgrade
-
 import charms.contextual_status as status
 import charms.node_base.address as node_address
 import charms.operator_libs_linux.v2.snap as snap_lib
+import ops
+import yaml
 from charms.contextual_status import ReconcilerError, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
@@ -117,6 +54,72 @@ from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v1 import systemd
 from charms.reconciler import Reconciler
+from loadbalancer_interface import LBProvider
+from ops.interface_kube_control import KubeControlProvides
+from pydantic import SecretStr
+from typing_extensions import Literal
+
+import config.arg_files
+import config.bootstrap
+import config.extra_args
+import containerd
+import k8s.node
+import utils
+from certificates import EtcdCertificates, K8sCertificates, RefreshCertificates
+from charmed_etcd import CharmedEtcdRequires
+from cloud_integration import CloudIntegration
+from config.cluster import assemble_cluster_config
+from cos_integration import COSIntegration
+from endpoints import build_url
+from events import update_status
+from inspector import ClusterInspector
+from k8s.client import kubectl
+from kube_control import configure as configure_kube_control
+from literals import (
+    APISERVER_CERT,
+    APISERVER_PORT,
+    BOOTSTRAP_CERTIFICATES,
+    BOOTSTRAP_DATASTORE,
+    BOOTSTRAP_NODE_TAINTS,
+    BOOTSTRAP_POD_CIDR,
+    BOOTSTRAP_SERVICE_CIDR,
+    CHARMED_ETCD_RELATION,
+    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
+    CLUSTER_CERTIFICATES_KEY,
+    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
+    CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
+    COMMON_NAME_CONFIG_KEY,
+    CONTAINERD_HTTP_PROXY,
+    CONTAINERD_RELATION,
+    CONTAINERD_SERVICE_NAME,
+    COS_RELATION,
+    COS_TOKENS_RELATION,
+    COS_TOKENS_WORKER_RELATION,
+    DATASTORE_NAME_MAPPING,
+    DATASTORE_TYPE_ETCD,
+    DATASTORE_TYPE_EXTERNAL,
+    DATASTORE_TYPE_K8S_DQLITE,
+    DEPENDENCIES,
+    ETC_KUBERNETES,
+    ETCD_CERTIFICATES_RELATION,
+    ETCD_RELATION,
+    EXTERNAL_LOAD_BALANCER_PORT,
+    EXTERNAL_LOAD_BALANCER_RELATION,
+    EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
+    EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
+    K8SD_PORT,
+    K8SD_SNAP_SOCKET,
+    KUBECONFIG,
+    KUBECTL_PATH,
+    KUBELET_CN_FORMATTER_CONFIG_KEY,
+    SUPPORTED_DATASTORES,
+)
+from pki import get_certificate_sans
+from snap import management as snap_management
+from snap import version as snap_version
+from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
+from upgrade import K8sDependenciesModel, K8sUpgrade
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -217,17 +220,23 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
+        self.certificates = K8sCertificates(self, self.certificate_refresh)
+        custom_events = self.certificates.events
+        if self.lead_control_plane:
+            self.etcd_certificate = EtcdCertificates(self)
+            self.etcd = self._initialize_external_etcd()
+            custom_events += self.etcd_certificate.events
+
         if self.is_control_plane:
-            self.etcd = EtcdReactiveRequires(self)
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
-        self.certificates = K8sCertificates(self, self.certificate_refresh)
+
         self.reconciler = Reconciler(
             self,
             self._reconcile,
             exit_status=self.update_status.active_status,
-            custom_events=self.certificates.events,
+            custom_events=custom_events,
         )
         self.framework.observe(self.on.refresh_certs_action, self._on_refresh_certs_action)
 
@@ -595,7 +604,7 @@ class K8sCharm(ops.CharmBase):
                 continue
             if self.is_control_plane:
                 continue
-            ## Only workers here, and they are limited to only relate to one containerd endpoint
+            # Only workers here, and they are limited to only relate to one containerd endpoint
             self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
             registries = containerd.recover(relation)
             containerd.ensure_registry_configs(registries)
@@ -661,9 +670,8 @@ class K8sCharm(ops.CharmBase):
 
         if datastore == DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
-            etcd_relation = self.model.get_relation(ETCD_RELATION)
 
-            if not etcd_relation:
+            if not self.etcd:
                 raise ReconcilerError("Missing etcd relation")
 
             if not self.etcd.is_ready:
@@ -1254,6 +1262,48 @@ class K8sCharm(ops.CharmBase):
                 self.api_manager.refresh_certs(extra_sans=sans, expiration_seconds=ttl_seconds)
             except (InvalidResponseError, K8sdConnectionError) as e:
                 event.fail(f"Failed to refresh certificates: {e}")
+
+    def _initialize_external_etcd(self) -> EtcdReactiveRequires | CharmedEtcdRequires | None:
+        """Initialize etcd instance or block charm."""
+        legacy_etcd = self.model.get_relation(ETCD_RELATION)
+        charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
+        etcd_certificate_relation = self.model.get_relation(ETCD_CERTIFICATES_RELATION)
+
+        if not legacy_etcd and not charmed_etcd:
+            log.error("Missing etcd relation")
+            status.add(ops.BlockedStatus("Missing etcd relation"))
+            return
+
+        if legacy_etcd and charmed_etcd:
+            log.error(
+                "etcd and etcd_client are mutually exclusive. Only one can be active at a time"
+            )
+            status.add(
+                ops.BlockedStatus(
+                    "etcd and etcd_client are mutually exclusive. Only one can be active at a time"
+                )
+            )
+            return
+
+        if charmed_etcd and not etcd_certificate_relation:
+            log.error("etcd_client relation requires etcd-certificates")
+            status.add(ops.BlockedStatus("etcd_client relation requires etcd-certificates"))
+            return
+
+        if etcd_certificate_relation and not charmed_etcd:
+            log.error("etcd-certificates relation requires etcd_client relation")
+            status.add(
+                ops.BlockedStatus("etcd-certificates relation requires etcd_client relation")
+            )
+            return
+
+        if legacy_etcd:
+            log.info("Using legacy etcd relation")
+            return EtcdReactiveRequires(self)
+
+        if charmed_etcd:
+            log.info("Using charmed etcd relation")
+            return CharmedEtcdRequires(self, self.etcd_certificate._certificates)
 
 
 if __name__ == "__main__":  # pragma: nocover

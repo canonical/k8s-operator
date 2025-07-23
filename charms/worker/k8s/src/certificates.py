@@ -19,6 +19,7 @@ from literals import (
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
+    ETCD_CERTIFICATES_RELATION,
     KUBELET_CN_FORMATTER_CONFIG_KEY,
     KUBELET_CSR_KEY,
     MAX_COMMON_NAME_SIZE,
@@ -426,3 +427,30 @@ class K8sCertificates(ops.Object):
                 self._populate_join_certificates(config)
             elif isinstance(config, NodeJoinConfig):
                 self._populate_join_certificates(config)
+
+
+class EtcdCertificates(ops.Object):
+    """A class for managing etcd certificates associated with the apiserver."""
+
+    def __init__(self, charm: K8sCharmProtocol) -> None:
+        """Initialize the EtcdCertificates class.
+
+        Args:
+            charm: An instance of the charm.
+        """
+        super().__init__(charm, "etcd-certificates-integration")
+        self._charm = charm
+        self._certificates = TLSCertificatesRequiresV4(
+            charm=self._charm,
+            relationship_name=ETCD_CERTIFICATES_RELATION,
+            certificate_requests=[
+                CertificateRequestAttributes(
+                    common_name="etcd",
+                )
+            ],
+        )
+
+    @property
+    def events(self) -> List[ops.BoundEvent]:
+        """Return the events that the Certificates library emits."""
+        return [self._certificates.on.certificate_available]
