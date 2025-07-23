@@ -72,7 +72,8 @@ async def test_external_load_balancer(kubernetes_cluster: juju.model.Model, api_
     server_endpoint = server_endpoint.strip("]")
 
     for unit in k8s.units:
-        assert unit.get_public_address() != server_endpoint, "External lb not configured"
+        addr = await unit.get_public_address()
+        assert addr != server_endpoint, "External lb not configured"
 
     api_client.configuration.host = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
     v1 = CoreV1Api(api_client)
