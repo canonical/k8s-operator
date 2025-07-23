@@ -129,6 +129,10 @@ class EtcdRequiresProtocol(Object):
             "The get_client_credentials method must be implemented by the subclass."
         )
 
+    def update_relation_data(self) -> None:
+        """Update the relation data with the current state."""
+        pass
+
 
 class EtcdReactiveRequires(EtcdRequiresProtocol):
     """Requires side of the etcd interface.

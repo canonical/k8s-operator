@@ -674,7 +674,10 @@ class K8sCharm(ops.CharmBase):
             if not self.etcd:
                 raise ReconcilerError("Missing etcd relation")
 
+            self.etcd.update_relation_data()
+
             if not self.etcd.is_ready:
+                status.add(ops.WaitingStatus("Waiting for etcd to be ready"))
                 raise ReconcilerError("etcd is not ready")
 
             etcd_config = self.etcd.get_client_credentials()
@@ -1021,7 +1024,9 @@ class K8sCharm(ops.CharmBase):
             event: ops.EventBase - event that triggered the reconciliation
         """
         log.info("Reconcile event=%s", event)
+        import pdb
 
+        pdb.set_trace()
         if self._evaluate_removal(event):
             self._death_handler(event)
 
@@ -1034,6 +1039,7 @@ class K8sCharm(ops.CharmBase):
         if self.lead_control_plane:
             self._k8s_info(event)
             self._configure_external_load_balancer()
+            self._check_etcd_ready()
             self._bootstrap_k8s_snap()
             self._ensure_cluster_config()
             self._create_cluster_tokens()
@@ -1263,39 +1269,44 @@ class K8sCharm(ops.CharmBase):
             except (InvalidResponseError, K8sdConnectionError) as e:
                 event.fail(f"Failed to refresh certificates: {e}")
 
-    def _initialize_external_etcd(self) -> EtcdReactiveRequires | CharmedEtcdRequires | None:
-        """Initialize etcd instance or block charm."""
+    def _check_etcd_ready(self):
+        """Check if etcd is ready and update the status accordingly.
+
+        This method initializes the etcd instance and checks its readiness.
+        If etcd is not ready, it blocks the charm with an appropriate status.
+        """
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
         charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
         etcd_certificate_relation = self.model.get_relation(ETCD_CERTIFICATES_RELATION)
 
         if not legacy_etcd and not charmed_etcd:
-            log.error("Missing etcd relation")
-            status.add(ops.BlockedStatus("Missing etcd relation"))
-            return
+            msg = "Missing etcd relation"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
 
         if legacy_etcd and charmed_etcd:
-            log.error(
-                "etcd and etcd_client are mutually exclusive. Only one can be active at a time"
-            )
-            status.add(
-                ops.BlockedStatus(
-                    "etcd and etcd_client are mutually exclusive. Only one can be active at a time"
-                )
-            )
-            return
+            msg = "etcd and etcd_client are mutually exclusive. Only one can be active at a time"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
 
         if charmed_etcd and not etcd_certificate_relation:
-            log.error("etcd_client relation requires etcd-certificates")
-            status.add(ops.BlockedStatus("etcd_client relation requires etcd-certificates"))
-            return
+            msg = "etcd_client relation requires etcd-certificates"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
 
         if etcd_certificate_relation and not charmed_etcd:
-            log.error("etcd-certificates relation requires etcd_client relation")
-            status.add(
-                ops.BlockedStatus("etcd-certificates relation requires etcd_client relation")
-            )
-            return
+            msg = "etcd-certificates relation requires etcd_client relation"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
+
+    def _initialize_external_etcd(self) -> EtcdReactiveRequires | CharmedEtcdRequires | None:
+        """Initialize etcd instance or block charm."""
+        legacy_etcd = self.model.get_relation(ETCD_RELATION)
+        charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
 
         if legacy_etcd:
             log.info("Using legacy etcd relation")

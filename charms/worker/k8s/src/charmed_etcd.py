@@ -31,7 +31,10 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
 
         self.etcd_certificate = etcd_certificate
         self.charmed_etcd = EtcdRequires(
-            charm=self.charm, relation_name=endpoint, prefix="/", mtls_cert=None
+            charm=self.charm,
+            relation_name=endpoint,
+            prefix="/",
+            mtls_cert=self.tls_client_certificate,
         )
 
     @property
@@ -54,7 +57,7 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
     def get_connection_string(self) -> str:
         """Return the connection string for etcd."""
         if self.relation:
-            return self.charmed_etcd.fetch_relation_field(self.relation.id, "endpoints") or ""
+            return self.charmed_etcd.fetch_relation_field(self.relation.id, "uris") or ""
         return ""
 
     def get_client_credentials(self) -> dict[str, str | None]:
@@ -79,3 +82,20 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
             "client_key": client_key,
             "client_ca": client_ca,
         }
+
+    @property
+    def tls_client_certificate(self) -> str | None:
+        """Return the client certificate for etcd."""
+        certificates, _ = self.etcd_certificate.get_assigned_certificates()
+        return certificates[0].certificate.raw if certificates else None
+
+    def update_relation_data(self):
+        """Update the relation data with the current state."""
+        if not self.relation:
+            log.warning("No etcd relation to update.")
+            return
+        if not self.tls_client_certificate:
+            log.warning("No TLS client certificate available to update relation data.")
+            return
+        log.debug(f"Updating relation data for etcd with relation ID {self.relation.id}.")
+        self.charmed_etcd.set_mtls_cert(self.relation.id, self.tls_client_certificate)
