@@ -224,10 +224,10 @@ class K8sCharm(ops.CharmBase):
         custom_events = self.certificates.events
         if self.lead_control_plane:
             self.etcd_certificate = EtcdCertificates(self)
-            self.etcd = self._initialize_external_etcd()
             custom_events += self.etcd_certificate.events
 
         if self.is_control_plane:
+            self.etcd = self._initialize_external_etcd()
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
@@ -1272,6 +1272,10 @@ class K8sCharm(ops.CharmBase):
         This method initializes the etcd instance and checks its readiness.
         If etcd is not ready, it blocks the charm with an appropriate status.
         """
+        if not BOOTSTRAP_DATASTORE.get(self) == DATASTORE_TYPE_EXTERNAL:
+            log.info("Not using external etcd, skipping external etcd readiness check")
+            return
+
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
         charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
         etcd_certificate_relation = self.model.get_relation(ETCD_CERTIFICATES_RELATION)
