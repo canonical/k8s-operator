@@ -445,7 +445,7 @@ class EtcdCertificates(ops.Object):
             relationship_name=ETCD_CERTIFICATES_RELATION,
             certificate_requests=[
                 CertificateRequestAttributes(
-                    common_name="apiserver",
+                    common_name="kube-apiserver-etcd-client",
                 )
             ],
         )
