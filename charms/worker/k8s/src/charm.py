@@ -1287,19 +1287,19 @@ class K8sCharm(ops.CharmBase):
             raise ReconcilerError(msg)
 
         if legacy_etcd and charmed_etcd:
-            msg = "etcd and etcd_client are mutually exclusive. Only one can be active at a time"
+            msg = "etcd and etcd-client are mutually exclusive. Only one can be active at a time"
             log.error(msg)
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
 
         if charmed_etcd and not etcd_certificate_relation:
-            msg = "etcd_client relation requires etcd-certificates"
+            msg = "etcd-client relation requires etcd-certificates relation"
             log.error(msg)
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
 
-        if etcd_certificate_relation and not charmed_etcd:
-            msg = "etcd-certificates relation requires etcd_client relation"
+        if etcd_certificate_relation and legacy_etcd:
+            msg = "etcd-certificates relation is incompatible with etcd relation"
             log.error(msg)
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
