@@ -12,10 +12,11 @@ acquire client credentials for secure communication with etcd.
 import logging
 from typing import Optional
 
+from ops import Relation
+
 from charms.data_platform_libs.v0.data_interfaces import EtcdRequires
 from charms.kubernetes_libs.v0.etcd import EtcdRequiresProtocol
 from charms.tls_certificates_interface.v4.tls_certificates import TLSCertificatesRequiresV4
-from ops import Relation
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
 
     @property
     def is_ready(self) -> bool:
-        """Check if all fields needed from etcd are ready"""
+        """Check if all fields needed from etcd are ready."""
         return (
             self.relation is not None
             and self.charmed_etcd.fetch_relation_field(self.relation.id, "uris") is not None
