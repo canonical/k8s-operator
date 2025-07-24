@@ -10,6 +10,7 @@ acquire client credentials for secure communication with etcd.
 """
 
 import logging
+from typing import Optional
 
 from charms.data_platform_libs.v0.data_interfaces import EtcdRequires
 from charms.kubernetes_libs.v0.etcd import EtcdRequiresProtocol
@@ -50,7 +51,7 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
         )
 
     @property
-    def relation(self) -> Relation | None:
+    def relation(self) -> Optional[Relation]:
         """Return the etcd relation if present."""
         return self.model.get_relation(self.endpoint)
 
@@ -60,7 +61,7 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
             return self.charmed_etcd.fetch_relation_field(self.relation.id, "uris") or ""
         return ""
 
-    def get_client_credentials(self) -> dict[str, str | None]:
+    def get_client_credentials(self) -> dict[str, Optional[str]]:
         """Return the client credentials for etcd."""
         certificates, private_key = self.etcd_certificate.get_assigned_certificates()
         if not self.relation or not certificates or not private_key:
@@ -84,7 +85,7 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
         }
 
     @property
-    def tls_client_certificate(self) -> str | None:
+    def tls_client_certificate(self) -> Optional[str]:
         """Return the client certificate for etcd."""
         certificates, _ = self.etcd_certificate.get_assigned_certificates()
         return certificates[0].certificate.raw if certificates else None

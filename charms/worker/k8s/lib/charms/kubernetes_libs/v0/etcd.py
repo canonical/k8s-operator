@@ -123,7 +123,7 @@ class EtcdRequiresProtocol(Object):
             "The get_connection_string method must be implemented by the subclass."
         )
 
-    def get_client_credentials(self) -> dict[str, str | None]:
+    def get_client_credentials(self) -> dict[str, Optional[str]]:
         """Return the client credentials for etcd."""
         raise NotImplementedError(
             "The get_client_credentials method must be implemented by the subclass."
@@ -210,7 +210,7 @@ class EtcdReactiveRequires(EtcdRequiresProtocol):
             return remote_data.get("connection_string")
         return ""
 
-    def get_client_credentials(self) -> dict[str, str | None]:
+    def get_client_credentials(self) -> dict[str, Optional[str]]:
         """Return the client credentials for etcd."""
         remote_data = self._remote_data
         return {

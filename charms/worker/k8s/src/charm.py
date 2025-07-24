@@ -1300,7 +1300,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
 
-    def _initialize_external_etcd(self) -> EtcdReactiveRequires | CharmedEtcdRequires | None:
+    def _initialize_external_etcd(self) -> Union[EtcdReactiveRequires, CharmedEtcdRequires, None]:
         """Initialize etcd instance or block charm."""
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
         charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
