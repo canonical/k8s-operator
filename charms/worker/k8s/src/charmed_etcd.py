@@ -40,14 +40,11 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
 
     @property
     def is_ready(self) -> bool:
-        """Check if the relation is available and emit the appropriate event."""
+        """Check if all fields needed from etcd are ready"""
         return (
             self.relation is not None
-            and self.charmed_etcd.fetch_relation_field(self.relation.id, "username") is not None
             and self.charmed_etcd.fetch_relation_field(self.relation.id, "uris") is not None
-            and self.charmed_etcd.fetch_relation_field(self.relation.id, "endpoints") is not None
             and self.charmed_etcd.fetch_relation_field(self.relation.id, "tls-ca") is not None
-            and self.charmed_etcd.fetch_relation_field(self.relation.id, "version") is not None
         )
 
     @property
