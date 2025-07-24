@@ -74,10 +74,9 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
 
         client_cert = certificates[0].certificate.raw
         client_key = private_key.raw
-        client_ca = certificates[0].ca.raw
+        client_ca = self.charmed_etcd.fetch_relation_field(self.relation.id, "tls-ca")
 
         self.charmed_etcd.set_mtls_cert(self.relation.id, client_cert)
-
         return {
             "client_cert": client_cert,
             "client_key": client_key,
