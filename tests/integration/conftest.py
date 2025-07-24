@@ -35,30 +35,45 @@ DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
 def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
 
+    --apply-proxy
+        Apply proxy to model-config.
+    --arch
+        Only run tests matching this architecture (e.g., amd64 or arm64).
     --charm-file
         Can be used multiple times, specifies which local charm files are available.
         Expected filename format: {charmName}_{base}-{arch}.charm
         Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm
         Some tests use subordinate charms (e.g. Ceph) that expect the charm
         base to match.
-    --upgrade-from
-        Instruct tests to start with a specific channel, and upgrade to these charms.
+    --cos
+        Add COS integration tests.
+    --lxd-containers
+        If cloud is LXD, use containers instead of LXD VMs.
+        Note that some charms may not work in LXD containers (e.g. Ceph).
+    --series
+        Ubuntu series to deploy, overrides any markings.
     --snap-installation-resource
         Path to the snap installation resource.
         The tarball must contain either a "snap_installation.yaml" OR a
         "*.snap" file.
-    --lxd-containers
-        If cloud is LXD, use containers instead of LXD VMs.
-        Note that some charms may not work in LXD containers (e.g. Ceph).
-    --apply-proxy
-        Apply proxy to model-config.
     --timeout
         Set timeout for tests
+    --upgrade-from
+        Instruct tests to start with a specific channel, and upgrade to these charms.
 
     Args:
         parser: Pytest parser.
     """
-    parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
+    parser.addoption(
+        "--apply-proxy", action="store_true", default=False, help="Apply proxy to model-config"
+    )
+    parser.addoption(
+        "--arch",
+        dest="arch",
+        default=None,
+        type=str,
+        help="Only run tests matching this architecture (e.g., amd64 or arm64)",
+    )
     parser.addoption(
         "--charm-file",
         dest="charm_files",
@@ -72,22 +87,7 @@ def pytest_addoption(parser: pytest.Parser):
             "base to match."
         ),
     )
-    parser.addoption(
-        "--snap-installation-resource",
-        default=str(DEFAULT_SNAP_INSTALLATION.resolve()),
-        help=(
-            "Path to the snap installation resource. "
-            'The tarball must contain either a "snap_installation.yaml" OR a '
-            '"*.snap" file.'
-        ),
-    )
     parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
-    parser.addoption(
-        "--apply-proxy",
-        action="store_true",
-        default=False,
-        help="Apply proxy to model-config",
-    )
     parser.addoption(
         "--lxd-containers",
         action="store_true",
@@ -97,35 +97,24 @@ def pytest_addoption(parser: pytest.Parser):
             "Note that some charms may not work in LXD containers (e.g. Ceph)."
         ),
     )
+    parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
     parser.addoption(
-        "--upgrade-from",
-        dest="upgrade_from",
-        default=None,
-        help="Charms channel to upgrade from",
+        "--snap-installation-resource",
+        default=str(DEFAULT_SNAP_INSTALLATION.resolve()),
+        help=(
+            "Path to the snap installation resource. "
+            'The tarball must contain either a "snap_installation.yaml" OR a '
+            '"*.snap" file.'
+        ),
     )
     parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
-
-
-def pytest_configure(config):
-    """Add pytest configuration args.
-
-    Args:
-        config: Pytest config.
-    """
-    config.addinivalue_line("markers", "cos: mark COS integration tests.")
-    config.addinivalue_line(
-        "markers",
-        "bundle(file='', series='', apps_local=[], apps_channel={}, apps_resources={}): "
-        "specify a YAML bundle file for a test.",
-    )
-    config.addinivalue_line(
-        "markers",
-        "clouds(*args): mark tests to run only on specific clouds.",
+    parser.addoption(
+        "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
 
 
 def pytest_collection_modifyitems(config, items):
-    """Add cos marker parsing.
+    """Remove from selected tests based on config.
 
     Called after collection has been performed. May filter or re-order the items in-place.
 
@@ -133,11 +122,29 @@ def pytest_collection_modifyitems(config, items):
         config (pytest.Config): The pytest config object.
         items (List[pytest.Item]): List of item objects.
     """
-    if not config.getoption("--cos"):
-        skip_cos = pytest.mark.skip(reason="need --cos option to run")
-        for item in items:
-            if item.get_closest_marker("cos"):
-                item.add_marker(skip_cos)
+    cos_active = config.getoption("--cos")
+    arch_filter = config.getoption("--arch")
+
+    selected, deselected = [], []
+
+    for item in items:
+        if item.get_closest_marker("cos") and not cos_active:
+            # Any test marked cos only runs if --cos is activated.
+            deselected.append(item)
+        elif (
+            (arch_mark := item.get_closest_marker("architecture"))
+            and arch_filter
+            and arch_mark.args
+            and arch_filter not in arch_mark.args
+        ):
+            # Test is marked with an architecture but the filter does not match.
+            deselected.append(item)
+        else:
+            selected.append(item)
+
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 async def cloud_proxied(ops_test: OpsTest):
@@ -176,7 +183,7 @@ async def cloud_profile(ops_test: OpsTest):
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
-@pytest_asyncio.fixture(autouse=True)
+@pytest_asyncio.fixture(scope="module", autouse=True)
 async def skip_by_cloud_type(request, ops_test):
     """Skip tests based on cloud type."""
     if cloud_markers := request.node.get_closest_marker("clouds"):

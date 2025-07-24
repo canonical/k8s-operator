@@ -20,7 +20,10 @@ from juju import model
 from kubernetes.utils import create_from_yaml
 
 pytestmark = [
-    pytest.mark.bundle(file="test_registries/test-bundle-docker-registry.yaml", apps_local=["k8s"])
+    pytest.mark.bundle(
+        file="test_registries/test-bundle-docker-registry.yaml", apps_local=["k8s"]
+    ),
+    pytest.mark.architecture("amd64"),
 ]
 
 log = logging.getLogger(__name__)
