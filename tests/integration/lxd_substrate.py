@@ -147,11 +147,18 @@ class LXDSubstrate:
             log.warning("Network %s does not exist, creating.", name)
             network = self.client.networks.create(name)
 
-        network.type = config.get("type", "bridge")
-        network.description = config.get("description", "")
+        if (val := config.get("type", "bridge")) and network.type != val:
+            network.type = val
+        if (val := config.get("description")) and network.description != val:
+            network.description = val
         for key, value in config["config"].items():
+            if network.config.get(key) == value:
+                continue
+            if value == "auto" and network.config.get(key) != "none":
+                continue
             network.config[key] = value
-        network.save()
+        if network.dirty:
+            network.save()
         log.info("Network created successfully.")
         return network
 
