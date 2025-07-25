@@ -16,6 +16,7 @@ import containerd
 import ops
 import ops.testing
 import pytest
+from literals import DATASTORE_NAME_MAPPING
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 from charms.contextual_status import ReconcilerError
@@ -206,7 +207,8 @@ def test_configure_datastore_bootstrap_config_managed_etcd(harness):
         pytest.skip("Not applicable on workers")
 
     bs_config = BootstrapConfig()
-    harness.charm._configure_datastore(bs_config)
+    snap_ds_type = DATASTORE_NAME_MAPPING["managed-etcd"]
+    harness.charm._configure_datastore(bs_config, snap_ds_type)
     assert bs_config.datastore_ca_cert is None
     assert bs_config.datastore_client_cert is None
     assert bs_config.datastore_client_key is None
@@ -224,8 +226,8 @@ def test_configure_datastore_bootstrap_config_dqlite(harness):
         pytest.skip("Not applicable on workers")
 
     bs_config = BootstrapConfig()
-    harness.update_config({"bootstrap-datastore": "dqlite"})
-    harness.charm._configure_datastore(bs_config)
+    snap_ds_type = DATASTORE_NAME_MAPPING["dqlite"]
+    harness.charm._configure_datastore(bs_config, snap_ds_type)
     assert bs_config.datastore_ca_cert is None
     assert bs_config.datastore_client_cert is None
     assert bs_config.datastore_client_key is None
@@ -244,13 +246,13 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
 
     harness.disable_hooks()
     bs_config = BootstrapConfig()
-    harness.update_config({"bootstrap-datastore": "etcd"})
     harness.add_relation("etcd", "etcd")
     with mock.patch.object(harness.charm, "etcd") as mock_etcd:
         mock_etcd.is_ready = True
         mock_etcd.get_client_credentials.return_value = {}
         mock_etcd.get_connection_string.return_value = "foo:1234,bar:1234"
-        harness.charm._configure_datastore(bs_config)
+        snap_ds_type = DATASTORE_NAME_MAPPING["etcd"]
+        harness.charm._configure_datastore(bs_config, snap_ds_type)
     assert bs_config.datastore_ca_cert == ""
     assert bs_config.datastore_client_cert == ""
     assert bs_config.datastore_client_key == ""
@@ -268,7 +270,8 @@ def test_configure_datastore_runtime_config_dqlite(harness):
         pytest.skip("Not applicable on workers")
 
     uccr_config = UpdateClusterConfigRequest()
-    harness.charm._configure_datastore(uccr_config)
+    snap_ds_type = DATASTORE_NAME_MAPPING["dqlite"]
+    harness.charm._configure_datastore(uccr_config, snap_ds_type)
     assert uccr_config.datastore is None
 
 
@@ -282,14 +285,14 @@ def test_configure_datastore_runtime_config_etcd(harness):
         pytest.skip("Not applicable on workers")
 
     harness.disable_hooks()
-    harness.update_config({"bootstrap-datastore": "etcd"})
     harness.add_relation("etcd", "etcd")
     with mock.patch.object(harness.charm, "etcd") as mock_etcd:
         mock_etcd.is_ready = True
         mock_etcd.get_client_credentials.return_value = {}
         mock_etcd.get_connection_string.return_value = "foo:1234,bar:1234"
         uccr_config = UpdateClusterConfigRequest()
-        harness.charm._configure_datastore(uccr_config)
+        snap_ds_type = DATASTORE_NAME_MAPPING["etcd"]
+        harness.charm._configure_datastore(uccr_config, snap_ds_type)
     assert uccr_config.datastore
     assert uccr_config.datastore.ca_crt == ""
     assert uccr_config.datastore.client_crt == ""
