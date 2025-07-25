@@ -133,8 +133,19 @@ def test_configure_datastore_extra_args(harness):
         pytest.skip("Not applicable on workers")
 
     harness.disable_hooks()
-    harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
-    harness.update_config({"bootstrap-datastore": "managed-etcd"})
+    harness.add_relation("cluster", "k8s", unit_data={"ingress-address": "1.2.3.4"})
+    harness.add_relation(
+        "etcd",
+        "etcd",
+        unit_data={
+            "connection_string": "https://etcd.example.com:2379",
+            "client_cert": "cert_data",
+            "client_key": "key_data",
+            "client_ca": "ca_data",
+        },
+    )
+    # event with external etcd, we still overshare
+    harness.update_config({"bootstrap-datastore": "etcd"})
     harness.update_config({"datastore-extra-args": "v=6 foo=ban clog"})
 
     bootstrap_config = harness.charm._assemble_bootstrap_config()
@@ -144,4 +155,8 @@ def test_configure_datastore_extra_args(harness):
         "--foo": "ban",
         "--clog": "true",
     }
-    assert bootstrap_config.extra_node_k8s_dqlite_args is None
+    assert bootstrap_config.extra_node_k8s_dqlite_args == {
+        "--v": "6",
+        "--foo": "ban",
+        "--clog": "true",
+    }

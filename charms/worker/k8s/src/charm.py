@@ -507,7 +507,7 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         node_ips = self._get_node_ips()
-        config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips)
+        config.extra_args.craft(self, bootstrap_config, cluster_name, node_ips)
         return bootstrap_config
 
     def _configure_external_load_balancer(self) -> None:
@@ -970,10 +970,10 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = self._get_extra_sans()
-            config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
+            config.extra_args.craft(self, request.config, cluster_name, node_ips)
         else:
             request.config = NodeJoinConfig()
-            config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
+            config.extra_args.craft(self, request.config, cluster_name, node_ips)
 
             bootstrap_node_taints = BOOTSTRAP_NODE_TAINTS.get(self).strip().split()
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
@@ -1121,7 +1121,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
             file_args_config = config.arg_files.FileArgsConfig()
             node_ips = self._get_node_ips()
-            config.extra_args.craft(self.config, file_args_config, cluster_name, node_ips)
+            config.extra_args.craft(self, file_args_config, cluster_name, node_ips)
             file_args_config.ensure()
 
     @property

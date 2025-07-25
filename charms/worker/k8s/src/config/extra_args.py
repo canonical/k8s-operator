@@ -36,7 +36,7 @@ def _parse(config_data) -> Dict[str, str]:
 
 
 def craft(
-    src: ops.ConfigData,
+    src: ops.CharmBase,
     dest: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig],
     cluster_name: str,
     node_ips: List[str],
@@ -59,31 +59,29 @@ def craft(
         cluster_name (str): the name of the cluster to override in the extra arguments.
         node_ips (list[str]): the IP address of the node to override in the extra arguments.
     """
-    if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
-        cmd = _parse(src["kube-apiserver-extra-args"])
+    if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig)):
+        cmd = _parse(literals.KUBE_APISERVER_EXTRA_ARGS.get(src))
         dest.extra_node_kube_apiserver_args = cmd
 
-        cmd = _parse(src["kube-controller-manager-extra-args"])
+        cmd = _parse(literals.KUBE_CONTROLLER_MANAGER_EXTRA_ARGS.get(src))
         if cluster_name:
             cmd.update(**{"--cluster-name": cluster_name})
         else:
             cmd.pop("--cluster-name", None)
         dest.extra_node_kube_controller_manager_args = cmd
 
-        cmd = _parse(src["kube-scheduler-extra-args"])
+        cmd = _parse(literals.KUBE_SCHEDULER_EXTRA_ARGS.get(src))
         dest.extra_node_kube_scheduler_args = cmd
 
-        cmd = _parse(src["datastore-extra-args"])
-        match src["bootstrap-datastore"]:
-            case literals.DATASTORE_TYPE_K8S_DQLITE:
-                dest.extra_node_k8s_dqlite_args = cmd
-            case literals.DATASTORE_TYPE_ETCD:
-                dest.extra_node_etcd_args = cmd
+    if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
+        cmd = _parse(literals.DATASTORE_EXTRA_ARGS.get(src))
+        dest.extra_node_k8s_dqlite_args = cmd
+        dest.extra_node_etcd_args = cmd
 
-    cmd = _parse(src["kube-proxy-extra-args"])
+    cmd = _parse(literals.KUBE_PROXY_EXTRA_ARGS.get(src))
     dest.extra_node_kube_proxy_args = cmd
 
-    cmd = _parse(src["kubelet-extra-args"])
+    cmd = _parse(literals.KUBELET_EXTRA_ARGS.get(src))
     if node_ips:
         cmd.update(**{"--node-ip": ",".join(node_ips)})
     else:
