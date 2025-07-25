@@ -92,6 +92,7 @@ NODE_LABELS = option.StrOption("node-labels")
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
+SNAP_RESOURCE_NAME = "snap-installation"
 
 # Relations
 CERTIFICATES_RELATION = "certificates"
@@ -133,6 +134,7 @@ LEADER_CONTROL_PLANE_CERTIFICATES = ["apiserver-kubelet-client"] + CONTROL_PLANE
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [
+    "containerd",
     "kubelet",
     "kube-proxy",
     "k8sd",

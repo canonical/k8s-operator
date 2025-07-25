@@ -172,6 +172,7 @@ def test_set_leader(mock_detect_bootstrap, harness):
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
+    harness.charm.upgrade = mock.MagicMock()
     harness.charm._ensure_cert_sans = mock.MagicMock()
     public_addr = "11.12.13.14"
     remote_addr = "11.12.13.15"
