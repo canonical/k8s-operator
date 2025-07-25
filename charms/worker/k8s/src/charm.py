@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 import config.arg_files
 import config.bootstrap
 import config.extra_args
+import config.resource
 import containerd
 import k8s.node
 import ops
@@ -82,6 +83,7 @@ from literals import (
     KUBECONFIG,
     KUBECTL_PATH,
     KUBELET_CN_FORMATTER_CONFIG_KEY,
+    SNAP_RESOURCE_NAME,
     SUPPORTED_DATASTORES,
 )
 from loadbalancer_interface import LBProvider
@@ -177,6 +179,7 @@ class K8sCharm(ops.CharmBase):
         """
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
+        self.snap_installation_resource = config.resource.CharmResource(self, SNAP_RESOURCE_NAME)
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
@@ -200,8 +203,7 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._upgrade_snap = False
-        self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
+        self._stored.set_default(is_dying=False, cluster_name=str())
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -317,15 +319,6 @@ class K8sCharm(ops.CharmBase):
                 if version := relation.data[unit].get("version"):
                     versions[version].append(unit)
         return versions
-
-    def grant_upgrade(self):
-        """Grant the upgrade to the charm."""
-        self._upgrade_snap = True
-
-    @property
-    def is_upgrade_granted(self) -> bool:
-        """Check if the upgrade has been granted."""
-        return self._upgrade_snap
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
@@ -1017,6 +1010,7 @@ class K8sCharm(ops.CharmBase):
         if self._evaluate_removal(event):
             self._death_handler(event)
 
+        self.upgrade.handler(event)
         self._apply_proxy_environment()
         self._install_snaps()
         self._apply_snap_requirements()

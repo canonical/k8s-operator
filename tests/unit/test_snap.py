@@ -128,14 +128,14 @@ def test_not_block_refresh(cache, state, overridden, caplog, resource_snap_insta
 def test_parse_no_file(harness):
     """Test no file exists."""
     with pytest.raises(snap.snap_lib.SnapError):
-        snap._parse_management_arguments(harness.charm)
+        snap._parse_management_arguments(harness.charm.snap_installation_resource)
 
 
 def test_parse_invalid_file(snap_installation, harness):
     """Test file is invalid."""
     snap_installation.return_value = io.BytesIO(b"example: =")
     with pytest.raises(snap.snap_lib.SnapError):
-        snap._parse_management_arguments(harness.charm)
+        snap._parse_management_arguments(harness.charm.snap_installation_resource)
 
 
 @mock.patch("subprocess.check_output")
@@ -144,7 +144,7 @@ def test_parse_invalid_arch(mock_checkoutput, snap_installation, harness):
     snap_installation.return_value = io.BytesIO(b"{}")
     mock_checkoutput().decode.return_value = "amd64"
     with pytest.raises(snap.snap_lib.SnapError):
-        snap._parse_management_arguments(harness.charm)
+        snap._parse_management_arguments(harness.charm.snap_installation_resource)
 
 
 @mock.patch("subprocess.check_output")
@@ -153,7 +153,7 @@ def test_parse_validation_error(mock_checkoutput, snap_installation, harness):
     snap_installation.return_value = io.BytesIO(b"amd64:\n- {}")
     mock_checkoutput().decode.return_value = "amd64"
     with pytest.raises(snap.snap_lib.SnapError):
-        snap._parse_management_arguments(harness.charm)
+        snap._parse_management_arguments(harness.charm.snap_installation_resource)
 
 
 def _create_gzip_tar_string(file_data_dict):
@@ -200,7 +200,7 @@ def test_resource_supplied_installation_by_channel(harness):
     yaml_data = f"{arch}:\n- install-type: store\n  name: k8s\n  channel: edge"
     file_data = {"./snap_installation.yaml": yaml_data}
     harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
-    args = snap._parse_management_arguments(harness.charm)
+    args = snap._parse_management_arguments(harness.charm.snap_installation_resource)
     assert len(args) == 1
     assert isinstance(args[0], snap.SnapStoreArgument)
     assert args[0].channel == "edge"
@@ -224,7 +224,7 @@ def test_resource_supplied_installation_by_filename(harness, resource_snap_insta
     ).strip()
     file_data = {"./snap_installation.yaml": yaml_data, "./k8s_xxxx.snap": ""}
     harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
-    args = snap._parse_management_arguments(harness.charm)
+    args = snap._parse_management_arguments(harness.charm.snap_installation_resource)
     assert len(args) == 1
     assert isinstance(args[0], snap.SnapFileArgument)
     assert args[0].install_type == "file"
@@ -239,7 +239,7 @@ def test_resource_supplied_snap(harness, resource_snap_installation):
     """Test resource installs by snap only."""
     file_data = {"./k8s_xxxx.snap": ""}
     harness.add_resource("snap-installation", _create_gzip_tar_string(file_data))
-    args = snap._parse_management_arguments(harness.charm)
+    args = snap._parse_management_arguments(harness.charm.snap_installation_resource)
     assert len(args) == 1
     assert isinstance(args[0], snap.SnapFileArgument)
     assert args[0].name == "k8s"
@@ -260,7 +260,7 @@ amd64:
 """
     snap_installation.return_value = io.BytesIO(content)
     mock_checkoutput().decode.return_value = "amd64"
-    args = snap._parse_management_arguments(harness.charm)
+    args = snap._parse_management_arguments(harness.charm.snap_installation_resource)
     assert args == [
         snap.SnapStoreArgument(name="k8s", channel="edge"),
     ]
@@ -277,7 +277,7 @@ amd64:
 """
     snap_installation.return_value = io.BytesIO(content)
     mock_checkoutput().decode.return_value = "amd64"
-    args = snap._parse_management_arguments(harness.charm)
+    args = snap._parse_management_arguments(harness.charm.snap_installation_resource)
     assert args == [
         snap.SnapFileArgument(name="k8s", filename=Path("path/to/thing")),
     ]
