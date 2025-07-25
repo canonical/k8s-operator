@@ -19,21 +19,20 @@ applications:
     constraints: cores=1 mem=4G root-disk=16G
     num_units: 1
   charmed-etcd:
-    # charm: charmed-etcd
-    charm: ../../../../charmed-etcd-operator/charmed-etcd_ubuntu@24.04-amd64.charm
-    # channel: "3.6/edge"
+    charm: charmed-etcd
+    channel: "3.6/edge"
     base: ubuntu@24.04
     constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
   k8s:
-    charm: ../../../k8s_ubuntu-22.04-amd64.charm
+    charm: k8s
     num_units: 1
     constraints: cores=2 mem=8G root-disk=16G virt-type=virtual-machine
     options:
       bootstrap-datastore: etcd
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
   k8s-worker:
-    charm: ../../../k8s-worker_ubuntu-22.04-amd64.charm
+    charm: k8s-worker
     constraints: cores=2 mem=8G root-disk=16G virt-type=virtual-machine
     num_units: 1
 relations:
