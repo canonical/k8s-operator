@@ -10,16 +10,18 @@ import re
 
 import pytest
 import pytest_asyncio
+import storage
 from juju import model
 from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
 from pytest_operator.plugin import OpsTest
 
-from . import storage
-
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
-pytestmark = [pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=["k8s"])]
+pytestmark = [
+    pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=["k8s"]),
+    pytest.mark.architecture("amd64"),
+]
 CEPH_CSI_MISSING_NS = re.compile(r"Missing namespace '(\S+)'")
 
 

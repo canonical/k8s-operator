@@ -16,6 +16,7 @@ import juju.model
 import juju.unit
 import pytest
 import yaml
+from helpers import CHARMCRAFT_DIRS, Bundle, get_leader, wait_pod_phase
 from pytest_operator.plugin import OpsTest
 from tenacity import (
     before_sleep_log,
@@ -24,8 +25,6 @@ from tenacity import (
     stop_after_delay,
     wait_fixed,
 )
-
-from .helpers import CHARMCRAFT_DIRS, Bundle, get_leader, wait_pod_phase
 
 CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.32/beta")
 CONTROL_PLANE_APP = "k8s"
@@ -49,14 +48,25 @@ def charm_channel_missing(charms: Iterable[str], channel: str) -> Tuple[bool, st
     for app in charms:
         for lookup in risk_levels[riskiest_level:]:
             out = subprocess.check_output(
-                ["juju", "info", app, "--channel", f"{track}/{lookup}", "--format", "yaml"]
+                [
+                    "juju",
+                    "info",
+                    app,
+                    "--channel",
+                    f"{track}/{lookup}",
+                    "--format",
+                    "yaml",
+                ]
             )
             track_map = yaml.safe_load(out).get("channels", {}).get(track, {})
             if lookup in track_map:
                 log.info("Found %s in %s", app, f"{track}/{lookup}")
                 break
         else:
-            return True, f"No suitable channel found for {app} in {channel} to upgrade from"
+            return (
+                True,
+                f"No suitable channel found for {app} in {channel} to upgrade from",
+            )
     return False, ""
 
 
@@ -70,6 +80,7 @@ pytestmark = [
         file="test-bundle-dqlite.yaml",
         apps_channel={CONTROL_PLANE_APP: CHARM_UPGRADE_FROM, "k8s-worker": CHARM_UPGRADE_FROM},
     ),
+    pytest.mark.architecture("amd64"),
 ]
 
 

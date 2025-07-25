@@ -16,7 +16,6 @@ import containerd
 import ops
 import ops.testing
 import pytest
-from charm import K8sCharm
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 from charms.contextual_status import ReconcilerError
@@ -31,23 +30,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     UserFacingClusterConfig,
     UserFacingDatastoreConfig,
 )
-
-
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
 
 
 @contextlib.contextmanager
@@ -188,7 +170,15 @@ def test_set_leader(harness):
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
+    harness.charm.upgrade = mock.MagicMock()
     harness.charm._ensure_cert_sans = mock.MagicMock()
+    public_addr = "11.12.13.14"
+    remote_addr = "11.12.13.15"
+    if harness.charm.is_control_plane:
+        harness.add_network(
+            public_addr, endpoint="cluster", ingress_addresses=[public_addr, remote_addr]
+        )
+        harness.add_relation("cluster", "remote")
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
