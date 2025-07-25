@@ -440,7 +440,7 @@ class EtcdCertificates(ops.Object):
         """
         super().__init__(charm, "etcd-certificates-integration")
         self._charm = charm
-        self._certificates = TLSCertificatesRequiresV4(
+        self.certificates = TLSCertificatesRequiresV4(
             charm=self._charm,
             relationship_name=ETCD_CERTIFICATES_RELATION,
             certificate_requests=[
@@ -453,4 +453,4 @@ class EtcdCertificates(ops.Object):
     @property
     def events(self) -> List[ops.BoundEvent]:
         """Return the events that the Certificates library emits."""
-        return [self._certificates.on.certificate_available]
+        return [self.certificates.on.certificate_available]

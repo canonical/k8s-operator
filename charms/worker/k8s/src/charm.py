@@ -1304,6 +1304,15 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.BlockedStatus(msg))
             raise ReconcilerError(msg)
 
+        if (
+            etcd_certificate_relation
+            and not self.etcd_certificate.certificates.get_assigned_certificates()[0]
+        ):
+            msg = "Waiting for the etcd client certificate"
+            log.error(msg)
+            status.add(ops.WaitingStatus(msg))
+            raise ReconcilerError(msg)
+
     def _initialize_external_etcd(self) -> Union[EtcdReactiveRequires, CharmedEtcdRequires, None]:
         """Initialize etcd instance or block charm."""
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
@@ -1315,7 +1324,7 @@ class K8sCharm(ops.CharmBase):
 
         if charmed_etcd:
             log.info("Using charmed etcd relation")
-            return CharmedEtcdRequires(self, self.etcd_certificate._certificates)
+            return CharmedEtcdRequires(self, self.etcd_certificate.certificates)
 
 
 if __name__ == "__main__":  # pragma: nocover
