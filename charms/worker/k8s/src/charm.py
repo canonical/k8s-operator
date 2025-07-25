@@ -30,7 +30,6 @@ from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import config.arg_files
-import config.bootstrap
 import config.extra_args
 import config.resource
 import containerd
@@ -1015,7 +1014,6 @@ class K8sCharm(ops.CharmBase):
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
-        config.bootstrap.detect_bootstrap_config_changes(self)
         self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
