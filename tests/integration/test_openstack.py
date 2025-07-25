@@ -64,7 +64,7 @@ async def test_cinder_pv(kubernetes_cluster: juju.model.Model, api_client: ApiCl
     await storage.exec_storage_class(definition, api_client)
 
 
-async def test_k8s_api_load_balancer(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
+async def test_api_load_balancer(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
     """Test k8s api load balancer.
 
     This test checks that the Kubernetes API server is accessible via a load balancer managed
