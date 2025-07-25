@@ -165,6 +165,7 @@ def test_detect_bootstrap_config_change(harness, caplog):
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
 @mock.patch("config.bootstrap.detect_bootstrap_config_changes")
+@mock.patch("certificates.K8sCertificates.announce_certificates_config", mock.Mock())
 def test_set_leader(mock_detect_bootstrap, harness):
     """Test emitting the set_leader hook while not reconciled.
 
@@ -411,11 +412,13 @@ def test_ensure_cert_sans(harness):
     with (
         mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans,
         mock.patch("charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])),
-        mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_api_manager,
+        mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_refresh_certs,
+        mock.patch("charm.K8sCertificates.get_certificates_provider") as mock_get_cert_provider,
     ):
+        mock_get_cert_provider.return_value = "self-signed"
         mock_extra_sans.return_value = ["sans1", "sans2"]
         harness.charm._ensure_cert_sans()
-        mock_api_manager.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])
+        mock_refresh_certs.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])
 
 
 def test_get_external_kubeconfig(harness):

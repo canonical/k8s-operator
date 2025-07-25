@@ -50,17 +50,12 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
-    BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
     BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
     BOOTSTRAP_SERVICE_CIDR,
-    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
-    CLUSTER_CERTIFICATES_KEY,
-    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
-    COMMON_NAME_CONFIG_KEY,
     CONTAINERD_HTTP_PROXY,
     CONTAINERD_RELATION,
     CONTAINERD_SERVICE_NAME,
@@ -79,7 +74,6 @@ from literals import (
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
     KUBECTL_PATH,
-    KUBELET_CN_FORMATTER_CONFIG_KEY,
     SNAP_DATASTORE_TYPE_EXTERNAL,
     SNAP_RESOURCE_NAME,
 )
@@ -571,6 +565,7 @@ class K8sCharm(ops.CharmBase):
             address=f"{node_ips[0]}:{K8SD_PORT}",
             config=self._assemble_bootstrap_config(),
         )
+        self.certificates.persist_cert_provider()
 
         # TODO: Make port (and address) configurable.
         self.api_manager.bootstrap_k8s_snap(payload)
@@ -825,21 +820,6 @@ class K8sCharm(ops.CharmBase):
         if version:
             relation.data[self.unit]["version"] = version
 
-    @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
-    def _announce_certificates_config(self) -> None:
-        if not (provider := BOOTSTRAP_CERTIFICATES.get(self)):
-            raise ReconcilerError("Missing certificates provider")
-
-        for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
-            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = provider
-            kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
-            rel.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
-            domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
-            rel.data[self.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
-        else:
-            log.info("Cluster (worker) relation not found, skipping certificates sharing.")
-            return
-
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
     def _announce_kubernetes_version(self) -> None:
         """Announce the Kubernetes version to the cluster.
@@ -1025,7 +1005,7 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._announce_kubernetes_version()
-            self._announce_certificates_config()
+            self.certificates.announce_certificates_config()
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
@@ -1207,7 +1187,9 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-        if BOOTSTRAP_CERTIFICATES.get(self) == "external":
+
+        provider = self.certificates.get_certificates_provider()
+        if provider == "external":
             # TODO: This should be implemented once k8s-snap offers an API endpoint
             # to update the certificates in the node.
             log.info("External certificates are used, skipping SANs update")
@@ -1228,9 +1210,9 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if BOOTSTRAP_CERTIFICATES.get(self) == "self-signed":
+            if provider == "self-signed":
                 self.api_manager.refresh_certs(all_sans)
-            elif BOOTSTRAP_CERTIFICATES.get(self) == "external":
+            elif provider == "external":
                 self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")
 

@@ -31,7 +31,7 @@ def _parse(option: StrOption, charm: ops.CharmBase) -> Dict[str, str]:
         config_data = option.get(charm)
     except ValueError:
         return {}
-    for element in str(config_data).split():
+    for element in config_data.split():
         if "=" in element:
             key, _, value = element.partition("=")
         else:
