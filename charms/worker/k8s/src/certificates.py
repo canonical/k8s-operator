@@ -19,6 +19,8 @@ from literals import (
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
+    COMMON_NAME_CONFIG_KEY,
     KUBELET_CN_FORMATTER_CONFIG_KEY,
     KUBELET_CSR_KEY,
     MAX_COMMON_NAME_SIZE,
@@ -84,7 +86,6 @@ class K8sCertificates(ops.Object):
 
     Attributes:
         events (List[str]): A list of events emitted by the Certificates library.
-        using_external_certificates (bool): Whether the charm is using external certificates.
     """
 
     def __init__(self, charm: K8sCharmProtocol, refresh_event: ops.BoundEvent) -> None:
@@ -108,7 +109,7 @@ class K8sCertificates(ops.Object):
         Returns:
             CertificateProvider: An instance implementing the CertificateProvider protocol.
         """
-        if self._get_certificates_provider() == "external":
+        if self.get_certificates_provider() == "external":
             return TLSCertificatesRequiresV4(
                 charm=self._charm,
                 relationship_name=CERTIFICATES_RELATION,
@@ -116,7 +117,6 @@ class K8sCertificates(ops.Object):
                 mode=Mode.UNIT,
                 refresh_events=[self._refresh_event],
             )
-
         return NoOpCertificateProvider()
 
     @property
@@ -126,8 +126,8 @@ class K8sCertificates(ops.Object):
         return self._format_common_name(formatter)
 
     @property
-    def kubelet_common_name(self) -> str:
-        """Kubelet common name."""
+    def kubelet_common_name_formatter(self) -> str:
+        """Kubelet common name formatter."""
         formatter = ""
         if self._charm.is_control_plane:
             formatter = str(self._charm.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY, ""))
@@ -138,14 +138,18 @@ class K8sCertificates(ops.Object):
                 if relation and relation.app in relation.data
                 else ""
             )
+        return formatter
 
-        return self._format_common_name(formatter)
+    @property
+    def kubelet_common_name(self) -> str:
+        """Kubelet common name."""
+        return self._format_common_name(self.kubelet_common_name_formatter)
 
     @property
     def domain_name(self) -> str:
         """Certificates domain name."""
         if self._charm.is_control_plane:
-            return str(self._charm.config.get("external-certs-domain-name"))
+            return str(self._charm.config.get(COMMON_NAME_CONFIG_KEY))
         else:
             relation = self.model.get_relation(CLUSTER_RELATION)
             return (
@@ -153,11 +157,6 @@ class K8sCertificates(ops.Object):
                 if relation and relation.app in relation.data
                 else ""
             )
-
-    @property
-    def using_external_certificates(self) -> bool:
-        """Return whether the charm is using external certificates."""
-        return self._get_certificates_provider() == "external"
 
     @property
     def events(self) -> List[ops.BoundEvent]:
@@ -335,26 +334,80 @@ class K8sCertificates(ops.Object):
         bootstrap_config.kubelet_cert = str(certificate.certificate)
         bootstrap_config.kubelet_key = str(key)
 
-    def _get_certificates_provider(self) -> Optional[str]:
+    def get_certificates_provider(self) -> str:
         """Get the certificates provider.
 
         Returns:
             str: The certificates provider.
         """
-        if self._charm.is_control_plane:
-            return BOOTSTRAP_CERTIFICATES.get(self._charm)
-
-        # NOTE: This operation is safe because we're validating the provider during the
-        # certificate configuration in the `configure_certificates` method.
+        app = self._charm.is_control_plane and self._charm.app or None
         relation = self.model.get_relation(CLUSTER_RELATION)
-        if not relation:
-            return None
+        provider = relation and relation.data[app or relation.app].get(CLUSTER_CERTIFICATES_KEY)
+        if not provider and self._charm.is_control_plane:
+            provider = BOOTSTRAP_CERTIFICATES.get(self._charm)
+            self._validate_provider(provider)
 
-        if not (provider := relation.data[relation.app].get(CLUSTER_CERTIFICATES_KEY)):
-            log.info("Waiting for certificates provider")
-            return None
+        return provider or ""
 
-        return provider
+    @staticmethod
+    def _validate_provider(provider: str) -> None:
+        """Validate the certificates provider.
+
+        Args:
+            provider (str): The certificates provider to validate.
+
+        Raises:
+            ReconcilerError: If the provider enum is unsupported.
+        """
+        if provider not in SUPPORTED_CERTIFICATES:
+            log.error(
+                "Unsupported certificate issuer: %s. Valid options: %s",
+                provider,
+                ", ".join(SUPPORTED_CERTIFICATES),
+            )
+            status.add(ops.BlockedStatus(f"Invalid certificates issuer: {provider}"))
+            raise status.ReconcilerError("Invalid certificates issuer")
+
+    def _validate_persistence(self):
+        """Validate the certificates provider can be persisted."""
+        if not self.model.get_relation(CLUSTER_RELATION):
+            log.error("Cluster relation not found, Cannot persist the certificates provider.")
+            status.add(ops.WaitingStatus("Persisting certificates provider."))
+            raise status.ReconcilerError(
+                "Cluster relation not found. Cannot persist the certificates provider."
+            )
+
+    def persist_cert_provider(self):
+        """Persist the certificates provider in the cluster relation.
+
+        Write-once into the cluster relation at the cluster-certificates key.
+
+        Args:
+            provider (str): The certificates provider to persist.
+        """
+        provider = self.get_certificates_provider()
+        for relation in self.model.relations[CLUSTER_RELATION]:
+            app_data = relation.data[self._charm.app]
+            if not app_data.get(CLUSTER_CERTIFICATES_KEY):
+                app_data[CLUSTER_CERTIFICATES_KEY] = provider
+
+    @status.on_error(ops.WaitingStatus("Announcing Certificates Provider"))
+    def announce_certificates_config(self) -> None:
+        """Announce the certificates provider to the cluster relation."""
+        if not (provider := self.get_certificates_provider()):
+            raise status.ReconcilerError("Missing certificates provider")
+
+        for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
+            rel.data[self._charm.app][CLUSTER_CERTIFICATES_KEY] = provider
+            kubelet_formatter = self.kubelet_common_name_formatter
+            rel.data[self._charm.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = (
+                kubelet_formatter
+            )
+            domain_name = self.domain_name
+            rel.data[self._charm.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
+        else:
+            log.info("Cluster (worker) relation not found, skipping certificates sharing.")
+            return
 
     def _validate_common_name_size(self):
         """Validate that the common names do not exceed the maximum size."""
@@ -394,18 +447,10 @@ class K8sCertificates(ops.Object):
         Raises:
             ReconcilerError: If the certificates issuer is invalid.
         """
-        certificates_type = self._get_certificates_provider()
-
-        if certificates_type not in SUPPORTED_CERTIFICATES:
-            log.error(
-                "Unsupported certificate issuer: %s. Valid options: %s",
-                certificates_type,
-                ", ".join(SUPPORTED_CERTIFICATES),
-            )
-            status.add(ops.BlockedStatus(f"Invalid certificates issuer: {certificates_type}"))
-            raise status.ReconcilerError("Invalid certificates issuer")
-
-        if certificates_type == "external":
+        provider = self.get_certificates_provider()
+        self._validate_provider(provider)
+        self._validate_persistence()
+        if provider == "external":
             log.info("Using external certificates for kube-apiserver and kubelet.")
             if not self._charm.model.get_relation(CERTIFICATES_RELATION):
                 msg = "Missing required 'certificates' relation"
