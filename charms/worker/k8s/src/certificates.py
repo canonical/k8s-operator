@@ -109,7 +109,7 @@ class K8sCertificates(ops.Object):
         Returns:
             CertificateProvider: An instance implementing the CertificateProvider protocol.
         """
-        if self.get_certificates_provider() == "external":
+        if self.get_provider_name() == "external":
             return TLSCertificatesRequiresV4(
                 charm=self._charm,
                 relationship_name=CERTIFICATES_RELATION,
@@ -334,8 +334,8 @@ class K8sCertificates(ops.Object):
         bootstrap_config.kubelet_cert = str(certificate.certificate)
         bootstrap_config.kubelet_key = str(key)
 
-    def get_certificates_provider(self) -> str:
-        """Get the certificates provider.
+    def get_provider_name(self) -> str:
+        """Get the certificates provider name.
 
         Returns:
             str: The certificates provider.
@@ -385,7 +385,7 @@ class K8sCertificates(ops.Object):
         Args:
             provider (str): The certificates provider to persist.
         """
-        provider = self.get_certificates_provider()
+        provider = self.get_provider_name()
         for relation in self.model.relations[CLUSTER_RELATION]:
             app_data = relation.data[self._charm.app]
             if not app_data.get(CLUSTER_CERTIFICATES_KEY):
@@ -394,7 +394,7 @@ class K8sCertificates(ops.Object):
     @status.on_error(ops.WaitingStatus("Announcing Certificates Provider"))
     def announce_certificates_config(self) -> None:
         """Announce the certificates provider to the cluster relation."""
-        if not (provider := self.get_certificates_provider()):
+        if not (provider := self.get_provider_name()):
             raise status.ReconcilerError("Missing certificates provider")
 
         for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
@@ -447,7 +447,7 @@ class K8sCertificates(ops.Object):
         Raises:
             ReconcilerError: If the certificates issuer is invalid.
         """
-        provider = self.get_certificates_provider()
+        provider = self.get_provider_name()
         self._validate_provider(provider)
         self._validate_persistence()
         if provider == "external":

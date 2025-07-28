@@ -11,7 +11,6 @@ from collections import Counter
 from typing import Optional
 
 import ops
-import pki
 from config.option import CharmOption
 from literals import (
     BOOTSTRAP_CERTIFICATES,
@@ -93,28 +92,26 @@ class BootstrapConfigOptions(BaseModel):
     @classmethod
     def build(
         cls,
+        certificate_provider: str,
         node_status: k8sd_api_manager.GetNodeStatusMetadata,
         cluster_config: Optional[k8sd_api_manager.GetClusterConfigMetadata] = None,
     ) -> "BootstrapConfigOptions":
         """Return a BootstrapCharmConfig instance from cluster config and node status.
 
         Args:
+            certificate_provider: The certificate provider to use.
             cluster_config: The cluster configuration.
             node_status: The node status.
 
         Returns:
             A BootstrapConfigOptions instance with the configuration options.
         """
-        # NOTE(Hue): certificates type should be determined based on the presence of the CA key.
-        certificates = "self-signed" if pki.check_ca_key() else "external"
-
-        datastore = (
-            cluster_config and cluster_config.datastore and cluster_config.datastore.type or ""
-        )
-
         return BootstrapConfigOptions(
-            certificates=certificates,
-            datastore=datastore,
+            certificates=certificate_provider,
+            datastore=cluster_config
+            and cluster_config.datastore
+            and cluster_config.datastore.type
+            or "",
             node_taints=" ".join(node_status.taints) if node_status.taints else "",
             pod_cidr=cluster_config and cluster_config.pod_cidr or "",
             service_cidr=cluster_config and cluster_config.service_cidr or "",
@@ -178,6 +175,7 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
 
     try:
         ref_config = BootstrapConfigOptions.build(
+            certificate_provider=charm.certificates.get_provider_name(),
             node_status=charm.api_manager.get_node_status().metadata,
             cluster_config=charm.api_manager.get_cluster_config().metadata
             if charm.is_control_plane

@@ -96,7 +96,6 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
-@mock.patch("pki.check_ca_key", mock.Mock(return_value=False))
 def test_detect_bootstrap_config_change(harness, caplog):
     """Test that the bootstrap config change is prevented.
 
@@ -105,6 +104,7 @@ def test_detect_bootstrap_config_change(harness, caplog):
         caplog: pytest fixture for capturing logs
     """
     harness.disable_hooks()
+    harness.add_relation("cluster", "k8s", app_data={"certs-provider": "external"})
     caplog.set_level("INFO")
 
     with (
@@ -413,7 +413,7 @@ def test_ensure_cert_sans(harness):
         mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans,
         mock.patch("charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])),
         mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_refresh_certs,
-        mock.patch("charm.K8sCertificates.get_certificates_provider") as mock_get_cert_provider,
+        mock.patch("charm.K8sCertificates.get_provider_name") as mock_get_cert_provider,
     ):
         mock_get_cert_provider.return_value = "self-signed"
         mock_extra_sans.return_value = ["sans1", "sans2"]

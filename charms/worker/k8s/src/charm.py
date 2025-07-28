@@ -1188,7 +1188,7 @@ class K8sCharm(ops.CharmBase):
         if not self.is_control_plane:
             return
 
-        provider = self.certificates.get_certificates_provider()
+        provider = self.certificates.get_provider_name()
         if provider == "external":
             # TODO: This should be implemented once k8s-snap offers an API endpoint
             # to update the certificates in the node.
