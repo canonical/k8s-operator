@@ -1320,6 +1320,8 @@ class K8sCharm(ops.CharmBase):
             log.info("Using charmed etcd relation")
             return CharmedEtcdRequires(self, self.etcd_certificate.certificates)
 
+        return None
+
 
 if __name__ == "__main__":  # pragma: nocover
     ops.main(K8sCharm)
