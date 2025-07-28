@@ -14,6 +14,7 @@ import storage
 from juju import model
 from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
+from literals import ONE_MIN
 from pytest_operator.plugin import OpsTest
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
@@ -27,7 +28,7 @@ CEPH_CSI_MISSING_NS = re.compile(r"Missing namespace '(\S+)'")
 
 @pytest_asyncio.fixture(scope="module")
 async def ready_csi_apps(
-    ops_test: OpsTest, kubernetes_cluster: model.Model, api_client: ApiClient
+    ops_test: OpsTest, kubernetes_cluster: model.Model, api_client: ApiClient, timeout: int
 ) -> None:
     """Wait for the CSI apps to be ready."""
     v1 = CoreV1Api(api_client)
@@ -43,9 +44,9 @@ async def ready_csi_apps(
                 )
                 break
 
-    async with ops_test.fast_forward():
+    async with ops_test.fast_forward(ONE_MIN):
         await kubernetes_cluster.wait_for_idle(
-            apps=[app.name for app in csi_apps], status="active", timeout=60 * 5
+            apps=[app.name for app in csi_apps], status="active", timeout=timeout * 60
         )
 
 
