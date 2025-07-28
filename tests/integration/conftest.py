@@ -27,6 +27,7 @@ from pytest_operator.plugin import OpsTest
 
 from .cos_substrate import LXDSubstrate
 from .helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs, is_deployed
+from .literals import ONE_MIN
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -169,6 +170,7 @@ async def deploy_model(
         model object
     """
     config: Optional[dict] = {}
+    at_least_60 = max(60, ops_test.request.config.option.timeout)
     if ops_test.request.config.option.model_config:
         config = ops_test.read_model_config(ops_test.request.config.option.model_config)
     credential_name = ops_test.cloud_name
@@ -181,13 +183,13 @@ async def deploy_model(
         )
     with ops_test.model_context(model_name) as the_model:
         await cloud_profile(ops_test)
-        async with ops_test.fast_forward("60s"):
+        async with ops_test.fast_forward(ONE_MIN):
             bundle_yaml = bundle.render(ops_test.tmp_path)
             await the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
                 status="active",
-                timeout=60 * 60,
+                timeout=at_least_60 * 60,
             )
         try:
             yield the_model
