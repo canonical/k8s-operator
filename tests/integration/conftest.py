@@ -209,6 +209,7 @@ async def deploy_model(
         model object
     """
     config: Optional[dict] = {}
+    at_least_60 = max(60, ops_test.request.config.option.timeout)
     if ops_test.request.config.option.model_config:
         config = ops_test.read_model_config(ops_test.request.config.option.model_config)
     credential_name = ops_test.cloud_name
@@ -227,7 +228,7 @@ async def deploy_model(
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
                 status="active",
-                timeout=60 * 60,
+                timeout=at_least_60 * 60,
             )
         try:
             yield the_model
