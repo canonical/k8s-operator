@@ -25,6 +25,7 @@ from juju.tag import untag
 from juju.url import URL
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
+from literals import ONE_MIN
 from pytest_operator.plugin import OpsTest
 
 log = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ async def deploy_model(
         )
     with ops_test.model_context(model_name) as the_model:
         await cloud_profile(ops_test)
-        async with ops_test.fast_forward("60s"):
+        async with ops_test.fast_forward(ONE_MIN):
             bundle_yaml = bundle.render(ops_test.tmp_path)
             await the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
             await the_model.wait_for_idle(

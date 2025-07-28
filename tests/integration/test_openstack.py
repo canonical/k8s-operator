@@ -12,6 +12,7 @@ import storage
 import yaml
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
+from literals import ONE_MIN
 
 CLOUD_TYPE = "openstack"
 CONTROLLER_NAME = "openstack-cloud-controller-manager"
@@ -93,7 +94,7 @@ async def test_extra_sans(ops_test, kubernetes_cluster: juju.model.Model, timeou
 
     extra_san = "test.example.com"
     sans_config = {"kube-apiserver-extra-sans": extra_san}
-    async with ops_test.fast_forward():
+    async with ops_test.fast_forward(ONE_MIN):
         await asyncio.gather(k8s.set_config(sans_config))
         await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
 

@@ -14,6 +14,7 @@ import storage
 from juju import model
 from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
+from literals import ONE_MIN
 from pytest_operator.plugin import OpsTest
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
@@ -43,7 +44,7 @@ async def ready_csi_apps(
                 )
                 break
 
-    async with ops_test.fast_forward():
+    async with ops_test.fast_forward(ONE_MIN):
         await kubernetes_cluster.wait_for_idle(
             apps=[app.name for app in csi_apps], status="active", timeout=timeout * 60
         )

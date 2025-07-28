@@ -18,6 +18,7 @@ import pytest
 import yaml
 from juju import model
 from kubernetes.utils import create_from_yaml
+from literals import ONE_MIN
 
 pytestmark = [
     pytest.mark.bundle(
@@ -56,7 +57,7 @@ async def test_custom_registry(
     custom_registry_config = {"containerd-custom-registries": config_string}
     tagged_image = f"{docker_registry_ip}:5000/{TEST_IMAGE}"
 
-    async with ops_test.fast_forward():
+    async with ops_test.fast_forward(ONE_MIN):
         await kubernetes_cluster.applications["k8s"].set_config(custom_registry_config)
         await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
 
