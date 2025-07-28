@@ -5,6 +5,7 @@
 
 """Bootstrap configuration options."""
 
+import dataclasses
 import http
 import logging
 from collections import Counter
@@ -21,7 +22,6 @@ from literals import (
     DATASTORE_NAME_MAPPING,
 )
 from protocols import K8sCharmProtocol
-from pydantic import BaseModel, Field
 
 import charms.contextual_status as context_status
 import charms.k8s.v0.k8sd_api_manager as k8sd_api_manager
@@ -80,42 +80,15 @@ class ConfigComparison:
         )
 
 
-class BootstrapConfigOptions(BaseModel):
+@dataclasses.dataclass
+class BootstrapConfigOptions:
     """Charm config options that has a `bootstrap-` prefix."""
 
-    certificates: str = Field()
-    datastore: str = Field()
-    node_taints: str = Field()
-    pod_cidr: str = Field()
-    service_cidr: str = Field()
-
-    @classmethod
-    def build(
-        cls,
-        certificate_provider: str,
-        node_status: k8sd_api_manager.GetNodeStatusMetadata,
-        cluster_config: Optional[k8sd_api_manager.GetClusterConfigMetadata] = None,
-    ) -> "BootstrapConfigOptions":
-        """Return a BootstrapCharmConfig instance from cluster config and node status.
-
-        Args:
-            certificate_provider: The certificate provider to use.
-            cluster_config: The cluster configuration.
-            node_status: The node status.
-
-        Returns:
-            A BootstrapConfigOptions instance with the configuration options.
-        """
-        return BootstrapConfigOptions(
-            certificates=certificate_provider,
-            datastore=cluster_config
-            and cluster_config.datastore
-            and cluster_config.datastore.type
-            or "",
-            node_taints=" ".join(node_status.taints) if node_status.taints else "",
-            pod_cidr=cluster_config and cluster_config.pod_cidr or "",
-            service_cidr=cluster_config and cluster_config.service_cidr or "",
-        )
+    certificates: str
+    node_taints: str
+    datastore: str
+    pod_cidr: str
+    service_cidr: str
 
     def prevent(self, charm: K8sCharmProtocol) -> Optional[ops.BlockedStatus]:
         """Prevent bootstrap config changes after bootstrap.
@@ -174,12 +147,23 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
     log.info("Preventing bootstrap config changes after bootstrap")
 
     try:
-        ref_config = BootstrapConfigOptions.build(
-            certificate_provider=charm.certificates.get_provider_name(),
-            node_status=charm.api_manager.get_node_status().metadata,
-            cluster_config=charm.api_manager.get_cluster_config().metadata
-            if charm.is_control_plane
-            else None,
+        node_status = charm.api_manager.get_node_status().metadata
+        node_taints = " ".join(node_status.taints) if node_status.taints else ""
+        certificate_provider = charm.certificates.get_provider_name()
+        datastore, pod_cidr, service_cidr = "", "", ""
+
+        if charm.is_control_plane:
+            cluster_config = charm.api_manager.get_cluster_config().metadata
+            datastore = cluster_config.datastore and cluster_config.datastore.type or ""
+            pod_cidr = cluster_config.pod_cidr or ""
+            service_cidr = cluster_config.service_cidr or ""
+
+        ref = BootstrapConfigOptions(
+            certificate_provider,
+            node_taints,
+            datastore,
+            pod_cidr,
+            service_cidr,
         )
     except k8sd_api_manager.InvalidResponseError as e:
         if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
@@ -187,6 +171,6 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
             return
         raise
 
-    if blocked := ref_config.prevent(charm):
+    if blocked := ref.prevent(charm):
         context_status.add(blocked)
         raise context_status.ReconcilerError(blocked.message)
