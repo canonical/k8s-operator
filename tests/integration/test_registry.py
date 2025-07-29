@@ -18,6 +18,7 @@ import pytest
 import yaml
 from juju import model
 from kubernetes.utils import create_from_yaml
+from literals import ONE_MIN
 
 pytestmark = [
     pytest.mark.bundle(
@@ -34,7 +35,9 @@ TEST_SOURCE_IMAGE = f"rocks.canonical.com/cdk/{TEST_IMAGE}"
 
 
 @pytest.mark.abort_on_fail
-async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
+async def test_custom_registry(
+    ops_test, kubernetes_cluster: model.Model, api_client, timeout: int
+):
     """Test that the charm configures the correct directory and can access a custom registry."""
     # List of resources created during the test
     created: List = []
@@ -54,8 +57,9 @@ async def test_custom_registry(kubernetes_cluster: model.Model, api_client):
     custom_registry_config = {"containerd-custom-registries": config_string}
     tagged_image = f"{docker_registry_ip}:5000/{TEST_IMAGE}"
 
-    await kubernetes_cluster.applications["k8s"].set_config(custom_registry_config)
-    await kubernetes_cluster.wait_for_idle(status="active")
+    async with ops_test.fast_forward(ONE_MIN):
+        await kubernetes_cluster.applications["k8s"].set_config(custom_registry_config)
+        await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
 
     action = await docker_registry_unit.run_action(
         "push", image=TEST_SOURCE_IMAGE, pull=True, tag=tagged_image

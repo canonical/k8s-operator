@@ -12,6 +12,7 @@ import storage
 import yaml
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
+from literals import ONE_MIN
 
 CLOUD_TYPE = "openstack"
 CONTROLLER_NAME = "openstack-cloud-controller-manager"
@@ -87,14 +88,15 @@ async def test_k8s_api_load_balancer(kubernetes_cluster: juju.model.Model, api_c
     assert node_list.items, "No nodes found"
 
 
-async def test_extra_sans(kubernetes_cluster: juju.model.Model):
+async def test_extra_sans(ops_test, kubernetes_cluster: juju.model.Model, timeout: int):
     """Test extra sans config."""
     k8s = kubernetes_cluster.applications["k8s"]
 
     extra_san = "test.example.com"
     sans_config = {"kube-apiserver-extra-sans": extra_san}
-    await asyncio.gather(k8s.set_config(sans_config))
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=5 * 60)
+    async with ops_test.fast_forward(ONE_MIN):
+        await asyncio.gather(k8s.set_config(sans_config))
+        await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
 
     # Get the server endpoint
     action = await k8s.units[0].run_action("get-kubeconfig")
