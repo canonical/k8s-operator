@@ -7,15 +7,11 @@
 
 import base64
 import json
-from platform import machine
-from typing import AsyncGenerator, Literal
+from typing import Literal
 
 import pytest
-import pytest_asyncio
 from helpers import ready_nodes
 from juju import application, model, unit
-from juju.model import Model
-from pytest_operator.plugin import OpsTest
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with etcd, for all the test within this module.
@@ -75,72 +71,6 @@ async def get_etcd_tls_ca(kubernetes_cluster: model.Model):
     tls_ca = base64.b64decode(etcd_tls_ca_secret.value.data["tls-ca"]).decode("utf-8")
     assert tls_ca, "etcd TLS CA is empty"
     return tls_ca
-
-
-@pytest.fixture
-def platform() -> str:
-    """Fixture to provide the platform architecture for testing."""
-    platforms = {
-        "x86_64": "amd64",
-        "aarch64": "arm64",
-    }
-    return platforms.get(machine(), "amd64")
-
-
-@pytest_asyncio.fixture
-async def kubernetes_cluster(ops_test: OpsTest, platform: str) -> AsyncGenerator[Model, None]:
-    """Deploy kubernetes charms according to the bundle_marker."""
-    model = "main"
-    with ops_test.model_context(model) as the_model:
-        yield the_model
-
-
-@pytest.mark.abort_on_fail
-async def test_deploy_kubernetes_cluster(kubernetes_cluster: model.Model, platform: str):
-    """Deploy the kubernetes cluster."""
-    # Ensure the k8s and k8s-worker applications are deployed
-    k8s_app = kubernetes_cluster.applications.get("k8s")
-    # Check if the applications are already deployed
-    if not k8s_app:
-        await kubernetes_cluster.deploy(
-            f"./k8s_ubuntu-22.04-{platform}.charm",
-            application_name="k8s",
-            constraints=f"cores=2 mem=8G root-disk=16G virt-type=virtual-machine arch={platform}",
-            config={
-                "bootstrap-datastore": "etcd",
-                "bootstrap-node-taints": "node-role.kubernetes.io/control-plane=:NoSchedule",
-            },
-        )
-        await kubernetes_cluster.deploy(
-            f"./k8s-worker_ubuntu-22.04-{platform}.charm",
-            application_name="k8s-worker",
-            constraints=f"cores=2 mem=8G root-disk=16G virt-type=virtual-machine arch={platform}",
-        )
-        await kubernetes_cluster.deploy(
-            "charmed-etcd",
-            application_name="charmed-etcd",
-            channel="3.6/edge",
-            constraints=f"cores=2 mem=8G root-disk=16G arch={platform}",
-        )
-        await kubernetes_cluster.deploy(
-            "self-signed-certificates",
-            application_name="ssc-k8s",
-            channel="1/stable",
-            constraints=f"cores=1 mem=4G root-disk=16G arch={platform}",
-        )
-        await kubernetes_cluster.deploy(
-            "self-signed-certificates",
-            application_name="ssc-charmed-etcd",
-            channel="1/stable",
-            constraints=f"cores=1 mem=4G root-disk=16G arch={platform}",
-        )
-        await kubernetes_cluster.integrate("k8s", "k8s-worker:cluster")
-        await kubernetes_cluster.integrate("k8s", "k8s-worker:containerd")
-        await kubernetes_cluster.integrate("k8s:etcd-client", "charmed-etcd")
-        await kubernetes_cluster.integrate("k8s:etcd-certificates", "ssc-k8s")
-        await kubernetes_cluster.integrate("charmed-etcd:client-certificates", "ssc-charmed-etcd")
-
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=20 * 60)
 
 
 @pytest.mark.abort_on_fail
