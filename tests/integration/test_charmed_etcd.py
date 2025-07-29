@@ -7,6 +7,7 @@
 
 import base64
 import json
+from platform import machine
 from typing import Literal
 
 import pytest
@@ -166,8 +167,17 @@ async def test_certificate_rotation_etcd(kubernetes_cluster: model.Model):
 @pytest.mark.abort_on_fail
 async def test_both_charmed_and_legacy_etcd_integrated(kubernetes_cluster: model.Model):
     """Test that both charmed and legacy etcd can be integrated."""
-    await kubernetes_cluster.deploy("etcd", channel="stable", application_name="legacy-etcd")
-    await kubernetes_cluster.deploy("easyrsa", channel="stable", application_name="easyrsa")
+    platforms = {
+        "x86_64": "amd64",
+        "aarch64": "arm64",
+    }
+    platform = platforms[machine()]
+    await kubernetes_cluster.deploy(
+        "etcd", channel="stable", application_name="legacy-etcd", constraints=f"arch={platform}"
+    )
+    await kubernetes_cluster.deploy(
+        "easyrsa", channel="stable", application_name="easyrsa", constraints=f"arch={platform}"
+    )
     await kubernetes_cluster.integrate("legacy-etcd", "easyrsa:client")
     await kubernetes_cluster.wait_for_idle(status="active", timeout=20 * 60)
     await kubernetes_cluster.integrate("legacy-etcd", "k8s:etcd")
