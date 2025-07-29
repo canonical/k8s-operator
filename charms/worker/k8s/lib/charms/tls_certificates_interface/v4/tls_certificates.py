@@ -9,7 +9,7 @@ interface.
 Pre-requisites:
   - Juju >= 3.0
   - cryptography >= 43.0.0
-  - pydantic >= 2.0
+  - pydantic >= 1.0
 
 Learn more on how-to use the TLS Certificates interface library by reading the documentation:
 - https://charmhub.io/tls-certificates-interface/
@@ -27,7 +27,9 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import FrozenSet, List, MutableMapping, Optional, Tuple, Union
 
+import pydantic
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtensionOID, NameOID
@@ -41,7 +43,6 @@ from ops.model import (
     SecretNotFoundError,
     Unit,
 )
-from pydantic import BaseModel, ConfigDict, ValidationError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "afd8c2bccf834997afce12c2706d2ede"
@@ -51,11 +52,11 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 21
 
 PYDEPS = [
     "cryptography>=43.0.0",
-    "pydantic>=2.0",
+    "pydantic",
 ]
 
 logger = logging.getLogger(__name__)
@@ -69,76 +70,142 @@ class DataValidationError(TLSCertificatesError):
     """Raised when data validation fails."""
 
 
-class _DatabagModel(BaseModel):
-    """Base databag model."""
+if int(pydantic.version.VERSION.split(".")[0]) < 2:
 
-    model_config = ConfigDict(
-        # tolerate additional keys in databag
-        extra="ignore",
-        # Allow instantiating this class by field name (instead of forcing alias).
-        populate_by_name=True,
-        # Custom config key: whether to nest the whole datastructure (as json)
-        # under a field or spread it out at the toplevel.
-        _NEST_UNDER=None,
-    )  # type: ignore
-    """Pydantic config."""
+    class _DatabagModel(pydantic.BaseModel):  # type: ignore
+        """Base databag model."""
 
-    @classmethod
-    def load(cls, databag: MutableMapping):
-        """Load this model from a Juju databag."""
-        nest_under = cls.model_config.get("_NEST_UNDER")
-        if nest_under:
-            return cls.model_validate(json.loads(databag[nest_under]))
+        class Config:
+            """Pydantic config."""
 
-        try:
-            data = {
-                k: json.loads(v)
-                for k, v in databag.items()
-                # Don't attempt to parse model-external values
-                if k in {(f.alias or n) for n, f in cls.model_fields.items()}
-            }
-        except json.JSONDecodeError as e:
-            msg = f"invalid databag contents: expecting json. {databag}"
-            logger.error(msg)
-            raise DataValidationError(msg) from e
+            # ignore any extra fields in the databag
+            extra = "ignore"
+            """Ignore any extra fields in the databag."""
+            allow_population_by_field_name = True
+            """Allow instantiating this class by field name (instead of forcing alias)."""
 
-        try:
-            return cls.model_validate_json(json.dumps(data))
-        except ValidationError as e:
-            msg = f"failed to validate databag: {databag}"
-            logger.debug(msg, exc_info=True)
-            raise DataValidationError(msg) from e
+        _NEST_UNDER = None
 
-    def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
-        """Write the contents of this model to Juju databag.
+        @classmethod
+        def load(cls, databag: MutableMapping):
+            """Load this model from a Juju databag."""
+            if cls._NEST_UNDER:
+                return cls.parse_obj(json.loads(databag[cls._NEST_UNDER]))
 
-        Args:
-            databag: The databag to write to.
-            clear: Whether to clear the databag before writing.
+            try:
+                data = {
+                    k: json.loads(v)
+                    for k, v in databag.items()
+                    # Don't attempt to parse model-external values
+                    if k in {f.alias for f in cls.__fields__.values()}
+                }
+            except json.JSONDecodeError as e:
+                msg = f"invalid databag contents: expecting json. {databag}"
+                logger.error(msg)
+                raise DataValidationError(msg) from e
 
-        Returns:
-            MutableMapping: The databag.
-        """
-        if clear and databag:
-            databag.clear()
+            try:
+                return cls.parse_raw(json.dumps(data))  # type: ignore
+            except pydantic.ValidationError as e:
+                msg = f"failed to validate databag: {databag}"
+                logger.debug(msg, exc_info=True)
+                raise DataValidationError(msg) from e
 
-        if databag is None:
-            databag = {}
-        nest_under = self.model_config.get("_NEST_UNDER")
-        if nest_under:
-            databag[nest_under] = self.model_dump_json(
-                by_alias=True,
-                # skip keys whose values are default
-                exclude_defaults=True,
-            )
+        def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+            """Write the contents of this model to Juju databag.
+
+            :param databag: the databag to write the data to.
+            :param clear: ensure the databag is cleared before writing it.
+            """
+            if clear and databag:
+                databag.clear()
+
+            if databag is None:
+                databag = {}
+
+            if self._NEST_UNDER:
+                databag[self._NEST_UNDER] = self.json(by_alias=True, exclude_defaults=True)
+                return databag
+
+            dct = self.dict(by_alias=True, exclude_defaults=True)
+            databag.update({k: json.dumps(v) for k, v in dct.items()})
+
             return databag
 
-        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=True)
-        databag.update({k: json.dumps(v) for k, v in dct.items()})
-        return databag
+else:
+    from pydantic import ConfigDict
+
+    class _DatabagModel(pydantic.BaseModel):
+        """Base databag model."""
+
+        model_config = ConfigDict(
+            # tolerate additional keys in databag
+            extra="ignore",
+            # Allow instantiating this class by field name (instead of forcing alias).
+            populate_by_name=True,
+            # Custom config key: whether to nest the whole datastructure (as json)
+            # under a field or spread it out at the toplevel.
+            _NEST_UNDER=None,  # type: ignore
+        )
+        """Pydantic config."""
+
+        @classmethod
+        def load(cls, databag: MutableMapping):
+            """Load this model from a Juju databag."""
+            nest_under = cls.model_config.get("_NEST_UNDER")
+            if nest_under:
+                return cls.model_validate(json.loads(databag[nest_under]))
+
+            try:
+                data = {
+                    k: json.loads(v)
+                    for k, v in databag.items()
+                    # Don't attempt to parse model-external values
+                    if k in {(f.alias or n) for n, f in cls.model_fields.items()}
+                }
+            except json.JSONDecodeError as e:
+                msg = f"invalid databag contents: expecting json. {databag}"
+                logger.error(msg)
+                raise DataValidationError(msg) from e
+
+            try:
+                return cls.model_validate_json(json.dumps(data))
+            except pydantic.ValidationError as e:
+                msg = f"failed to validate databag: {databag}"
+                logger.debug(msg, exc_info=True)
+                raise DataValidationError(msg) from e
+
+        def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+            """Write the contents of this model to Juju databag.
+
+            Args:
+                databag: The databag to write to.
+                clear: Whether to clear the databag before writing.
+
+            Returns:
+                MutableMapping: The databag.
+            """
+            if clear and databag:
+                databag.clear()
+
+            if databag is None:
+                databag = {}
+            nest_under = self.model_config.get("_NEST_UNDER")
+            if nest_under:
+                databag[nest_under] = self.model_dump_json(
+                    by_alias=True,
+                    # skip keys whose values are default
+                    exclude_defaults=True,
+                )
+                return databag
+
+            dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=True)
+            databag.update({k: json.dumps(v) for k, v in dct.items()})
+
+            return databag
 
 
-class _Certificate(BaseModel):
+class _Certificate(pydantic.BaseModel):
     """Certificate model."""
 
     ca: str
@@ -163,7 +230,7 @@ class _Certificate(BaseModel):
         )
 
 
-class _CertificateSigningRequest(BaseModel):
+class _CertificateSigningRequest(pydantic.BaseModel):
     """Certificate signing request model."""
 
     certificate_signing_request: str
@@ -671,6 +738,49 @@ def generate_private_key(
     return PrivateKey.from_string(key_bytes.decode())
 
 
+def calculate_relative_datetime(target_time: datetime, fraction: float) -> datetime:
+    """Calculate a datetime that is a given percentage from now to a target time.
+
+    Args:
+        target_time (datetime): The future datetime to interpolate towards.
+        fraction (float): Fraction of the interval from now to target_time (0.0-1.0).
+            1.0 means return target_time,
+            0.9 means return the time after 90% of the interval has passed,
+            and 0.0 means return now.
+    """
+    if fraction <= 0.0 or fraction > 1.0:
+        raise ValueError("Invalid fraction. Must be between 0.0 and 1.0")
+    now = datetime.now(timezone.utc)
+    time_until_target = target_time - now
+    return now + time_until_target * fraction
+
+
+def chain_has_valid_order(chain: List[str]) -> bool:
+    """Check if the chain has a valid order.
+
+    Validates that each certificate in the chain is properly signed by the next certificate.
+    The chain should be ordered from leaf to root, where each certificate is signed by
+    the next one in the chain.
+
+    Args:
+        chain (List[str]): List of certificates in PEM format, ordered from leaf to root
+
+    Returns:
+        bool: True if the chain has a valid order, False otherwise.
+    """
+    if len(chain) < 2:
+        return True
+
+    try:
+        for i in range(len(chain) - 1):
+            cert = x509.load_pem_x509_certificate(chain[i].encode())
+            issuer = x509.load_pem_x509_certificate(chain[i + 1].encode())
+            cert.verify_directly_issued_by(issuer)
+        return True
+    except (ValueError, TypeError, InvalidSignature):
+        return False
+
+
 def generate_csr(  # noqa: C901
     private_key: PrivateKey,
     common_name: str,
@@ -1062,6 +1172,7 @@ class TLSCertificatesRequiresV4(Object):
         mode: Mode = Mode.UNIT,
         refresh_events: List[BoundEvent] = [],
         private_key: Optional[PrivateKey] = None,
+        renewal_relative_time: float = 0.9,
     ):
         """Create a new instance of the TLSCertificatesRequiresV4 class.
 
@@ -1088,6 +1199,11 @@ class TLSCertificatesRequiresV4(Object):
                 Using this parameter is discouraged,
                 having to pass around private keys manually can be a security concern.
                 Allowing the library to generate and manage the key is the more secure approach.
+            renewal_relative_time (float): The time to renew the certificate relative to its
+                expiry.
+                Default is 0.9, meaning 90% of the validity period.
+                The minimum value is 0.5, meaning 50% of the validity period.
+                If an invalid value is provided, an exception will be raised.
         """
         super().__init__(charm, relationship_name)
         if not JujuVersion.from_environ().has_secrets:
@@ -1103,7 +1219,12 @@ class TLSCertificatesRequiresV4(Object):
         self.mode = mode
         if private_key and not private_key.is_valid():
             raise TLSCertificatesError("Invalid private key")
+        if renewal_relative_time <= 0.5 or renewal_relative_time > 1.0:
+            raise TLSCertificatesError(
+                "Invalid renewal relative time. Must be between 0.0 and 1.0"
+            )
         self._private_key = private_key
+        self.renewal_relative_time = renewal_relative_time
         self.framework.observe(charm.on[relationship_name].relation_created, self._configure)
         self.framework.observe(charm.on[relationship_name].relation_changed, self._configure)
         self.framework.observe(charm.on.secret_expired, self._on_secret_expired)
@@ -1111,7 +1232,7 @@ class TLSCertificatesRequiresV4(Object):
         for event in refresh_events:
             self.framework.observe(event, self._configure)
 
-    def _configure(self, _: EventBase):
+    def _configure(self, _: Optional[EventBase] = None):
         """Handle TLS Certificates Relation Data.
 
         This method is called during any TLS relation event.
@@ -1164,6 +1285,14 @@ class TLSCertificatesRequiresV4(Object):
         csr = CertificateSigningRequest.from_string(csr_str)
         self._renew_certificate_request(csr)
         event.secret.remove_all_revisions()
+
+    def sync(self) -> None:
+        """Sync TLS Certificates Relation Data.
+
+        This method allows the requirer to sync the TLS certificates relation data
+        without waiting for the refresh events to be triggered.
+        """
+        self._configure()
 
     def renew_certificate(self, certificate: ProviderCertificate) -> None:
         """Request the renewal of the provided certificate."""
@@ -1296,6 +1425,7 @@ class TLSCertificatesRequiresV4(Object):
         try:
             secret = self.charm.model.get_secret(label=self._get_private_key_secret_label())
             secret.set_content({"private-key": str(private_key)})
+            secret.get_content(refresh=True)
         except SecretNotFoundError:
             self.charm.unit.add_secret(
                 content={"private-key": str(private_key)},
@@ -1465,10 +1595,13 @@ class TLSCertificatesRequiresV4(Object):
         if not self.private_key:
             return None
         for provider_certificate in self.get_provider_certificates():
-            if (
-                provider_certificate.certificate_signing_request == csr.certificate_signing_request
-                and provider_certificate.certificate.is_ca == csr.is_ca
-            ):
+            if provider_certificate.certificate_signing_request == csr.certificate_signing_request:
+                if provider_certificate.certificate.is_ca and not csr.is_ca:
+                    logger.warning("Non CA certificate requested, got a CA certificate, ignoring")
+                    continue
+                elif not provider_certificate.certificate.is_ca and csr.is_ca:
+                    logger.warning("CA certificate requested, got a non CA certificate, ignoring")
+                    continue
                 if not provider_certificate.certificate.matches_private_key(self.private_key):
                     logger.warning(
                         "Certificate does not match the private key. Ignoring invalid certificate."
@@ -1536,7 +1669,10 @@ class TLSCertificatesRequiresV4(Object):
                                 "csr": str(provider_certificate.certificate_signing_request),
                             },
                             label=secret_label,
-                            expire=provider_certificate.certificate.expiry_time,
+                            expire=calculate_relative_datetime(
+                                target_time=provider_certificate.certificate.expiry_time,
+                                fraction=self.renewal_relative_time,
+                            ),
                         )
                     self.on.certificate_available.emit(
                         certificate_signing_request=provider_certificate.certificate_signing_request,
@@ -1668,7 +1804,7 @@ class TLSCertificatesProvidesV4(Object):
         self, relation: Relation, unit_or_app: Union[Application, Unit]
     ) -> List[RequirerCertificateRequest]:
         try:
-            requirer_relation_data = _RequirerData.load(relation.data[unit_or_app])
+            requirer_relation_data = _RequirerData.load(relation.data.get(unit_or_app, {}))
         except DataValidationError:
             logger.debug("Invalid requirer relation data for %s", unit_or_app.name)
             return []
@@ -1688,11 +1824,21 @@ class TLSCertificatesProvidesV4(Object):
         relation: Relation,
         provider_certificate: ProviderCertificate,
     ) -> None:
+        chain = [str(certificate) for certificate in provider_certificate.chain]
+        if chain[0] != str(provider_certificate.certificate):
+            logger.warning(
+                "The order of the chain from the TLS Certificates Provider is incorrect. "
+                "The leaf certificate should be the first element of the chain."
+            )
+        elif not chain_has_valid_order(chain):
+            logger.warning(
+                "The order of the chain from the TLS Certificates Provider is partially incorrect."
+            )
         new_certificate = _Certificate(
             certificate=str(provider_certificate.certificate),
             certificate_signing_request=str(provider_certificate.certificate_signing_request),
             ca=str(provider_certificate.ca),
-            chain=[str(certificate) for certificate in provider_certificate.chain],
+            chain=chain,
         )
         provider_certificates = self._load_provider_certificates(relation)
         if new_certificate in provider_certificates:
