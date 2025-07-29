@@ -9,6 +9,7 @@ from string import Template
 from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
 
 import ops
+import pki
 from literals import (
     APISERVER_CN_FORMATTER_CONFIG_KEY,
     APISERVER_CSR_KEY,
@@ -32,6 +33,8 @@ import charms.contextual_status as status
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
+    InvalidResponseError,
+    K8sdConnectionError,
     NodeJoinConfig,
 )
 from charms.tls_certificates_interface.v4.tls_certificates import (
@@ -343,6 +346,16 @@ class K8sCertificates(ops.Object):
         app = self._charm.is_control_plane and self._charm.app or None
         relation = self.model.get_relation(CLUSTER_RELATION)
         provider = relation and relation.data[app or relation.app].get(CLUSTER_CERTIFICATES_KEY)
+
+        if not provider:
+            # Note(AKD): This could be an upgrade scenario where the provider is unset.
+            # if this node is online, we know that a certificates provider is already set.
+            try:
+                self._charm.api_manager.get_node_status().metadata
+                provider = "self-signed" if pki.check_ca_key() else "external"
+            except (K8sdConnectionError, InvalidResponseError) as e:
+                log.error("Failed to get node status: %s", e)
+
         if not provider and self._charm.is_control_plane:
             provider = BOOTSTRAP_CERTIFICATES.get(self._charm)
             self._validate_provider(provider)
