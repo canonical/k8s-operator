@@ -14,7 +14,6 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
-import juju.application
 import juju.model
 import juju.unit
 import juju.utils
