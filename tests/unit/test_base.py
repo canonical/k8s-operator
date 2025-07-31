@@ -294,7 +294,7 @@ def test_set_leader_etcd_missing(mock_detect_bootstrap, harness):
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
     assert harness.model.unit.status == ops.BlockedStatus(
-        "etcd and etcd-client are mutually exclusive. Only one can be active at a time"
+        "etcd and etcd-client relations are mutually exclusive"
     )
 
     harness.remove_relation(etcd_client_relation)
