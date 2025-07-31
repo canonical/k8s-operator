@@ -6,14 +6,14 @@
 """Integration tests."""
 
 import pytest
+from helpers import ready_nodes
 from juju import model
-
-from .helpers import ready_nodes
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with self-signed-certficates, for all the test within this module.
 pytestmark = [
-    pytest.mark.bundle(file="test-bundle-external-certs.yaml", apps_local=["k8s", "k8s-worker"])
+    pytest.mark.bundle(file="test-bundle-external-certs.yaml", apps_local=["k8s", "k8s-worker"]),
+    pytest.mark.architecture("amd64"),
 ]
 
 

@@ -78,7 +78,7 @@ class ClusterInspector:
                 )
 
             return [node for node in client.list(Node, labels=labels) if is_node_not_ready(node)]
-        except (ApiError, httpx.ConnectError) as e:
+        except (ApiError, httpx.HTTPError) as e:
             raise ClusterInspector.ClusterInspectorError(f"Failed to get nodes: {e}") from e
 
     def verify_pods_running(self, namespaces: List[str]) -> Optional[str]:
@@ -104,7 +104,7 @@ class ClusterInspector:
                         failing_pods.append(f"{namespace}/{pod.metadata.name}")  # type: ignore
             if failing_pods:
                 return ", ".join(failing_pods)
-        except (ApiError, httpx.ConnectError) as e:
+        except (ApiError, httpx.HTTPError) as e:
             raise ClusterInspector.ClusterInspectorError(f"Failed to get pods: {e}") from e
         return None
 
@@ -119,8 +119,8 @@ def is_not_running(pod: Pod) -> bool:
         True if the pod is not running, False otherwise.
     """
     if not (status := pod.status):
-        pod_phase = "Unknown"
-        pod_reason = "Unknown"
+        pod_phase: Optional[str] = "Unknown"
+        pod_reason: Optional[str] = "Unknown"
     else:
         pod_phase, pod_reason = status.phase, status.reason
 

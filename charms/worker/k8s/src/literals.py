@@ -18,7 +18,23 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # Charm
 SNAP_COMMON = "/var/snap/k8s/common"
-CONTAINERD_ARGS = Path(SNAP_COMMON) / "args/containerd"
+SERVICE_ARGS = Path(SNAP_COMMON) / "args"
+CONTAINERD_ARGS = SERVICE_ARGS / "containerd"
+K8S_DQLITE_ARGS = SERVICE_ARGS / "k8s-dqlite"
+K8SD_ARGS = SERVICE_ARGS / "k8sd"
+KUBE_APISERVER_ARGS_PATH = SERVICE_ARGS / "kube-apiserver"
+KUBE_CONTROLLER_MANAGER_ARGS_PATH = SERVICE_ARGS / "kube-controller-manager"
+KUBE_PROXY_ARGS_PATH = SERVICE_ARGS / "kube-proxy"
+KUBE_SCHEDULER_ARGS_PATH = SERVICE_ARGS / "kube-scheduler"
+KUBELET_ARGS_PATH = SERVICE_ARGS / "kubelet"
+# SystemD Args
+SNAP_SYSD_ARGS_FILE = "00-snap-managed"
+CHARM_SYSD_ARGS_FILE = "01-charm-managed"
+KUBE_APISERVER_SYSD_PATH = SERVICE_ARGS / "kube-apiserver.args.d"
+KUBE_CONTROLLER_MANAGER_SYSD_PATH = SERVICE_ARGS / "kube-controller-manager.args.d"
+KUBE_PROXY_SYSD_PATH = SERVICE_ARGS / "kube-proxy.args.d"
+KUBE_SCHEDULER_SYSD_PATH = SERVICE_ARGS / "kube-scheduler.args.d"
+KUBELET_SYSD_PATH = SERVICE_ARGS / "kubelet.args.d"
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
@@ -77,6 +93,7 @@ NODE_LABELS = option.StrOption("node-labels")
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
+SNAP_RESOURCE_NAME = "snap-installation"
 
 # Relations
 CERTIFICATES_RELATION = "certificates"
@@ -118,6 +135,7 @@ LEADER_CONTROL_PLANE_CERTIFICATES = ["apiserver-kubelet-client"] + CONTROL_PLANE
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [
+    "containerd",
     "kubelet",
     "kube-proxy",
     "k8sd",

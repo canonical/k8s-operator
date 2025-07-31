@@ -6,37 +6,16 @@
 """Unit tests for config.proxy_service."""
 
 import os
-from pathlib import Path
 from unittest import mock
 
 import config.proxy_service
 import literals
-import ops.testing
 import pytest
-from charm import K8sCharm
 
 import charms.contextual_status as status
 
 PROXY_EXAMPLE_COM = "https://proxy.example.com:8080"
 NO_PROXY = "127.0.0.1,localhost.::1,example.com"
-
-
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.disable_hooks()
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
 
 
 @pytest.fixture(autouse=True)
@@ -78,6 +57,7 @@ def test_invalid_url_blocks(environ, harness):
 @mock.patch.object(config.proxy_service, "systemd")
 def test_enable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, harness):
     """Test that the proxy service config handles valid services."""
+    harness.disable_hooks()
     juju_app = harness.charm.app.name
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
     harness.update_config({literals.WEB_PROXY_ENABLE_CONTAINERD.name: True})
@@ -129,6 +109,7 @@ def test_enable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, 
 @mock.patch.object(config.proxy_service, "systemd")
 def test_disable_containerd_proxy(systemd, mkdir, exists, read_text, write_text, harness):
     """Test that the proxy service config handles valid services."""
+    harness.disable_hooks()
     service = config.proxy_service.CONTAINERD_SERVICE_NAME
     harness.update_config({literals.WEB_PROXY_ENABLE_CONTAINERD.name: False})
     exists.return_value = True

@@ -35,9 +35,9 @@ class DynamicActiveStatus(ops.ActiveStatus):
         postfix (str): Optional postfix to the unit status
     """
 
-    def __init__(self) -> None:
+    def __init__(self, msg="Ready") -> None:
         """Initialise the DynamicActiveStatus."""
-        super().__init__("Ready")
+        super().__init__(msg)
         self.prefix: str = ""
         self.postfix: str = ""
 
@@ -90,7 +90,7 @@ class Handler(ops.Object):
 
         try:
             with status.context(self.charm.unit, exit_status=self.active_status):
-                self.upgrade.set_upgrade_status(event)
+                self.upgrade.handler(event)
                 self.run()
         except status.ReconcilerError:
             log.exception("Can't update_status")
