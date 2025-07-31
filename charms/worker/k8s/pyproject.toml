@@ -52,7 +52,7 @@ integration = [
     "pytest-operator",
     "pytest-sugar",
     "tenacity",
-    "requests < 2.32",  # https://github.com/canonical/pylxd/issues/579
+    "requests <2.33",  # https://github.com/canonical/pylxd/issues/579
 ]
 
 [tool.bandit]
