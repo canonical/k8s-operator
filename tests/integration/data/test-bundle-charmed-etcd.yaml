@@ -8,19 +8,19 @@ applications:
   ssc-k8s:
     charm: self-signed-certificates
     channel: "1/stable"
-    base: ubuntu@24.04
+    series: noble
     constraints: cores=1 mem=4G root-disk=16G
     num_units: 1
   ssc-charmed-etcd:
     charm: self-signed-certificates
     channel: "1/stable"
-    base: ubuntu@24.04
+    series: noble
     constraints: cores=1 mem=4G root-disk=16G
     num_units: 1
   charmed-etcd:
     charm: charmed-etcd
     channel: "3.6/edge"
-    base: ubuntu@24.04
+    series: noble
     constraints: cores=2 mem=8G root-disk=16G
     num_units: 1
   k8s:

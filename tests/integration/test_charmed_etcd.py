@@ -84,7 +84,7 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
 
 
 @pytest.mark.abort_on_fail
-async def test_etcd_datastore(kubernetes_cluster: model.Model):
+async def test_charmed_etcd_datastore(kubernetes_cluster: model.Model):
     """Test that etcd is the backend datastore."""
     k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
     etcd: unit.Unit = kubernetes_cluster.applications["charmed-etcd"].units[0]
