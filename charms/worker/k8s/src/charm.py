@@ -902,11 +902,11 @@ class K8sCharm(ops.CharmBase):
             str: A multi-line string containing the systemd [Service] section configuration
             with proxy environment variables.
         """
-        proxy_env_keys = {
+        proxy_env_keys = [
             "JUJU_CHARM_HTTP_PROXY",
             "JUJU_CHARM_HTTPS_PROXY",
             "JUJU_CHARM_NO_PROXY",
-        }
+        ]
         proxy_settings = []
         for key in proxy_env_keys:
             env_value = os.getenv(key)
