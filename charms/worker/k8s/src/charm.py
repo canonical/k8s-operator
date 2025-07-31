@@ -224,8 +224,8 @@ class K8sCharm(ops.CharmBase):
 
         custom_events = []
         if self.lead_control_plane:
-            self.etcd_certificate = EtcdCertificates(self)
-            custom_events += self.etcd_certificate.events
+            self.etcd_certificates = EtcdCertificates(self)
+            custom_events += self.etcd_certificates.events
 
         if self.is_control_plane:
             self.etcd = self._initialize_external_etcd()
@@ -1302,7 +1302,7 @@ class K8sCharm(ops.CharmBase):
 
         if (
             etcd_certificate_relation
-            and not self.etcd_certificate.certificates.get_assigned_certificates()[0]
+            and not self.etcd_certificates.certificates.get_assigned_certificates()[0]
         ):
             msg = "Waiting for the etcd client certificate"
             log.error(msg)
@@ -1320,7 +1320,7 @@ class K8sCharm(ops.CharmBase):
 
         if charmed_etcd:
             log.info("Using charmed etcd relation")
-            return CharmedEtcdRequires(self, self.etcd_certificate.certificates)
+            return CharmedEtcdRequires(self, self.etcd_certificates.certificates)
 
         return None
 
