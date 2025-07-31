@@ -223,6 +223,8 @@ async def deploy_model(
         await cloud_profile(ops_test)
         async with ops_test.fast_forward("60s"):
             bundle_yaml = bundle.render(ops_test.tmp_path)
+            log.info(f"Model: {the_model.name}")
+            log.info(f"Bundle content:\n{Path(bundle_yaml).read_text()}")
             await the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
             await the_model.wait_for_idle(
                 apps=list(bundle.applications),
