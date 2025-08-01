@@ -36,7 +36,7 @@ UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
 RELATION_NODE_NAME = "node-name"
 RELATION_JOINED = "joined"
 RELATION_CLUSTER_NAME = "cluster-name"
-RELATION_TOKEN_FAILURE = "token-failure"
+RELATION_TOKEN_FAILURE = "token-failure"  # nosec
 RELATION_SECRET_ID = "{0}-secret-id"  # nosec
 
 
@@ -102,17 +102,20 @@ def _get_token_failure(relation: ops.Relation, unit: ops.Unit) -> Optional[Token
     return None
 
 
-def _set_token_failure(relation: ops.Relation, unit: ops.Unit, error: str, revision: int) -> None:
+def _set_token_failure(
+    relation: ops.Relation, unit: ops.Unit, token_failure: Optional[TokenFailure]
+) -> None:
     """Set the token failure for a unit on this relation.
 
     Args:
         relation (ops.Relation): Which relation (cluster or k8s-cluster)
         unit (ops.Unit): The unit the secret is intended for
-        error (str): The error message
-        revision (int): The revision number
+        token_failure (TokenFailure): The token failure information
     """
-    token_failure = TokenFailure(revision=revision, error=error)
-    relation.data[unit][RELATION_TOKEN_FAILURE] = token_failure.model_dump_json()
+    if token_failure:
+        relation.data[unit][RELATION_TOKEN_FAILURE] = token_failure.model_dump_json()
+    else:
+        relation.data[unit].pop(RELATION_TOKEN_FAILURE, None)
 
 
 class TokenStrategy(Enum):
@@ -318,6 +321,7 @@ class TokenCollector:
             # this unit is not joined
             cluster_name = self.cluster_name(relation, False)
             relation.data[self.charm.unit][RELATION_JOINED] = cluster_name
+            _set_token_failure(relation, self.charm.unit, None)
         return cluster_name or ""
 
     @contextlib.contextmanager
@@ -349,9 +353,11 @@ class TokenCollector:
         if len(secret_ids) != 1:
             raise ReconcilerError(f"Failed to find 1 {relation.name}:{secret_key}")
         (secret_id,) = secret_ids
-        if not secret_id:
-            raise ReconcilerError(f"{relation.name}:{secret_key} is not valid")
-        secret = self.charm.model.get_secret(id=secret_id)
+
+        try:
+            secret = self.charm.model.get_secret(id=secret_id)
+        except ops.SecretNotFoundError as e:
+            raise ReconcilerError(f"{relation.name}:{secret_key} is deleted") from e
 
         # Get the content from the secret
         try:
@@ -363,7 +369,8 @@ class TokenCollector:
             yield content.token.get_secret_value()
         except Exception as e:
             # Notify the leader that this token failed
-            _set_token_failure(relation, self.charm.unit, str(e), content.revision)
+            token_failure = TokenFailure(revision=content.revision, error=str(e))
+            _set_token_failure(relation, self.charm.unit, token_failure)
             raise e
 
         # signal that the relation is joined, the token is used
@@ -574,13 +581,14 @@ class TokenDistributor:
                 unit.name,
                 node,
             )
-            token = token = tokenizer.create(node, token_type)
+            token = tokenizer.create(node, token_type)
             secret_id = RELATION_SECRET_ID.format(unit.name)
             if not secret:
                 content = TokenContent(token=token, revision=0)
                 secret = relation.app.add_secret(content.model_dump())
             else:
                 content = TokenContent.load_from_secret(secret)
+                content.token = token
                 content.revision += 1
                 secret.set_content(content.model_dump())
             secret.grant(relation, unit=unit)
