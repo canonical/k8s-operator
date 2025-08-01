@@ -153,4 +153,7 @@ markers = [
 ]
 
 [tool.pyright]
-extraPaths = ["src", "lib"]
+extraPaths = [
+    "charms/worker/k8s/src",
+    "charms/worker/k8s/lib"
+]
