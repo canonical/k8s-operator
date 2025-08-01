@@ -187,6 +187,7 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch("upgrade.list_services")
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
+    @mock.patch("reschedule.PeriodicEvent.cancel", new=mock.MagicMock(return_value=None))
     def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade, list_services):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
@@ -223,8 +224,9 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch("upgrade.list_services")
     @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
+    @mock.patch("reschedule.PeriodicEvent.cancel", new=mock.MagicMock(return_value=None))
     def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade, list_services):
-        """Test _upgrade method for control plane."""
+        """Test _upgrade method for worker."""
         event = mock.MagicMock()
         list_services.return_value = {
             "containerd": {"enabled": True, "active": True},
