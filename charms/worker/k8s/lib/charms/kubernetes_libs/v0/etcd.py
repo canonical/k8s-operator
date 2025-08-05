@@ -99,7 +99,7 @@ class EtcdConsumerEvents(ObjectEvents):
     tls_available = EventSource(EtcdTLSAvailable)
 
 
-class EtcdRequiresProtocol(Object):
+class EtcdRequiresProtocol:
     """Protocol for the etcd requires interface.
 
     This class defines the protocol for the etcd requires interface.
@@ -108,7 +108,6 @@ class EtcdRequiresProtocol(Object):
     """
 
     def __init__(self, charm, endpoint="etcd"):
-        super().__init__(charm, f"relation-{endpoint}")
         self.charm = charm
         self.endpoint = endpoint
 
@@ -134,7 +133,7 @@ class EtcdRequiresProtocol(Object):
         pass
 
 
-class EtcdReactiveRequires(EtcdRequiresProtocol):
+class EtcdReactiveRequires(Object, EtcdRequiresProtocol):
     """Requires side of the etcd interface.
 
     This class is a translation interface that wraps the requires side
@@ -145,7 +144,8 @@ class EtcdReactiveRequires(EtcdRequiresProtocol):
     on = EtcdConsumerEvents()
 
     def __init__(self, charm, endpoint="etcd"):
-        super().__init__(charm, endpoint)
+        Object.__init__(self, charm, f"relation-{endpoint}")
+        EtcdRequiresProtocol.__init__(self, charm, endpoint)
 
         self.state.set_default(
             connected=False, available=False, tls_available=False, connection_string=""

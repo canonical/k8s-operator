@@ -12,16 +12,17 @@ acquire client credentials for secure communication with etcd.
 import logging
 from typing import Optional
 
-from ops import Relation
+from ops import Object, Relation
 
 from charms.data_platform_libs.v0.data_interfaces import EtcdRequires
 from charms.kubernetes_libs.v0.etcd import EtcdRequiresProtocol
 from charms.tls_certificates_interface.v4.tls_certificates import TLSCertificatesRequiresV4
+from charms.worker.k8s.src.literals import CHARMED_ETCD_TLS_CA, CHARMED_ETCD_URIS
 
 log = logging.getLogger(__name__)
 
 
-class CharmedEtcdRequires(EtcdRequiresProtocol):
+class CharmedEtcdRequires(Object, EtcdRequiresProtocol):
     """Charmed etcd requires interface.
 
     This class is a translation interface that wraps the requires side
@@ -29,7 +30,8 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
     """
 
     def __init__(self, charm, etcd_certificate: TLSCertificatesRequiresV4, endpoint="etcd-client"):
-        super().__init__(charm, endpoint)
+        Object.__init__(self, charm, f"relation-{endpoint}")
+        EtcdRequiresProtocol.__init__(self, charm, endpoint)
 
         self.etcd_certificate = etcd_certificate
         self.charmed_etcd = EtcdRequires(
@@ -44,8 +46,10 @@ class CharmedEtcdRequires(EtcdRequiresProtocol):
         """Check if all fields needed from etcd are ready."""
         return (
             self.relation is not None
-            and self.charmed_etcd.fetch_relation_field(self.relation.id, "uris") is not None
-            and self.charmed_etcd.fetch_relation_field(self.relation.id, "tls-ca") is not None
+            and self.charmed_etcd.fetch_relation_field(self.relation.id, CHARMED_ETCD_URIS)
+            is not None
+            and self.charmed_etcd.fetch_relation_field(self.relation.id, CHARMED_ETCD_TLS_CA)
+            is not None
         )
 
     @property

@@ -122,6 +122,7 @@ from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v1 import systemd
 from charms.reconciler import Reconciler
+from charms.worker.k8s.lib.charms.kubernetes_libs.v0.etcd import EtcdRequiresProtocol
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -1309,7 +1310,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.WaitingStatus(msg))
             raise ReconcilerError(msg)
 
-    def _initialize_external_etcd(self) -> Union[EtcdReactiveRequires, CharmedEtcdRequires, None]:
+    def _initialize_external_etcd(self) -> Optional[EtcdRequiresProtocol]:
         """Initialize etcd instance or block charm."""
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
         charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)

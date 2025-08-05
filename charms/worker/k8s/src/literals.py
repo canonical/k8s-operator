@@ -176,3 +176,7 @@ DEPENDENCIES = {
         "version": "1.33.0",
     },
 }
+
+# CHARMED_ETCD_RELATION_KEYS
+CHARMED_ETCD_URIS = "uris"
+CHARMED_ETCD_TLS_CA = "tls-ca"
