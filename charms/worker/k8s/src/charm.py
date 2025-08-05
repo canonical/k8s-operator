@@ -118,11 +118,10 @@ from charms.k8s.v0.k8sd_api_manager import (
     UpdateClusterConfigRequest,
     UserFacingDatastoreConfig,
 )
-from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
+from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires, EtcdRequiresProtocol
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v1 import systemd
 from charms.reconciler import Reconciler
-from charms.worker.k8s.lib.charms.kubernetes_libs.v0.etcd import EtcdRequiresProtocol
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
