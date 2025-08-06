@@ -79,7 +79,7 @@ config:
       type: string
       description: |
         The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "managed-etcd", "dqlite" and "etcd". 
+        after deployment. Allowed values are "managed-etcd", "dqlite" and "etcd".
         If "etcd" is chosen, the charm should be integrated with the etcd charm.
     bootstrap-certificates:
       type: string
@@ -93,7 +93,7 @@ config:
       description: |
         Space-separated list of taints to apply to this node at registration time.
 
-        This config is only used at bootstrap time when Kubelet first registers the
+        This config is only used at node join time when Kubelet first registers the
         node with Kubernetes. To change node taints after deploy time, use kubectl
         instead.
 

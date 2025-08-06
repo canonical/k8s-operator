@@ -9,18 +9,30 @@ import pytest
 import charms.contextual_status
 
 
-def test_node_taints_valid(harness):
+@pytest.mark.parametrize(
+    "taints,expected",
+    [
+        ("", []),
+        ("key1=:NoSchedule", ["key1=:NoSchedule"]),
+        ("key1=value1:NoSchedule", ["key1=value1:NoSchedule"]),
+        (
+            "key1=value1:NoSchedule key2=value2:NoSchedule",
+            ["key1=value1:NoSchedule", "key2=value2:NoSchedule"],
+        ),
+    ],
+)
+def test_node_taints_valid(harness, taints, expected):
     """Test valid node taints configuration.
 
     Args:
         harness: the harness under test
+        taints: the taints to test
+        expected: the expected result after processing the taints
     """
     harness.disable_hooks()
-    harness.update_config(
-        {"bootstrap-node-taints": "   newTaint1:NoSchedule   newTaint2:PreferNoSchedule   "}
-    )
+    harness.update_config({"bootstrap-node-taints": taints})
     bootstrap_node_taints = config.bootstrap.node_taints(harness.charm)
-    assert bootstrap_node_taints == ["newTaint1:NoSchedule", "newTaint2:PreferNoSchedule"]
+    assert bootstrap_node_taints == expected
 
 
 @pytest.mark.parametrize(
