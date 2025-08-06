@@ -95,7 +95,7 @@ def craft(
     dest.extra_node_kubelet_args = cmd
 
 
-def taint_worker(dest: NodeJoinConfig, taints: List[str]):
+def taint_node(dest: NodeJoinConfig, taints: List[str]):
     """Apply the specified list of taints to the node join configuration.
 
     Updates the following attributes of the `config` object:

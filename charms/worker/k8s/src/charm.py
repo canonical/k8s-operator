@@ -51,7 +51,6 @@ from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
     BOOTSTRAP_DATASTORE,
-    BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
     BOOTSTRAP_SERVICE_CIDR,
     CLUSTER_RELATION,
@@ -497,7 +496,7 @@ class K8sCharm(ops.CharmBase):
         )
         bootstrap_config.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self)
         bootstrap_config.pod_cidr = BOOTSTRAP_POD_CIDR.get(self)
-        bootstrap_config.control_plane_taints = BOOTSTRAP_NODE_TAINTS.get(self).split()
+        bootstrap_config.control_plane_taints = config.bootstrap.node_taints(self)
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         node_ips = self._get_node_ips()
@@ -946,8 +945,8 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self, request.config, cluster_name, node_ips)
 
-            bootstrap_node_taints = BOOTSTRAP_NODE_TAINTS.get(self).strip().split()
-            config.extra_args.taint_worker(request.config, bootstrap_node_taints)
+        bootstrap_node_taints = config.bootstrap.node_taints(self)
+        config.extra_args.taint_node(request.config, bootstrap_node_taints)
 
         self.certificates.configure_certificates(request.config)
         self.api_manager.join_cluster(request)

@@ -8,8 +8,7 @@
 import dataclasses
 import http
 import logging
-from collections import Counter
-from typing import Optional
+from typing import List, Optional
 
 import ops
 from config.option import CharmOption
@@ -21,7 +20,9 @@ from literals import (
     BOOTSTRAP_SERVICE_CIDR,
     DATASTORE_NAME_MAPPING,
 )
+from ops.interface_kube_control.model import Taint
 from protocols import K8sCharmProtocol
+from pydantic import TypeAdapter, ValidationError
 
 import charms.contextual_status as context_status
 import charms.k8s.v0.k8sd_api_manager as k8sd_api_manager
@@ -85,7 +86,6 @@ class BootstrapConfigOptions:
     """Charm config options that has a `bootstrap-` prefix."""
 
     certificates: str
-    node_taints: str
     datastore: str
     pod_cidr: str
     service_cidr: str
@@ -113,28 +113,10 @@ class BootstrapConfigOptions:
             test.append(ConfigComparison(charm, BOOTSTRAP_CERTIFICATES, self.certificates))
             test.append(ConfigComparison(charm, BOOTSTRAP_POD_CIDR, self.pod_cidr))
             test.append(ConfigComparison(charm, BOOTSTRAP_SERVICE_CIDR, self.service_cidr))
-        test += [
-            ConfigComparison(charm, BOOTSTRAP_NODE_TAINTS, self.node_taints, eq=_equal_taints)
-        ]
 
         if reports := [c for c in test if not c.matching]:
             return reports[0].user_status
         return None
-
-
-def _equal_taints(t1: str, t2: str) -> bool:
-    """Check if two taint strings are equal.
-
-    The strings can be in any order and individual taints can be separated by spaces.
-
-    Args:
-        t1: The first taint string.
-        t2: The second taint string.
-
-    Returns:
-        True if the two taint strings are equal, False otherwise.
-    """
-    return Counter(t1.split()) == Counter(t2.split())
 
 
 @context_status.on_error(
@@ -147,8 +129,6 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
     log.info("Preventing bootstrap config changes after bootstrap")
 
     try:
-        node_status = charm.api_manager.get_node_status().metadata
-        node_taints = " ".join(node_status.taints) if node_status.taints else ""
         certificate_provider = charm.certificates.get_provider_name()
         datastore, pod_cidr, service_cidr = "", "", ""
 
@@ -160,7 +140,6 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
 
         ref = BootstrapConfigOptions(
             certificate_provider,
-            node_taints,
             datastore,
             pod_cidr,
             service_cidr,
@@ -174,3 +153,15 @@ def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
     if blocked := ref.prevent(charm):
         context_status.add(blocked)
         raise context_status.ReconcilerError(blocked.message)
+
+
+@context_status.on_error(
+    ops.BlockedStatus("Invalid config on bootstrap-node-taints"),
+    ValidationError,
+)
+def node_taints(charm: ops.CharmBase) -> List[str]:
+    """Share node taints with the kube-control interface."""
+    taints = BOOTSTRAP_NODE_TAINTS.get(charm).split()
+    for taint in taints:
+        TypeAdapter(Taint).validate_python(taint)
+    return taints
