@@ -115,6 +115,11 @@ EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 CLUSTER_CERTIFICATES_KEY = "certs-provider"
 CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY = "certs-kubelet-formatter"
 CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY = "certs-domain-name"
+CLUSTER_CLUSTER_NAME = "cluster-name"
+CLUSTER_JOINED = "joined"
+CLUSTER_NODE_NAME = "node-name"
+CLUSTER_SECRET_ID = "{0}-secret-id"  # nosec
+CLUSTER_TOKEN_FAILURE = "token-failure"  # nosec
 
 # Certificates
 APISERVER_CN_FORMATTER_CONFIG_KEY = "external-certs-apiserver-common-name-format"

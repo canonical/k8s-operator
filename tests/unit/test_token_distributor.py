@@ -6,6 +6,11 @@
 # pylint: disable=duplicate-code,missing-function-docstring
 """Unit tests token_distributor module."""
 
+import json
+import unittest.mock as mock
+
+import ops
+import pytest
 import token_distributor
 from literals import CLUSTER_RELATION
 
@@ -48,3 +53,28 @@ def test_cluster_name_joined(harness):
     assert remote == local == "my-cluster"
     data = harness.get_relation_data(relation_id, harness.charm.unit.name)
     assert data["joined"] == "my-cluster"
+
+
+@pytest.mark.parametrize("revision", [1, "2"])
+@pytest.mark.parametrize("token", ["my-token"])
+def test_token_content(revision, token):
+    """Test token content."""
+    as_dict = {"revision": revision, "token": token}
+    as_json = json.dumps(as_dict)
+    secret = mock.MagicMock(spec=ops.Secret)
+    secret.get_content.return_value = as_dict
+
+    content = [
+        token_distributor.TokenContent(revision=revision, token=token),
+        token_distributor.TokenContent.model_validate(as_dict),
+        token_distributor.TokenContent.model_validate_json(as_json),
+        token_distributor.TokenContent.load_from_secret(secret),
+    ]
+
+    int_rev = int(revision)
+    str_rev = str(int_rev)
+    for c in content:
+        assert c.revision == int_rev
+        assert c.token.get_secret_value() == "my-token"
+        assert c.model_dump() == {"revision": str_rev, "token": "my-token"}
+        assert c.model_dump_json() == f'{{"revision":"{str_rev}","token":"my-token"}}'
