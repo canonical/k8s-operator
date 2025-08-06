@@ -68,7 +68,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +99,41 @@ class EtcdConsumerEvents(ObjectEvents):
     tls_available = EventSource(EtcdTLSAvailable)
 
 
-class EtcdReactiveRequires(Object):
+class EtcdRequiresProtocol:
+    """Protocol for the etcd requires interface.
+
+    This class defines the protocol for the etcd requires interface.
+    It provides methods to check if the relation is available, get
+    connection details, and handle client credentials.
+    """
+
+    def __init__(self, charm, endpoint="etcd"):
+        self.charm = charm
+        self.endpoint = endpoint
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if the relation is available and emit the appropriate event."""
+        raise NotImplementedError("The is_ready method must be implemented by the subclass.")
+
+    def get_connection_string(self) -> str:
+        """Return the connection string for etcd."""
+        raise NotImplementedError(
+            "The get_connection_string method must be implemented by the subclass."
+        )
+
+    def get_client_credentials(self) -> dict[str, Optional[str]]:
+        """Return the client credentials for etcd."""
+        raise NotImplementedError(
+            "The get_client_credentials method must be implemented by the subclass."
+        )
+
+    def update_relation_data(self) -> None:
+        """Update the relation data with the current state."""
+        pass
+
+
+class EtcdReactiveRequires(Object, EtcdRequiresProtocol):
     """Requires side of the etcd interface.
 
     This class is a translation interface that wraps the requires side
@@ -110,9 +144,8 @@ class EtcdReactiveRequires(Object):
     on = EtcdConsumerEvents()
 
     def __init__(self, charm, endpoint="etcd"):
-        super().__init__(charm, f"relation-{endpoint}")
-        self.charm = charm
-        self.endpoint = endpoint
+        Object.__init__(self, charm, f"relation-{endpoint}")
+        EtcdRequiresProtocol.__init__(self, charm, endpoint)
 
         self.state.set_default(
             connected=False, available=False, tls_available=False, connection_string=""
@@ -177,7 +210,7 @@ class EtcdReactiveRequires(Object):
             return remote_data.get("connection_string")
         return ""
 
-    def get_client_credentials(self) -> dict:
+    def get_client_credentials(self) -> dict[str, Optional[str]]:
         """Return the client credentials for etcd."""
         remote_data = self._remote_data
         return {

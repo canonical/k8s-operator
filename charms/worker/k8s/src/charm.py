@@ -38,7 +38,8 @@ import k8s.node
 import ops
 import utils
 import yaml
-from certificates import K8sCertificates, RefreshCertificates
+from certificates import EtcdCertificates, K8sCertificates, RefreshCertificates
+from charmed_etcd import CharmedEtcdRequires
 from cloud_integration import CloudIntegration
 from config.cluster import assemble_cluster_config
 from cos_integration import COSIntegration
@@ -55,6 +56,7 @@ from literals import (
     BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
     BOOTSTRAP_SERVICE_CIDR,
+    CHARMED_ETCD_RELATION,
     CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
@@ -73,6 +75,7 @@ from literals import (
     DATASTORE_TYPE_K8S_DQLITE,
     DEPENDENCIES,
     ETC_KUBERNETES,
+    ETCD_CERTIFICATES_RELATION,
     ETCD_RELATION,
     EXTERNAL_LOAD_BALANCER_PORT,
     EXTERNAL_LOAD_BALANCER_RELATION,
@@ -115,7 +118,7 @@ from charms.k8s.v0.k8sd_api_manager import (
     UpdateClusterConfigRequest,
     UserFacingDatastoreConfig,
 )
-from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
+from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires, EtcdRequiresProtocol
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v1 import systemd
 from charms.reconciler import Reconciler
@@ -219,17 +222,25 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
+        custom_events = []
+        if self.lead_control_plane:
+            self.etcd_certificates = EtcdCertificates(self)
+            custom_events += self.etcd_certificates.events
+
         if self.is_control_plane:
-            self.etcd = EtcdReactiveRequires(self)
+            self.etcd = self._initialize_external_etcd()
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
+
         self.certificates = K8sCertificates(self, self.certificate_refresh)
+        custom_events += self.certificates.events
+
         self.reconciler = Reconciler(
             self,
             self._reconcile,
             exit_status=self.update_status.active_status,
-            custom_events=self.certificates.events,
+            custom_events=custom_events,
         )
         self.framework.observe(self.on.refresh_certs_action, self._on_refresh_certs_action)
 
@@ -588,7 +599,7 @@ class K8sCharm(ops.CharmBase):
                 continue
             if self.is_control_plane:
                 continue
-            ## Only workers here, and they are limited to only relate to one containerd endpoint
+            # Only workers here, and they are limited to only relate to one containerd endpoint
             self.unit.status = ops.MaintenanceStatus("Ensuring containerd registries")
             registries = containerd.recover(relation)
             containerd.ensure_registry_configs(registries)
@@ -654,12 +665,14 @@ class K8sCharm(ops.CharmBase):
 
         if datastore == DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
-            etcd_relation = self.model.get_relation(ETCD_RELATION)
 
-            if not etcd_relation:
+            if not self.etcd:
                 raise ReconcilerError("Missing etcd relation")
 
+            self.etcd.update_relation_data()
+
             if not self.etcd.is_ready:
+                status.add(ops.WaitingStatus("Waiting for etcd to be ready"))
                 raise ReconcilerError("etcd is not ready")
 
             etcd_config = self.etcd.get_client_credentials()
@@ -1006,7 +1019,6 @@ class K8sCharm(ops.CharmBase):
             event: ops.EventBase - event that triggered the reconciliation
         """
         log.info("Reconcile event=%s", event)
-
         if self._evaluate_removal(event):
             self._death_handler(event)
 
@@ -1020,6 +1032,7 @@ class K8sCharm(ops.CharmBase):
         if self.lead_control_plane:
             self._k8s_info(event)
             self._configure_external_load_balancer()
+            self._check_etcd_ready()
             self._bootstrap_k8s_snap()
             self._ensure_cluster_config()
             self._create_cluster_tokens()
@@ -1248,6 +1261,68 @@ class K8sCharm(ops.CharmBase):
                 self.api_manager.refresh_certs(extra_sans=sans, expiration_seconds=ttl_seconds)
             except (InvalidResponseError, K8sdConnectionError) as e:
                 event.fail(f"Failed to refresh certificates: {e}")
+
+    def _check_etcd_ready(self):
+        """Check if etcd is ready and update the status accordingly.
+
+        This method initializes the etcd instance and checks its readiness.
+        If etcd is not ready, it blocks the charm with an appropriate status.
+        """
+        if not BOOTSTRAP_DATASTORE.get(self) == DATASTORE_TYPE_EXTERNAL:
+            log.info("Not using external etcd, skipping external etcd readiness check")
+            return
+
+        legacy_etcd = self.model.get_relation(ETCD_RELATION)
+        charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
+        etcd_certificate_relation = self.model.get_relation(ETCD_CERTIFICATES_RELATION)
+
+        if not legacy_etcd and not charmed_etcd:
+            msg = "Missing etcd relation"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
+
+        if legacy_etcd and charmed_etcd:
+            msg = "etcd and etcd-client relations are mutually exclusive"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
+
+        if charmed_etcd and not etcd_certificate_relation:
+            msg = "etcd-client relation requires etcd-certificates relation"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
+
+        if etcd_certificate_relation and legacy_etcd:
+            msg = "etcd-certificates relation is incompatible with etcd relation"
+            log.error(msg)
+            status.add(ops.BlockedStatus(msg))
+            raise ReconcilerError(msg)
+
+        if (
+            etcd_certificate_relation
+            and not self.etcd_certificates.certificates.get_assigned_certificates()[0]
+        ):
+            msg = "Waiting for the etcd client certificate"
+            log.error(msg)
+            status.add(ops.WaitingStatus(msg))
+            raise ReconcilerError(msg)
+
+    def _initialize_external_etcd(self) -> Optional[EtcdRequiresProtocol]:
+        """Initialize etcd instance or block charm."""
+        legacy_etcd = self.model.get_relation(ETCD_RELATION)
+        charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
+
+        if legacy_etcd:
+            log.info("Using legacy etcd relation")
+            return EtcdReactiveRequires(self)
+
+        if charmed_etcd:
+            log.info("Using charmed etcd relation")
+            return CharmedEtcdRequires(self, self.etcd_certificates.certificates)
+
+        return None
 
 
 if __name__ == "__main__":  # pragma: nocover

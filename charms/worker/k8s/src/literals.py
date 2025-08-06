@@ -96,6 +96,7 @@ SNAP_RESOURCE_NAME = "snap-installation"
 
 # Relations
 CERTIFICATES_RELATION = "certificates"
+ETCD_CERTIFICATES_RELATION = "etcd-certificates"
 CLUSTER_RELATION = "cluster"
 CLUSTER_WORKER_RELATION = "k8s-cluster"
 CONTAINERD_RELATION = "containerd"
@@ -103,6 +104,7 @@ COS_TOKENS_RELATION = "cos-tokens"
 COS_TOKENS_WORKER_RELATION = "cos-worker-tokens"
 COS_RELATION = "cos-agent"
 ETCD_RELATION = "etcd"
+CHARMED_ETCD_RELATION = "etcd-client"
 UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
@@ -174,3 +176,7 @@ DEPENDENCIES = {
         "version": "1.33.0",
     },
 }
+
+# CHARMED_ETCD_RELATION_KEYS
+CHARMED_ETCD_URIS = "uris"
+CHARMED_ETCD_TLS_CA = "tls-ca"

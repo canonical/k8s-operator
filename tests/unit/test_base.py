@@ -258,6 +258,64 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
     assert bs_config.datastore_type == "external"
 
 
+@mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
+@mock.patch("config.bootstrap.detect_bootstrap_config_changes")
+def test_set_leader_etcd_missing(mock_detect_bootstrap, harness):
+    """Test emitting the set_leader hook while not reconciled.
+
+    Args:
+        mock_detect_bootstrap: mock for detect_bootstrap_config_changes
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
+    harness.charm._ensure_cert_sans = mock.MagicMock()
+    harness.update_config({"bootstrap-datastore": "etcd"})
+    public_addr = "11.12.13.14"
+    remote_addr = "11.12.13.15"
+    if harness.charm.is_control_plane:
+        harness.add_network(
+            public_addr, endpoint="cluster", ingress_addresses=[public_addr, remote_addr]
+        )
+        harness.add_relation("cluster", "remote")
+    with mock_reconciler_handlers(harness) as handlers:
+        handlers["_evaluate_removal"].return_value = False
+        harness.set_leader(True)
+    assert harness.model.unit.status == ops.BlockedStatus("Missing etcd relation")
+    etcd_relation = harness.add_relation("etcd", "etcd")
+    with mock_reconciler_handlers(harness) as handlers:
+        handlers["_evaluate_removal"].return_value = False
+        harness.set_leader(True)
+    assert harness.model.unit.status == ops.ActiveStatus("Ready")
+    etcd_client_relation = harness.add_relation("etcd-client", "charmed-etcd")
+    with mock_reconciler_handlers(harness) as handlers:
+        handlers["_evaluate_removal"].return_value = False
+        harness.set_leader(True)
+    assert harness.model.unit.status == ops.BlockedStatus(
+        "etcd and etcd-client relations are mutually exclusive"
+    )
+
+    harness.remove_relation(etcd_client_relation)
+    etcd_certificates_relation = harness.add_relation("etcd-certificates", "ssc")
+    with mock_reconciler_handlers(harness) as handlers:
+        handlers["_evaluate_removal"].return_value = False
+        harness.set_leader(True)
+    assert harness.model.unit.status == ops.BlockedStatus(
+        "etcd-certificates relation is incompatible with etcd relation"
+    )
+    harness.remove_relation(etcd_certificates_relation)
+    harness.remove_relation(etcd_relation)
+    harness.add_relation("etcd-client", "charmed-etcd")
+    with mock_reconciler_handlers(harness) as handlers:
+        handlers["_evaluate_removal"].return_value = False
+        harness.set_leader(True)
+    assert harness.model.unit.status == ops.BlockedStatus(
+        "etcd-client relation requires etcd-certificates relation"
+    )
+
+
 def test_configure_datastore_runtime_config_dqlite(harness):
     """Test configuring the datastore=dqlite on runtime changes.
 
