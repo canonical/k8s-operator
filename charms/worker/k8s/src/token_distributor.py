@@ -10,6 +10,13 @@ from enum import Enum, auto
 from typing import Dict, Generator, Optional, Union
 
 import ops
+from literals import (
+    CLUSTER_CLUSTER_NAME,
+    CLUSTER_JOINED,
+    CLUSTER_NODE_NAME,
+    CLUSTER_SECRET_ID,
+    CLUSTER_TOKEN_FAILURE,
+)
 from protocols import K8sCharmProtocol
 from pydantic import (
     BaseModel,
@@ -33,15 +40,21 @@ log = logging.getLogger(__name__)
 
 UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
 
-RELATION_NODE_NAME = "node-name"
-RELATION_JOINED = "joined"
-RELATION_CLUSTER_NAME = "cluster-name"
-RELATION_TOKEN_FAILURE = "token-failure"  # nosec
-RELATION_SECRET_ID = "{0}-secret-id"  # nosec
-
 
 class TokenFailure(BaseModel):
-    """Model for token failure."""
+    """Model for token failure.
+
+    This objects stores information about token failures in a relation.
+
+    The joiner creates one of these when it fails to join the cluster
+    and will store it in its unit relation data in 'token-failure' key.
+    When the leader sees this failure and the revision matches the one
+    in the secret, it will generate a new token and update the secret.
+
+    Attributes:
+        revision (int): The revision number of the token provided in the juju-secret
+        error (str): The error message associated with the token of the same revision
+    """
 
     revision: int
     error: str
@@ -97,7 +110,7 @@ def _get_token_failure(relation: ops.Relation, unit: ops.Unit) -> Optional[Token
     Returns:
         TokenFailure: The token failure for the unit, if any
     """
-    if token_failure_str := relation.data[unit].get(RELATION_TOKEN_FAILURE):
+    if token_failure_str := relation.data[unit].get(CLUSTER_TOKEN_FAILURE):
         return TokenFailure.model_validate_json(token_failure_str)
     return None
 
@@ -113,9 +126,9 @@ def _set_token_failure(
         token_failure (TokenFailure): The token failure information
     """
     if token_failure:
-        relation.data[unit][RELATION_TOKEN_FAILURE] = token_failure.model_dump_json()
+        relation.data[unit][CLUSTER_TOKEN_FAILURE] = token_failure.model_dump_json()
     else:
-        relation.data[unit].pop(RELATION_TOKEN_FAILURE, None)
+        relation.data[unit].pop(CLUSTER_TOKEN_FAILURE, None)
 
 
 class TokenStrategy(Enum):
@@ -286,7 +299,7 @@ class TokenCollector:
             relation (ops.Relation): The relation on which to request
         """
         # the presence of node-name is used to request a token
-        relation.data[self.charm.unit][RELATION_NODE_NAME] = self.node_name
+        relation.data[self.charm.unit][CLUSTER_NODE_NAME] = self.node_name
 
     def cluster_name(self, relation: ops.Relation, local: bool) -> str:
         """Get the cluster name from this relation.
@@ -309,18 +322,18 @@ class TokenCollector:
             # recover_cluster_name from a consensus of all units
             values = set()
             for unit in relation.units:
-                if value := relation.data[unit].get(RELATION_CLUSTER_NAME):
+                if value := relation.data[unit].get(CLUSTER_CLUSTER_NAME):
                     values |= {value}
             if values:
                 if len(values) != 1:
                     raise ReconcilerError(
-                        f"Failed to find 1 {relation.name}:{RELATION_CLUSTER_NAME}"
+                        f"Failed to find 1 {relation.name}:{CLUSTER_CLUSTER_NAME}"
                     )
                 (cluster_name,) = values
-        elif not (cluster_name := relation.data[self.charm.unit].get(RELATION_JOINED)):
+        elif not (cluster_name := relation.data[self.charm.unit].get(CLUSTER_JOINED)):
             # this unit is not joined
             cluster_name = self.cluster_name(relation, False)
-            relation.data[self.charm.unit][RELATION_JOINED] = cluster_name
+            relation.data[self.charm.unit][CLUSTER_JOINED] = cluster_name
             _set_token_failure(relation, self.charm.unit, None)
         return cluster_name or ""
 
@@ -343,7 +356,7 @@ class TokenCollector:
         self.request(relation)
 
         # Read the secret-id from the relation
-        secret_key = RELATION_SECRET_ID.format(self.charm.unit.name)
+        secret_key = CLUSTER_SECRET_ID.format(self.charm.unit.name)
         secret_ids = {
             secret_id
             for unit in relation.units | {self.charm.unit}
@@ -408,7 +421,7 @@ class TokenDistributor:
         Returns:
             secret_id (None | ops.Secret) if on the relation
         """
-        secret_id = RELATION_SECRET_ID.format(unit.name)
+        secret_id = CLUSTER_SECRET_ID.format(unit.name)
         if juju_secret := relation.data[self.charm.unit].get(secret_id):
             return self.charm.model.get_secret(id=juju_secret)
         return None
@@ -420,7 +433,7 @@ class TokenDistributor:
             relation (ops.Relation): Which relation (cluster or k8s-cluster)
             unit (ops.Unit): The unit the secret is intended for
         """
-        secret_id = RELATION_SECRET_ID.format(unit.name)
+        secret_id = CLUSTER_SECRET_ID.format(unit.name)
         if juju_secret := relation.data[self.charm.unit].pop(secret_id, None):
             secret = self.charm.model.get_secret(id=juju_secret)
             secret.remove_all_revisions()
@@ -501,15 +514,15 @@ class TokenDistributor:
             )
         )
         local_cluster = self.charm.get_cluster_name()
-        relation.data[self.charm.unit][RELATION_NODE_NAME] = self.node_name
-        relation.data[self.charm.unit][RELATION_CLUSTER_NAME] = local_cluster
+        relation.data[self.charm.unit][CLUSTER_NODE_NAME] = self.node_name
+        relation.data[self.charm.unit][CLUSTER_CLUSTER_NAME] = local_cluster
         if not tokenizer.allocator_needs_tokens:
             # the allocator doesn't need a token to join, mark as already joined
-            relation.data[self.charm.unit][RELATION_JOINED] = local_cluster
+            relation.data[self.charm.unit][CLUSTER_JOINED] = local_cluster
 
         for unit in units:
-            remote_cluster = relation.data[unit].get(RELATION_JOINED)
-            node = relation.data[unit].get(RELATION_NODE_NAME)
+            remote_cluster = relation.data[unit].get(CLUSTER_JOINED)
+            node = relation.data[unit].get(CLUSTER_NODE_NAME)
             secret = self._get_juju_secret(relation, unit)
             if not node:
                 log.info(
@@ -582,7 +595,7 @@ class TokenDistributor:
                 node,
             )
             token = tokenizer.create(node, token_type)
-            secret_id = RELATION_SECRET_ID.format(unit.name)
+            secret_id = CLUSTER_SECRET_ID.format(unit.name)
             if not secret:
                 content = TokenContent(token=token, revision=0)
                 secret = relation.app.add_secret(content.model_dump())
@@ -677,5 +690,5 @@ def joined_cluster(relation: ops.Relation, unit: ops.Unit) -> Optional[str]:
         the recovered cluster name from existing relations
     """
     if data := relation.data.get(unit):
-        return data.get(RELATION_JOINED)
+        return data.get(CLUSTER_JOINED)
     return None
