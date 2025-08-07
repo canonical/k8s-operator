@@ -133,15 +133,24 @@ async def test_nodes_labelled(
 
 
 @pytest.mark.usefixtures("preserve_charm_config")
+@pytest.mark.parametrize(
+    "config_key, config_value",
+    [
+        ("bootstrap-pod-cidr", "10.0.0.0/8"),
+        ("bootstrap-service-cidr", "10.128.0.0/16"),
+        ("bootstrap-datastore", "etcd"),
+        ("bootstrap-certificates", "external"),
+    ],
+)
 async def test_prevent_bootstrap_config_changes(
-    kubernetes_cluster: juju.model.Model, timeout: int
+    kubernetes_cluster: juju.model.Model, timeout: int, config_key: str, config_value: str
 ):
     """Test that the bootstrap config cannot be changed."""
     apps = ["k8s", "k8s-worker"]
     k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
     expected_nodes = len(k8s.units) + len(worker.units)
     await ready_nodes(k8s.units[0], expected_nodes)
-    await k8s.set_config({"bootstrap-pod-cidr": "10.0.0.0/8"})
+    await k8s.set_config({config_key: config_value})
     await kubernetes_cluster.wait_for_idle(apps=apps[:1], status="blocked", timeout=timeout * 60)
 
 
