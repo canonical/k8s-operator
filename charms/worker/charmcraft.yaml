@@ -59,7 +59,7 @@ config:
       description: |
         Space-separated list of taints to apply to this node at registration time.
 
-        This config is only used at bootstrap time when Kubelet first registers the
+        This config is only used at node join time when Kubelet first registers the
         node with Kubernetes. To change node taints after deploy time, use kubectl
         instead.
 

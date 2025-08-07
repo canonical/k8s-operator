@@ -10,6 +10,7 @@ from typing import Dict, List, Union
 import literals
 import ops
 from config.arg_files import FileArgsConfig
+from config.option import StrOption
 
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
@@ -18,14 +19,19 @@ from charms.k8s.v0.k8sd_api_manager import (
 )
 
 
-def _parse(config_data) -> Dict[str, str]:
+def _parse(option: StrOption, charm: ops.CharmBase) -> Dict[str, str]:
     """Parse user config data into a dictionary.
 
     Args:
-        config_data: the charm config data for an extra-args
+        option: the charm config option for an extra-args
+        charm (ops.CharmBase): the charm instance to get the configuration from.
     """
     args: Dict[str, str] = {}
-    for element in str(config_data).split():
+    try:
+        config_data = option.get(charm)
+    except ValueError:
+        return {}
+    for element in config_data.split():
         if "=" in element:
             key, _, value = element.partition("=")
         else:
@@ -36,7 +42,7 @@ def _parse(config_data) -> Dict[str, str]:
 
 
 def craft(
-    src: ops.ConfigData,
+    charm: ops.CharmBase,
     dest: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig],
     cluster_name: str,
     node_ips: List[str],
@@ -53,37 +59,35 @@ def craft(
         - extra_node_k8s_dqlite_args: arguments for k8s-dqlite
 
     Args:
-        src (ops.ConfigData): the charm instance to get the configuration from.
+        charm (ops.CharmBase): the charm instance to get the configuration from.
         dest (Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig]):
             The configuration object to be updated with extra arguments.
         cluster_name (str): the name of the cluster to override in the extra arguments.
         node_ips (list[str]): the IP address of the node to override in the extra arguments.
     """
-    if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
-        cmd = _parse(src["kube-apiserver-extra-args"])
+    if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig)):
+        cmd = _parse(literals.KUBE_APISERVER_EXTRA_ARGS, charm)
         dest.extra_node_kube_apiserver_args = cmd
 
-        cmd = _parse(src["kube-controller-manager-extra-args"])
+        cmd = _parse(literals.KUBE_CONTROLLER_MANAGER_EXTRA_ARGS, charm)
         if cluster_name:
             cmd.update(**{"--cluster-name": cluster_name})
         else:
             cmd.pop("--cluster-name", None)
         dest.extra_node_kube_controller_manager_args = cmd
 
-        cmd = _parse(src["kube-scheduler-extra-args"])
+        cmd = _parse(literals.KUBE_SCHEDULER_EXTRA_ARGS, charm)
         dest.extra_node_kube_scheduler_args = cmd
 
-        cmd = _parse(src["datastore-extra-args"])
-        match src["bootstrap-datastore"]:
-            case literals.DATASTORE_TYPE_K8S_DQLITE:
-                dest.extra_node_k8s_dqlite_args = cmd
-            case literals.DATASTORE_TYPE_ETCD:
-                dest.extra_node_etcd_args = cmd
+    if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
+        cmd = _parse(literals.DATASTORE_EXTRA_ARGS, charm)
+        dest.extra_node_k8s_dqlite_args = cmd
+        dest.extra_node_etcd_args = cmd
 
-    cmd = _parse(src["kube-proxy-extra-args"])
+    cmd = _parse(literals.KUBE_PROXY_EXTRA_ARGS, charm)
     dest.extra_node_kube_proxy_args = cmd
 
-    cmd = _parse(src["kubelet-extra-args"])
+    cmd = _parse(literals.KUBELET_EXTRA_ARGS, charm)
     if node_ips:
         cmd.update(**{"--node-ip": ",".join(node_ips)})
     else:
@@ -91,7 +95,7 @@ def craft(
     dest.extra_node_kubelet_args = cmd
 
 
-def taint_worker(dest: NodeJoinConfig, taints: List[str]):
+def taint_node(dest: NodeJoinConfig, taints: List[str]):
     """Apply the specified list of taints to the node join configuration.
 
     Updates the following attributes of the `config` object:
