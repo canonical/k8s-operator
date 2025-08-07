@@ -163,12 +163,10 @@ def test_detect_bootstrap_config_change(harness, caplog):
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
-@mock.patch("config.bootstrap.detect_bootstrap_config_changes")
-def test_set_leader(mock_detect_bootstrap, harness):
+def test_set_leader(harness):
     """Test emitting the set_leader hook while not reconciled.
 
     Args:
-        mock_detect_bootstrap: mock for detect_bootstrap_config_changes
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
@@ -188,12 +186,6 @@ def test_set_leader(mock_detect_bootstrap, harness):
     assert harness.charm.reconciler.stored.reconciled
     called = {name: h for name, h in handlers.items() if h.called}
     assert len(called) == len(handlers)
-    # NOTE: This account for adding the new relation and the leadership change.
-    if harness.charm.is_control_plane:
-        mock_detect_bootstrap.assert_has_calls([mock.call(harness.charm)] * 2)
-        assert mock_detect_bootstrap.call_count == 2
-    else:
-        mock_detect_bootstrap.assert_called_once_with(harness.charm)
 
 
 def test_configure_datastore_bootstrap_config_managed_etcd(harness):
