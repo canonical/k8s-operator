@@ -44,7 +44,7 @@ jobs:
           tox -e unit,coverage-xml
           # TiCS expects the report to be under a "$(pwd)/cover" directory.
           mkdir -p "$GITHUB_WORKSPACE/cover"
-          GENERATED_COVERAGE_XML="$GITHUB_WORKSPACE/charms/worker/k8s/coverage.xml"
+          GENERATED_COVERAGE_XML=$(find "$GITHUB_WORKSPACE" -type f -name "coverage.xml")
           mv "$GENERATED_COVERAGE_XML" cover/coverage.xml
 
       - name: Run TICS
