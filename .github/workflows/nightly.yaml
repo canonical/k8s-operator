@@ -32,7 +32,7 @@ jobs:
         channel: latest/stable
         juju-channel: 3/stable
     - name: Checking out repo
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Setup cluster with terraform
       timeout-minutes: 15
       run: |
