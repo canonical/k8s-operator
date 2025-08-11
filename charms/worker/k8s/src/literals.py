@@ -71,6 +71,13 @@ ETCD_RELATION = "etcd"
 UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
+# Cluster Relation Keys
+CLUSTER_CLUSTER_NAME = "cluster-name"
+CLUSTER_JOINED = "joined"
+CLUSTER_NODE_NAME = "node-name"
+CLUSTER_SECRET_ID = "{0}-secret-id"  # nosec
+CLUSTER_TOKEN_FAILURE = "token-failure"  # nosec
+
 # Kubernetes services
 K8S_COMMON_SERVICES = [
     "kubelet",
