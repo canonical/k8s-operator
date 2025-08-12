@@ -27,7 +27,7 @@ jobs:
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
@@ -40,7 +40,7 @@ jobs:
       amd64: ${{ steps.select.outputs.amd64 }}
       arm64: ${{ steps.select.outputs.arm64 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Astral UV
         uses: astral-sh/setup-uv@v6.4.3
         with:
