@@ -112,7 +112,7 @@ class K8sCertificates(ops.Object):
         Returns:
             CertificateProvider: An instance implementing the CertificateProvider protocol.
         """
-        if self.get_provider_name() == "external":
+        if self._get_provider_name(False) == "external":
             return TLSCertificatesRequiresV4(
                 charm=self._charm,
                 relationship_name=CERTIFICATES_RELATION,
@@ -343,9 +343,19 @@ class K8sCertificates(ops.Object):
         Returns:
             str: The certificates provider.
         """
+        return self._get_provider_name()
+
+    def _get_provider_name(self, validate: bool = True) -> str:
+        """Get the certificates provider name internally.
+
+        Returns:
+            str: The certificates provider.
+        """
         app = self._charm.is_control_plane and self._charm.app or None
         relation = self.model.get_relation(CLUSTER_RELATION)
-        provider = relation and relation.data[app or relation.app].get(CLUSTER_CERTIFICATES_KEY)
+        provider = (
+            relation and relation.data[app or relation.app].get(CLUSTER_CERTIFICATES_KEY) or ""
+        )
 
         if not provider:
             # Note(AKD): This could be an upgrade scenario where the provider is unset.
@@ -358,9 +368,10 @@ class K8sCertificates(ops.Object):
 
         if not provider and self._charm.is_control_plane:
             provider = BOOTSTRAP_CERTIFICATES.get(self._charm)
-            self._validate_provider(provider)
+            if validate:
+                self._validate_provider(provider)
 
-        return provider or ""
+        return provider
 
     @staticmethod
     def _validate_provider(provider: str) -> None:
