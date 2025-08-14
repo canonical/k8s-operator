@@ -76,9 +76,7 @@ class ConfigComparison:
     @property
     def user_status(self) -> ops.BlockedStatus:
         """Return a user-friendly block status."""
-        return ops.BlockedStatus(
-            f"Expected {self._option.name}='{self._cur_val}' not '{self._charm_val}'"
-        )
+        return ops.BlockedStatus(f"{self._option.name} is immutable; revert to '{self._cur_val}'")
 
 
 @dataclasses.dataclass

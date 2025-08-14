@@ -135,7 +135,7 @@ def test_detect_bootstrap_config_change(harness, caplog):
             "bootstrap-service-cidr",
         ]
     )
-    assert str(ie.value) == "Expected bootstrap-datastore='dqlite' not 'managed-etcd'"
+    assert str(ie.value) == "bootstrap-datastore is immutable; revert to 'dqlite'"
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
