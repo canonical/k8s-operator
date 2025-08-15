@@ -131,26 +131,28 @@ class Controller:
     @property
     def config(self) -> ConfigOptions:
         """Return the current bootstrap configuration options."""
+        immutable, with_auto = self.immutable, self._with_auto
         return ConfigOptions(
-            datastore=self.immutable.datastore or self._with_auto.datastore,
-            pod_cidr=self.immutable.pod_cidr or self._with_auto.pod_cidr,
-            service_cidr=self.immutable.service_cidr or self._with_auto.service_cidr,
-            certificates=self.immutable.certificates or self._with_auto.certificates,
+            datastore=immutable.datastore or with_auto.datastore,
+            pod_cidr=immutable.pod_cidr or with_auto.pod_cidr,
+            service_cidr=immutable.service_cidr or with_auto.service_cidr,
+            certificates=immutable.certificates or with_auto.certificates,
         )
 
     def validate(self) -> None:
         """Validate the bootstrap options."""
         config = self.config
         try:
-            if config.datastore not in (DATASTORE_NAME_MAPPING.keys() | {None}):
-                name = config.datastore
+            if config.datastore not in DATASTORE_NAME_MAPPING:
+                name = BOOTSTRAP_DATASTORE.name
+                drop_none = DATASTORE_NAME_MAPPING.keys() - {None}
                 log.error(
                     "Invalid %s: %s. Valid Options are: %s",
                     name,
                     config.datastore,
-                    ", ".join(sorted(DATASTORE_NAME_MAPPING)),
+                    ", ".join(sorted(drop_none)),
                 )
-                raise ValueError(f"Invalid {name}: {config.datastore}.")
+                raise ValueError(f"{name}='{config.datastore}' is invalid.")
             if config.certificates not in SUPPORTED_CERTIFICATES:
                 name = BOOTSTRAP_CERTIFICATES.name
                 log.error(
@@ -159,7 +161,7 @@ class Controller:
                     config.certificates,
                     ", ".join(sorted(SUPPORTED_CERTIFICATES)),
                 )
-                raise ValueError(f"Invalid {name}: {config.certificates}.")
+                raise ValueError(f"{name}='{config.certificates}' is invalid.")
         except ValueError as e:
             m = str(e)
             log.error("Invalid bootstrap configuration: %s", m)
@@ -203,41 +205,41 @@ class Controller:
         if self._charm.is_control_plane:
             if (val := juju.datastore) != "auto":
                 opts.datastore = val
+            if (val := juju.certificates) != "auto":
+                opts.certificates = val
             if (val := juju.pod_cidr) != "auto":
                 opts.pod_cidr = val
             if (val := juju.service_cidr) != "auto":
                 opts.service_cidr = val
-            if (val := juju.certificates) != "auto":
-                opts.certificates = val
 
         return opts
 
-    def prevent(self):
-        """Prevent bootstrap config changes after bootstrap."""
-        log.info("Preventing bootstrap config changes after bootstrap")
+    # def prevent(self):
+    #     """Prevent bootstrap config changes after bootstrap."""
+    #     log.info("Preventing bootstrap config changes after bootstrap")
 
-        juju = self._juju
-        for field in dataclasses.fields(self.immutable):
-            if getattr(juju, field.name) == "auto":
-                # Auto-mapped options are not immutable.
-                continue
-            cur_val = getattr(self.immutable, field.name)
-            if cur_val is None:
-                # If the current value is None, it means it was never set.
-                continue
-            alias = field.metadata["alias"]
-            if cur_val != getattr(juju, field.name):
-                log.warning(
-                    "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
-                    field.name,
-                    alias,
-                    getattr(juju, field.name),
-                    self._charm.app.name,
-                    alias,
-                    cur_val,
-                )
-                msg = f"{alias} is immutable; revert to '{cur_val}'"
-                context_status.add(ops.BlockedStatus(msg))
+    #     juju = self._juju
+    #     for field in dataclasses.fields(self.immutable):
+    #         if getattr(juju, field.name) == "auto":
+    #             # Auto-mapped options are not immutable.
+    #             continue
+    #         cur_val = getattr(self.immutable, field.name)
+    #         if cur_val is None:
+    #             # If the current value is None, it means it was never set.
+    #             continue
+    #         alias = field.metadata["alias"]
+    #         if cur_val != getattr(juju, field.name):
+    #             log.warning(
+    #                 "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
+    #                 field.name,
+    #                 alias,
+    #                 getattr(juju, field.name),
+    #                 self._charm.app.name,
+    #                 alias,
+    #                 cur_val,
+    #             )
+    #             msg = f"{alias} is immutable; revert to '{cur_val}'"
+    #             context_status.add(ops.BlockedStatus(msg))
 
 
 @context_status.on_error(
