@@ -109,7 +109,7 @@ LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 14
 
 PYDEPS = ["opentelemetry-api"]
 
@@ -149,6 +149,7 @@ class _SnapDict(TypedDict, total=True):
     name: str
     channel: str
     revision: str
+    version: str
     confinement: str
     apps: NotRequired[list[dict[str, JSONType]] | None]
 
@@ -309,6 +310,7 @@ class Snap:
       - channel: "stable", "candidate", "beta", and "edge" are common
       - revision: a string representing the snap's revision
       - confinement: "classic", "strict", or "devmode"
+      - version: a string representing the snap's version, if set by the snap author
     """
 
     def __init__(
@@ -320,6 +322,8 @@ class Snap:
         confinement: str,
         apps: list[dict[str, JSONType]] | None = None,
         cohort: str | None = None,
+        *,
+        version: str | None = None,
     ) -> None:
         self._name = name
         self._state = state
@@ -328,6 +332,7 @@ class Snap:
         self._confinement = confinement
         self._cohort = cohort or ""
         self._apps = apps or []
+        self._version = version
         self._snap_client = SnapClient()
 
     def __eq__(self, other: object) -> bool:
@@ -783,6 +788,11 @@ class Snap:
         info = self._snap("info")
         return "hold:" in info
 
+    @property
+    def version(self) -> str | None:
+        """Returns the version for a snap."""
+        return self._version
+
 
 class _UnixSocketConnection(http.client.HTTPConnection):
     """Implementation of HTTPConnection that connects to a named Unix socket."""
@@ -1048,6 +1058,7 @@ class SnapCache(Mapping[str, Snap]):
                 revision=i["revision"],
                 confinement=i["confinement"],
                 apps=i.get("apps"),
+                version=i.get("version"),
             )
             self._snap_map[snap.name] = snap
 
@@ -1067,6 +1078,7 @@ class SnapCache(Mapping[str, Snap]):
             revision=info["revision"],
             confinement=info["confinement"],
             apps=None,
+            version=info.get("version"),
         )
 
 
