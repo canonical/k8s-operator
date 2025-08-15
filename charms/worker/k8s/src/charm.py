@@ -972,7 +972,7 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
 
-            bootstrap_node_taints = str(self.config["bootstrap-node-taints"] or "").strip().split()
+            bootstrap_node_taints = config.bootstrap.node_taints(self)
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
         self.api_manager.join_cluster(request)
