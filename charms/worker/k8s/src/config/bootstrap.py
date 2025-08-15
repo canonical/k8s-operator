@@ -67,8 +67,8 @@ class Controller:
         # Load from the immutable cluster storage.
         try:
             if self._charm.is_control_plane:
-                cluster = self._charm.api_manager.get_cluster_config()
-                snap_ds = cluster.metadata.datastore and cluster.metadata.datastore.type
+                cluster = self._charm.api_manager.get_cluster_config().metadata
+                snap_ds = cluster.datastore and cluster.datastore.type
                 opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
                 opts.pod_cidr = cluster.pod_cidr
                 opts.service_cidr = cluster.service_cidr
@@ -88,16 +88,17 @@ class Controller:
 
     def validate(self) -> None:
         """Validate the bootstrap options."""
+        config = self.config
         try:
-            if self.config.datastore not in (DATASTORE_NAME_MAPPING.keys() | {None}):
-                name = self.config.datastore
+            if config.datastore not in (DATASTORE_NAME_MAPPING.keys() | {None}):
+                name = config.datastore
                 log.error(
                     "Invalid %s: %s. Valid Options are: %s",
                     name,
-                    self.config.datastore,
+                    config.datastore,
                     ", ".join(sorted(DATASTORE_NAME_MAPPING)),
                 )
-                raise ValueError(f"Invalid {name}: {self.config.datastore}.")
+                raise ValueError(f"Invalid {name}: {config.datastore}.")
         except ValueError as e:
             m = str(e)
             log.error("Invalid bootstrap configuration: %s", m)
@@ -106,9 +107,10 @@ class Controller:
 
     def persist(self) -> None:
         """Persist the bootstrap configuration options."""
-        self.immutable.datastore = self.config.datastore
-        self.immutable.pod_cidr = self.config.pod_cidr
-        self.immutable.service_cidr = self.config.service_cidr
+        config = self.config
+        self.immutable.datastore = config.datastore
+        self.immutable.pod_cidr = config.pod_cidr
+        self.immutable.service_cidr = config.service_cidr
 
     @property
     def _juju(self) -> ConfigOptions:
