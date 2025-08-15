@@ -213,7 +213,7 @@ class K8sCertificates(ops.Object):
         }
 
         if self._charm.is_control_plane:
-            sans_ip.update(self._get_service_ips())
+            sans_ip.update(self._get_kubernetes_svc_ips())
 
         extra_ips, extra_dns = self._charm.split_sans_by_type()
         sans_ip.update(extra_ips)
@@ -249,27 +249,25 @@ class K8sCertificates(ops.Object):
             log.exception("Invalid common name formatter '%s'", formatter)
             raise
 
-    def _get_service_ips(self) -> Set[str]:
-        """Get Kubernetes service IPs from the CIDRs.
+    def _get_kubernetes_svc_ips(self) -> Set[str]:
+        """Get Internal Kubernetes service IPs from the CIDRs.
 
         Returns:
-            Set[str]: A set of Kubernetes service IPs.
+            Set[str]: A set of internal kubernetes service IPs.
 
         Raises:
             ValueError: If the service CIDR is invalid.
         """
-        service_ips = set()
         service_cidr = self._bootstrap.config.service_cidr
         if not service_cidr:
             raise ValueError("Service CIDR is not configured")
 
-        cidrs = service_cidr.split(",")
-
-        for cidr in cidrs:
+        service_ips = set()
+        for cidr in service_cidr.split(","):
             cidr = cidr.strip()
             try:
                 network = ipaddress.ip_network(cidr)
-                service_ips.add(str(network[1]))
+                service_ips.add(str(network[1]))  # first usable IP from the CIDR
             except ValueError:
                 log.exception("Invalid service CIDR: %s", cidr)
                 raise
