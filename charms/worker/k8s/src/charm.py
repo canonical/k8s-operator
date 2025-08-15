@@ -50,8 +50,6 @@ from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
-    BOOTSTRAP_CERTIFICATES,
-    BOOTSTRAP_NODE_TAINTS,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     CONTAINERD_HTTP_PROXY,
@@ -929,7 +927,7 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
 
-            bootstrap_node_taints = BOOTSTRAP_NODE_TAINTS.get(self).strip().split()
+            bootstrap_node_taints = config.bootstrap.node_taints(self)
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
         self.certificates.configure_certificates(request.config)
@@ -1170,7 +1168,9 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-        if BOOTSTRAP_CERTIFICATES.get(self) == "external":
+
+        provider = self.certificates.get_provider_name()
+        if provider == "external":
             # TODO: This should be implemented once k8s-snap offers an API endpoint
             # to update the certificates in the node.
             log.info("External certificates are used, skipping SANs update")
@@ -1191,9 +1191,9 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if BOOTSTRAP_CERTIFICATES.get(self) == "self-signed":
+            if provider == "self-signed":
                 self.api_manager.refresh_certs(all_sans)
-            elif BOOTSTRAP_CERTIFICATES.get(self) == "external":
+            elif provider == "external":
                 self.certificate_refresh.emit()
             log.info("Certificates have been refreshed")
 

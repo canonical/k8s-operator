@@ -13,7 +13,6 @@ import ops
 from literals import (
     APISERVER_CN_FORMATTER_CONFIG_KEY,
     APISERVER_CSR_KEY,
-    BOOTSTRAP_SERVICE_CIDR,
     CERTIFICATES_RELATION,
     CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
     CLUSTER_CERTIFICATES_KEY,
@@ -261,7 +260,11 @@ class K8sCertificates(ops.Object):
             ValueError: If the service CIDR is invalid.
         """
         service_ips = set()
-        cidrs = BOOTSTRAP_SERVICE_CIDR.get(self._charm).split(",")
+        service_cidr = self._bootstrap.config.service_cidr
+        if not service_cidr:
+            raise ValueError("Service CIDR is not configured")
+
+        cidrs = service_cidr.split(",")
 
         for cidr in cidrs:
             cidr = cidr.strip()

@@ -179,6 +179,25 @@ def test_set_leader(harness):
     assert len(called) == len(handlers)
 
 
+def test_configure_datastore_bootstrap_config_auto(harness):
+    """Test configuring the datastore=auto on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    bs_config = BootstrapConfig()
+    harness.update_config()
+    harness.charm._configure_datastore(bs_config)
+    assert bs_config.datastore_ca_cert is None
+    assert bs_config.datastore_client_cert is None
+    assert bs_config.datastore_client_key is None
+    assert bs_config.datastore_servers is None
+    assert bs_config.datastore_type is None
+
+
 def test_configure_datastore_bootstrap_config_managed_etcd(harness):
     """Test configuring the datastore=managed-etcd on bootstrap.
 
@@ -189,6 +208,7 @@ def test_configure_datastore_bootstrap_config_managed_etcd(harness):
         pytest.skip("Not applicable on workers")
 
     bs_config = BootstrapConfig()
+    harness.update_config({"bootstrap-datastore": "managed-etcd"})
     harness.charm._configure_datastore(bs_config)
     assert bs_config.datastore_ca_cert is None
     assert bs_config.datastore_client_cert is None
@@ -392,7 +412,9 @@ def test_ensure_cert_sans(harness):
         mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans,
         mock.patch("charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])),
         mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_api_manager,
+        mock.patch("charm.K8sCertificates.get_provider_name") as mock_get_cert_provider,
     ):
+        mock_get_cert_provider.return_value = "self-signed"
         mock_extra_sans.return_value = ["sans1", "sans2"]
         harness.charm._ensure_cert_sans()
         mock_api_manager.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])
