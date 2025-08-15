@@ -15,7 +15,6 @@ from literals import (
     APISERVER_CSR_KEY,
     CERTIFICATES_RELATION,
     CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
-    CLUSTER_CERTIFICATES_KEY,
     CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
@@ -359,16 +358,13 @@ class K8sCertificates(ops.Object):
     @status.on_error(ops.WaitingStatus("Announcing Certificates Provider"))
     def announce_certificates_config(self) -> None:
         """Announce the certificates provider to the cluster relation."""
-        if not (provider := self.get_provider_name()):
-            raise status.ReconcilerError("Missing certificates provider")
+        self._bootstrap.persist_certificates()
 
         for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
-            rel.data[self._charm.app][CLUSTER_CERTIFICATES_KEY] = provider
-            kubelet_formatter = self.kubelet_common_name_formatter
+            domain_name, kubelet_formatter = self.domain_name, self.kubelet_common_name_formatter
             rel.data[self._charm.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = (
                 kubelet_formatter
             )
-            domain_name = self.domain_name
             rel.data[self._charm.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
         else:
             log.info("Cluster (worker) relation not found, skipping certificates sharing.")

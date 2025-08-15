@@ -19,6 +19,7 @@ from literals import (
     BOOTSTRAP_SERVICE_CIDR,
     CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
     DATASTORE_NAME_MAPPING,
     DEFAULT_CERTIFICATE_PROVIDER,
     SUPPORTED_CERTIFICATES,
@@ -86,6 +87,11 @@ def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> No
         provider (str): The certificates provider to persist.
     """
     for relation in charm.model.relations[CLUSTER_RELATION]:
+        app_data = relation.data[charm.app]
+        if not app_data.get(CLUSTER_CERTIFICATES_KEY):
+            app_data[CLUSTER_CERTIFICATES_KEY] = provider
+
+    for relation in charm.model.relations.get(CLUSTER_WORKER_RELATION, []):
         app_data = relation.data[charm.app]
         if not app_data.get(CLUSTER_CERTIFICATES_KEY):
             app_data[CLUSTER_CERTIFICATES_KEY] = provider
@@ -174,8 +180,15 @@ class Controller:
         self.immutable.datastore = config.datastore
         self.immutable.pod_cidr = config.pod_cidr
         self.immutable.service_cidr = config.service_cidr
-        self.immutable.certificates = config.certificates
-        _persist_certificates_provider(self._charm, config.certificates)
+        self.immutable.certificates = self.persist_certificates()
+
+    def persist_certificates(self) -> str:
+        """Persist the certificates provider in the cluster relation."""
+        if not (provider := self.config.certificates):
+            raise context_status.ReconcilerError("Missing certificates provider")
+
+        _persist_certificates_provider(self._charm, provider)
+        return provider
 
     @property
     def _juju(self) -> ConfigOptions:
