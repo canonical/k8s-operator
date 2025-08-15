@@ -80,25 +80,27 @@ class Controller:
     @property
     def config(self) -> ConfigOptions:
         """Return the current bootstrap configuration options."""
+        immutable, with_auto = self.immutable, self._with_auto
         return ConfigOptions(
-            datastore=self.immutable.datastore or self._with_auto.datastore,
-            pod_cidr=self.immutable.pod_cidr or self._with_auto.pod_cidr,
-            service_cidr=self.immutable.service_cidr or self._with_auto.service_cidr,
+            datastore=immutable.datastore or with_auto.datastore,
+            pod_cidr=immutable.pod_cidr or with_auto.pod_cidr,
+            service_cidr=immutable.service_cidr or with_auto.service_cidr,
         )
 
     def validate(self) -> None:
         """Validate the bootstrap options."""
         config = self.config
         try:
-            if config.datastore not in (DATASTORE_NAME_MAPPING.keys() | {None}):
-                name = config.datastore
+            if config.datastore not in DATASTORE_NAME_MAPPING:
+                name = BOOTSTRAP_DATASTORE.name
+                drop_none = DATASTORE_NAME_MAPPING.keys() - {None}
                 log.error(
                     "Invalid %s: %s. Valid Options are: %s",
                     name,
                     config.datastore,
-                    ", ".join(sorted(DATASTORE_NAME_MAPPING)),
+                    ", ".join(sorted(drop_none)),
                 )
-                raise ValueError(f"Invalid {name}: {config.datastore}.")
+                raise ValueError(f"{name}='{config.datastore}' is invalid.")
         except ValueError as e:
             m = str(e)
             log.error("Invalid bootstrap configuration: %s", m)
