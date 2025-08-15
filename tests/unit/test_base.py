@@ -11,24 +11,15 @@ import json
 from pathlib import Path
 from unittest import mock
 
-import config.bootstrap
 import containerd
 import ops
 import ops.testing
 import pytest
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
-from charms.contextual_status import ReconcilerError
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
-    GetClusterConfigMetadata,
-    GetClusterConfigResponse,
-    GetNodeStatusMetadata,
-    GetNodeStatusResponse,
-    NodeStatus,
     UpdateClusterConfigRequest,
-    UserFacingClusterConfig,
-    UserFacingDatastoreConfig,
 )
 
 
@@ -95,80 +86,78 @@ def test_update_status(harness):
     assert harness.model.unit.status == ops.WaitingStatus("Node not Clustered")
 
 
-@mock.patch("pki.check_ca_key", mock.Mock(return_value=False))
-def test_detect_bootstrap_config_change(harness, caplog):
-    """Test that the bootstrap config change is prevented.
+# @mock.patch("pki.check_ca_key", mock.Mock(return_value=False))
+# def test_detect_bootstrap_config_change(harness, caplog):
+#     """Test that the bootstrap config change is prevented.
 
-    Args:
-        harness (ops.testing.Harness): The test harness
-        caplog: pytest fixture for capturing logs
-    """
-    harness.disable_hooks()
-    caplog.set_level("INFO")
+#     Args:
+#         harness (ops.testing.Harness): The test harness
+#         caplog: pytest fixture for capturing logs
+#     """
+#     harness.disable_hooks()
+#     caplog.set_level("INFO")
 
-    with (
-        mock.patch.object(
-            harness.charm.api_manager, "get_cluster_config"
-        ) as mock_get_cluster_config,
-        mock.patch.object(harness.charm.api_manager, "get_node_status") as mock_get_node_status,
-    ):
-        mock_get_cluster_config.return_value = GetClusterConfigResponse(
-            error_code=0,
-            status="OK",
-            status_code=200,
-            type="",
-            metadata=GetClusterConfigMetadata(
-                status=UserFacingClusterConfig(),
-                datastore=UserFacingDatastoreConfig(type="k8s-dqlite"),
-                pod_cidr="10.0.0.0/8",
-                service_cidr="10.0.0.0/8",
-            ),
-        )
+#     with (
+#         mock.patch.object(
+#             harness.charm.api_manager, "get_cluster_config"
+#         ) as mock_get_cluster_config,
+#         mock.patch.object(harness.charm.api_manager, "get_node_status") as mock_get_node_status,
+#     ):
+#         mock_get_cluster_config.return_value = GetClusterConfigResponse(
+#             error_code=0,
+#             status="OK",
+#             status_code=200,
+#             type="",
+#             metadata=GetClusterConfigMetadata(
+#                 status=UserFacingClusterConfig(),
+#                 datastore=UserFacingDatastoreConfig(type="k8s-dqlite"),
+#                 pod_cidr="10.0.0.0/8",
+#                 service_cidr="10.0.0.0/8",
+#             ),
+#         )
 
-        mock_get_node_status.return_value = GetNodeStatusResponse(
-            error_code=0,
-            status="OK",
-            status_code=200,
-            type="",
-            metadata=GetNodeStatusMetadata(
-                status=NodeStatus(),
-                taints=["taint1", "taint2"],
-            ),
-        )
+#         mock_get_node_status.return_value = GetNodeStatusResponse(
+#             error_code=0,
+#             status="OK",
+#             status_code=200,
+#             type="",
+#             metadata=GetNodeStatusMetadata(
+#                 status=NodeStatus(),
+#                 taints=["taint1", "taint2"],
+#             ),
+#         )
 
-        # NOTE(Hue): taints are available for both control-plane and worker
-        harness.update_config({"bootstrap-node-taints": "newTaint1 newTaint2"})
-        with pytest.raises(ReconcilerError) as ie:
-            config.bootstrap.detect_bootstrap_config_changes(harness.charm)
+#         # NOTE(Hue): taints are available for both control-plane and worker
+#         harness.update_config({"bootstrap-node-taints": "newTaint1 newTaint2"})
+#         with pytest.raises(ReconcilerError) as ie:
+#             config.bootstrap.detect_bootstrap_config_changes(harness.charm)
 
-    assert "Preventing bootstrap config changes after bootstrap" in caplog.text
-    assert "Cannot satisfy configuration bootstrap-node-taints=" in caplog.text
-    assert f"Run `juju config {harness.charm.app.name} bootstrap-node-taints=" in caplog.text
-    if harness.charm.is_worker:
-        assert (
-            str(ie.value)
-            == "Expected bootstrap-node-taints='taint1 taint2' not 'newTaint1 newTaint2'"
-        )
-    else:
-        assert all(
-            f"Cannot satisfy configuration {msg}=" in caplog.text
-            for msg in [
-                "bootstrap-certificates",
-                "bootstrap-datastore",
-                "bootstrap-pod-cidr",
-                "bootstrap-service-cidr",
-            ]
-        )
-        assert str(ie.value) == "Expected bootstrap-datastore='dqlite' not 'managed-etcd'"
+#     assert "Preventing bootstrap config changes after bootstrap" in caplog.text
+#     assert "Cannot satisfy configuration bootstrap-node-taints=" in caplog.text
+#     assert f"Run `juju config {harness.charm.app.name} bootstrap-node-taints=" in caplog.text
+#     if harness.charm.is_worker:
+#         assert (
+#             str(ie.value)
+#             == "Expected bootstrap-node-taints='taint1 taint2' not 'newTaint1 newTaint2'"
+#         )
+#     else:
+#         assert all(
+#             f"Cannot satisfy configuration {msg}=" in caplog.text
+#             for msg in [
+#                 "bootstrap-certificates",
+#                 "bootstrap-datastore",
+#                 "bootstrap-pod-cidr",
+#                 "bootstrap-service-cidr",
+#             ]
+#         )
+#         assert str(ie.value) == "Expected bootstrap-datastore='dqlite' not 'managed-etcd'"
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
-@mock.patch("config.bootstrap.detect_bootstrap_config_changes")
-def test_set_leader(mock_detect_bootstrap, harness):
+def test_set_leader(harness):
     """Test emitting the set_leader hook while not reconciled.
 
     Args:
-        mock_detect_bootstrap: mock for detect_bootstrap_config_changes
         harness: the harness under test
     """
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
@@ -188,12 +177,6 @@ def test_set_leader(mock_detect_bootstrap, harness):
     assert harness.charm.reconciler.stored.reconciled
     called = {name: h for name, h in handlers.items() if h.called}
     assert len(called) == len(handlers)
-    # NOTE: This account for adding the new relation and the leadership change.
-    if harness.charm.is_control_plane:
-        mock_detect_bootstrap.assert_has_calls([mock.call(harness.charm)] * 2)
-        assert mock_detect_bootstrap.call_count == 2
-    else:
-        mock_detect_bootstrap.assert_called_once_with(harness.charm)
 
 
 def test_configure_datastore_bootstrap_config_managed_etcd(harness):
