@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import tarfile
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 import yaml
 from config.resource import CharmResource
@@ -368,61 +368,3 @@ def version(snap: str) -> Tuple[Optional[str], bool]:
 
     log.info("Snap k8s not found or no version available.")
     return None, overridden
-
-
-def stop(snap_name: str, services: List[str]) -> None:
-    """Stop the services of the snap on this machine.
-
-    Arguments:
-        snap_name: The name of the snap
-        services: The services to stop
-
-    Raises:
-        SnapError: If the snap isn't installed
-    """
-    cache = snap_lib.SnapCache()
-    if snap_name not in cache:
-        message = f"Snap '{snap_name}' not installed"
-        log.error(message)
-        raise snap_lib.SnapError(message)
-    snap = cache[snap_name]
-    snap.stop(services=services)
-
-
-def start(snap_name: str, services: List[str]) -> None:
-    """Start the services of the snap on this machine.
-
-    Arguments:
-        snap_name: The name of the snap
-        services: The services to start
-
-    Raises:
-        SnapError: If the snap isn't installed
-    """
-    cache = snap_lib.SnapCache()
-    if snap_name not in cache:
-        message = f"Snap '{snap_name}' not installed"
-        log.error(message)
-        raise snap_lib.SnapError(message)
-    snap = cache[snap_name]
-    snap.start(services=services)
-
-
-def list(snap_name: str) -> Dict[str, snap_lib.SnapServiceDict]:
-    """List the services of the snap on this machine.
-
-    Arguments:
-        snap_name: The name of the snap
-
-    Returns:
-        Dict[str, snap_lib.SnapServiceDict]: The list of services of the snap
-
-    Raises:
-        SnapError: If the snap isn't installed
-    """
-    cache = snap_lib.SnapCache()
-    if snap_name not in cache:
-        message = f"Snap '{snap_name}' not installed"
-        log.error(message)
-        raise snap_lib.SnapError(message)
-    return cache[snap_name].services
