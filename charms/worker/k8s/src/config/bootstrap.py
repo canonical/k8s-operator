@@ -51,7 +51,7 @@ class ConfigOptions:
     )
 
 
-def _load_certificates_provider(charm: K8sCharmProtocol) -> Optional[str]:
+def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
     """Load the certificate provider name from the cluster relation.
 
     Args:
@@ -73,7 +73,7 @@ def _load_certificates_provider(charm: K8sCharmProtocol) -> Optional[str]:
         except (k8sd.K8sdConnectionError, k8sd.InvalidResponseError) as e:
             log.error("Failed to get node status: %s", e)
 
-    return provider
+    return provider or ""
 
 
 def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> None:
@@ -113,14 +113,13 @@ class Controller:
             A BootstrapStore instance with the configuration options.
         """
         opts = ConfigOptions()
-        if val := _load_certificates_provider(self._charm):
-            opts.certificates = val
+        opts.certificates = _load_certificates_provider(self._charm)
 
         # Load from the immutable cluster storage.
         try:
             if self._charm.is_control_plane:
-                cluster = self._charm.api_manager.get_cluster_config()
-                snap_ds = cluster.metadata.datastore and cluster.metadata.datastore.type
+                cluster = self._charm.api_manager.get_cluster_config().metadata
+                snap_ds = cluster.datastore and cluster.datastore.type
                 opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
                 opts.pod_cidr = cluster.pod_cidr
                 opts.service_cidr = cluster.service_cidr
@@ -141,25 +140,26 @@ class Controller:
 
     def validate(self) -> None:
         """Validate the bootstrap options."""
+        config = self.config
         try:
-            if self.config.datastore not in (DATASTORE_NAME_MAPPING.keys() | {None}):
-                name = self.config.datastore
+            if config.datastore not in (DATASTORE_NAME_MAPPING.keys() | {None}):
+                name = config.datastore
                 log.error(
                     "Invalid %s: %s. Valid Options are: %s",
                     name,
-                    self.config.datastore,
+                    config.datastore,
                     ", ".join(sorted(DATASTORE_NAME_MAPPING)),
                 )
-                raise ValueError(f"Invalid {name}: {self.config.datastore}.")
-            if self.config.certificates not in SUPPORTED_CERTIFICATES:
+                raise ValueError(f"Invalid {name}: {config.datastore}.")
+            if config.certificates not in SUPPORTED_CERTIFICATES:
                 name = BOOTSTRAP_CERTIFICATES.name
                 log.error(
                     "Invalid %s: %s. Valid Options are: %s",
                     name,
-                    self.config.certificates,
+                    config.certificates,
                     ", ".join(sorted(SUPPORTED_CERTIFICATES)),
                 )
-                raise ValueError(f"Invalid {name}: {self.config.certificates}.")
+                raise ValueError(f"Invalid {name}: {config.certificates}.")
         except ValueError as e:
             m = str(e)
             log.error("Invalid bootstrap configuration: %s", m)
@@ -168,11 +168,12 @@ class Controller:
 
     def persist(self) -> None:
         """Persist the bootstrap configuration options."""
-        self.immutable.datastore = self.config.datastore
-        self.immutable.pod_cidr = self.config.pod_cidr
-        self.immutable.service_cidr = self.config.service_cidr
-        self.immutable.certificates = self.config.certificates
-        _persist_certificates_provider(self._charm, self.config.certificates)
+        config = self.config
+        self.immutable.datastore = config.datastore
+        self.immutable.pod_cidr = config.pod_cidr
+        self.immutable.service_cidr = config.service_cidr
+        self.immutable.certificates = config.certificates
+        _persist_certificates_provider(self._charm, config.certificates)
 
     @property
     def _juju(self) -> ConfigOptions:
@@ -181,8 +182,9 @@ class Controller:
         Options are always loaded from the charm config, or mapped through the default
         if they are set to "auto".
         """
-        opts = ConfigOptions(certificates=BOOTSTRAP_CERTIFICATES.get(self._charm))
+        opts = ConfigOptions()
         if self._charm.is_control_plane:
+            opts.certificates = BOOTSTRAP_CERTIFICATES.get(self._charm)
             opts.datastore = BOOTSTRAP_DATASTORE.get(self._charm)
             opts.pod_cidr = BOOTSTRAP_POD_CIDR.get(self._charm)
             opts.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self._charm)
@@ -205,9 +207,8 @@ class Controller:
                 opts.pod_cidr = val
             if (val := juju.service_cidr) != "auto":
                 opts.service_cidr = val
-
-        if (val := juju.certificates) != "auto":
-            opts.certificates = val
+            if (val := juju.certificates) != "auto":
+                opts.certificates = val
 
         return opts
 

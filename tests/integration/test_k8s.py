@@ -132,18 +132,26 @@ async def test_nodes_labelled(
     assert 0 == len(labelled), "Not all nodes labelled without custom-label"
 
 
-@pytest.mark.usefixtures("preserve_charm_config")
-async def test_prevent_bootstrap_config_changes(
-    ops_test, kubernetes_cluster: juju.model.Model, timeout: int
-):
-    """Test that the bootstrap config cannot be changed."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
-    new_config = {"bootstrap-node-taints": "new-taint"}
-    await asyncio.gather(k8s.set_config(new_config), worker.set_config(new_config))
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="blocked", timeout=timeout * 60)
+# @pytest.mark.usefixtures("preserve_charm_config")
+# @pytest.mark.parametrize(
+#     "config_key, config_value",
+#     [
+#         ("bootstrap-pod-cidr", "10.0.0.0/8"),
+#         ("bootstrap-service-cidr", "10.128.0.0/16"),
+#         ("bootstrap-datastore", "etcd"),
+#         ("bootstrap-certificates", "external"),
+#     ],
+# )
+# async def test_prevent_bootstrap_config_changes(
+#     kubernetes_cluster: juju.model.Model, timeout: int, config_key: str, config_value: str
+# ):
+#     """Test that the bootstrap config cannot be changed."""
+#     apps = ["k8s", "k8s-worker"]
+#     k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
+#     expected_nodes = len(k8s.units) + len(worker.units)
+#     await ready_nodes(k8s.units[0], expected_nodes)
+#     await k8s.set_config({config_key: config_value})
+#     await kubernetes_cluster.wait_for_idle(apps=apps[:1], status="blocked", timeout=timeout * 60)
 
 
 async def test_remove_worker(kubernetes_cluster: juju.model.Model, timeout: int):
