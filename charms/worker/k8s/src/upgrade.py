@@ -4,25 +4,17 @@
 """A module for upgrading the k8s and k8s-worker charms."""
 
 import logging
-from typing import List, Union
+from typing import List, Optional, Union
 
 import ops
 import reschedule
 from inspector import ClusterInspector
 from literals import (
-    DATASTORE_TYPE_ETCD,
-    DATASTORE_TYPE_K8S_DQLITE,
-    K8S_CONTROL_PLANE_SERVICES,
-    K8S_DQLITE_SERVICE,
-    K8S_WORKER_SERVICES,
-    MANAGED_ETCD_SERVICE,
-    SNAP_NAME,
     UPGRADE_RELATION,
 )
 from protocols import K8sCharmProtocol
 from pydantic import BaseModel
 from snap import management as snap_management
-from snap import start, stop
 from snap import version as snap_version
 
 import charms.contextual_status as status
@@ -158,19 +150,6 @@ class K8sUpgrade(DataUpgrade):
 
         return True
 
-    def _perform_upgrade(self, services: List[str]) -> None:
-        """Perform the upgrade.
-
-        Args:
-            services: The services to stop and start during the upgrade.
-        """
-        status.add(ops.MaintenanceStatus("Stopping the K8s services"))
-        stop(SNAP_NAME, services)
-        status.add(ops.MaintenanceStatus("Upgrading the k8s snap."))
-        snap_management(self.charm)
-        status.add(ops.MaintenanceStatus("Starting the K8s services"))
-        start(SNAP_NAME, services)
-
     def _on_upgrade_granted(self, event: UpgradeGrantedEvent) -> None:
         """Handle the upgrade granted event.
 
@@ -178,9 +157,10 @@ class K8sUpgrade(DataUpgrade):
             event: The UpgradeGrantedEvent instance.
         """
         with status.context(self.charm.unit, exit_status=ops.ActiveStatus("Ready")):
-            self._upgrade(event)
+            if failure := self._upgrade(event):
+                status.add(failure)
 
-    def _upgrade(self, event: Union[ops.EventBase, ops.HookEvent]) -> None:
+    def _upgrade(self, event: Union[ops.EventBase, ops.HookEvent]) -> Optional[ops.StatusBase]:
         """Upgrade the snap workload."""
         trigger = reschedule.PeriodicEvent(self.charm)
         current_version, _ = snap_version("k8s")
@@ -189,43 +169,29 @@ class K8sUpgrade(DataUpgrade):
         if not current_version:
             log.error("Failed to get the version of the k8s snap.")
             self.set_unit_failed(cause="Failed to get the version of the k8s snap.")
-            status.add(ops.BlockedStatus("Failed to get the version of the k8s snap."))
-            return
+            return ops.BlockedStatus("Failed to get the version of the k8s snap.")
 
-        status.add(ops.MaintenanceStatus("Upgrading the charm."))
-
-        if self.charm.lead_control_plane:
-            if not self._verify_worker_versions():
-                self.set_unit_failed(
-                    cause="The k8s worker charm version does not meet the requirements."
-                )
-                trigger.cancel()
-                return
+        if self.charm.lead_control_plane and not self._verify_worker_versions():
+            message = "The k8s worker version requirements are not met."
+            log.error(message)
+            self.set_unit_failed(cause=message)
+            trigger.cancel()
+            return ops.BlockedStatus(message)
 
         self.charm.grant_upgrade()
-        if self.charm.is_control_plane:
-            services = list(K8S_CONTROL_PLANE_SERVICES)
-            bootstrap_datastore = str(self.charm.config["bootstrap-datastore"])
-            if bootstrap_datastore != DATASTORE_TYPE_K8S_DQLITE:
-                services.remove(K8S_DQLITE_SERVICE)
-            if bootstrap_datastore != DATASTORE_TYPE_ETCD:
-                services.remove(MANAGED_ETCD_SERVICE)
-        else:
-            services = list(K8S_WORKER_SERVICES)
-
+        status.add(ops.MaintenanceStatus("Upgrading the snap."))
         try:
-            self._perform_upgrade(services=services)
+            snap_management(self.charm)
             self.set_unit_completed()
-
             if self.charm.unit.is_leader():
                 self.on_upgrade_changed(event)
-
             trigger.cancel()
         except SnapError:
-            status.add(ops.WaitingStatus("Waiting for the snap to be installed."))
             log.exception("Failed to upgrade the snap. Will retry...")
             trigger.create(reschedule.Period(seconds=30))
-            return
+            return ops.WaitingStatus("Waiting for the snap to be installed.")
+
+        return None
 
     def build_upgrade_stack(self) -> List[int]:
         """Return a list of unit numbers to upgrade in order.

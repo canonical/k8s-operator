@@ -108,6 +108,7 @@ def test_set_leader(harness):
     Args:
         harness: the harness under test
     """
+    harness.disable_hooks()
     harness.charm.reconciler.stored.reconciled = False  # Pretended to not be reconciled
     harness.charm._ensure_cert_sans = mock.MagicMock()
     public_addr = "11.12.13.14"
@@ -116,6 +117,7 @@ def test_set_leader(harness):
         public_addr, endpoint="cluster", ingress_addresses=[public_addr, remote_addr]
     )
     harness.add_relation("cluster", "remote")
+    harness.enable_hooks()
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
