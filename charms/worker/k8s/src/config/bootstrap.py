@@ -41,14 +41,14 @@ class ConfigOptions:
     datastore: Optional[str] = dataclasses.field(
         default=None, metadata={"alias": BOOTSTRAP_DATASTORE.name}
     )
+    certificates: str = dataclasses.field(
+        default=DEFAULT_CERTIFICATE_PROVIDER, metadata={"alias": BOOTSTRAP_CERTIFICATES.name}
+    )
     pod_cidr: Optional[str] = dataclasses.field(
         default=None, metadata={"alias": BOOTSTRAP_POD_CIDR.name}
     )
     service_cidr: Optional[str] = dataclasses.field(
         default=None, metadata={"alias": BOOTSTRAP_SERVICE_CIDR.name}
-    )
-    certificates: str = dataclasses.field(
-        default=DEFAULT_CERTIFICATE_PROVIDER, metadata={"alias": BOOTSTRAP_CERTIFICATES.name}
     )
 
 
@@ -86,12 +86,9 @@ def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> No
         charm: An instance of the charm.
         provider (str): The certificates provider to persist.
     """
-    for relation in charm.model.relations[CLUSTER_RELATION]:
-        app_data = relation.data[charm.app]
-        if not app_data.get(CLUSTER_CERTIFICATES_KEY):
-            app_data[CLUSTER_CERTIFICATES_KEY] = provider
-
-    for relation in charm.model.relations.get(CLUSTER_WORKER_RELATION, []):
+    peers = charm.model.relations[CLUSTER_RELATION]
+    workers = charm.model.relations.get(CLUSTER_WORKER_RELATION, [])
+    for relation in peers + workers:
         app_data = relation.data[charm.app]
         if not app_data.get(CLUSTER_CERTIFICATES_KEY):
             app_data[CLUSTER_CERTIFICATES_KEY] = provider
@@ -140,9 +137,9 @@ class Controller:
         immutable, with_auto = self.immutable, self._with_auto
         return ConfigOptions(
             datastore=immutable.datastore or with_auto.datastore,
+            certificates=immutable.certificates or with_auto.certificates,
             pod_cidr=immutable.pod_cidr or with_auto.pod_cidr,
             service_cidr=immutable.service_cidr or with_auto.service_cidr,
-            certificates=immutable.certificates or with_auto.certificates,
         )
 
     def validate(self) -> None:
@@ -199,8 +196,8 @@ class Controller:
         """
         opts = ConfigOptions()
         if self._charm.is_control_plane:
-            opts.certificates = BOOTSTRAP_CERTIFICATES.get(self._charm)
             opts.datastore = BOOTSTRAP_DATASTORE.get(self._charm)
+            opts.certificates = BOOTSTRAP_CERTIFICATES.get(self._charm)
             opts.pod_cidr = BOOTSTRAP_POD_CIDR.get(self._charm)
             opts.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self._charm)
 
@@ -227,32 +224,33 @@ class Controller:
 
         return opts
 
-    # def prevent(self):
-    #     """Prevent bootstrap config changes after bootstrap."""
-    #     log.info("Preventing bootstrap config changes after bootstrap")
-
-    #     juju = self._juju
-    #     for field in dataclasses.fields(self.immutable):
-    #         if getattr(juju, field.name) == "auto":
-    #             # Auto-mapped options are not immutable.
-    #             continue
-    #         cur_val = getattr(self.immutable, field.name)
-    #         if cur_val is None:
-    #             # If the current value is None, it means it was never set.
-    #             continue
-    #         alias = field.metadata["alias"]
-    #         if cur_val != getattr(juju, field.name):
-    #             log.warning(
-    #                 "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
-    #                 field.name,
-    #                 alias,
-    #                 getattr(juju, field.name),
-    #                 self._charm.app.name,
-    #                 alias,
-    #                 cur_val,
-    #             )
-    #             msg = f"{alias} is immutable; revert to '{cur_val}'"
-    #             context_status.add(ops.BlockedStatus(msg))
+    def prevent(self) -> Optional[ops.BlockedStatus]:
+        """Prevent bootstrap config changes after bootstrap."""
+        juju = self._juju
+        blockers = []
+        for field in dataclasses.fields(self.immutable):
+            cur_val = getattr(self.immutable, field.name)
+            if cur_val is None:
+                # If the current value is None, it means it was never set.
+                log.info("Skipping immutability check for %s==None", field.name)
+                continue
+            if getattr(juju, field.name) == "auto":
+                # Auto-mapped options are not immutable.
+                log.info("Skipping immutability check for %s='%s'", field.name, "auto")
+                continue
+            alias = field.metadata["alias"]
+            if cur_val != getattr(juju, field.name):
+                log.warning(
+                    "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
+                    alias,
+                    getattr(juju, field.name),
+                    self._charm.app.name,
+                    alias,
+                    cur_val,
+                )
+                msg = f"{alias} is immutable; revert to '{cur_val}'"
+                blockers.append(ops.BlockedStatus(msg))
+        return next(iter(blockers), None)
 
 
 @context_status.on_error(

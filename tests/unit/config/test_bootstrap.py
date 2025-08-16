@@ -189,3 +189,47 @@ def test_persist(mock_persist, harness):
     assert harness.charm.bootstrap.immutable.pod_cidr == "10.1.0.0/16"
     assert harness.charm.bootstrap.immutable.service_cidr == "10.1.2.0/24"
     assert harness.charm.bootstrap.immutable.certificates == "TRUSTED"
+
+
+@pytest.mark.parametrize(
+    "error_key",
+    [
+        "bootstrap-datastore",
+        "bootstrap-certificates",
+        "bootstrap-pod-cidr",
+        "bootstrap-service-cidr",
+        None,
+    ],
+)
+def test_prevent(harness, error_key):
+    """Test preventing changes to immutable bootstrap configuration options."""
+    if harness.charm.is_worker:
+        pytest.skip("Persist is only relevant for control plane charms.")
+
+    harness.disable_hooks()
+    harness.add_relation(config.bootstrap.CLUSTER_RELATION, harness.charm.app.name)
+    config.bootstrap._persist_certificates_provider(harness.charm, "self-signed")
+    cc = harness.charm.api_manager.get_cluster_config = mock.MagicMock()
+    cc.return_value.metadata.datastore.type = "etcd"
+    cc.return_value.metadata.pod_cidr = "10.1.0.0/16"
+    cc.return_value.metadata.service_cidr = "10.152.183.0/24"
+    harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
+
+    adjusted = {
+        "bootstrap-datastore": "dqlite",
+        "bootstrap-certificates": "external",
+        "bootstrap-pod-cidr": "10.2.0.0/16",
+        "bootstrap-service-cidr": "10.1.3.0/24",
+    }
+    for k in tuple(adjusted.keys()):
+        if k == error_key:
+            break
+        adjusted.pop(k)
+
+    harness.update_config(adjusted)
+    blocked_by = harness.charm.bootstrap.prevent()
+    if error_key:
+        assert blocked_by is not None
+        assert error_key in blocked_by.message
+    else:
+        assert blocked_by is None

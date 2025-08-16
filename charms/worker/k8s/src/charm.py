@@ -180,7 +180,6 @@ class K8sCharm(ops.CharmBase):
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
         )
         self.cos = COSIntegration(self)
-        self.update_status = update_status.Handler(self, self.upgrade)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -213,6 +212,7 @@ class K8sCharm(ops.CharmBase):
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
         self.bootstrap = config.bootstrap.Controller(self)
         self.certificates = K8sCertificates(self, self.bootstrap, self.certificate_refresh)
+        self.update_status = update_status.Handler(self, self.bootstrap, self.upgrade)
         self.reconciler = Reconciler(
             self,
             self._reconcile,
