@@ -552,7 +552,6 @@ class K8sCharm(ops.CharmBase):
             address=f"{node_ips[0]}:{K8SD_PORT}",
             config=self._assemble_bootstrap_config(),
         )
-        self.bootstrap.persist()
         self.api_manager.bootstrap_k8s_snap(payload)
 
     @on_error(
@@ -980,6 +979,7 @@ class K8sCharm(ops.CharmBase):
             self._k8s_info(event)
             self._configure_external_load_balancer()
             self._bootstrap_k8s_snap()
+            self.bootstrap.persist()
             self._ensure_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()

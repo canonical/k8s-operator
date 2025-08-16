@@ -80,8 +80,15 @@ config:
       description: |
         The datastore to use in Canonical Kubernetes.
         This can only be reset after deployment.
+
         Allowed values are auto, managed-etcd, dqlite and etcd.
-        If "etcd" is chosen, the charm should be integrated with the etcd charm.
+
+        * auto:         The charm will automatically bootstrap with the default
+                        datastore managed by the k8s snap.
+        * managed-etcd: The charm will bootstrap with a managed-etcd datastore.
+        * dqlite:       The charm will bootstrap with a k8s-dqlite datastore.
+        * etcd:         The charm will bootstrap with an external etcd datastore.
+                        The charm will block until the etcd charm is integrated.
     bootstrap-certificates:
       type: string
       default: auto
