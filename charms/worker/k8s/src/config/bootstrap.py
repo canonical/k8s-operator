@@ -86,12 +86,9 @@ def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> No
         charm: An instance of the charm.
         provider (str): The certificates provider to persist.
     """
-    for relation in charm.model.relations[CLUSTER_RELATION]:
-        app_data = relation.data[charm.app]
-        if not app_data.get(CLUSTER_CERTIFICATES_KEY):
-            app_data[CLUSTER_CERTIFICATES_KEY] = provider
-
-    for relation in charm.model.relations.get(CLUSTER_WORKER_RELATION, []):
+    peers = charm.model.relations[CLUSTER_RELATION]
+    workers = charm.model.relations.get(CLUSTER_WORKER_RELATION, [])
+    for relation in peers + workers:
         app_data = relation.data[charm.app]
         if not app_data.get(CLUSTER_CERTIFICATES_KEY):
             app_data[CLUSTER_CERTIFICATES_KEY] = provider
@@ -226,33 +223,6 @@ class Controller:
                 opts.service_cidr = val
 
         return opts
-
-    # def prevent(self):
-    #     """Prevent bootstrap config changes after bootstrap."""
-    #     log.info("Preventing bootstrap config changes after bootstrap")
-
-    #     juju = self._juju
-    #     for field in dataclasses.fields(self.immutable):
-    #         if getattr(juju, field.name) == "auto":
-    #             # Auto-mapped options are not immutable.
-    #             continue
-    #         cur_val = getattr(self.immutable, field.name)
-    #         if cur_val is None:
-    #             # If the current value is None, it means it was never set.
-    #             continue
-    #         alias = field.metadata["alias"]
-    #         if cur_val != getattr(juju, field.name):
-    #             log.warning(
-    #                 "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
-    #                 field.name,
-    #                 alias,
-    #                 getattr(juju, field.name),
-    #                 self._charm.app.name,
-    #                 alias,
-    #                 cur_val,
-    #             )
-    #             msg = f"{alias} is immutable; revert to '{cur_val}'"
-    #             context_status.add(ops.BlockedStatus(msg))
 
 
 @context_status.on_error(
