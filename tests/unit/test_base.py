@@ -13,8 +13,8 @@ from unittest import mock
 
 import containerd
 import ops
-import ops.testing
 import pytest
+from literals import CLUSTER_CERTIFICATES_KEY
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 from charms.k8s.v0.k8sd_api_manager import (
@@ -98,11 +98,16 @@ def test_set_leader(harness):
     harness.charm._ensure_cert_sans = mock.MagicMock()
     public_addr = "11.12.13.14"
     remote_addr = "11.12.13.15"
+    harness.disable_hooks()
+    harness.add_relation(
+        "cluster", harness.charm.app.name, app_data={CLUSTER_CERTIFICATES_KEY: "self-signed"}
+    )
+    harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
     if harness.charm.is_control_plane:
         harness.add_network(
             public_addr, endpoint="cluster", ingress_addresses=[public_addr, remote_addr]
         )
-        harness.add_relation("cluster", "remote")
+    harness.enable_hooks()
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)

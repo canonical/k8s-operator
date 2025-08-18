@@ -48,7 +48,7 @@ class ConfigOptions:
         default=None, metadata={"alias": BOOTSTRAP_SERVICE_CIDR.name}
     )
     certificates: str = dataclasses.field(
-        default=DEFAULT_CERTIFICATE_PROVIDER, metadata={"alias": BOOTSTRAP_CERTIFICATES.name}
+        default="", metadata={"alias": BOOTSTRAP_CERTIFICATES.name}
     )
 
 
@@ -70,7 +70,7 @@ def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
         # if this node is online, we know that a certificates provider is already set.
         try:
             charm.api_manager.get_node_status().metadata
-            provider = "self-signed" if pki.check_ca_key() else "external"
+            provider = DEFAULT_CERTIFICATE_PROVIDER if pki.check_ca_key() else "external"
         except (k8sd.K8sdConnectionError, k8sd.InvalidResponseError) as e:
             log.error("Failed to get node status: %s", e)
 
@@ -213,6 +213,8 @@ class Controller:
         opts = ConfigOptions()
         juju = self._juju
         if self._charm.is_control_plane:
+            # Default to self-signed only if the charm is a control plane.
+            opts.certificates = DEFAULT_CERTIFICATE_PROVIDER
             if (val := juju.datastore) != "auto":
                 opts.datastore = val
             if (val := juju.certificates) != "auto":
