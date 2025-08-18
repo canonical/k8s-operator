@@ -139,6 +139,7 @@ class Controller:
         opts = ConfigOptions()
         juju = self._juju
         if self._charm.is_control_plane:
+            # Default to self-signed only if the charm is a control plane.
             if (val := juju.datastore) != "auto":
                 opts.datastore = val
             if (val := juju.pod_cidr) != "auto":

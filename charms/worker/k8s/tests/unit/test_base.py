@@ -13,7 +13,6 @@ from unittest import mock
 
 import containerd
 import ops
-import ops.testing
 import pytest
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
