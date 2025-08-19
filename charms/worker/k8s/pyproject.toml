@@ -34,6 +34,7 @@ unit = [
     "pytest>=8.3.4",
     "pytest-sugar"
 ]
+docs = ["vale"]
 static = ["bandit"]
 update = ["pyyaml"]
 lint = [
