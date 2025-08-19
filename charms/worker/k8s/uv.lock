@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.11'",
@@ -520,7 +520,7 @@ name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/9f/a65090624ecf468cdca03533906e7c69ed7588582240cfe7cc9e770b50eb/exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88", size = 29749, upload-time = "2025-05-10T17:42:51.123Z" }
 wheels = [
@@ -792,6 +792,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+docs = [
+    { name = "vale" },
+]
 integration = [
     { name = "juju" },
     { name = "pydantic" },
@@ -847,6 +850,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+docs = [{ name = "vale" }]
 integration = [
     { name = "juju" },
     { name = "pydantic" },
@@ -1940,6 +1944,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/15/22/9ee70a2574a4f4599c47dd506532914ce044817c7752a79b6a51286319bc/urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760", size = 393185, upload-time = "2025-06-18T14:07:41.644Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/c2/fe1e52489ae3122415c51f387e221dd0773709bad6c6cdaa599e8a2c5185/urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc", size = 129795, upload-time = "2025-06-18T14:07:40.39Z" },
+]
+
+[[package]]
+name = "vale"
+version = "3.12.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/09/0254ecbf8847a3b926e77284568ce30bcb3485dc5b065f7ec3f7eb61afa5/vale-3.12.0.0.tar.gz", hash = "sha256:26bf05326e8fbc878edb782fc9ecee87b826395ba00c066d91ef87a4ed6a6fed", size = 5311, upload-time = "2025-06-10T08:57:28.246Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/e5/bbd5a55e50b75de4f3b98b91262191004ba069f8ec2fd36e8bd066177de8/vale-3.12.0.0-py3-none-any.whl", hash = "sha256:bb5f0907bfdbb61e3a11097d4e2b771b2796be2c4af94a45b09f74db39c50d30", size = 5904, upload-time = "2025-06-10T08:57:26.276Z" },
 ]
 
 [[package]]
