@@ -111,7 +111,7 @@ config:
         https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
     bootstrap-pod-cidr:
       type: string
-      default: "10.1.0.0/16"
+      default: auto
       description: |
         Comma-separated CIDR blocks for IP addresses that can be assigned
         to pods within the cluster. Can contain at most 2 blocks, one for IPv4
@@ -128,7 +128,7 @@ config:
           - "2001:db8::/32,192.0.2.0/24"
     bootstrap-service-cidr:
       type: string
-      default: 10.152.183.0/24
+      default: auto
       description: |
         Comma-separated CIDR blocks for IP addresses that can be assigned
         to services within the cluster. Can contain at most 2 blocks, one for IPv4

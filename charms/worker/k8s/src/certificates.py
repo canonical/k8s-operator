@@ -3,7 +3,6 @@
 
 """K8s Certificates module."""
 
-import ipaddress
 import logging
 from string import Template
 from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
@@ -258,20 +257,11 @@ class K8sCertificates(ops.Object):
         Raises:
             ValueError: If the service CIDR is invalid.
         """
-        service_cidr = self._bootstrap.config.service_cidr
-        if not service_cidr:
-            raise ValueError("Service CIDR is not configured")
-
-        service_ips = set()
-        for cidr in service_cidr.split(","):
-            cidr = cidr.strip()
-            try:
-                network = ipaddress.ip_network(cidr)
-                service_ips.add(str(network[1]))  # first usable IP from the CIDR
-            except ValueError:
-                log.exception("Invalid service CIDR: %s", cidr)
-                raise
-        return service_ips
+        service_cidr = self._bootstrap.config.service_cidr or ""
+        cidrs = bootstrap.valid_cidr(
+            service_cidr, bootstrap.BOOTSTRAP_SERVICE_CIDR.name, required=True
+        )
+        return {str(svc_ip[1]) for svc_ip in cidrs}
 
     def _get_validated_certificate(
         self, request: CertificateRequestAttributes

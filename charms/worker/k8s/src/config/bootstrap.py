@@ -5,7 +5,9 @@
 
 """Bootstrap configuration options."""
 
+import collections
 import dataclasses
+import ipaddress
 import logging
 from typing import List, Optional
 
@@ -50,6 +52,41 @@ class ConfigOptions:
     certificates: str = dataclasses.field(
         default="", metadata={"alias": BOOTSTRAP_CERTIFICATES.name}
     )
+
+
+def valid_cidr(
+    cidr: str, name: str, required: bool = False
+) -> set[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Validate a CIDR block.
+
+    Args:
+        cidr: The CIDR block to validate.
+        name: The name of the configuration option for logging.
+        required: Whether the CIDR block is required.
+
+    Raises:
+        ValueError: If the CIDR block is invalid.
+    """
+    if not cidr and required:
+        raise ValueError(f"{name} is required.")
+
+    user_cidr: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for cidr in cidr.strip().split(","):
+        if not cidr.strip():
+            continue
+        net = ipaddress.ip_network(cidr)  # Validate the CIDR format.
+        if net.prefixlen == net.max_prefixlen:
+            raise ValueError(f"CIDR '{cidr}' is a single IP address.")
+        user_cidr.append(net)
+
+    if not (1 <= len(user_cidr) <= 2):
+        raise ValueError(f"{name} must contain 1 or 2 CIDR blocks, not {len(user_cidr)}.")
+
+    if len(user_cidr) == 2:
+        counter = collections.Counter(ipaddress.ip_network(c).version for c in user_cidr)
+        if counter[4] != 1 or counter[6] != 1:
+            raise ValueError(f"{name} must contain one IPv4 and one IPv6 CIDR block.")
+    return set(user_cidr)
 
 
 def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
@@ -165,6 +202,13 @@ class Controller:
                     ", ".join(sorted(SUPPORTED_CERTIFICATES)),
                 )
                 raise ValueError(f"{name}='{config.certificates}' is invalid.")
+            if self._charm.is_worker:
+                return  # Workers do not validate CIDRs.
+            if (cidr := config.service_cidr) or config.certificates == "external":
+                required = config.certificates == "external"
+                valid_cidr(cidr or "", BOOTSTRAP_SERVICE_CIDR.name, required)
+            if cidr := config.pod_cidr:
+                valid_cidr(cidr, BOOTSTRAP_POD_CIDR.name)
         except ValueError as e:
             m = str(e)
             log.error("Invalid bootstrap configuration: %s", m)
