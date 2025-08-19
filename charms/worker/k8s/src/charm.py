@@ -29,6 +29,7 @@ from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import config.arg_files
+import config.bootstrap
 import config.extra_args
 import containerd
 import k8s.node

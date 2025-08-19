@@ -5,9 +5,11 @@
 
 """Bootstrap configuration options."""
 
+import collections
 import dataclasses
+import ipaddress
 import logging
-from typing import List, Optional
+from typing import List, Optional, Set, Union
 
 import ops
 from literals import (
@@ -24,6 +26,7 @@ import charms.contextual_status as context_status
 import charms.k8s.v0.k8sd_api_manager as k8sd
 
 log = logging.getLogger(__name__)
+AnyIPNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 
 
 @dataclasses.dataclass
@@ -39,6 +42,39 @@ class ConfigOptions:
     service_cidr: Optional[str] = dataclasses.field(
         default=None, metadata={"alias": BOOTSTRAP_SERVICE_CIDR.name}
     )
+
+
+def valid_cidr(cidr: str, name: str, required: bool = False) -> Set[AnyIPNetwork]:
+    """Validate a CIDR block.
+
+    Args:
+        cidr: The CIDR block to validate.
+        name: The name of the configuration option for logging.
+        required: Whether the CIDR block is required.
+
+    Raises:
+        ValueError: If the CIDR block is invalid.
+    """
+    if not cidr and required:
+        raise ValueError(f"{name} is required.")
+
+    user_cidr: List[AnyIPNetwork] = []
+    for cidr in cidr.strip().split(","):
+        if not cidr.strip():
+            continue
+        net = ipaddress.ip_network(cidr)  # Validate the CIDR format.
+        if net.prefixlen == net.max_prefixlen:
+            raise ValueError(f"CIDR '{cidr}' is a single IP address.")
+        user_cidr.append(net)
+
+    if not (1 <= len(user_cidr) <= 2):
+        raise ValueError(f"{name} must contain 1 or 2 CIDR blocks, not {len(user_cidr)}.")
+
+    if len(user_cidr) == 2:
+        counter = collections.Counter(ipaddress.ip_network(c).version for c in user_cidr)
+        if counter[4] != 1 or counter[6] != 1:
+            raise ValueError(f"{name} must contain one IPv4 and one IPv6 CIDR block.")
+    return set(user_cidr)
 
 
 class Controller:
@@ -101,6 +137,12 @@ class Controller:
                     ", ".join(sorted(drop_none)),
                 )
                 raise ValueError(f"{name}='{config.datastore}' is invalid.")
+            if self._charm.is_worker:
+                return  # Workers do not validate CIDRs.
+            if cidr := config.service_cidr:
+                valid_cidr(cidr or "", BOOTSTRAP_SERVICE_CIDR.name)
+            if cidr := config.pod_cidr:
+                valid_cidr(cidr, BOOTSTRAP_POD_CIDR.name)
         except ValueError as e:
             m = str(e)
             log.error("Invalid bootstrap configuration: %s", m)
