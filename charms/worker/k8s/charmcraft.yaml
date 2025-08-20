@@ -121,11 +121,10 @@ config:
         After deployment it is not possible to change the size of
         the IP range.
 
-        Examples:
-          - "192.0.2.0/24"
-          - "2001:db8::/32"
-          - "192.0.2.0/24,2001:db8::/32"
-          - "2001:db8::/32,192.0.2.0/24"
+        * "192.0.2.0/24"
+        * "2001:db8::/32"
+        * "192.0.2.0/24,2001:db8::/32"
+        * "2001:db8::/32,192.0.2.0/24"
     bootstrap-service-cidr:
       type: string
       default: auto
@@ -138,11 +137,12 @@ config:
         After deployment it is not possible to change the size of
         the IP range.
 
-        Examples:
-          - "192.0.2.0/24"
-          - "2001:db8::/32"
-          - "192.0.2.0/24,2001:db8::/32"
-          - "2001:db8::/32,192.0.2.0/24"
+        * "auto" - The charm will bootstrap with the defaults from the k8s snap
+                   Invalid when bootstrap-certificates is set to "external"
+        * "192.0.2.0/24"
+        * "2001:db8::/32"
+        * "192.0.2.0/24,2001:db8::/32"
+        * "2001:db8::/32,192.0.2.0/24"
     containerd-custom-registries:
       type: string
       default: "[]"
