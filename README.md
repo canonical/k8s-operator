@@ -1,4 +1,4 @@
-# k8s charms
+# Canonical Kubernetes charms
 
 [![Get K8s from the Charmhub](https://charmhub.io/k8s/badge.svg)](https://charmhub.io/k8s)
 [![Get K8s-Worker from the Charmhub](https://charmhub.io/k8s-worker/badge.svg)](https://charmhub.io/k8s-worker)
@@ -20,12 +20,12 @@ certificate managers.
 
 This charm provides the following running components:
 
-* kube-apiserver
-* kube-scheduler
-* kube-controller-manager
-* kube-proxy
-* kubelet
-* containerd
+* `kube-apiserver`
+* `kube-scheduler`
+* `kube-controller-manager`
+* `kube-proxy`
+* `kubelet`
+* `containerd`
 
 This charm can optionally disable the following components:
 
