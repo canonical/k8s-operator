@@ -98,7 +98,7 @@ def test_validate_datastore(harness):
         harness.charm.bootstrap.validate()
     assert "bootstrap-datastore='INVALID' is invalid." in str(ie.value)
 
-    harness.update_config({"bootstrap-datastore": "auto"})
+    harness.update_config({"bootstrap-datastore": ""})
     harness.charm.bootstrap.validate()
 
 
@@ -108,6 +108,7 @@ def test_persist(harness):
         pytest.skip("Persist is only relevant for control plane charms.")
 
     harness.disable_hooks()
+    harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
     harness.update_config(
         {
             "bootstrap-datastore": "etcd",
