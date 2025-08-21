@@ -134,7 +134,7 @@ def test_load_immutable(harness):
 def test_validate_certificates(harness):
     """Test validating the bootstrap-certificates option."""
     harness.disable_hooks()
-    harness.update_config({"bootstrap-datastore": "auto"})
+    harness.update_config({"bootstrap-datastore": ""})
     harness.add_relation(config.bootstrap.CLUSTER_RELATION, harness.charm.app.name)
     config.bootstrap._persist_certificates_provider(harness.charm, "INVALID")
     harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
@@ -160,10 +160,11 @@ def test_validate_datastore(harness):
         harness.charm.bootstrap.validate()
     assert "bootstrap-datastore='INVALID' is invalid." in str(ie.value)
 
-    harness.update_config({"bootstrap-datastore": "auto"})
+    harness.update_config({"bootstrap-datastore": ""})
     harness.charm.bootstrap.validate()
 
 
+@mock.patch("config.bootstrap._load_certificates_provider", mock.MagicMock(return_value="TRUSTED"))
 @mock.patch("config.bootstrap._persist_certificates_provider")
 def test_persist(mock_persist, harness):
     """Test persisting the bootstrap configuration options."""
@@ -171,18 +172,18 @@ def test_persist(mock_persist, harness):
         pytest.skip("Persist is only relevant for control plane charms.")
 
     harness.disable_hooks()
+    harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
     harness.update_config(
         {
             "bootstrap-datastore": "etcd",
             "bootstrap-pod-cidr": "10.1.0.0/16",
             "bootstrap-service-cidr": "10.1.2.0/24",
-            "bootstrap-certificates": "TRUSTED",
         }
     )
     assert harness.charm.bootstrap.immutable.datastore is None
     assert harness.charm.bootstrap.immutable.pod_cidr is None
     assert harness.charm.bootstrap.immutable.service_cidr is None
-    assert harness.charm.bootstrap.immutable.certificates == ""
+    assert harness.charm.bootstrap.immutable.certificates == "TRUSTED"
     harness.charm.bootstrap.persist()
     mock_persist.assert_called_once_with(harness.charm, "TRUSTED")
     assert harness.charm.bootstrap.immutable.datastore == "etcd"

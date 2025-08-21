@@ -171,12 +171,12 @@ class Controller:
     @property
     def config(self) -> ConfigOptions:
         """Return the current bootstrap configuration options."""
-        immutable, with_auto = self.immutable, self._with_auto
+        immutable, juju = self.immutable, self._juju
         return ConfigOptions(
-            datastore=immutable.datastore or with_auto.datastore,
-            pod_cidr=immutable.pod_cidr or with_auto.pod_cidr,
-            service_cidr=immutable.service_cidr or with_auto.service_cidr,
-            certificates=immutable.certificates or with_auto.certificates,
+            datastore=immutable.datastore or juju.datastore,
+            pod_cidr=immutable.pod_cidr or juju.pod_cidr,
+            service_cidr=immutable.service_cidr or juju.service_cidr,
+            certificates=immutable.certificates or juju.certificates,
         )
 
     def validate(self) -> None:
@@ -233,42 +233,23 @@ class Controller:
 
     @property
     def _juju(self) -> ConfigOptions:
-        """Return the bootstrap configuration options from the juju config.
-
-        Options are always loaded from the charm config, or mapped through the default
-        if they are set to "auto".
-        """
-        opts = ConfigOptions()
-        if self._charm.is_control_plane:
-            opts.certificates = BOOTSTRAP_CERTIFICATES.get(self._charm)
-            opts.datastore = BOOTSTRAP_DATASTORE.get(self._charm)
-            opts.pod_cidr = BOOTSTRAP_POD_CIDR.get(self._charm)
-            opts.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self._charm)
-
-        return opts
-
-    @property
-    def _with_auto(self) -> ConfigOptions:
         """Return the bootstrap configuration options from the juju config with auto-mapping.
 
         Options are always loaded from the charm config, or mapped through the default
-        if they are set to "auto".
+        if they are set to "".
         """
-        opts = ConfigOptions()
-        juju = self._juju
+        juju, empty = ConfigOptions(), ""
         if self._charm.is_control_plane:
             # Default to self-signed only if the charm is a control plane.
-            opts.certificates = DEFAULT_CERTIFICATE_PROVIDER
-            if (val := juju.datastore) != "auto":
-                opts.datastore = val
-            if (val := juju.certificates) != "auto":
-                opts.certificates = val
-            if (val := juju.pod_cidr) != "auto":
-                opts.pod_cidr = val
-            if (val := juju.service_cidr) != "auto":
-                opts.service_cidr = val
+            juju.certificates = DEFAULT_CERTIFICATE_PROVIDER
+            if (val := BOOTSTRAP_DATASTORE.get(self._charm)) != empty:
+                juju.datastore = val
+            if (val := BOOTSTRAP_POD_CIDR.get(self._charm)) != empty:
+                juju.pod_cidr = val
+            if (val := BOOTSTRAP_SERVICE_CIDR.get(self._charm)) != empty:
+                juju.service_cidr = val
 
-        return opts
+        return juju
 
 
 @context_status.on_error(
