@@ -27,3 +27,7 @@ output "provides" {
     kube_control      = "kube-control"
   }
 }
+
+output "machines" {
+  value = juju_application.k8s.machines
+}

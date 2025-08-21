@@ -57,3 +57,9 @@ variable "units" {
   type        = number
   default     = 1
 }
+
+variable "machines" {
+  description = "Placement info for the application's units."
+  type        = set(string)
+  default     = null
+}

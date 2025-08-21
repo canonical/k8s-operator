@@ -73,3 +73,9 @@ variable "expose" {
     error_message = "If provided, expose must only contain the keys: cidrs, endpoints, spaces."
   }
 }
+
+variable "machines" {
+  description = "Placement info for the application's units."
+  type        = set(string)
+  default     = null
+}

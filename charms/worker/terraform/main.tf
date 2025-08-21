@@ -16,4 +16,5 @@ resource "juju_application" "k8s_worker" {
   constraints = var.constraints
   units       = var.units
   resources   = var.resources
+  machines    = var.machines
 }
