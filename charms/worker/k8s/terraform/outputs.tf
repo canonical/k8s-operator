@@ -10,7 +10,6 @@ output "requires" {
   value = {
     aws                     = "aws"
     azure                   = "azure"
-    certificates            = "certificates"
     etcd                    = "etcd"
     etcd_client             = "etcd-client"
     etcd_certificates       = "etcd-certificates"
