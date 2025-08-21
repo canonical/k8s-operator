@@ -124,7 +124,7 @@ charmcraft pack -p charms/worker
 charmcraft pack -p charms/worker/k8s
 ```
 
-## Tox Environments
+## Tox environments
 
 ### Formatting
 
@@ -158,7 +158,7 @@ If the github CI is complaining about invalid linting, it could be due to an upd
 tox run -re lint,static
 ```
 
-### Unit Testing
+### Unit testing
 
 This repo uses `pytest` to execute unit tests against the charm code, and create a coverage report after the unit tests are completed. The unit tests are defined in `./charms/worker/k8s/tests/unit/`
 
@@ -170,7 +170,7 @@ tox run -e unit,coverage-report
 
 Since the same charm code is executed on the worker and control-plane, in some unit test modules, we'll parameterize the tests to run against both the worker and control-plane to confirm both paths are tested. See `./charms/worker/k8s/tests/unit/test_base.py` for examples.
 
-### Integration Testing
+### Integration testing
 
 This repo uses `pytest` and `pytest-operator` to execute functional/integration tests against the charm files. The integration tests are defined in `./tests/integration`. Because this repo consists of two charms, the integration tests will build two charm files automatically without you doing anything. If you want to use specific charm files, just make sure the `.charm` files are in the top-level paths and the integration tests will find them if they are named appropriately (eg `./k8s-worker_*.charm` or `k8s_*.charm`). The charms are deployed according to the bundle defined in `./tests/integration/test-bundle.yaml`.
 
@@ -182,7 +182,7 @@ juju status -m controller
 
 You should see that there's a controller running on a cloud substrage like `aws` or `lxd` or some other cloud substrate that supports machines -- not a kubernetes substrate.
 
-`pytest-operator` will create a new juju model and deploy a cluster into each model for every test module (eg `test_something.py`). For now, only one module is defined at `.tests/integration/test_k8s.py`. When the tests complete (successful or not), `pytest-operator` will clean up the models for you.
+`pytest-operator` will create a new Juju model and deploy a cluster into each model for every test module (eg `test_something.py`). For now, only one module is defined at `.tests/integration/test_k8s.py`. When the tests complete (successful or not), `pytest-operator` will clean up the models for you.
 
 Running the integration tests are as easy as:
 
@@ -192,7 +192,7 @@ tox run -e integration-tests
 
 Sometimes you will want to debug certain situations, and having the models torn down after a failed test prevents you from debugging. There are a few tools that make post-test debugging possible.
 
-1) `juju-crashdump`: failed tests will create a juju-crashdump available in the toplevel with logs from each unit pulled out into an archive.
+1) `juju-crashdump`: failed tests will create a crash log available in the top-level with logs from each unit pulled out into an archive.
 2) Running with extra arguments
 
 Running the integration tests with extra arguments can be accomplished with
@@ -201,7 +201,7 @@ Running the integration tests with extra arguments can be accomplished with
 tox run -e integration-tests -- --positional --arguments
 ```
 
-#### COS Integration
+#### Canonical observability integration
 
 The COS integration tests are optional as these are slow/heavy tests. Currently, this suite only runs on LXD. If you are modifying something related to the COS integration, you can validate your changes through integration testing using the flag `--cos`. Also, when submitting a Pull Request with changes related to COS, you must include the `[COS]` tag in your Pull Request description. This will instruct GitHub Actions to execute the respective validation tests against your changes.
 
