@@ -12,14 +12,12 @@ import logging
 from typing import List, Optional
 
 import ops
-import pki
 from literals import (
     BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
     BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
     BOOTSTRAP_SERVICE_CIDR,
-    CLUSTER_CERTIFICATES_KEY,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     DATASTORE_NAME_MAPPING,
@@ -100,17 +98,7 @@ def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
     """
     app = charm.is_control_plane and charm.app or None
     relation = charm.model.get_relation(CLUSTER_RELATION)
-    provider = relation and relation.data[app or relation.app].get(CLUSTER_CERTIFICATES_KEY)
-
-    if not provider:
-        # Note(AKD): This could be an upgrade scenario where the provider is unset.
-        # if this node is online, we know that a certificates provider is already set.
-        try:
-            charm.api_manager.get_node_status().metadata
-            provider = DEFAULT_CERTIFICATE_PROVIDER if pki.check_ca_key() else "external"
-        except (k8sd.K8sdConnectionError, k8sd.InvalidResponseError) as e:
-            log.error("Failed to get node status: %s", e)
-
+    provider = relation and relation.data[app or relation.app].get(BOOTSTRAP_CERTIFICATES.name)
     return provider or ""
 
 
@@ -127,8 +115,8 @@ def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> No
     workers = charm.model.relations.get(CLUSTER_WORKER_RELATION, [])
     for relation in peers + workers:
         app_data = relation.data[charm.app]
-        if not app_data.get(CLUSTER_CERTIFICATES_KEY):
-            app_data[CLUSTER_CERTIFICATES_KEY] = provider
+        if not app_data.get(BOOTSTRAP_CERTIFICATES.name):
+            app_data[BOOTSTRAP_CERTIFICATES.name] = provider
 
 
 class Controller:

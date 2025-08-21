@@ -36,9 +36,7 @@ import config.resource
 import containerd
 import k8s.node
 import ops
-import utils
 import yaml
-from certificates import K8sCertificates, RefreshCertificates
 from cloud_integration import CloudIntegration
 from config.cluster import assemble_cluster_config
 from cos_integration import COSIntegration
@@ -151,12 +149,10 @@ class K8sCharm(ops.CharmBase):
         lead_control_plane: true if this is a control-plane unit and its the leader
         is_upgrade_granted: true if the upgrade has been granted
         datastore: the datastore used for Kubernetes
-        certificate_refresh: event source for certificate refresh
         external_load_balancer_address: the external load balancer address, if available
     """
 
     _stored = ops.StoredState()
-    certificate_refresh = ops.EventSource(RefreshCertificates)
 
     def __init__(self, *args):
         """Initialise the K8s charm.
@@ -212,14 +208,11 @@ class K8sCharm(ops.CharmBase):
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
         self.bootstrap = config.bootstrap.Controller(self)
-        self.certificates = K8sCertificates(self, self.bootstrap, self.certificate_refresh)
         self.reconciler = Reconciler(
             self,
             self._reconcile,
             exit_status=self.update_status.active_status,
-            custom_events=self.certificates.events,
         )
-        self.framework.observe(self.on.refresh_certs_action, self._on_refresh_certs_action)
 
     @property
     def external_load_balancer_address(self) -> str:
@@ -477,7 +470,6 @@ class K8sCharm(ops.CharmBase):
             BootstrapConfig: The bootstrap configuration object.
         """
         bootstrap_config = BootstrapConfig.model_construct()
-        self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = assemble_cluster_config(
             self, "external" if self.xcp.has_xcp else None
@@ -929,7 +921,6 @@ class K8sCharm(ops.CharmBase):
             bootstrap_node_taints = config.bootstrap.node_taints(self)
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
-        self.certificates.configure_certificates(request.config)
         self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)
 
@@ -986,7 +977,6 @@ class K8sCharm(ops.CharmBase):
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._announce_kubernetes_version()
-            self.certificates.announce_certificates_config()
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
@@ -1168,14 +1158,6 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-
-        provider = self.certificates.get_provider_name()
-        if provider == "external":
-            # TODO: This should be implemented once k8s-snap offers an API endpoint
-            # to update the certificates in the node.
-            log.info("External certificates are used, skipping SANs update")
-            return
-
         extra_sans = self._get_extra_sans()
         if not extra_sans:
             log.info("No extra SANs to update")
@@ -1191,24 +1173,10 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if provider == "self-signed":
-                self.api_manager.refresh_certs(all_sans)
-            elif provider == "external":
-                self.certificate_refresh.emit()
+            self.api_manager.refresh_certs(all_sans)
             log.info("Certificates have been refreshed")
 
         log.info("Certificate SANs are up-to-date")
-
-    def _on_refresh_certs_action(self, event: ops.ActionEvent):
-        """Handle the refresh-certs action."""
-        if self.is_control_plane:
-            expires_in = event.params["expires-in"]
-            ttl_seconds = utils.ttl_to_seconds(expires_in)
-            sans = self._get_extra_sans()
-            try:
-                self.api_manager.refresh_certs(extra_sans=sans, expiration_seconds=ttl_seconds)
-            except (InvalidResponseError, K8sdConnectionError) as e:
-                event.fail(f"Failed to refresh certificates: {e}")
 
 
 if __name__ == "__main__":  # pragma: nocover

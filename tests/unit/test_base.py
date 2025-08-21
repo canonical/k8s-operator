@@ -14,7 +14,7 @@ from unittest import mock
 import containerd
 import ops
 import pytest
-from literals import CLUSTER_CERTIFICATES_KEY
+from literals import BOOTSTRAP_CERTIFICATES, DEFAULT_CERTIFICATE_PROVIDER
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 from charms.k8s.v0.k8sd_api_manager import (
@@ -100,7 +100,9 @@ def test_set_leader(harness):
     remote_addr = "11.12.13.15"
     harness.disable_hooks()
     harness.add_relation(
-        "cluster", harness.charm.app.name, app_data={CLUSTER_CERTIFICATES_KEY: "self-signed"}
+        "cluster",
+        harness.charm.app.name,
+        app_data={BOOTSTRAP_CERTIFICATES.name: DEFAULT_CERTIFICATE_PROVIDER},
     )
     harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
     if harness.charm.is_control_plane:
@@ -350,9 +352,7 @@ def test_ensure_cert_sans(harness):
         mock.patch.object(harness.charm, "_get_extra_sans") as mock_extra_sans,
         mock.patch("charm.get_certificate_sans", return_value=(["sans1"], ["1.2.3.4"])),
         mock.patch.object(harness.charm.api_manager, "refresh_certs") as mock_api_manager,
-        mock.patch("charm.K8sCertificates.get_provider_name") as mock_get_cert_provider,
     ):
-        mock_get_cert_provider.return_value = "self-signed"
         mock_extra_sans.return_value = ["sans1", "sans2"]
         harness.charm._ensure_cert_sans()
         mock_api_manager.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])

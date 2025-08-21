@@ -81,26 +81,24 @@ def test_load_certificates_provider_not_bootstrapped(harness):
     assert provider == "TRUSTED"
 
 
-@pytest.mark.parametrize("uplifted", [True, False], ids=["has ca", "no ca"])
-@mock.patch("pki.check_ca_key")
-def test_load_certificates_provider_bootstrapped(mock_check_ca_key, harness, uplifted):
+def test_load_certificates_provider_bootstrapped(harness):
     """Test loading the certificates provider from the cluster relation when bootstrapped."""
     harness.charm.api_manager.get_node_status = mock.MagicMock()
-    mock_check_ca_key.return_value = uplifted
-    expected_provider = "self-signed" if uplifted else "external"
+    undefined_provider = ""
 
     # Test with no relation
     harness.disable_hooks()
     provider = config.bootstrap._load_certificates_provider(harness.charm)
-    assert provider == expected_provider
+    assert provider == undefined_provider
 
     # test with a relation that has no data
     harness.add_relation(config.bootstrap.CLUSTER_RELATION, harness.charm.app.name)
     provider = config.bootstrap._load_certificates_provider(harness.charm)
-    assert provider == expected_provider
+    assert provider == undefined_provider
 
     # Test with a relation that has data
     config.bootstrap._persist_certificates_provider(harness.charm, "TRUSTED")
+    # Make sure the first persisted value is retained
     config.bootstrap._persist_certificates_provider(harness.charm, "UNCHANGED")
     provider = config.bootstrap._load_certificates_provider(harness.charm)
     assert provider == "TRUSTED"
