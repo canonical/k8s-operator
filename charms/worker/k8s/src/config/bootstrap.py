@@ -11,10 +11,8 @@ from collections import Counter
 from typing import Optional
 
 import ops
-import pki
 from config.option import CharmOption
 from literals import (
-    BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
     BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
@@ -84,7 +82,6 @@ class ConfigComparison:
 class BootstrapConfigOptions(BaseModel):
     """Charm config options that has a `bootstrap-` prefix."""
 
-    certificates: str = Field()
     datastore: str = Field()
     node_taints: str = Field()
     pod_cidr: str = Field()
@@ -105,15 +102,11 @@ class BootstrapConfigOptions(BaseModel):
         Returns:
             A BootstrapConfigOptions instance with the configuration options.
         """
-        # NOTE(Hue): certificates type should be determined based on the presence of the CA key.
-        certificates = "self-signed" if pki.check_ca_key() else "external"
-
         datastore = (
             cluster_config and cluster_config.datastore and cluster_config.datastore.type or ""
         )
 
         return BootstrapConfigOptions(
-            certificates=certificates,
             datastore=datastore,
             node_taints=" ".join(node_status.taints) if node_status.taints else "",
             pod_cidr=cluster_config and cluster_config.pod_cidr or "",
@@ -140,7 +133,6 @@ class BootstrapConfigOptions(BaseModel):
                     mapping=DATASTORE_NAME_MAPPING,
                 )
             )
-            test.append(ConfigComparison(charm, BOOTSTRAP_CERTIFICATES, self.certificates))
             test.append(ConfigComparison(charm, BOOTSTRAP_POD_CIDR, self.pod_cidr))
             test.append(ConfigComparison(charm, BOOTSTRAP_SERVICE_CIDR, self.service_cidr))
         test += [

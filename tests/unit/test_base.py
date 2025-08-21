@@ -153,7 +153,6 @@ def test_detect_bootstrap_config_change(harness, caplog):
         assert all(
             f"Cannot satisfy configuration {msg}=" in caplog.text
             for msg in [
-                "bootstrap-certificates",
                 "bootstrap-datastore",
                 "bootstrap-pod-cidr",
                 "bootstrap-service-cidr",
