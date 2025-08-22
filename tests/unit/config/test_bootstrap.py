@@ -129,6 +129,7 @@ def test_load_immutable(harness):
     assert immutable.certificates == "TRUSTED"
 
 
+@pytest.mark.xfail(reason="Certificate validation is currently disabled.")
 def test_validate_certificates(harness):
     """Test validating the bootstrap-certificates option."""
     harness.disable_hooks()

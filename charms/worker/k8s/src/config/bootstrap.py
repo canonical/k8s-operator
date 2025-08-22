@@ -189,7 +189,8 @@ class Controller:
                     config.certificates,
                     ", ".join(sorted(SUPPORTED_CERTIFICATES)),
                 )
-                raise ValueError(f"{name}='{config.certificates}' is invalid.")
+                # TODO: eventually re-enable this error when certificates feature is stable
+                # raise ValueError(f"{name}='{config.certificates}' is invalid.")
             if self._charm.is_worker:
                 return  # Workers do not validate CIDRs.
             if (cidr := config.service_cidr) or config.certificates == "external":
