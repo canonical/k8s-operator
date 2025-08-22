@@ -39,16 +39,14 @@ class ConfigOptions:
     """Charm options that has a `bootstrap-` prefix."""
 
     datastore: Optional[str] = dataclasses.field(
-        default=None, metadata={"alias": BOOTSTRAP_DATASTORE.name}
+        default=None, metadata={"option": BOOTSTRAP_DATASTORE}
     )
+    certificates: str = dataclasses.field(default="")
     pod_cidr: Optional[str] = dataclasses.field(
-        default=None, metadata={"alias": BOOTSTRAP_POD_CIDR.name}
+        default=None, metadata={"option": BOOTSTRAP_POD_CIDR}
     )
     service_cidr: Optional[str] = dataclasses.field(
-        default=None, metadata={"alias": BOOTSTRAP_SERVICE_CIDR.name}
-    )
-    certificates: str = dataclasses.field(
-        default="", metadata={"alias": BOOTSTRAP_CERTIFICATES.name}
+        default=None, metadata={"option": BOOTSTRAP_SERVICE_CIDR}
     )
 
 
@@ -170,9 +168,9 @@ class Controller:
         immutable, juju = self.immutable, self._juju
         return ConfigOptions(
             datastore=immutable.datastore or juju.datastore,
+            certificates=immutable.certificates or juju.certificates,
             pod_cidr=immutable.pod_cidr or juju.pod_cidr,
             service_cidr=immutable.service_cidr or juju.service_cidr,
-            certificates=immutable.certificates or juju.certificates,
         )
 
     def validate(self) -> None:
@@ -247,6 +245,37 @@ class Controller:
                 juju.service_cidr = val
 
         return juju
+
+    def prevent(self) -> Optional[ops.BlockedStatus]:
+        """Prevent bootstrap config changes after bootstrap."""
+        if not self._charm.is_control_plane:
+            # Only control plane nodes can have immutable bootstrap config.
+            return None
+        blockers = []
+        for field in dataclasses.fields(self.immutable):
+            cur_val = getattr(self.immutable, field.name)
+            option = field.metadata.get("option")
+            if cur_val is None or option is None:
+                # If the current value is None, it means it was never set.
+                log.info("Skipping immutability check for %s==None", field.name)
+                continue
+
+            if not (juju := option.get(self._charm)):
+                # Auto-mapped options are not immutable.
+                log.info("Skipping immutability check for %s=''", field.name)
+                continue
+            if cur_val != juju:
+                log.warning(
+                    "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
+                    option.name,
+                    juju,
+                    self._charm.app.name,
+                    option.name,
+                    cur_val,
+                )
+                msg = f"{option.name} is immutable; revert to '{cur_val}'"
+                blockers.append(ops.BlockedStatus(msg))
+        return next(iter(blockers), None)
 
 
 @context_status.on_error(

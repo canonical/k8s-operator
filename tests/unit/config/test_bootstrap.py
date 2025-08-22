@@ -7,6 +7,7 @@ import unittest.mock as mock
 
 import config.bootstrap
 import pytest
+from literals import DEFAULT_CERTIFICATE_PROVIDER
 
 import charms.contextual_status
 import charms.k8s.v0.k8sd_api_manager as k8sd
@@ -190,3 +191,49 @@ def test_persist(mock_persist, harness):
     assert harness.charm.bootstrap.immutable.pod_cidr == "10.1.0.0/16"
     assert harness.charm.bootstrap.immutable.service_cidr == "10.1.2.0/24"
     assert harness.charm.bootstrap.immutable.certificates == "TRUSTED"
+
+
+@pytest.mark.parametrize(
+    "error_key",
+    [
+        "bootstrap-datastore",
+        "bootstrap-pod-cidr",
+        "bootstrap-service-cidr",
+        None,
+    ],
+)
+@mock.patch(
+    "config.bootstrap._load_certificates_provider",
+    mock.MagicMock(return_value=DEFAULT_CERTIFICATE_PROVIDER),
+)
+def test_prevent(harness, error_key):
+    """Test preventing changes to immutable bootstrap configuration options."""
+    if harness.charm.is_worker:
+        pytest.skip("Persist is only relevant for control plane charms.")
+
+    harness.disable_hooks()
+    harness.add_relation(config.bootstrap.CLUSTER_RELATION, harness.charm.app.name)
+    harness.charm.api_manager.is_cluster_bootstrapped = mock.MagicMock(return_value=True)
+    cc = harness.charm.api_manager.get_cluster_config = mock.MagicMock()
+    cc.return_value.metadata.datastore.type = "etcd"
+    cc.return_value.metadata.pod_cidr = "10.1.0.0/16"
+    cc.return_value.metadata.service_cidr = "10.152.183.0/24"
+    harness.charm.bootstrap.immutable = harness.charm.bootstrap.load_immutable()
+
+    adjusted = {
+        "bootstrap-datastore": "dqlite",
+        "bootstrap-pod-cidr": "10.2.0.0/16",
+        "bootstrap-service-cidr": "10.1.3.0/24",
+    }
+    for k in tuple(adjusted.keys()):
+        if k == error_key:
+            break
+        adjusted.pop(k)
+
+    harness.update_config(adjusted)
+    blocked_by = harness.charm.bootstrap.prevent()
+    if error_key:
+        assert blocked_by is not None
+        assert blocked_by.message.startswith(error_key)
+    else:
+        assert blocked_by is None

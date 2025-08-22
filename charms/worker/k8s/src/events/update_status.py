@@ -13,6 +13,7 @@ from typing import List, Optional, cast
 
 import ops
 import reschedule
+from config.bootstrap import Controller as BootstrapController
 from inspector import ClusterInspector
 from k8s.node import Status, ready
 from protocols import K8sCharmProtocol
@@ -70,15 +71,19 @@ class Handler(ops.Object):
             the unit's status during the update process.
     """
 
-    def __init__(self, charm: K8sCharmProtocol, upgrade: K8sUpgrade):
+    def __init__(
+        self, charm: K8sCharmProtocol, bootstrap: BootstrapController, upgrade: K8sUpgrade
+    ):
         """Initialize the UpdateStatusEvent.
 
         Args:
             charm: The charm instance that is instantiating this event.
+            bootstrap: The bootstrap controller that manages the bootstrap config.
             upgrade: The upgrade instance that handles the upgrade process.
         """
         super().__init__(charm, "update_status")
         self.charm = charm
+        self.bootstrap = bootstrap
         self.upgrade = upgrade
         self.active_status = DynamicActiveStatus()
         self.charm.framework.observe(self.charm.on.update_status, self._on_update_status)
@@ -185,6 +190,8 @@ class Handler(ops.Object):
             final_status = ops.WaitingStatus(f"Node {name} {readiness.value}")
         elif final_status := self.unready_pods_waiting():
             log.warning("Unready pods detected: %s", final_status.message)
+        elif final_status := self.bootstrap.prevent():
+            log.warning("Bootstrap configuration changes blocked: %s", final_status.message)
         if final_status:
             status.add(final_status)
             trigger.create(reschedule.Period(seconds=30))
