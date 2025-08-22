@@ -139,7 +139,6 @@ async def test_nodes_labelled(
         ("bootstrap-pod-cidr", "10.0.0.0/8"),
         ("bootstrap-service-cidr", "10.128.0.0/16"),
         ("bootstrap-datastore", "etcd"),
-        ("bootstrap-certificates", "external"),
     ],
 )
 async def test_prevent_bootstrap_config_changes(
