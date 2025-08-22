@@ -191,7 +191,7 @@ class Handler(ops.Object):
         elif final_status := self.unready_pods_waiting():
             log.warning("Unready pods detected: %s", final_status.message)
         elif final_status := self.bootstrap.prevent():
-            log.warning("Bootstrap config changes are prevented: %s", final_status.message)
+            log.warning("Bootstrap configuration changes blocked: %s", final_status.message)
         if final_status:
             status.add(final_status)
             trigger.create(reschedule.Period(seconds=30))
