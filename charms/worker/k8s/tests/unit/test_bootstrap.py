@@ -66,6 +66,7 @@ def test_node_taints_invalid(harness, taints):
 def test_load_immutable(harness):
     """Test loading the immutable bootstrap configuration options."""
     if harness.charm.is_control_plane:
+        harness.charm.api_manager.is_cluster_bootstrapped = mock.MagicMock(return_value=True)
         cc = harness.charm.api_manager.get_cluster_config = mock.MagicMock()
         cc.return_value.metadata.datastore.type = "etcd"
         cc.return_value.metadata.pod_cidr = "10.1.0.0/16"
