@@ -144,15 +144,23 @@ class Controller:
         opts.certificates = _load_certificates_provider(self._charm)
 
         # Load from the immutable cluster storage.
+        if self._charm.is_worker:
+            log.debug("Loaded immutable config for worker")
+            return opts
+
+        if not self._charm.api_manager.is_cluster_bootstrapped():
+            log.debug("Cluster not bootstrapped, no immutable cluster config")
+            return opts
+
         try:
-            if self._charm.is_control_plane:
-                cluster = self._charm.api_manager.get_cluster_config().metadata
-                snap_ds = cluster.datastore and cluster.datastore.type
-                opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
-                opts.pod_cidr = cluster.pod_cidr
-                opts.service_cidr = cluster.service_cidr
+            cluster = self._charm.api_manager.get_cluster_config().metadata
+            snap_ds = cluster.datastore and cluster.datastore.type
+            opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
+            opts.pod_cidr = cluster.pod_cidr
+            opts.service_cidr = cluster.service_cidr
         except (k8sd.K8sdConnectionError, k8sd.InvalidResponseError) as e:
-            log.warning("Cannot load cluster config: %s", e)
+            log.warning("Failed to load cluster config: %s", e)
+            # Still return the options we have so far -- they will be validated later.
 
         return opts
 

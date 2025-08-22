@@ -109,6 +109,7 @@ def test_load_immutable(harness):
     harness.add_relation(config.bootstrap.CLUSTER_RELATION, harness.charm.app.name)
     config.bootstrap._persist_certificates_provider(harness.charm, "TRUSTED")
     if harness.charm.is_control_plane:
+        harness.charm.api_manager.is_cluster_bootstrapped = mock.MagicMock(return_value=True)
         cc = harness.charm.api_manager.get_cluster_config = mock.MagicMock()
         cc.return_value.metadata.datastore.type = "etcd"
         cc.return_value.metadata.pod_cidr = "10.1.0.0/16"
