@@ -5,6 +5,8 @@
 
 from pathlib import Path
 
+import config.option as option
+
 # Snap
 SNAP_NAME = "k8s"
 SNAP_DATASTORE_TYPE_K8S_DQLITE = "k8s-dqlite"
@@ -52,10 +54,20 @@ EXTERNAL_LOAD_BALANCER_PORT = 443
 APISERVER_PORT = 6443
 
 DATASTORE_NAME_MAPPING = {
+    None: None,
     DATASTORE_TYPE_EXTERNAL: SNAP_DATASTORE_TYPE_EXTERNAL,
     DATASTORE_TYPE_ETCD: SNAP_DATASTORE_TYPE_ETCD,
     DATASTORE_TYPE_K8S_DQLITE: SNAP_DATASTORE_TYPE_K8S_DQLITE,
 }
+
+# Control-Plane Options
+BOOTSTRAP_DATASTORE = option.StrOption("bootstrap-datastore")
+BOOTSTRAP_CERTIFICATES = option.StrOption("bootstrap-certificates")
+BOOTSTRAP_POD_CIDR = option.StrOption("bootstrap-pod-cidr")
+BOOTSTRAP_SERVICE_CIDR = option.StrOption("bootstrap-service-cidr")
+
+# Worker and Control Plane Options
+BOOTSTRAP_NODE_TAINTS = option.StrOption("bootstrap-node-taints")
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True

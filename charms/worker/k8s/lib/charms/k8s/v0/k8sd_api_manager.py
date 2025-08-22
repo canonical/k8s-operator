@@ -752,6 +752,32 @@ class RefreshCertificatesRunResponse(BaseRequestModel):
     metadata: RefreshCertificatesRunMetadata
 
 
+class GetClusterConfigMetadata(BaseModel, allow_population_by_field_name=True):
+    """Metadata containing the cluster config.
+
+    Attributes:
+        status (UserFacingClusterConfig): The configuration of the cluster.
+        datastore (UserFacingDatastoreConfig): The configuration of the datastore.
+        pod_cidr (str): The CIDR range for the pods in the cluster.
+        service_cidr (str): The CIDR range for the services in the cluster.
+    """
+
+    status: UserFacingClusterConfig
+    datastore: Optional[UserFacingDatastoreConfig] = Field(default=None)
+    pod_cidr: Optional[str] = Field(default=None, alias="pod-cidr")
+    service_cidr: Optional[str] = Field(default=None, alias="service-cidr")
+
+
+class GetClusterConfigResponse(BaseRequestModel):
+    """Response model for the get cluster config endpoint.
+
+    Attributes:
+        metadata (GetClusterConfigMetadata): Metadata containing the cluster config.
+    """
+
+    metadata: GetClusterConfigMetadata
+
+
 T = TypeVar("T", bound=BaseRequestModel)
 
 
@@ -965,6 +991,17 @@ class K8sdAPIManager:
         endpoint = "/1.0/k8sd/cluster/config"
         body = config.dict(exclude_none=True, by_alias=True)
         self._send_request(endpoint, "PUT", EmptyResponse, body)
+
+    def get_cluster_config(self) -> GetClusterConfigResponse:
+        """Retrieve the cluster configuration.
+
+        Worker nodes are not allowed to call this endpoint:
+        https://github.com/canonical/k8s-snap/blob/0a5edd2/src/k8s/pkg/k8sd/api/endpoints.go#L121-L126
+
+        Returns:
+            GetClusterConfigResponse: The cluster configuration.
+        """
+        return self._send_request("/1.0/k8sd/cluster/config", "GET", GetClusterConfigResponse)
 
     def get_cluster_status(self) -> GetClusterStatusResponse:
         """Retrieve cluster status.

@@ -13,29 +13,13 @@ from unittest import mock
 
 import containerd
 import ops
-import ops.testing
 import pytest
-from charm import K8sCharm
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
-from charms.k8s.v0.k8sd_api_manager import BootstrapConfig, UpdateClusterConfigRequest
-
-
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
+from charms.k8s.v0.k8sd_api_manager import (
+    BootstrapConfig,
+    UpdateClusterConfigRequest,
+)
 
 
 @contextlib.contextmanager
@@ -127,6 +111,25 @@ def test_set_leader(harness):
     assert len(called) == len(handlers)
 
 
+def test_configure_datastore_bootstrap_config_auto(harness):
+    """Test configuring the datastore=auto on bootstrap.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    bs_config = BootstrapConfig()
+    harness.update_config()
+    harness.charm._configure_datastore(bs_config)
+    assert bs_config.datastore_ca_cert is None
+    assert bs_config.datastore_client_cert is None
+    assert bs_config.datastore_client_key is None
+    assert bs_config.datastore_servers is None
+    assert bs_config.datastore_type is None
+
+
 def test_configure_datastore_bootstrap_config_managed_etcd(harness):
     """Test configuring the datastore=managed-etcd on bootstrap.
 
@@ -137,6 +140,7 @@ def test_configure_datastore_bootstrap_config_managed_etcd(harness):
         pytest.skip("Not applicable on workers")
 
     bs_config = BootstrapConfig()
+    harness.update_config({"bootstrap-datastore": "managed-etcd"})
     harness.charm._configure_datastore(bs_config)
     assert bs_config.datastore_ca_cert is None
     assert bs_config.datastore_client_cert is None

@@ -86,12 +86,20 @@ config:
         Example:
           e.g.: key1=value1 key2=value2
     bootstrap-datastore:
-      default: managed-etcd
       type: string
+      default: ""
       description: |
-        The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "managed-etcd", "dqlite" and "etcd".
-        If "etcd" is chosen, the charm should be integrated with the etcd charm.
+        The datastore to use in Canonical Kubernetes.
+        This can only be reset after deployment.
+
+        Allowed values are "", managed-etcd, dqlite and etcd.
+
+        * "":           The charm will automatically bootstrap with the default
+                        datastore managed by the k8s snap.
+        * managed-etcd: The charm will bootstrap with a managed-etcd datastore.
+        * dqlite:       The charm will bootstrap with a k8s-dqlite datastore.
+        * etcd:         The charm will bootstrap with an external etcd datastore.
+                        The charm will block until the etcd charm is integrated.
     bootstrap-node-taints:
       type: string
       default: ""
@@ -107,11 +115,12 @@ config:
         https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
     bootstrap-pod-cidr:
       type: string
-      default: "10.1.0.0/16"
+      default: ""
       description: |
         Comma-separated CIDR blocks for IP addresses that can be assigned
         to pods within the cluster. Can contain at most 2 blocks, one for IPv4
-        and one for IPv6.
+        and one for IPv6. If the value is "", the snap will automatically
+        assign a CIDR block for the pods.
 
         After deployment it is not possible to change the size of
         the IP range.
@@ -123,20 +132,21 @@ config:
           - "2001:db8::/32,192.0.2.0/24"
     bootstrap-service-cidr:
       type: string
-      default: 10.152.183.0/24
+      default: ""
       description: |
         Comma-separated CIDR blocks for IP addresses that can be assigned
         to services within the cluster. Can contain at most 2 blocks, one for IPv4
-        and one for IPv6.
+        and one for IPv6. If the value is "", the snap will automatically
+        assign a CIDR block for the services.
 
         After deployment it is not possible to change the size of
         the IP range.
 
-        Examples:
-          - "192.0.2.0/24"
-          - "2001:db8::/32"
-          - "192.0.2.0/24,2001:db8::/32"
-          - "2001:db8::/32,192.0.2.0/24"
+        * "" - The charm will bootstrap with the defaults from the k8s snap
+        * "192.0.2.0/24"
+        * "2001:db8::/32"
+        * "192.0.2.0/24,2001:db8::/32"
+        * "2001:db8::/32,192.0.2.0/24"
     containerd-custom-registries:
       type: string
       default: "[]"

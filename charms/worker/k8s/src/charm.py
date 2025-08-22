@@ -29,6 +29,7 @@ from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import config.arg_files
+import config.bootstrap
 import config.extra_args
 import containerd
 import k8s.node
@@ -53,9 +54,6 @@ from literals import (
     COS_TOKENS_RELATION,
     COS_TOKENS_WORKER_RELATION,
     DATASTORE_NAME_MAPPING,
-    DATASTORE_TYPE_ETCD,
-    DATASTORE_TYPE_EXTERNAL,
-    DATASTORE_TYPE_K8S_DQLITE,
     DEPENDENCIES,
     ETC_KUBERNETES,
     ETCD_RELATION,
@@ -67,7 +65,7 @@ from literals import (
     K8SD_SNAP_SOCKET,
     KUBECONFIG,
     KUBECTL_PATH,
-    SUPPORTED_DATASTORES,
+    SNAP_DATASTORE_TYPE_EXTERNAL,
 )
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
@@ -182,9 +180,6 @@ class K8sCharm(ops.CharmBase):
         )
         self.cos = COSIntegration(self)
         self.update_status = update_status.Handler(self, self.upgrade)
-        self.reconciler = Reconciler(
-            self, self._reconcile, exit_status=self.update_status.active_status
-        )
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -216,6 +211,12 @@ class K8sCharm(ops.CharmBase):
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
+        self.bootstrap = config.bootstrap.Controller(self)
+        self.reconciler = Reconciler(
+            self,
+            self._reconcile,
+            exit_status=self.update_status.active_status,
+        )
 
     @property
     def external_load_balancer_address(self) -> str:
@@ -470,9 +471,9 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig.construct()
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = self._assemble_cluster_config()
-        bootstrap_config.service_cidr = str(self.config["bootstrap-service-cidr"])
-        bootstrap_config.pod_cidr = str(self.config["bootstrap-pod-cidr"])
-        bootstrap_config.control_plane_taints = str(self.config["bootstrap-node-taints"]).split()
+        bootstrap_config.service_cidr = self.bootstrap.config.service_cidr
+        bootstrap_config.pod_cidr = self.bootstrap.config.pod_cidr
+        bootstrap_config.control_plane_taints = config.bootstrap.node_taints(self)
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         node_ips = self._get_node_ips()
@@ -540,8 +541,6 @@ class K8sCharm(ops.CharmBase):
             address=f"{node_ips[0]}:{K8SD_PORT}",
             config=self._assemble_bootstrap_config(),
         )
-
-        # TODO: Make port (and address) configurable.
         self.api_manager.bootstrap_k8s_snap(payload)
 
     @on_error(
@@ -682,18 +681,9 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = self.config.get("bootstrap-datastore")
+        snap_ds = DATASTORE_NAME_MAPPING.get(self.bootstrap.config.datastore)
 
-        if datastore not in SUPPORTED_DATASTORES:
-            log.error(
-                "Invalid datastore: %s. Supported values: %s",
-                datastore,
-                ", ".join(SUPPORTED_DATASTORES),
-            )
-            status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-            raise ReconcilerError(f"Invalid datastore: {datastore}")
-
-        if datastore == DATASTORE_TYPE_EXTERNAL:
+        if snap_ds == SNAP_DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation(ETCD_RELATION)
 
@@ -705,7 +695,7 @@ class K8sCharm(ops.CharmBase):
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
-                config.datastore_type = DATASTORE_NAME_MAPPING.get(datastore)
+                config.datastore_type = snap_ds
                 config.datastore_servers = self.etcd.get_connection_string().split(",")
                 config.datastore_ca_cert = etcd_config.get("client_ca", "")
                 config.datastore_client_cert = etcd_config.get("client_cert", "")
@@ -713,19 +703,15 @@ class K8sCharm(ops.CharmBase):
                 log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
                 config.datastore = UserFacingDatastoreConfig()
-                config.datastore.type = DATASTORE_NAME_MAPPING.get(datastore)
+                config.datastore.type = snap_ds
                 config.datastore.servers = self.etcd.get_connection_string().split(",")
                 config.datastore.ca_crt = etcd_config.get("client_ca", "")
                 config.datastore.client_crt = etcd_config.get("client_cert", "")
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
-
-        elif datastore == DATASTORE_TYPE_ETCD and isinstance(config, BootstrapConfig):
-            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_ETCD)
-            log.info("Using managed etcd as datastore")
-        elif datastore == DATASTORE_TYPE_K8S_DQLITE and isinstance(config, BootstrapConfig):
-            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_K8S_DQLITE)
-            log.info("Using dqlite as datastore")
+        elif snap_ds and isinstance(config, BootstrapConfig):
+            config.datastore_type = snap_ds
+            log.info("Using %s as datastore", snap_ds)
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
@@ -986,7 +972,7 @@ class K8sCharm(ops.CharmBase):
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
 
-            bootstrap_node_taints = str(self.config["bootstrap-node-taints"] or "").strip().split()
+            bootstrap_node_taints = config.bootstrap.node_taints(self)
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
         self.api_manager.join_cluster(request)
@@ -1035,6 +1021,7 @@ class K8sCharm(ops.CharmBase):
             self._k8s_info(event)
             self._configure_external_load_balancer()
             self._bootstrap_k8s_snap()
+            self.bootstrap.persist()
             self._ensure_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()
