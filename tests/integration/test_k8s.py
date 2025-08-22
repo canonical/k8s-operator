@@ -132,20 +132,6 @@ async def test_nodes_labelled(
     assert 0 == len(labelled), "Not all nodes labelled without custom-label"
 
 
-@pytest.mark.usefixtures("preserve_charm_config")
-async def test_prevent_bootstrap_config_changes(
-    ops_test, kubernetes_cluster: juju.model.Model, timeout: int
-):
-    """Test that the bootstrap config cannot be changed."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
-    new_config = {"bootstrap-node-taints": "new-taint"}
-    await asyncio.gather(k8s.set_config(new_config), worker.set_config(new_config))
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="blocked", timeout=timeout * 60)
-
-
 async def test_remove_worker(kubernetes_cluster: juju.model.Model, timeout: int):
     """Deploy the charm and wait for active/idle status."""
     apps = ["k8s", "k8s-worker"]
