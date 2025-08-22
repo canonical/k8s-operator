@@ -2,12 +2,11 @@
 # See LICENSE file for licensing details.
 
 amd64:
-  - name: k8s
-    install-type: store
-    classic: true
-    channel: latest/edge
+  - install-type: store
+    name: k8s
+    revision: 4181
+
 arm64:
-  - name: k8s
-    install-type: store
-    classic: true
-    channel: latest/edge
+  - install-type: store
+    name: k8s
+    revision: 4182
