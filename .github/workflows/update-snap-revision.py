@@ -13,7 +13,7 @@ import yaml
 
 logging.basicConfig(format="%(levelname)-8s: %(message)s", level=logging.INFO)
 log = logging.getLogger("update-snap-revision")
-TRACK = "1.32-classic"
+TRACK = f"{t}-classic" if (t := os.getenv("TRACK")) else ""
 RISK = "stable"
 ROOT = Path(__file__).parent / ".." / ".."
 INSTALLATION = ROOT / "charms/worker/k8s/templates/snap_installation.yaml"
@@ -46,7 +46,7 @@ def find_snapstore_revision(arch: str, track: str, risk: str) -> str:
         if (channel := mapping.get("channel")) and (
             channel.get("architecture") == arch
             and (channel.get("risk") == risk if risk else True)
-            and track in channel.get("track")
+            and track.startswith(channel.get("track"))
         ):
             rev = mapping.get("revision")
             log.info(
