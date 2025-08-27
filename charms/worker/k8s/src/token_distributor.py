@@ -157,18 +157,6 @@ class ClusterTokenType(Enum):
     NONE = ""
 
 
-class SecretIDScope(Enum):
-    """Enumeration defining scope for secret IDs.
-
-    Attributes:
-        UNIT: Secret ID scoped to the unit.
-        APP: Secret ID scoped to the application.
-    """
-
-    UNIT = "unit"
-    APP = "app"
-
-
 class TokenManager:
     """Base class for managing tokens.
 
@@ -176,13 +164,11 @@ class TokenManager:
         allocator_needs_tokens: Whether the allocating node needs a token to join
         strategy: The token strategy for token creation.
         revoke_on_join: Whether to revoke a token after node joins.
-        secret_id_scope: The scope of the secret ID (unit or app).
     """
 
     allocator_needs_tokens: bool
     strategy: TokenStrategy
     revoke_on_join: bool
-    secret_id_scope: SecretIDScope
 
     def __init__(self, api_manager: K8sdAPIManager):
         """Initialize a ClusterTokenManager instance.
@@ -217,26 +203,20 @@ class TokenManager:
         """
         secret_key = CLUSTER_SECRET_ID.format(unit.name)
         log.info(
-            "Grant %s token for '%s' on %s:%s",
+            "Grant %s token for '%s' on %s",
             self.strategy.name.title(),
             secret_key,
             relation.name,
-            self.secret_id_scope.name.title(),
         )
         if secret.id is None:
             raise ReconcilerError("Secret ID is None, cannot grant secret")
 
-        if self.secret_id_scope == SecretIDScope.UNIT:
-            relation.data[charm.unit][secret_key] = secret.id
-        elif self.secret_id_scope == SecretIDScope.APP:
-            relation.data[charm.unit].pop(secret_key, None)
-            relation.data[charm.app][secret_key] = secret.id
-        else:
-            raise ReconcilerError(f"Invalid secret_id_scope: {self.secret_id_scope}")
+        relation.data[charm.unit].pop(secret_key, None)
+        relation.data[charm.app][secret_key] = secret.id
         secret.grant(relation, unit=unit)
 
     def revoke(self, relation: ops.Relation, charm: ops.CharmBase, unit: ops.Unit) -> None:
-        """Unshare a secret offered to a unit on this relation.
+        """Revoke a secret offered to a unit on this relation.
 
         Args:
             relation (ops.Relation): Which relation
@@ -245,27 +225,20 @@ class TokenManager:
         """
         secret_key = CLUSTER_SECRET_ID.format(unit.name)
         log.info(
-            "Revoke %s token for '%s' on %s:%s",
+            "Revoke %s token for '%s' on %s",
             self.strategy.name.title(),
             secret_key,
             relation.name,
-            self.secret_id_scope.name.title(),
         )
 
-        by_unit = relation.data[charm.unit].pop(secret_key, None)
         by_app = relation.data[charm.app].pop(secret_key, None)
-        if self.secret_id_scope == SecretIDScope.UNIT:
-            juju_secret = by_unit
-        elif self.secret_id_scope == SecretIDScope.APP:
-            juju_secret = by_app
-        else:
-            juju_secret = None
+        by_unit = relation.data[charm.unit].pop(secret_key, None)
 
-        if juju_secret:
+        if juju_secret := (by_app or by_unit):
             secret = charm.model.get_secret(id=juju_secret)
             secret.remove_all_revisions()
 
-    def juju_secret(
+    def get_juju_secret(
         self, relation: ops.Relation, charm: ops.CharmBase, unit: ops.Unit
     ) -> Optional[ops.Secret]:
         """Lookup juju secret offered to a unit on this relation.
@@ -279,23 +252,16 @@ class TokenManager:
             secret_id (None | ops.Secret) if on the relation
         """
         secret_key = CLUSTER_SECRET_ID.format(unit.name)
-        by_unit = relation.data[charm.unit].get(secret_key)
         by_app = relation.data[charm.app].get(secret_key)
-
-        if self.secret_id_scope == SecretIDScope.UNIT:
-            juju_secret = by_unit
-        elif self.secret_id_scope == SecretIDScope.APP:
-            juju_secret = by_app or by_unit
-        else:
-            juju_secret = None
+        by_unit = relation.data[charm.unit].get(secret_key)
+        juju_secret = by_app or by_unit
 
         log.info(
-            "%s %s token for '%s' on %s:%s",
+            "%s %s token for '%s' on %s",
             "Found" if juju_secret else "Didn't find",
             self.strategy.name.title(),
             secret_key,
             relation.name,
-            self.secret_id_scope.name.title(),
         )
         if juju_secret:
             return charm.model.get_secret(id=juju_secret)
@@ -307,7 +273,6 @@ class ClusterTokenManager(TokenManager):
 
     allocator_needs_tokens: bool = False
     revoke_on_join = True
-    secret_id_scope = SecretIDScope.UNIT
     strategy: TokenStrategy = TokenStrategy.CLUSTER
 
     def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
@@ -352,7 +317,6 @@ class CosTokenManager(TokenManager):
 
     allocator_needs_tokens: bool = True
     revoke_on_join = False
-    secret_id_scope = SecretIDScope.APP
     strategy: TokenStrategy = TokenStrategy.COS
 
     def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
@@ -612,7 +576,7 @@ class TokenDistributor:
         for unit in units:
             remote_cluster = relation.data[unit].get(CLUSTER_JOINED)
             node = relation.data[unit].get(CLUSTER_NODE_NAME)
-            secret = tokenizer.juju_secret(relation, self.charm, unit)
+            secret = tokenizer.get_juju_secret(relation, self.charm, unit)
             if not node:
                 log.info(
                     "Wait for %s token allocation of %s with unit=%s:%s",
@@ -675,6 +639,7 @@ class TokenDistributor:
                         unit.name,
                         node,
                     )
+                    tokenizer.grant(relation, self.charm, unit, secret)
                     continue
 
             log.info(
@@ -696,7 +661,7 @@ class TokenDistributor:
             tokenizer.grant(relation, self.charm, unit, secret)
             self.update_node(relation, unit, f"pending-{node}")
 
-    def revoke_tokens(
+    def remove_units(
         self,
         relation: ops.Relation,
         token_strategy: TokenStrategy,
@@ -763,7 +728,7 @@ class TokenDistributor:
                 ignore_errors |= state == "pending"  # on pending tokens
                 # if cluster doesn't match
                 ignore_errors |= self.charm.get_cluster_name() != joined_cluster(relation, unit)
-                secret = tokenizer.juju_secret(relation, self.charm, unit)
+                secret = tokenizer.get_juju_secret(relation, self.charm, unit)
                 tokenizer.remove(node, secret, ignore_errors)
                 self.drop_node(relation, unit)
                 tokenizer.revoke(relation, self.charm, unit)

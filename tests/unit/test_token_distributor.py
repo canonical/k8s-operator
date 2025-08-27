@@ -99,18 +99,16 @@ def test_token_manager_grant(manager_klass, request, caplog):
     relation.name = request.node.name
     relation.data = defaultdict(dict)
     secret_key = token_distributor.CLUSTER_SECRET_ID.format(unit.name)
+    relation.data[charm.unit][secret_key] = "my-value"
+
     caplog.set_level("DEBUG")
 
     manager.grant(relation, charm, unit, secret)
-    if manager_klass.secret_id_scope == token_distributor.SecretIDScope.APP:
-        assert relation.data[charm.app][secret_key] == secret.id
-        assert secret_key not in relation.data[charm.unit]
-    else:
-        assert relation.data[charm.unit][secret_key] == secret.id
+    assert relation.data[charm.app][secret_key] == secret.id
+    assert secret_key not in relation.data[charm.unit]
 
     title = manager_klass.strategy.name.title()
-    bucket = manager_klass.secret_id_scope.name.title()
-    assert f"Grant {title} token for '{secret_key}' on {relation.name}:{bucket}" in caplog.text
+    assert f"Grant {title} token for '{secret_key}' on {relation.name}" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -134,7 +132,7 @@ def test_token_manager_get_revoke(manager_klass, request, caplog):
     relation.data[charm.unit][secret_key] = "my-value"
     caplog.set_level("DEBUG")
 
-    secret = manager.juju_secret(relation, charm, unit)
+    secret = manager.get_juju_secret(relation, charm, unit)
     charm.model.get_secret.assert_called_once_with(id="my-value")
 
     manager.revoke(relation, charm, unit)
@@ -143,6 +141,5 @@ def test_token_manager_get_revoke(manager_klass, request, caplog):
     secret.remove_all_revisions.assert_called_once_with()
 
     title = manager_klass.strategy.name.title()
-    bucket = manager_klass.secret_id_scope.name.title()
-    assert f"Found {title} token for '{secret_key}' on {relation.name}:{bucket}" in caplog.text
-    assert f"Revoke {title} token for '{secret_key}' on {relation.name}:{bucket}" in caplog.text
+    assert f"Found {title} token for '{secret_key}' on {relation.name}" in caplog.text
+    assert f"Revoke {title} token for '{secret_key}' on {relation.name}" in caplog.text
