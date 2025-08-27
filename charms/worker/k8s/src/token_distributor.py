@@ -38,7 +38,7 @@ from charms.k8s.v0.k8sd_api_manager import (
 
 log = logging.getLogger(__name__)
 
-UNIT_RE = re.compile(r"k8s(-worker)?/\d+")
+UNIT_RE = re.compile(r"^k8s(-worker)?/\d+$")
 
 
 class TokenFailure(BaseModel):
