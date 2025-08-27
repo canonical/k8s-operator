@@ -157,18 +157,32 @@ class ClusterTokenType(Enum):
     NONE = ""
 
 
-class ClusterTokenManager:
-    """Class for managing cluster tokens.
+class SecretIDScope(Enum):
+    """Enumeration defining scope for secret IDs.
 
     Attributes:
-        allocator_needs_tokens: The allocating node does not need a cluster token to join
-        strategy: The cluster strategy for token creation.
-        revoke_on_join: Revoke a token once it's joined.
+        UNIT: Secret ID scoped to the unit.
+        APP: Secret ID scoped to the application.
     """
 
-    allocator_needs_tokens: bool = False
-    strategy: TokenStrategy = TokenStrategy.CLUSTER
-    revoke_on_join = True
+    UNIT = "unit"
+    APP = "app"
+
+
+class TokenManager:
+    """Base class for managing tokens.
+
+    Attributes:
+        allocator_needs_tokens: Whether the allocating node needs a token to join
+        strategy: The token strategy for token creation.
+        revoke_on_join: Whether to revoke a token after node joins.
+        secret_id_scope: The scope of the secret ID (unit or app).
+    """
+
+    allocator_needs_tokens: bool
+    strategy: TokenStrategy
+    revoke_on_join: bool
+    secret_id_scope: SecretIDScope
 
     def __init__(self, api_manager: K8sdAPIManager):
         """Initialize a ClusterTokenManager instance.
@@ -177,6 +191,124 @@ class ClusterTokenManager:
             api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
         """
         self.api_manager = api_manager
+
+    def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
+        """Create a cluster token."""
+        raise NotImplementedError
+
+    def remove(self, name: str, secret: Optional[ops.Secret], ignore_errors: bool):
+        """Remove a cluster token."""
+        raise NotImplementedError
+
+    def grant(
+        self,
+        relation: ops.Relation,
+        charm: ops.CharmBase,
+        unit: ops.Unit,
+        secret: ops.Secret,
+    ):
+        """Share and grant a secret with a unit on this relation.
+
+        Args:
+            relation (ops.Relation): Which relation
+            charm (ops.CharmBase): A charm object representing the current charm.
+            unit (ops.Unit): The unit the secret is intended for
+            secret (ops.Secret): The secret to share over the relation
+        """
+        secret_key = CLUSTER_SECRET_ID.format(unit.name)
+        log.info(
+            "Grant %s token for '%s' on %s:%s",
+            self.strategy.name.title(),
+            secret_key,
+            relation.name,
+            self.secret_id_scope.name.title(),
+        )
+        if secret.id is None:
+            raise ReconcilerError("Secret ID is None, cannot grant secret")
+
+        if self.secret_id_scope == SecretIDScope.UNIT:
+            relation.data[charm.unit][secret_key] = secret.id
+        elif self.secret_id_scope == SecretIDScope.APP:
+            relation.data[charm.unit].pop(secret_key, None)
+            relation.data[charm.app][secret_key] = secret.id
+        else:
+            raise ReconcilerError(f"Invalid secret_id_scope: {self.secret_id_scope}")
+        secret.grant(relation, unit=unit)
+
+    def revoke(self, relation: ops.Relation, charm: ops.CharmBase, unit: ops.Unit) -> None:
+        """Unshare a secret offered to a unit on this relation.
+
+        Args:
+            relation (ops.Relation): Which relation
+            charm (ops.CharmBase): A charm object representing the current charm.
+            unit (ops.Unit): The unit the secret is intended for
+        """
+        secret_key = CLUSTER_SECRET_ID.format(unit.name)
+        log.info(
+            "Revoke %s token for '%s' on %s:%s",
+            self.strategy.name.title(),
+            secret_key,
+            relation.name,
+            self.secret_id_scope.name.title(),
+        )
+
+        by_unit = relation.data[charm.unit].pop(secret_key, None)
+        by_app = relation.data[charm.app].pop(secret_key, None)
+        if self.secret_id_scope == SecretIDScope.UNIT:
+            juju_secret = by_unit
+        elif self.secret_id_scope == SecretIDScope.APP:
+            juju_secret = by_app
+        else:
+            juju_secret = None
+
+        if juju_secret:
+            secret = charm.model.get_secret(id=juju_secret)
+            secret.remove_all_revisions()
+
+    def juju_secret(
+        self, relation: ops.Relation, charm: ops.CharmBase, unit: ops.Unit
+    ) -> Optional[ops.Secret]:
+        """Lookup juju secret offered to a unit on this relation.
+
+        Args:
+            relation (ops.Relation): Which relation (cluster or k8s-cluster)
+            charm (ops.CharmBase): A charm object representing the current charm.
+            unit (ops.Unit): The unit the secret is intended for
+
+        Returns:
+            secret_id (None | ops.Secret) if on the relation
+        """
+        secret_key = CLUSTER_SECRET_ID.format(unit.name)
+        by_unit = relation.data[charm.unit].get(secret_key)
+        by_app = relation.data[charm.app].get(secret_key)
+
+        if self.secret_id_scope == SecretIDScope.UNIT:
+            juju_secret = by_unit
+        elif self.secret_id_scope == SecretIDScope.APP:
+            juju_secret = by_app or by_unit
+        else:
+            juju_secret = None
+
+        log.info(
+            "%s %s token for '%s' on %s:%s",
+            "Found" if juju_secret else "Didn't find",
+            self.strategy.name.title(),
+            secret_key,
+            relation.name,
+            self.secret_id_scope.name.title(),
+        )
+        if juju_secret:
+            return charm.model.get_secret(id=juju_secret)
+        return None
+
+
+class ClusterTokenManager(TokenManager):
+    """Class for managing cluster tokens."""
+
+    allocator_needs_tokens: bool = False
+    revoke_on_join = True
+    secret_id_scope = SecretIDScope.UNIT
+    strategy: TokenStrategy = TokenStrategy.CLUSTER
 
     def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
         """Create a cluster token.
@@ -191,16 +323,16 @@ class ClusterTokenManager:
         worker = token_type == ClusterTokenType.WORKER
         return self.api_manager.create_join_token(name, worker=worker)
 
-    def revoke(self, name: str, _secret: Optional[ops.Secret], ignore_errors: bool):
+    def remove(self, name: str, secret: Optional[ops.Secret], ignore_errors: bool):
         """Remove a cluster token.
 
         Args:
             name (str):                     The name of the node.
-            _secret (Optional[ops.Secret]): The secret to revoke
+            secret (Optional[ops.Secret]):  The secret to remove
             ignore_errors (bool):           Whether or not errors can be ignored
 
         Raises:
-            K8sdConnectionError: reraises cluster token revoke failures
+            K8sdConnectionError: reraises cluster token remove failures
         """
         try:
             self.api_manager.remove_node(name)
@@ -215,26 +347,13 @@ class ClusterTokenManager:
                 raise
 
 
-class CosTokenManager:
-    """Class for managing COS tokens.
-
-    Attributes:
-        allocator_needs_tokens: The allocating node needs a cos-token to join
-        strategy: The cos strategy for token creation.
-        revoke_on_join: Don't revoke a token once it's joined.
-    """
+class CosTokenManager(TokenManager):
+    """Class for managing COS tokens."""
 
     allocator_needs_tokens: bool = True
-    strategy: TokenStrategy = TokenStrategy.COS
     revoke_on_join = False
-
-    def __init__(self, api_manager: K8sdAPIManager):
-        """Initialize a CosTokenManager instance.
-
-        Args:
-            api_manager (K8sdAPIManager): An K8sdAPIManager object for interacting with k8sd API.
-        """
-        self.api_manager = api_manager
+    secret_id_scope = SecretIDScope.APP
+    strategy: TokenStrategy = TokenStrategy.COS
 
     def create(self, name: str, token_type: ClusterTokenType) -> SecretStr:
         """Create a COS token.
@@ -251,11 +370,11 @@ class CosTokenManager:
             username=f"system:cos:{name}", groups=["system:cos"]
         )
 
-    def revoke(self, _name: str, secret: Optional[ops.Secret], ignore_errors: bool):
+    def remove(self, name: str, secret: Optional[ops.Secret], ignore_errors: bool):
         """Remove a COS token intentionally left unimplemented.
 
         Args:
-            _name (str):                   The name of the node.
+            name (str):                   The name of the node.
             secret (Optional[ops.Secret]): The secret to revoke
             ignore_errors (bool):          Whether or not errors can be ignored
 
@@ -274,7 +393,7 @@ class CosTokenManager:
                 # "Remote end closed connection without response"
                 # "Failed to check if node is control-plane"
                 # Removing a node that doesn't exist
-                log.warning("Revoke_Auth_Token %s: but with an expected error: %s", _name, e)
+                log.warning("Revoke_Auth_Token %s: but with an expected error: %s", name, e)
             else:
                 raise
 
@@ -359,7 +478,7 @@ class TokenCollector:
         secret_key = CLUSTER_SECRET_ID.format(self.charm.unit.name)
         secret_ids = {
             secret_id
-            for unit in relation.units | {self.charm.unit}
+            for unit in relation.units | {self.charm.unit, relation.app}
             if (secret_id := relation.data[unit].get(secret_key))
         }
 
@@ -390,9 +509,6 @@ class TokenCollector:
         self.cluster_name(relation, True)
 
 
-TokenManager = Union[ClusterTokenManager, CosTokenManager]
-
-
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
@@ -410,33 +526,6 @@ class TokenDistributor:
             TokenStrategy.CLUSTER: ClusterTokenManager(api_manager),
             TokenStrategy.COS: CosTokenManager(api_manager),
         }
-
-    def _get_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> Optional[ops.Secret]:
-        """Lookup juju secret offered to a unit on this relation.
-
-        Args:
-            relation (ops.Relation): Which relation (cluster or k8s-cluster)
-            unit (ops.Unit): The unit the secret is intended for
-
-        Returns:
-            secret_id (None | ops.Secret) if on the relation
-        """
-        secret_id = CLUSTER_SECRET_ID.format(unit.name)
-        if juju_secret := relation.data[self.charm.unit].get(secret_id):
-            return self.charm.model.get_secret(id=juju_secret)
-        return None
-
-    def _revoke_juju_secret(self, relation: ops.Relation, unit: ops.Unit) -> None:
-        """Revoke and remove juju secret offered to a unit on this relation.
-
-        Args:
-            relation (ops.Relation): Which relation (cluster or k8s-cluster)
-            unit (ops.Unit): The unit the secret is intended for
-        """
-        secret_id = CLUSTER_SECRET_ID.format(unit.name)
-        if juju_secret := relation.data[self.charm.unit].pop(secret_id, None):
-            secret = self.charm.model.get_secret(id=juju_secret)
-            secret.remove_all_revisions()
 
     def active_nodes(self, relation: ops.Relation):
         """Get nodes from application databag for given relation.
@@ -523,7 +612,7 @@ class TokenDistributor:
         for unit in units:
             remote_cluster = relation.data[unit].get(CLUSTER_JOINED)
             node = relation.data[unit].get(CLUSTER_NODE_NAME)
-            secret = self._get_juju_secret(relation, unit)
+            secret = tokenizer.juju_secret(relation, self.charm, unit)
             if not node:
                 log.info(
                     "Wait for %s token allocation of %s with unit=%s:%s",
@@ -559,8 +648,9 @@ class TokenDistributor:
                 )
                 self.update_node(relation, unit, f"joined-{node}")
                 if tokenizer.revoke_on_join:
-                    self._revoke_juju_secret(relation, unit)
-
+                    tokenizer.revoke(relation, self.charm, unit)
+                elif secret:
+                    tokenizer.grant(relation, self.charm, unit, secret)
                 continue  # unit reports its joined already
             if secret:
                 # unit has been assigned a join-token
@@ -595,7 +685,6 @@ class TokenDistributor:
                 node,
             )
             token = tokenizer.create(node, token_type)
-            secret_id = CLUSTER_SECRET_ID.format(unit.name)
             if not secret:
                 content = TokenContent(token=token, revision=0)
                 secret = relation.app.add_secret(content.model_dump())
@@ -604,8 +693,7 @@ class TokenDistributor:
                 content.token = token
                 content.revision += 1
                 secret.set_content(content.model_dump())
-            secret.grant(relation, unit=unit)
-            relation.data[self.charm.unit][secret_id] = secret.id or ""
+            tokenizer.grant(relation, self.charm, unit, secret)
             self.update_node(relation, unit, f"pending-{node}")
 
     def revoke_tokens(
@@ -655,6 +743,9 @@ class TokenDistributor:
                 f"Revoking {token_type.name.title()} {token_strategy.name.title()} tokens"
             )
         )
+        tokenizer = self.token_strategies.get(token_strategy)
+        if not tokenizer:
+            raise ReconcilerError(f"Invalid token_strategy: {token_strategy}")
 
         for unit in remove:
             if node_state := app_databag.get(unit):
@@ -672,11 +763,10 @@ class TokenDistributor:
                 ignore_errors |= state == "pending"  # on pending tokens
                 # if cluster doesn't match
                 ignore_errors |= self.charm.get_cluster_name() != joined_cluster(relation, unit)
-                self.token_strategies[token_strategy].revoke(
-                    node, self._get_juju_secret(relation, unit), ignore_errors
-                )
+                secret = tokenizer.juju_secret(relation, self.charm, unit)
+                tokenizer.remove(node, secret, ignore_errors)
                 self.drop_node(relation, unit)
-                self._revoke_juju_secret(relation, unit)
+                tokenizer.revoke(relation, self.charm, unit)
 
 
 def joined_cluster(relation: ops.Relation, unit: ops.Unit) -> Optional[str]:
