@@ -44,6 +44,7 @@ lint = [
     "types-PyYAML"
 ]
 integration = [
+    "async-lru",
     "juju",
     "pydantic",
     "pylxd",

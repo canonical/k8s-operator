@@ -19,7 +19,7 @@ import pytest
 import pytest_asyncio
 import yaml
 from cos_substrate import LXDSubstrate
-from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
+from helpers import Bundle, cloud_arch, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
 from juju.url import URL
@@ -191,6 +191,15 @@ async def skip_by_cloud_type(request, ops_test):
         _type, _ = await cloud_type(ops_test)
         if _type not in cloud_markers.args:
             pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def skip_by_arch(request, ops_test):
+    """Skip tests based on architecture."""
+    if arch_marker := request.node.get_closest_marker("architecture"):
+        _arch = await cloud_arch(ops_test)
+        if _arch not in arch_marker.args:
+            pytest.skip(f"architecture={_arch} not among {arch_marker.args}")
 
 
 @contextlib.asynccontextmanager

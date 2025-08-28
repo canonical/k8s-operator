@@ -242,6 +242,7 @@ async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, requ
 
 
 @pytest.mark.cos
+@pytest.mark.architecture("amd64")
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
 async def test_grafana(
     traefik_url: str,
@@ -263,6 +264,7 @@ async def test_grafana(
 
 
 @pytest.mark.cos
+@pytest.mark.architecture("amd64")
 @pytest.mark.usefixtures("related_prometheus")
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
 async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout: int):
