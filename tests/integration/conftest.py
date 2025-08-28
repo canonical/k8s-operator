@@ -46,8 +46,6 @@ def pytest_addoption(parser: pytest.Parser):
         Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm
         Some tests use subordinate charms (e.g. Ceph) that expect the charm
         base to match.
-    --cos
-        Add COS integration tests.
     --lxd-containers
         If cloud is LXD, use containers instead of LXD VMs.
         Note that some charms may not work in LXD containers (e.g. Ceph).
@@ -88,7 +86,6 @@ def pytest_addoption(parser: pytest.Parser):
             "base to match."
         ),
     )
-    parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
     parser.addoption(
         "--lxd-containers",
         action="store_true",
@@ -123,16 +120,12 @@ def pytest_collection_modifyitems(config, items):
         config (pytest.Config): The pytest config object.
         items (List[pytest.Item]): List of item objects.
     """
-    cos_active = config.getoption("--cos")
     arch_filter = config.getoption("--arch")
 
     selected, deselected = [], []
 
     for item in items:
-        if item.get_closest_marker("cos") and not cos_active:
-            # Any test marked cos only runs if --cos is activated.
-            deselected.append(item)
-        elif (
+        if (
             (arch_mark := item.get_closest_marker("architecture"))
             and arch_filter
             and arch_mark.args
