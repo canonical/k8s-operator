@@ -8,6 +8,7 @@
 
 import json
 import unittest.mock as mock
+from collections import defaultdict
 from pathlib import Path
 
 import ops
@@ -98,3 +99,67 @@ def test_token_content(revision, token):
         assert c.token.get_secret_value() == "my-token"
         assert c.dict() == {"revision": str_rev, "token": "my-token"}
         assert c.json() == f'{{"revision": "{str_rev}", "token": "my-token"}}'
+
+
+@pytest.mark.parametrize(
+    "manager_klass",
+    [
+        token_distributor.ClusterTokenManager,
+        token_distributor.CosTokenManager,
+    ],
+)
+def test_token_manager_grant(manager_klass, request, caplog):
+    """Test token manager can share into correct relation databag."""
+    api_manager_mock = mock.MagicMock(spec=token_distributor.K8sdAPIManager)
+    manager = manager_klass(api_manager_mock())
+    charm = mock.MagicMock(spec=ops.CharmBase)()
+    unit = mock.MagicMock(spec=ops.Unit)()
+    secret = mock.MagicMock(spec=ops.Secret)()
+    relation = mock.MagicMock()
+    relation.name = request.node.name
+    relation.data = defaultdict(dict)
+    secret_key = token_distributor.CLUSTER_SECRET_ID.format(unit.name)
+    relation.data[charm.unit][secret_key] = "my-value"
+
+    caplog.set_level("DEBUG")
+
+    manager.grant(relation, charm, unit, secret)
+    assert relation.data[charm.app][secret_key] == secret.id
+    assert secret_key not in relation.data[charm.unit]
+
+    title = manager_klass.strategy.name.title()
+    assert f"Grant {title} token for '{secret_key}' on {relation.name}" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "manager_klass",
+    [
+        token_distributor.ClusterTokenManager,
+        token_distributor.CosTokenManager,
+    ],
+)
+def test_token_manager_get_revoke(manager_klass, request, caplog):
+    """Test token manager can unshare from correct relation databag."""
+    api_manager_mock = mock.MagicMock(spec=token_distributor.K8sdAPIManager)
+    manager = manager_klass(api_manager_mock())
+    charm = mock.MagicMock(spec=ops.CharmBase)()
+    unit = mock.MagicMock(spec=ops.Unit)()
+    relation = mock.MagicMock()
+    relation.name = request.node.name
+    relation.data = defaultdict(dict)
+    secret_key = token_distributor.CLUSTER_SECRET_ID.format(unit.name)
+    relation.data[charm.app][secret_key] = "my-value"
+    relation.data[charm.unit][secret_key] = "my-value"
+    caplog.set_level("DEBUG")
+
+    secret = manager.get_juju_secret(relation, charm, unit)
+    charm.model.get_secret.assert_called_once_with(id="my-value")
+
+    manager.revoke(relation, charm, unit)
+    assert secret_key not in relation.data[charm.unit]
+    assert secret_key not in relation.data[charm.app]
+    secret.remove_all_revisions.assert_called_once_with()
+
+    title = manager_klass.strategy.name.title()
+    assert f"Found {title} token for '{secret_key}' on {relation.name}" in caplog.text
+    assert f"Revoke {title} token for '{secret_key}' on {relation.name}" in caplog.text
