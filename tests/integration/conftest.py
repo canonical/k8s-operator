@@ -316,7 +316,7 @@ async def grafana_agent(kubernetes_cluster: Model):
     series = juju.utils.get_version_series(data["base"].split("@")[1])
     url = URL("ch", name="grafana-agent", series=series, architecture=arch)
 
-    await kubernetes_cluster.deploy(url, channel="stable", series=series)
+    await kubernetes_cluster.deploy(url, channel="1/stable", series=series)
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
     await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
