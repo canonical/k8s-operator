@@ -669,7 +669,7 @@ class K8sCharm(ops.CharmBase):
             to_remove = unit
 
         if peer := self.model.get_relation(CLUSTER_RELATION):
-            self.distributor.revoke_tokens(
+            self.distributor.remove_units(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.CONTROL_PLANE,
@@ -677,7 +677,7 @@ class K8sCharm(ops.CharmBase):
             )
 
         for relation in self.model.relations[CLUSTER_WORKER_RELATION]:
-            self.distributor.revoke_tokens(
+            self.distributor.remove_units(
                 relation=relation,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.WORKER,
