@@ -52,7 +52,9 @@ jobs:
         run: |
           list_modules() {
             ARCH=$1
-            MODULES=$(tox -e integration -- --arch "$ARCH" --collect-only -q 2>/dev/null \
+            MODULES=$(tox -e integration -- --collect-only \
+               -q --arch "$ARCH" ${{ needs.extra-args.outputs.args }} \
+                2>/dev/null \
               | grep -E '<Module test_.*\.py>' \
               | sed -E 's/.*<Module (test_[^.]*)\.py>.*/\1/' \
               | sort -u)

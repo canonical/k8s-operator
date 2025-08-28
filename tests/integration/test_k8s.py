@@ -13,11 +13,8 @@ import juju.model
 import juju.unit
 import pytest
 import pytest_asyncio
-from grafana import Grafana
 from helpers import get_leader, get_rsc, ready_nodes, wait_pod_phase
 from literals import ONE_MIN
-from prometheus import Prometheus
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
 
@@ -239,49 +236,3 @@ async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, requ
         with revert.open("rb") as obj:
             k8s.attach_resource("snap-installation", revert, obj)
             await kubernetes_cluster.wait_for_idle(status="active")
-
-
-@pytest.mark.cos
-@pytest.mark.architecture("amd64")
-@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_grafana(
-    traefik_url: str,
-    grafana_password: str,
-    expected_dashboard_titles: set,
-    cos_model: juju.model.Model,
-    timeout: int,
-):
-    """Test integration with Grafana."""
-    grafana = Grafana(model_name=cos_model.name, base=traefik_url, password=grafana_password)
-    await asyncio.wait_for(grafana.is_ready(), timeout=timeout * 60)
-    dashboards = await grafana.dashboards_all()
-    actual_dashboard_titles = set()
-
-    for dashboard in dashboards:
-        actual_dashboard_titles.add(dashboard.get("title"))
-
-    assert expected_dashboard_titles.issubset(actual_dashboard_titles)
-
-
-@pytest.mark.cos
-@pytest.mark.architecture("amd64")
-@pytest.mark.usefixtures("related_prometheus")
-@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout: int):
-    """Test integration with Prometheus."""
-    prometheus = Prometheus(model_name=cos_model.name, base=traefik_url)
-    await asyncio.wait_for(prometheus.is_ready(), timeout=timeout * 60)
-
-    queries = [
-        'up{job="kubelet", metrics_path="/metrics"} > 0',
-        'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
-        'up{job="kubelet", metrics_path="/metrics/probes"} > 0',
-        'up{job="apiserver"} > 0',
-        'up{job="kube-controller-manager"} > 0',
-        'up{job="kube-scheduler"} > 0',
-        'up{job="kube-proxy"} > 0',
-        'up{job="kube-state-metrics"} > 0',
-    ]
-    results = await asyncio.gather(*[prometheus.get_metrics(query) for query in queries])
-    failed = [query for query, result in zip(queries, results) if not result]
-    assert not failed, f"Failed queries: {failed}"

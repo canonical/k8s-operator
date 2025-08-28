@@ -19,7 +19,7 @@ import pytest
 import pytest_asyncio
 import yaml
 from cos_substrate import LXDSubstrate
-from helpers import Bundle, cloud_arch, cloud_type, get_kubeconfig, get_unit_cidrs
+from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
 from juju.url import URL
@@ -193,15 +193,6 @@ async def skip_by_cloud_type(request, ops_test):
             pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def skip_by_arch(request, ops_test):
-    """Skip tests based on architecture."""
-    if arch_marker := request.node.get_closest_marker("architecture"):
-        _arch = await cloud_arch(ops_test)
-        if _arch not in arch_marker.args:
-            pytest.skip(f"architecture={_arch} not among {arch_marker.args}")
-
-
 @contextlib.asynccontextmanager
 async def deploy_model(
     ops_test: OpsTest,
@@ -319,23 +310,28 @@ async def api_client(
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
 async def grafana_agent(kubernetes_cluster: Model):
     """Deploy Grafana Agent."""
-    primary = kubernetes_cluster.applications["k8s"]
-    data = primary.units[0].machine.safe_data
+    apps = ["k8s", "k8s-worker"]
+    k8s, worker = (kubernetes_cluster.applications.get(a) for a in apps)
+    if not k8s:
+        pytest.fail("k8s application not found in the model")
+    data = k8s.units[0].machine.safe_data
     arch = data["hardware-characteristics"]["arch"]
     series = juju.utils.get_version_series(data["base"].split("@")[1])
     url = URL("ch", name="grafana-agent", series=series, architecture=arch)
 
     await kubernetes_cluster.deploy(url, channel="1/stable", series=series)
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
-    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
-    await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
+    if worker:
+        await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
+        await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
 
     yield
 
     await kubernetes_cluster.remove_application("grafana-agent")
-    await kubernetes_cluster.applications["k8s"].destroy_relation(
-        "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
-    )
+    if worker:
+        await kubernetes_cluster.applications["k8s"].destroy_relation(
+            "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
+        )
 
 
 @pytest_asyncio.fixture(scope="module")
