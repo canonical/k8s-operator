@@ -18,6 +18,7 @@ import juju.model
 import juju.unit
 import juju.utils
 import yaml
+from async_lru import alru_cache
 from juju.url import URL
 from pytest_operator.plugin import OpsTest
 from tenacity import AsyncRetrying, before_sleep_log, retry, stop_after_attempt, wait_fixed
@@ -554,6 +555,7 @@ class Bundle:
         return target
 
 
+@alru_cache
 async def cloud_arch(ops_test: OpsTest) -> str:
     """Return current architecture of the selected controller.
 
@@ -573,6 +575,7 @@ async def cloud_arch(ops_test: OpsTest) -> str:
     return arch.pop().strip()
 
 
+@alru_cache
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller.
 

@@ -5,24 +5,6 @@ on:
   pull_request:
 
 jobs:
-  extra-args:
-    runs-on: ubuntu-latest
-    outputs:
-      args: ${{ steps.flags.outputs.args }}
-    steps:
-      - name: Determine extra args
-        id: flags
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-          JOB: ${{ github.job }}
-          WORKFLOW: ${{ github.workflow }}
-        run: |
-          EXTRA_ARGS="--crash-dump=on-failure"
-          if [[ "$TITLE" == *"[COS]"* ]]; then
-            EXTRA_ARGS="$EXTRA_ARGS --cos"
-          fi
-          echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
-
   charmcraft-channel:
     runs-on: ubuntu-24.04
     outputs:
@@ -34,7 +16,7 @@ jobs:
 
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
-    needs: [charmcraft-channel, extra-args]
+    needs: [charmcraft-channel]
     secrets: inherit
     strategy:
       matrix:
@@ -44,7 +26,7 @@ jobs:
           builder-label: ubuntu-22.04
           tester-arch: AMD64
           tester-size: xlarge
-          modules: '["test_k8s", "test_etcd", "test_dqlite", "test_ceph", "test_upgrade"]'
+          modules: '["test_cos", "test_k8s", "test_etcd", "test_dqlite", "test_ceph", "test_upgrade"]'
         # built and test on on self-hosted
         - id: arm64
           builder-label: ARM64
@@ -56,7 +38,6 @@ jobs:
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
-        ${{needs.extra-args.outputs.args}}
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=jammy' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
