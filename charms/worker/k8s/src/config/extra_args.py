@@ -5,7 +5,7 @@
 
 """Parse extra arguments for Kubernetes components."""
 
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import literals
 import ops
@@ -35,11 +35,23 @@ def _parse(config_data) -> Dict[str, str]:
     return args
 
 
+def _configure_datastore_args(dest, src, datastore: str):
+    """Configure Service Arguments for the specified datastore."""
+    datastore_args = _parse(src["datastore-extra-args"])
+    if datastore == literals.DATASTORE_TYPE_K8S_DQLITE:
+        dest.extra_node_k8s_dqlite_args = datastore_args
+    elif datastore == literals.DATASTORE_TYPE_ETCD:
+        # NOTE: Enable the metrics URL on localhost.
+        datastore_args[literals.LISTEN_METRICS_URLS_ARG] = "http://localhost:2381"
+        dest.extra_node_etcd_args = datastore_args
+
+
 def craft(
     src: ops.ConfigData,
     dest: Union[BootstrapConfig, ControlPlaneNodeJoinConfig, FileArgsConfig, NodeJoinConfig],
     cluster_name: str,
     node_ips: List[str],
+    datastore: Optional[str] = None,
 ):
     """Set extra arguments for Kubernetes components based on the provided configuration.
 
@@ -58,37 +70,35 @@ def craft(
             The configuration object to be updated with extra arguments.
         cluster_name (str): the name of the cluster to override in the extra arguments.
         node_ips (list[str]): the IP address of the node to override in the extra arguments.
+        datastore(Optional[str]): the name of the datastore.
     """
+
+    def update_args(key: str, extra_args: dict):
+        """Parse and update arguments."""
+        cmd = _parse(src.get(key, ""))
+        cmd.update(extra_args)
+        return cmd
+
     if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
-        cmd = _parse(src["kube-apiserver-extra-args"])
-        dest.extra_node_kube_apiserver_args = cmd
+        dest.extra_node_kube_apiserver_args = _parse(src["kube-apiserver-extra-args"])
 
-        cmd = _parse(src["kube-controller-manager-extra-args"])
-        if cluster_name:
-            cmd.update(**{"--cluster-name": cluster_name})
-        else:
-            cmd.pop("--cluster-name", None)
-        dest.extra_node_kube_controller_manager_args = cmd
+        controller_args = {"--cluster-name": cluster_name} if cluster_name else {}
+        dest.extra_node_kube_controller_manager_args = update_args(
+            "kube-controller-manager-extra-args", controller_args
+        )
 
-        cmd = _parse(src["kube-scheduler-extra-args"])
-        dest.extra_node_kube_scheduler_args = cmd
+        dest.extra_node_kube_scheduler_args = _parse(src["kube-scheduler-extra-args"])
 
-        cmd = _parse(src["datastore-extra-args"])
-        match src["bootstrap-datastore"]:
-            case literals.DATASTORE_TYPE_K8S_DQLITE:
-                dest.extra_node_k8s_dqlite_args = cmd
-            case literals.DATASTORE_TYPE_ETCD:
-                dest.extra_node_etcd_args = cmd
+        if datastore:
+            _configure_datastore_args(dest, src, datastore)
 
-    cmd = _parse(src["kube-proxy-extra-args"])
-    dest.extra_node_kube_proxy_args = cmd
+    if datastore and isinstance(dest, FileArgsConfig):
+        _configure_datastore_args(dest, src, datastore)
 
-    cmd = _parse(src["kubelet-extra-args"])
-    if node_ips:
-        cmd.update(**{"--node-ip": ",".join(node_ips)})
-    else:
-        cmd.pop("--node-ip", None)
-    dest.extra_node_kubelet_args = cmd
+    dest.extra_node_kube_proxy_args = _parse(src["kube-proxy-extra-args"])
+
+    kubelet_args = {"--node-ip": ",".join(node_ips)} if node_ips else {}
+    dest.extra_node_kubelet_args = update_args("kubelet-extra-args", kubelet_args)
 
 
 def taint_worker(dest: NodeJoinConfig, taints: List[str]):

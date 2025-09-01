@@ -480,7 +480,8 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         node_ips = self._get_node_ips()
-        config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips)
+        datastore = self.bootstrap.config.datastore
+        config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips, datastore)
         return bootstrap_config
 
     def _configure_external_load_balancer(self) -> None:
@@ -771,7 +772,10 @@ class K8sCharm(ops.CharmBase):
         try:
             with self.collector.recover_token(relation) as token:
                 return self.cos.get_metrics_endpoints(
-                    self.get_node_name(), token, self.is_control_plane
+                    self.get_node_name(),
+                    token,
+                    self.is_control_plane,
+                    self.bootstrap.config.datastore,
                 )
         except ReconcilerError:
             log.exception("Failed to get COS token.")
@@ -1064,7 +1068,10 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
             file_args_config = config.arg_files.FileArgsConfig()
             node_ips = self._get_node_ips()
-            config.extra_args.craft(self.config, file_args_config, cluster_name, node_ips)
+            datastore = self.bootstrap.config.datastore if self.is_control_plane else None
+            config.extra_args.craft(
+                self.config, file_args_config, cluster_name, node_ips, datastore
+            )
             file_args_config.ensure()
 
     @property

@@ -35,6 +35,8 @@ def test_file_args_config_with_file(read_text):
     expected = {"--some-arg": "value"}
 
     assert config._service_args == {
+        "etcd": expected,
+        "k8s-dqlite": expected,
         "kube-apiserver": expected,
         "kube-controller-manager": expected,
         "kube-scheduler": expected,
@@ -42,6 +44,8 @@ def test_file_args_config_with_file(read_text):
         "kubelet": expected,
     }
     assert config._file_hashes == {
+        "etcd": arg_hash,
+        "k8s-dqlite": arg_hash,
         "kube-apiserver": arg_hash,
         "kube-controller-manager": arg_hash,
         "kube-scheduler": arg_hash,

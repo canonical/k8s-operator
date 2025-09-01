@@ -26,7 +26,7 @@ import ops
 import pydantic
 import tomli_w
 import yaml
-from literals import CONTAINERD_ARGS
+from literals import CONTAINERD_ARGS_PATH
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def containerd_path() -> Path:
     Raises:
         FileNotFoundError: if containerd config path cannot be found
     """
-    for line in CONTAINERD_ARGS.read_text().splitlines():
+    for line in CONTAINERD_ARGS_PATH.read_text().splitlines():
         if line.startswith("--config="):
             path = line.split("=")[1].strip('"').strip("'")
             return Path(path).parent
