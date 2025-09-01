@@ -37,28 +37,13 @@ assumes:
   - juju >= 3.3
 
 type: charm
-platforms:
-  ubuntu-22.04-amd64:
-    build-on:
-      - ubuntu@22.04:amd64
-    build-for:
-      - ubuntu@22.04:amd64
-  ubuntu-22.04-arm64:
-    build-on:
-      - ubuntu@22.04:arm64
-    build-for:
-      - ubuntu@22.04:arm64
 
-  ubuntu-24.04-amd64:
-    build-on:
-      - ubuntu@24.04:amd64
-    build-for:
-      - ubuntu@24.04:amd64
-  ubuntu-24.04-arm64:
-    build-on:
-      - ubuntu@24.04:arm64
-    build-for:
-      - ubuntu@24.04:arm64
+platforms:
+  ubuntu@22.04:amd64:
+  ubuntu@22.04:arm64:
+  ubuntu@24.04:amd64:
+  ubuntu@24.04:arm64:
+
 config:
   options:
     cluster-annotations:
