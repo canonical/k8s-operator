@@ -46,8 +46,6 @@ def pytest_addoption(parser: pytest.Parser):
         Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm
         Some tests use subordinate charms (e.g. Ceph) that expect the charm
         base to match.
-    --cos
-        Add COS integration tests.
     --lxd-containers
         If cloud is LXD, use containers instead of LXD VMs.
         Note that some charms may not work in LXD containers (e.g. Ceph).
@@ -88,7 +86,6 @@ def pytest_addoption(parser: pytest.Parser):
             "base to match."
         ),
     )
-    parser.addoption("--cos", action="store_true", default=False, help="Run COS integration tests")
     parser.addoption(
         "--lxd-containers",
         action="store_true",
@@ -123,16 +120,12 @@ def pytest_collection_modifyitems(config, items):
         config (pytest.Config): The pytest config object.
         items (List[pytest.Item]): List of item objects.
     """
-    cos_active = config.getoption("--cos")
     arch_filter = config.getoption("--arch")
 
     selected, deselected = [], []
 
     for item in items:
-        if item.get_closest_marker("cos") and not cos_active:
-            # Any test marked cos only runs if --cos is activated.
-            deselected.append(item)
-        elif (
+        if (
             (arch_mark := item.get_closest_marker("architecture"))
             and arch_filter
             and arch_mark.args
@@ -310,23 +303,28 @@ async def api_client(
 @pytest_asyncio.fixture(name="_grafana_agent", scope="module")
 async def grafana_agent(kubernetes_cluster: Model):
     """Deploy Grafana Agent."""
-    primary = kubernetes_cluster.applications["k8s"]
-    data = primary.units[0].machine.safe_data
+    apps = ["k8s", "k8s-worker"]
+    k8s, worker = (kubernetes_cluster.applications.get(a) for a in apps)
+    if not k8s:
+        pytest.fail("k8s application not found in the model")
+    data = k8s.units[0].machine.safe_data
     arch = data["hardware-characteristics"]["arch"]
     series = juju.utils.get_version_series(data["base"].split("@")[1])
     url = URL("ch", name="grafana-agent", series=series, architecture=arch)
 
     await kubernetes_cluster.deploy(url, channel="1/stable", series=series)
     await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
-    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
-    await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
+    if worker:
+        await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
+        await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
 
     yield
 
     await kubernetes_cluster.remove_application("grafana-agent")
-    await kubernetes_cluster.applications["k8s"].destroy_relation(
-        "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
-    )
+    if worker:
+        await kubernetes_cluster.applications["k8s"].destroy_relation(
+            "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
+        )
 
 
 @pytest_asyncio.fixture(scope="module")
