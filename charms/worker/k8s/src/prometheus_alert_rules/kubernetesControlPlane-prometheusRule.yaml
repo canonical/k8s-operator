@@ -708,6 +708,22 @@ groups:
     for: 10m
     labels:
       severity: info
+  - alert: HostOutOfDiskSpace
+    annotations:
+      summary: "Host out of disk space (instance {{ $labels.instance }})"
+      description: |
+        Disk is almost full (< 10% left) on instance {{ $labels.instance }}, mountpoint {{ $labels.mountpoint }}.
+        VALUE = {{ $value }}
+        DEVICE = {{ $labels.device }}
+        FILESYSTEM TYPE = {{ $labels.fstype }}
+    expr: |
+      (node_filesystem_avail_bytes{fstype!~"^(fuse.*|tmpfs|cifs|nfs)"} 
+        / node_filesystem_size_bytes) < 0.10 
+      and on (instance, device, mountpoint) 
+      node_filesystem_readonly == 0
+    for: 2m
+    labels:
+      severity: critical
   - alert: KubeNodeUnreachable
     annotations:
       description: '{{ $labels.node }} is unreachable and some workloads may be rescheduled
