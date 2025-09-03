@@ -72,20 +72,15 @@ def craft(
         node_ips (list[str]): the IP address of the node to override in the extra arguments.
         datastore(Optional[str]): the name of the datastore.
     """
-
-    def update_args(key: str, extra_args: dict):
-        """Parse and update arguments."""
-        cmd = _parse(src.get(key, ""))
-        cmd.update(extra_args)
-        return cmd
-
     if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
         dest.extra_node_kube_apiserver_args = _parse(src["kube-apiserver-extra-args"])
 
-        controller_args = {"--cluster-name": cluster_name} if cluster_name else {}
-        dest.extra_node_kube_controller_manager_args = update_args(
-            "kube-controller-manager-extra-args", controller_args
-        )
+        args = _parse(src["kube-controller-manager-extra-args"])
+        if cluster_name:
+            args.update(**{"--cluster-name": cluster_name})
+        else:
+            args.pop("--cluster-name", None)
+        dest.extra_node_kube_controller_manager_args = args
 
         dest.extra_node_kube_scheduler_args = _parse(src["kube-scheduler-extra-args"])
 
@@ -97,8 +92,12 @@ def craft(
 
     dest.extra_node_kube_proxy_args = _parse(src["kube-proxy-extra-args"])
 
-    kubelet_args = {"--node-ip": ",".join(node_ips)} if node_ips else {}
-    dest.extra_node_kubelet_args = update_args("kubelet-extra-args", kubelet_args)
+    args = _parse(src["kubelet-extra-args"])
+    if node_ips:
+        args.update(**{"--node-ip": ",".join(node_ips)})
+    else:
+        args.pop("--node-ip", None)
+    dest.extra_node_kubelet_args = args
 
 
 def taint_worker(dest: NodeJoinConfig, taints: List[str]):

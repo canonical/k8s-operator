@@ -917,7 +917,8 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = self._get_extra_sans()
-            config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
+            datastore = self.bootstrap.config.datastore
+            config.extra_args.craft(self.config, request.config, cluster_name, node_ips, datastore)
         else:
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
@@ -1068,7 +1069,7 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
             file_args_config = config.arg_files.FileArgsConfig()
             node_ips = self._get_node_ips()
-            datastore = self.bootstrap.config.datastore if self.is_control_plane else None
+            datastore = self.bootstrap.config.datastore
             config.extra_args.craft(
                 self.config, file_args_config, cluster_name, node_ips, datastore
             )
