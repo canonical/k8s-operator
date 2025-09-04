@@ -35,14 +35,17 @@ def _parse(config_data) -> Dict[str, str]:
     return args
 
 
-def _configure_datastore_args(dest, src, datastore: str):
+def _configure_datastore_args(dest, src, datastore: Optional[str]):
     """Configure Service Arguments for the specified datastore."""
+    if not datastore:
+        return
+
     datastore_args = _parse(src["datastore-extra-args"])
     if datastore == literals.DATASTORE_TYPE_K8S_DQLITE:
         dest.extra_node_k8s_dqlite_args = datastore_args
     elif datastore == literals.DATASTORE_TYPE_ETCD:
         # NOTE: Enable the metrics URL on localhost.
-        datastore_args[literals.LISTEN_METRICS_URLS_ARG] = "http://localhost:2381"
+        datastore_args[literals.ETCD_LISTEN_METRICS_URLS_ARG] = literals.ETCD_DEFAULT_METRICS_URL
         dest.extra_node_etcd_args = datastore_args
 
 
@@ -70,7 +73,7 @@ def craft(
             The configuration object to be updated with extra arguments.
         cluster_name (str): the name of the cluster to override in the extra arguments.
         node_ips (list[str]): the IP address of the node to override in the extra arguments.
-        datastore(Optional[str]): the name of the datastore.
+        datastore(Optional[str]): the name of the datastore, specified in charm notation.
     """
     if isinstance(dest, (BootstrapConfig, ControlPlaneNodeJoinConfig)):
         dest.extra_node_kube_apiserver_args = _parse(src["kube-apiserver-extra-args"])
@@ -84,10 +87,9 @@ def craft(
 
         dest.extra_node_kube_scheduler_args = _parse(src["kube-scheduler-extra-args"])
 
-        if datastore:
-            _configure_datastore_args(dest, src, datastore)
+        _configure_datastore_args(dest, src, datastore)
 
-    if datastore and isinstance(dest, FileArgsConfig):
+    if isinstance(dest, FileArgsConfig):
         _configure_datastore_args(dest, src, datastore)
 
     dest.extra_node_kube_proxy_args = _parse(src["kube-proxy-extra-args"])

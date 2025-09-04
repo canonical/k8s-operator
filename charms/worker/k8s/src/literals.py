@@ -166,8 +166,9 @@ K8S_WORKER_SERVICES = [
     *K8S_COMMON_SERVICES,
 ]
 
-# etcd arguments
-LISTEN_METRICS_URLS_ARG = "--listen-metrics-urls"
+# etcd
+ETCD_LISTEN_METRICS_URLS_ARG = "--listen-metrics-urls"
+ETCD_DEFAULT_METRICS_URL = "http://localhost:2381"
 
 # Upgrade
 DEPENDENCIES = {
