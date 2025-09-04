@@ -34,7 +34,7 @@ import socket
 from contextlib import contextmanager
 from datetime import datetime
 from http.client import HTTPConnection, HTTPException
-from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Dict, Generator, List, Mapping, Optional, Tuple, Type, TypeVar
 
 import yaml
 from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, validator
@@ -419,10 +419,10 @@ class BootstrapConfig(BaseModel):
     extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
-    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
     )
-    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+    extra_node_containerd_config: Optional[Mapping[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
     )
     containerd_base_dir: Optional[str] = Field(default=None, alias="containerd-base-dir")
@@ -526,7 +526,7 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig, allow_population_by_field_name=
     extra_node_k8s_dqlite_args: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
-    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
