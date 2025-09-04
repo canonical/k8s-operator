@@ -34,7 +34,7 @@ import socket
 from contextlib import contextmanager
 from datetime import datetime
 from http.client import HTTPConnection, HTTPException
-from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar, Mapping
 
 import yaml
 from pydantic import (
@@ -55,7 +55,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 9
 
 logger = logging.getLogger(__name__)
 
@@ -500,31 +500,31 @@ class BootstrapConfig(BaseModel):
         default=None, alias="extra-node-config-files"
     )
     # Extra service arguments (values can be None to delete)
-    extra_node_kube_apiserver_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_apiserver_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
     )
-    extra_node_kube_controller_manager_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_controller_manager_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
     )
-    extra_node_kube_scheduler_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_scheduler_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
     )
-    extra_node_kube_proxy_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_proxy_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-proxy-args"
     )
-    extra_node_kubelet_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kubelet_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kubelet-args"
     )
-    extra_node_containerd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_containerd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-containerd-args"
     )
-    extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_k8s_dqlite_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
-    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
     )
-    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+    extra_node_containerd_config: Optional[Mapping[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
     )
     containerd_base_dir: Optional[str] = Field(default=None, alias="containerd-base-dir")
@@ -655,19 +655,19 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
     extra_node_config_files: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-config-files"
     )
-    extra_node_kube_apiserver_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_apiserver_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
     )
-    extra_node_kube_controller_manager_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_controller_manager_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
     )
-    extra_node_kube_scheduler_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_scheduler_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
     )
-    extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_k8s_dqlite_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
-    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(

@@ -53,6 +53,7 @@ async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout
     await asyncio.wait_for(prometheus.is_ready(), timeout=timeout * 60)
 
     queries = [
+        'up{job="etcd"} > 0',
         'up{job="kubelet", metrics_path="/metrics"} > 0',
         'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
         'up{job="kubelet", metrics_path="/metrics/probes"} > 0',
