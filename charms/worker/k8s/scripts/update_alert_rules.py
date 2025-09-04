@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import List, Tuple
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -23,8 +24,8 @@ import yaml
 logging.basicConfig(level=logging.INFO)
 
 # NOTE: pick a kube-prometheus version that supports the Kubernetes version we deploy
-# As of 2025-06-16, v0.15.0 supports 1.31-1.33.
-VERSION = "v0.15.0"
+# As of 2025-09-01, v0.16.0 supports 1.31-1.34.
+VERSION = "v0.16.0"
 SOURCE = (
     f"https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/{VERSION}/manifests"
 )
@@ -37,9 +38,10 @@ ALERT_RULES_DIR = Path("src/prometheus_alert_rules")
 PATCHES_DIR = Path("scripts/rules-patches")
 
 # NOTE: (mateoflorido): This record is duplicated across the rules. As of
-# 2025-06-16 (v0.15.0), Prometheus does not support duplicated records.
-DROP_RECORDS = [
-    ("kube-apiserver-availability.rules", "code_verb:apiserver_request_total:increase1h")
+# 2025-09-01 (v0.16.0), Prometheus does not support duplicated records. Patch
+# 006 merges the duplicates into one recording rule.
+DROP_RECORDS: List[Tuple[str, str]] = [
+    # ("kube-apiserver-availability.rules", "code_verb:apiserver_request_total:increase1h")
 ]
 
 
@@ -152,6 +154,9 @@ def apply_patches():
             to support charmed environments The patch adjusts the join logic
             to use the instance label instead of node. It also uses
             `label_replace` to align labels between metrics.
+        006_apiserver_sla: Current version of Prometheus does not allow duplicated
+            rules. This patch combines the apiserver SLO into one recording
+            rule.
     """
     for patch_file in PATCHES_DIR.glob("*"):
         logging.info("Applying patch %s", patch_file)

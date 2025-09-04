@@ -21,7 +21,7 @@ import yaml
 
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "v0.15.0"
+VERSION = "v0.16.0"
 SOURCE_URL = (
     "https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/"
     f"{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
