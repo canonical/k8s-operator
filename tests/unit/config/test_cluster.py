@@ -134,14 +134,16 @@ def test_configure_datastore_extra_args(harness):
 
     harness.disable_hooks()
     harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
-    harness.update_config({"bootstrap-datastore": "managed-etcd"})
-    harness.update_config({"datastore-extra-args": "v=6 foo=ban clog"})
+    harness.update_config(
+        {"bootstrap-datastore": "managed-etcd", "datastore-extra-args": "v=6 foo=ban clog"}
+    )
 
     bootstrap_config = harness.charm._assemble_bootstrap_config()
 
     assert bootstrap_config.extra_node_etcd_args == {
         "--v": "6",
         "--foo": "ban",
+        "--listen-metrics-urls": "http://localhost:2381",
         "--clog": "true",
     }
     assert bootstrap_config.extra_node_k8s_dqlite_args is None
