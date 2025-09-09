@@ -11,15 +11,11 @@ from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
 from literals import (
-    K8S_CONTROL_PLANE_SERVICES,
-    K8S_DQLITE_SERVICE,
-    K8S_WORKER_SERVICES,
-    MANAGED_ETCD_SERVICE,
     UPGRADE_RELATION,
 )
 from upgrade import K8sDependenciesModel, K8sUpgrade
 
-from charms.data_platform_libs.v0.upgrade import ClusterNotReadyError
+import charms.data_platform_libs.v0.upgrade as upgrade_lib
 
 
 class TestK8sUpgrade(unittest.TestCase):
@@ -82,7 +78,7 @@ class TestK8sUpgrade(unittest.TestCase):
             Node(metadata=ObjectMeta(name="k8s-3")),
         ]
 
-        with self.assertRaises(ClusterNotReadyError):
+        with self.assertRaises(upgrade_lib.ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
 
     def test_pre_upgrade_check_cluster_inspector_error(self):
@@ -91,7 +87,7 @@ class TestK8sUpgrade(unittest.TestCase):
             "test error"
         )
 
-        with self.assertRaises(ClusterNotReadyError):
+        with self.assertRaises(upgrade_lib.ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
 
     def test_pre_upgrade_check_pods_not_ready(self):
@@ -99,7 +95,7 @@ class TestK8sUpgrade(unittest.TestCase):
         self.node_manager.get_nodes.return_value = None
         self.node_manager.verify_pods_running.return_value = "kube-system/pod-1"
 
-        with self.assertRaises(ClusterNotReadyError):
+        with self.assertRaises(upgrade_lib.ClusterNotReadyError):
             self.upgrade.pre_upgrade_check()
 
     def test_build_upgrade_stack_no_relation(self):
@@ -134,7 +130,10 @@ class TestK8sUpgrade(unittest.TestCase):
         unit_1.name = "k8s-worker/0"
         unit_2 = mock.MagicMock(spec=ops.Unit)
         unit_2.name = "k8s-worker/1"
-        self.charm.get_worker_versions.return_value = {"1.31.0": [unit_1], "1.31.5": [unit_2]}
+        self.charm.get_worker_versions.return_value = {
+            "1.31.0": [unit_1],
+            "1.31.5": [unit_2],
+        }
 
         result = self.upgrade._verify_worker_versions()
 
@@ -146,23 +145,14 @@ class TestK8sUpgrade(unittest.TestCase):
         unit_1.name = "k8s-worker/0"
         unit_2 = mock.MagicMock(spec=ops.Unit)
         unit_2.name = "k8s-worker/1"
-        self.charm.get_worker_versions.return_value = {"1.32.0": [unit_1], "1.33.0": [unit_2]}
+        self.charm.get_worker_versions.return_value = {
+            "1.32.0": [unit_1],
+            "1.33.0": [unit_2],
+        }
 
         result = self.upgrade._verify_worker_versions()
 
         self.assertFalse(result)
-
-    @mock.patch("upgrade.start")
-    @mock.patch("upgrade.stop")
-    @mock.patch("upgrade.snap_management")
-    def test_perform_upgrade(self, management, stop, start):
-        """Test perform_upgrade method."""
-        services = mock.MagicMock()
-
-        self.upgrade._perform_upgrade(services)
-        management.assert_called_once_with(self.charm)
-        stop.assert_called_once_with("k8s", services)
-        start.assert_called_once_with("k8s", services)
 
     @mock.patch("upgrade.K8sUpgrade._upgrade")
     def test_on_upgrade_granted(self, mock_upgrade):
@@ -175,43 +165,46 @@ class TestK8sUpgrade(unittest.TestCase):
     @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
-        "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
+        "upgrade.K8sUpgrade._verify_worker_versions",
+        new=mock.MagicMock(return_value=True),
     )
-    @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
+    @mock.patch("upgrade.snap_management")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
-    def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade):
+    def test_upgrade_control_plane(self, on_upgrade_changed, snap_management):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
-        self.charm.meta.config = {
-            "bootstrap-datastore": ops.ConfigMeta("bootstrap-datastore", "string", None, None)
-        }
-        self.charm.config = {"bootstrap-datastore": "etcd"}
         self.charm.is_control_plane = True
         self.charm.is_worker = False
 
         self.upgrade._upgrade(event)
-        services = [
-            s
-            for s in K8S_CONTROL_PLANE_SERVICES
-            if s != K8S_DQLITE_SERVICE and s != MANAGED_ETCD_SERVICE
-        ]
-        perform_upgrade.assert_called_once_with(services=services)
+        snap_management.assert_called_once_with(self.charm)
         on_upgrade_changed.assert_called_once_with(event)
 
     @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
     @mock.patch("upgrade.snap_version", new=mock.MagicMock(return_value=("1.31.1", False)))
     @mock.patch(
-        "upgrade.K8sUpgrade._verify_worker_versions", new=mock.MagicMock(return_value=True)
+        "upgrade.K8sUpgrade._verify_worker_versions",
+        new=mock.MagicMock(return_value=True),
     )
-    @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
+    @mock.patch("upgrade.snap_management")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
-    def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade):
+    def test_upgrade_worker(self, on_upgrade_changed, snap_management):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
-        self.charm.meta.config = {}
         self.charm.is_control_plane = False
         self.charm.is_worker = True
 
         self.upgrade._upgrade(event)
-        perform_upgrade.assert_called_once_with(services=K8S_WORKER_SERVICES)
+        snap_management.assert_called_once_with(self.charm)
         on_upgrade_changed.assert_called_once_with(event)
+
+    def test_handler_proceed(self):
+        """Test handler method allows reconciliation."""
+        cases = [
+            upgrade_lib.UpgradeGrantedEvent,
+            upgrade_lib.UpgradeFinishedEvent,
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                event = mock.MagicMock(spec=case)
+                self.upgrade.handler(event)

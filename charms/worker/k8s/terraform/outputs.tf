@@ -10,7 +10,6 @@ output "requires" {
   value = {
     aws                     = "aws"
     azure                   = "azure"
-    certificates            = "certificates"
     etcd                    = "etcd"
     external_cloud_provider = "external-cloud-provider"
     gcp                     = "gcp"

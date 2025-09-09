@@ -38,27 +38,10 @@ assumes:
 
 type: charm
 platforms:
-  ubuntu-22.04-amd64:
-    build-on:
-      - ubuntu@22.04:amd64
-    build-for:
-      - ubuntu@22.04:amd64
-  ubuntu-22.04-arm64:
-    build-on:
-      - ubuntu@22.04:arm64
-    build-for:
-      - ubuntu@22.04:arm64
-
-  ubuntu-24.04-amd64:
-    build-on:
-      - ubuntu@24.04:amd64
-    build-for:
-      - ubuntu@24.04:amd64
-  ubuntu-24.04-arm64:
-    build-on:
-      - ubuntu@24.04:arm64
-    build-for:
-      - ubuntu@24.04:arm64
+  ubuntu@22.04:amd64:
+  ubuntu@22.04:arm64:
+  ubuntu@24.04:amd64:
+  ubuntu@24.04:arm64:
 config:
   options:
     cluster-annotations:
@@ -75,18 +58,20 @@ config:
         Example:
           e.g.: key1=value1 key2=value2
     bootstrap-datastore:
-      default: managed-etcd
       type: string
+      default: ""
       description: |
-        The datastore to use in Canonical Kubernetes. This cannot be changed
-        after deployment. Allowed values are "managed-etcd", "dqlite" and "etcd". 
-        If "etcd" is chosen, the charm should be integrated with the etcd charm.
-    bootstrap-certificates:
-      type: string
-      default: "self-signed"
-      description: |
-        The type of certificates to use in Canonical Kubernetes. This cannot be
-        changed after deployment. Allowed values are "self-signed" and "external".
+        The datastore to use in Canonical Kubernetes.
+        This can only be reset after deployment.
+
+        Allowed values are "", managed-etcd, dqlite and etcd.
+
+        * "":           The charm will automatically bootstrap with the default
+                        datastore managed by the k8s snap.
+        * managed-etcd: The charm will bootstrap with a managed-etcd datastore.
+        * dqlite:       The charm will bootstrap with a k8s-dqlite datastore.
+        * etcd:         The charm will bootstrap with an external etcd datastore.
+                        The charm will block until the etcd charm is integrated.
     bootstrap-node-taints:
       type: string
       default: ""
@@ -102,36 +87,37 @@ config:
         https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
     bootstrap-pod-cidr:
       type: string
-      default: "10.1.0.0/16"
+      default: ""
       description: |
         Comma-separated CIDR blocks for IP addresses that can be assigned
         to pods within the cluster. Can contain at most 2 blocks, one for IPv4
-        and one for IPv6.
+        and one for IPv6. If the value is "", the snap will automatically
+        assign a CIDR block for the pods.
 
         After deployment it is not possible to change the size of
         the IP range.
 
-        Examples:
-          - "192.0.2.0/24"
-          - "2001:db8::/32"
-          - "192.0.2.0/24,2001:db8::/32"
-          - "2001:db8::/32,192.0.2.0/24"
+        * "192.0.2.0/24"
+        * "2001:db8::/32"
+        * "192.0.2.0/24,2001:db8::/32"
+        * "2001:db8::/32,192.0.2.0/24"
     bootstrap-service-cidr:
       type: string
-      default: 10.152.183.0/24
+      default: ""
       description: |
         Comma-separated CIDR blocks for IP addresses that can be assigned
         to services within the cluster. Can contain at most 2 blocks, one for IPv4
-        and one for IPv6.
+        and one for IPv6. If the value is "", the snap will automatically
+        assign a CIDR block for the services.
 
         After deployment it is not possible to change the size of
         the IP range.
 
-        Examples:
-          - "192.0.2.0/24"
-          - "2001:db8::/32"
-          - "192.0.2.0/24,2001:db8::/32"
-          - "2001:db8::/32,192.0.2.0/24"
+        * "" - The charm will bootstrap with the defaults from the k8s snap
+        * "192.0.2.0/24"
+        * "2001:db8::/32"
+        * "192.0.2.0/24,2001:db8::/32"
+        * "2001:db8::/32,192.0.2.0/24"
     containerd-custom-registries:
       type: string
       default: "[]"
@@ -210,37 +196,6 @@ config:
         endpoints.
 
         If omitted defaults to `/etc/resolv.conf` and uses the nameservers on each node.
-    external-certs-domain-name:
-      type: string
-      default: ""
-      description: |
-        Specifies the domain name (e.g., `example.com`) used by the charm for
-        formatting common names in external-facing certificates (e.g.,
-        kube-apiserver or kubelet).
-        This value is passed to formatters using the `$domain_name` key and
-        applies only to external certificates. It can be use in the `external-certs-*-format`
-        configuration options.
-    external-certs-apiserver-common-name-format:
-      type: string
-      default: "kube-apiserver"
-      description: |
-        Formatter string for the API server's TLS certificate common name (CN).
-        Supports placeholders: $node_name, $cluster_name, and $domain_name.
-        The resulting CN must not exceed 64 characters and applies only to
-        external certificates.
-        Example: "apiserver.$cluster_name.$domain_name"
-        (e.g., "apiserver.mycluster.mydomain.com" if $cluster_name="mycluster" and $domain_name="mydomain.com")
-
-    external-certs-kubelet-common-name-format:
-      type: string
-      default: "system:node:$node_name"
-      description: |
-        Formatter string for the Kubelet's TLS certificate common name (CN).
-        Supports placeholders: $node_name, $cluster_name, and $domain_name.
-        The resulting CN must not exceed 64 characters and applies only to
-        external certificates.
-        Example: "system:node:$node_name"
-        (e.g., "system:node:worker1" if $node_name="worker1")
     gateway-enabled:
       type: boolean
       default: false
@@ -477,14 +432,6 @@ actions:
         type: string
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
-  refresh-certs:
-    description:  Refresh the certificates of the Kubernetes node
-    params:
-      expires-in:
-        description: Time until the certificates expire, e.g., 1h, 2d, 4mo, 5y
-        type: string
-    required:
-    - expires-in
 
 parts:
   charm:
@@ -534,9 +481,6 @@ requires:
     interface: aws-integration
   azure:
     interface: azure-integration
-  certificates:
-    interface: tls-certificates
-    limit: 1
   etcd:
     interface: etcd
     limit: 1

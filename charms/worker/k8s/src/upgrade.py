@@ -4,19 +4,12 @@
 """A module for upgrading the k8s and k8s-worker charms."""
 
 import logging
-from typing import List, Union
+from typing import List, Optional, Union
 
 import ops
 import reschedule
 from inspector import ClusterInspector
 from literals import (
-    BOOTSTRAP_DATASTORE,
-    DATASTORE_TYPE_ETCD,
-    DATASTORE_TYPE_K8S_DQLITE,
-    K8S_CONTROL_PLANE_SERVICES,
-    K8S_DQLITE_SERVICE,
-    K8S_WORKER_SERVICES,
-    MANAGED_ETCD_SERVICE,
     SNAP_NAME,
     UPGRADE_RELATION,
 )
@@ -26,7 +19,6 @@ from protocols import K8sCharmProtocol
 #  because the upgrade model does not support pydantic v2 yet.
 from pydantic.v1 import BaseModel
 from snap import management as snap_management
-from snap import start, stop
 from snap import version as snap_version
 
 import charms.contextual_status as status
@@ -34,6 +26,7 @@ from charms.data_platform_libs.v0.upgrade import (
     ClusterNotReadyError,
     DataUpgrade,
     DependencyModel,
+    UpgradeFinishedEvent,
     UpgradeGrantedEvent,
     verify_requirements,
 )
@@ -68,25 +61,52 @@ class K8sUpgrade(DataUpgrade):
         super().__init__(charm, **kwargs)
         self.charm = charm
         self.cluster_inspector = cluster_inspector
+        self._upgrade_granted = False
+        self._upgrade_complete = False
 
-    def set_upgrade_status(self, event: ops.UpdateStatusEvent) -> None:
-        """Set the Juju upgrade status.
+    @property
+    def upgrade_granted(self) -> bool:
+        """Check if the upgrade has been granted."""
+        return self._upgrade_granted
+
+    def handler(self, event: ops.EventBase):
+        """Block reconciler if the unit was upgraded without a pre-upgrade-check.
 
         Args:
-            event: The UpdateStatusEvent instance.
+            event: ops.EventBase - event that triggered the check
         """
-        upgrade_status = self.state
-        if not upgrade_status:
-            return
-        if upgrade_status == "upgrading":
-            if not self.charm.is_upgrade_granted:
-                self._upgrade(event)
-        elif upgrade_status == "recovery":
-            status.add(ops.MaintenanceStatus("Charm is in recovery mode. Please check the logs."))
-            return
-        elif upgrade_status == "failed":
-            status.add(ops.BlockedStatus("Upgrade Failed. Please check the logs."))
-            return
+        if isinstance(event, (UpgradeGrantedEvent, UpgradeFinishedEvent)):
+            log.debug("%s, proceed with reconciliation", event.__class__.__name__)
+        elif self.state is None:
+            log.debug("Upgrade not setup, proceed with reconciliation")
+        elif self.state == "upgrading" and (failure := self._upgrade(event)):
+            log.warning("Upgrade failure, cease reconciliation: %s", failure.message)
+            status.add(failure)
+            raise status.ReconcilerError(failure.message)
+        elif self.state != "idle":
+            failure = self.charm.unit.status.message
+            message = f"Upgrade not idle state='{self.state}', cease reconciliation.: {failure}"
+            log.warning(message)
+            status.add(self.charm.unit.status)
+            raise status.ReconcilerError(message)
+        elif isinstance(event, ops.UpgradeCharmEvent):
+            # A resource attachment can trigger this event
+            if self.charm.snap_installation_resource.is_updated:
+                log.debug("Resource Attachment, proceed with reconciliation.")
+            # or it's a charm upgrade, maybe a single node upgrade that's done?
+            elif len(self.app_units) == 1 and self._upgrade_complete:
+                log.debug("Single node upgrade completed, proceed with reconciliation.")
+            # or maybe a multi-unit upgrade that is underway?
+            elif super().upgrade_stack:
+                log.debug("Upgrade stack exists, proceed with reconciliation.")
+            else:
+                reason = "Unit was upgraded without a pre-upgrade-check"
+                log.warning(reason)
+                self.set_unit_failed(reason)
+                if self.charm.unit.is_leader():
+                    self.upgrade_stack = self.build_upgrade_stack()
+                status.add(self.charm.unit.status)
+                raise status.ReconcilerError(reason)
 
     def pre_upgrade_check(self) -> None:
         """Check if the cluster is ready for an upgrade.
@@ -145,41 +165,22 @@ class K8sUpgrade(DataUpgrade):
             bool: True if all worker versions meet the requirements, False otherwise.
         """
         worker_versions = self.charm.get_worker_versions()
-        if not worker_versions:
-            return True
         dependency_model: DependencyModel = getattr(self.dependency_model, "k8s_service")
+        requirement = dependency_model.dependencies["k8s-worker"]
 
         incompatible = {
             version: units
             for version, units in worker_versions.items()
-            if not verify_requirements(
-                version=version, requirement=dependency_model.dependencies["k8s-worker"]
-            )
+            if not verify_requirements(version, requirement)
         }
 
         if incompatible:
             units_str = "\n".join(
                 f"[{v}]: {', '.join(u.name for u in units)}" for v, units in incompatible.items()
             )
-            log.error(
-                "k8s worker charm version requirements not met. Incompatible units: %s", units_str
-            )
-            return False
+            log.error("k8s worker version requirements not met. Incompatible units: %s", units_str)
 
-        return True
-
-    def _perform_upgrade(self, services: List[str]) -> None:
-        """Perform the upgrade.
-
-        Args:
-            services: The services to stop and start during the upgrade.
-        """
-        status.add(ops.MaintenanceStatus("Stopping the K8s services"))
-        stop(SNAP_NAME, services)
-        status.add(ops.MaintenanceStatus("Upgrading the k8s snap."))
-        snap_management(self.charm)
-        status.add(ops.MaintenanceStatus("Starting the K8s services"))
-        start(SNAP_NAME, services)
+        return not incompatible
 
     def _on_upgrade_granted(self, event: UpgradeGrantedEvent) -> None:
         """Handle the upgrade granted event.
@@ -188,54 +189,43 @@ class K8sUpgrade(DataUpgrade):
             event: The UpgradeGrantedEvent instance.
         """
         with status.context(self.charm.unit, exit_status=ops.ActiveStatus("Ready")):
-            self._upgrade(event)
+            if failure := self._upgrade(event):
+                status.add(failure)
+        self._upgrade_complete = True
 
-    def _upgrade(self, event: Union[ops.EventBase, ops.HookEvent]) -> None:
+    def _upgrade(self, event: Union[ops.EventBase, ops.HookEvent]) -> Optional[ops.StatusBase]:
         """Upgrade the snap workload."""
         trigger = reschedule.PeriodicEvent(self.charm)
-        current_version, _ = snap_version("k8s")
+        current_version, _ = snap_version(SNAP_NAME)
 
         status.add(ops.MaintenanceStatus("Verifying the cluster is ready for an upgrade."))
         if not current_version:
-            log.error("Failed to get the version of the k8s snap.")
-            self.set_unit_failed(cause="Failed to get the version of the k8s snap.")
-            status.add(ops.BlockedStatus("Failed to get the version of the k8s snap."))
-            return
+            message = "Failed to get the version of the k8s snap."
+            log.error(message)
+            self.set_unit_failed(cause=message)
+            return ops.BlockedStatus(message)
 
-        status.add(ops.MaintenanceStatus("Upgrading the charm."))
+        if self.charm.lead_control_plane and not self._verify_worker_versions():
+            message = "The k8s worker version requirements are not met."
+            log.error(message)
+            self.set_unit_failed(cause=message)
+            trigger.cancel()
+            return ops.BlockedStatus(message)
 
-        if self.charm.lead_control_plane:
-            if not self._verify_worker_versions():
-                self.set_unit_failed(
-                    cause="The k8s worker charm version does not meet the requirements."
-                )
-                trigger.cancel()
-                return
-
-        self.charm.grant_upgrade()
-        if self.charm.is_control_plane:
-            services = list(K8S_CONTROL_PLANE_SERVICES)
-            bootstrap_datastore = BOOTSTRAP_DATASTORE.get(self.charm)
-            if bootstrap_datastore != DATASTORE_TYPE_K8S_DQLITE:
-                services.remove(K8S_DQLITE_SERVICE)
-            if bootstrap_datastore != DATASTORE_TYPE_ETCD:
-                services.remove(MANAGED_ETCD_SERVICE)
-        else:
-            services = list(K8S_WORKER_SERVICES)
-
+        self._upgrade_granted = True
+        status.add(ops.MaintenanceStatus("Upgrading the snap."))
         try:
-            self._perform_upgrade(services=services)
+            snap_management(self.charm)
             self.set_unit_completed()
-
             if self.charm.unit.is_leader():
                 self.on_upgrade_changed(event)
-
             trigger.cancel()
         except SnapError:
-            status.add(ops.WaitingStatus("Waiting for the snap to be installed."))
             log.exception("Failed to upgrade the snap. Will retry...")
             trigger.create(reschedule.Period(seconds=30))
-            return
+            return ops.WaitingStatus("Waiting for the snap to be installed.")
+        self._upgrade_granted = False
+        return None
 
     def build_upgrade_stack(self) -> List[int]:
         """Return a list of unit numbers to upgrade in order.
@@ -243,13 +233,10 @@ class K8sUpgrade(DataUpgrade):
         Returns:
             A list of unit numbers to upgrade in order.
         """
-        relation = self.charm.model.get_relation(UPGRADE_RELATION)
-        if not relation:
-            return [int(self.charm.unit.name.split("/")[-1])]
-
-        return [
-            int(unit.name.split("/")[-1]) for unit in ({self.charm.unit} | set(relation.units))
-        ]
+        units = {self.charm.unit}
+        if relation := self.charm.model.get_relation(UPGRADE_RELATION):
+            units |= set(relation.units)
+        return [int(unit.name.split("/")[-1]) for unit in units]
 
     def log_rollback_instructions(self) -> None:
         """Log instructions for rolling back the upgrade."""

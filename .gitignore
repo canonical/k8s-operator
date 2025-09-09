@@ -3,11 +3,13 @@ build/
 *.charm
 .tox/
 .coverage
+coverage.xml
 __pycache__/
 *.py[cod]
 .idea
 .vscode
 .mypy_cache
+.style-guide/
 *.egg-info/
 */*.rock
 

@@ -17,6 +17,8 @@ applications:
     options:
       bootstrap-certificates: external
       bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
+      bootstrap-pod-cidr: 10.1.0.0/16
+      bootstrap-service-cidr: 10.152.183.0/24
   k8s-worker:
     charm: k8s-worker
     constraints: cores=2 mem=8G root-disk=16G
@@ -26,4 +28,3 @@ relations:
   - [k8s, k8s-worker:containerd]
   - [k8s, self-signed-certificates:certificates]
   - [k8s-worker, self-signed-certificates:certificates]
-

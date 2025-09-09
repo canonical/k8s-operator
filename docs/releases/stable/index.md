@@ -4,7 +4,7 @@ This document outlines the process for publishing a Canonical Kubernetes stable 
 
 ## Background
 
-### Repository Branching
+### Repository branching
 
 This repositories used by Canonical Kubernetes has a branch scheme to provide a
 consistent release experience. Any external or shared repositories are forked
@@ -12,11 +12,11 @@ into the `charmed-kubernetes` github organization and have the following branche
 
 * `main`: The primary development branch. Merges are made against this branch as they are approved.
 * `release_1.xx`: The release branch. New major releases are branched from `main`.
-* `release_1.xx`. Bugfix releases have specific commits PR'd to `release_1.xx` from a `bugfix_1.xx_<bugid>` branch.
+* `release_1.xx`. Bug fix releases have specific commits committed to `release_1.xx` from a `bugfix_1.xx_<bugid>` branch via a pull-request.
 
 Tags are used to mark releases on the `release_1.xx` branch.
 
-### Feature Freeze
+### Feature freeze
 
 In the weeks prior to a stable release the team goes into a feature freeze. At this
 time only bugfixes and concentration on resolving any other outstanding issues
@@ -32,9 +32,9 @@ the default repo branch per the documentation below. During the feature freeze a
 Solutions QA period, fixes which need to be applied to address CI or QA failures
 (and only those specific fixes) are merged to the respective release branches.
 
-## Prepare CI
+## Prepare continuous integration
 
-### $stable++ release
+### Prepare next stable release
 
 It may feel early, but part of releasing the next stable version requires
 preparing for the release that will follow. This requires opening tracks and
@@ -63,7 +63,7 @@ promote to the new release.
 
 ### Pin snap channel in the release branches
 
-The charms run the `k8s-snap` underneath, so to make sure the changes in the 
+The charms run the `k8s-snap` underneath, so to make sure the changes in the
 snap are going to be available in the charm, we need to make sure the correct
 k8s snap channel is referenced. For that, the [snap_installation.yaml] file
 needs to be updated either with the correct `channel`, or with the `revision` of the
@@ -88,47 +88,8 @@ amd64:
   revision: 2500
 ```
 
-The [auto-update-snap-revision] job is also responsible for auto-updating the snap 
+The [auto-update-snap-revision] job is also responsible for auto-updating the snap
 revision in the [snap_installation.yaml] file. This job is triggered on a schedule.
-
-### Pin pip versions of all python dependencies
-
-In order to reproduce charm builds, we should pin the python dependencies of at least
-the charm code.  The pinning should take place using a specific version of python
-in order to ensure compatibility with the base os release. One can use `pyenv` to help
-create python environments locally to help freeze the requirements.txt
-
-| base                     | python |
-| ---                      | ---    |
-| ubuntu@20.04 (**focal**) | 3.8    |
-| ubuntu@22.04 (**jammy**) | 3.10   |
-| ubuntu@24.04 (**noble**) | 3.12   |
-
-Choose the environment based build-on base in `charms/worker/k8s/charmcraft.yaml`
-
-In the following example, building on focal yields packages for python 3.8.
-
-```yaml
-  - build-on:
-    - name: ubuntu
-      channel: "20.04"
-      architectures: [amd64]
-```
-
-Create a python 3.8 environment, and freeze the libraries.
-Then create a PR to merge into the release branch.
-
-Task:
-
-```sh
-pyenv install 3.8
-pyenv virtualenv 3.8 k8s-operator
-pyenv activate k8s-operator
-git switch release_1.xx
-git checkout -b task/pip-pinning/release-1.xx
-pip install -r charms/worker/k8s/requirements.txt
-pip freeze > charms/worker/k8s/requirements.txt
-```
 
 ### Build charms from the release branches
 
@@ -161,30 +122,18 @@ We aim to remove this list in the future, and have all tests running in CI.
 
 Also, make sure that all the [nightly tests] are passing.
 
-### Run **validate-k8s-release-upgrade** job
-
-**Job**: <https://jenkins.canonical.com/k8s-ps5/job/validate-k8s-release-upgrade/>
-
-This validates the deployment using charms from the `$prev/stable` channel,
-then performing an upgrade to `1.xx/beta`. The tests are parameterized to
-run on:
-
-* multiple series
-* multiple architectures
-* multiple clouds (aws/azure/gcp/vsphere)
-
 ### Promote charms to candidate
 
 **Job**: <https://github.com/canonical/k8s-operator/actions/workflows/promote_charm.yaml>
 
 Once we've made sure that the [publish-charms] job ran successfully for the latest
-changes in the release branch, and the changes are available in `beta`, we can 
+changes in the release branch, and the changes are available in `beta`, we can
 promote the charms to `candidate`. This can be done by running the [promote-charms] job
 for the release branch:
 
 ![Promote to candidate](./beta-to-candidate.png)
 
-### Notify Solutions QA
+### Notify quality team
 
 At the end of the first week and assuming all major blockers are resolved, the
 release is passed over to Solutions QA (SQA) for sign-off. This is done by
@@ -193,29 +142,11 @@ with a new `1.xx` tag and informing SQA of that tag. The SQA team will have the
 remaining week to test and file bugs so engineering can work towards getting
 them resolved prior to stable release.
 
-### CNCF Conformance
-
-**Job**: <https://jenkins.canonical.com/k8s-ps5/job/conformance-cncf-k8s/>
-
-Sync `canonical/k8s-conformance` main from upstream.
-
-* <https://github.com/canonical/k8s-conformance>
-
-Confirm passing results, then create a PR against the upstream `k8s-conformance`
-repo.
-
-Next, open an upstream PR:
-
-* <https://github.com/cncf/k8s-conformance/pull/XXXXX>
-
-> **Note**: CNCF requires a sign-off. After confirming results, issue a
-`git commit --amend --signoff` on the branch prior to submitting the PR.
-
 ## Performing the release
 
 ### Document release notes
 
-* Bugfixes
+* Bug fixes
 * Enhancements
 * Known Limitations/Issues
 

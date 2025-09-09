@@ -6,31 +6,10 @@
 # pylint: disable=duplicate-code,missing-function-docstring
 """Unit tests."""
 
-from pathlib import Path
 from unittest import mock
 
-import ops
-import ops.testing
 import pytest
-from charm import K8sCharm
 from config.cluster import assemble_cluster_config
-
-
-@pytest.fixture(params=["worker", "control-plane"])
-def harness(request):
-    """Craft a ops test harness.
-
-    Args:
-        request: pytest request object
-    """
-    meta = Path(__file__).parent / "../../../charmcraft.yaml"
-    if request.param == "worker":
-        meta = Path(__file__).parent / "../../../../charmcraft.yaml"
-    harness = ops.testing.Harness(K8sCharm, meta=meta.read_text())
-    harness.begin()
-    harness.charm.is_worker = request.param == "worker"
-    yield harness
-    harness.cleanup()
 
 
 def test_configure_network_options(harness):
@@ -86,6 +65,9 @@ def test_configure_common_extra_args(harness):
 
     harness.disable_hooks()
     harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
+    harness.add_network(
+        "10.0.0.10", endpoint="cluster", ingress_addresses=("10.0.0.10", "2001:db8:10::a00:a")
+    )
     harness.update_config({"kubelet-extra-args": "v=3 foo=bar flag"})
     harness.update_config({"kube-proxy-extra-args": "v=4 foo=baz flog"})
 
@@ -95,6 +77,8 @@ def test_configure_common_extra_args(harness):
     assert bootstrap_config.extra_node_kubelet_args == {
         "--v": "3",
         "--foo": "bar",
+        # NOTE: (mateoflorido): IPv6 addrs are exploded.
+        "--node-ip": "10.0.0.10,2001:0db8:0010:0000:0000:0000:0a00:000a",
         "--flag": "true",
     }
     assert bootstrap_config.extra_node_kube_proxy_args == {
@@ -150,14 +134,16 @@ def test_configure_datastore_extra_args(harness):
 
     harness.disable_hooks()
     harness.add_relation("cluster", "remote", unit_data={"ingress-address": "1.2.3.4"})
-    harness.update_config({"bootstrap-datastore": "managed-etcd"})
-    harness.update_config({"datastore-extra-args": "v=6 foo=ban clog"})
+    harness.update_config(
+        {"bootstrap-datastore": "managed-etcd", "datastore-extra-args": "v=6 foo=ban clog"}
+    )
 
     bootstrap_config = harness.charm._assemble_bootstrap_config()
 
     assert bootstrap_config.extra_node_etcd_args == {
         "--v": "6",
         "--foo": "ban",
+        "--listen-metrics-urls": "http://localhost:2381",
         "--clog": "true",
     }
     assert bootstrap_config.extra_node_k8s_dqlite_args is None

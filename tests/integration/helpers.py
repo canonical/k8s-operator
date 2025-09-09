@@ -14,17 +14,26 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
-import juju.application
 import juju.model
 import juju.unit
 import juju.utils
 import yaml
+from async_lru import alru_cache
 from juju.url import URL
 from pytest_operator.plugin import OpsTest
-from tenacity import AsyncRetrying, before_sleep_log, retry, stop_after_attempt, wait_fixed
+from tenacity import (
+    AsyncRetrying,
+    before_sleep_log,
+    retry,
+    stop_after_attempt,
+    wait_fixed,
+)
 
 log = logging.getLogger(__name__)
-CHARMCRAFT_DIRS = {"k8s": Path("charms/worker/k8s"), "k8s-worker": Path("charms/worker")}
+CHARMCRAFT_DIRS = {
+    "k8s": Path("charms/worker/k8s"),
+    "k8s-worker": Path("charms/worker"),
+}
 
 
 async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
@@ -439,7 +448,9 @@ class Bundle:
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
                 await charm.resolve(
-                    ops_test, self.arch, juju.utils.get_series_version(self.series or "jammy")
+                    ops_test,
+                    self.arch,
+                    juju.utils.get_series_version(self.series or "jammy"),
                 )
                 app_to_charm[charm.name] = charm
         return app_to_charm
@@ -582,6 +593,7 @@ class Bundle:
         return True
 
 
+@alru_cache
 async def cloud_arch(ops_test: OpsTest) -> str:
     """Return current architecture of the selected controller.
 
@@ -601,6 +613,7 @@ async def cloud_arch(ops_test: OpsTest) -> str:
     return arch.pop().strip()
 
 
+@alru_cache
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller.
 

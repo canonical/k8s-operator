@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import ops
+from literals import DATASTORE_TYPE_ETCD
 from ops.charm import CharmBase
 
 log = logging.getLogger(__name__)
@@ -95,7 +96,11 @@ class COSIntegration(ops.Object):
         }
 
     def get_metrics_endpoints(
-        self, node_name: str, token: str, control_plane: bool = False
+        self,
+        node_name: str,
+        token: str,
+        control_plane: bool = False,
+        datastore: Optional[str] = None,
     ) -> List[Dict]:
         """Retrieve Prometheus scrape job configurations for Kubernetes components.
 
@@ -104,6 +109,7 @@ class COSIntegration(ops.Object):
             token (str): The authentication token.
             control_plane (bool, optional): If True, include control plane components.
                 Defaults to False.
+            datastore (Optional[str]): The datastore used in the cluster.
 
         Returns:
             List[Dict]: A list of Prometheus scrape job configurations.
@@ -205,9 +211,25 @@ class COSIntegration(ops.Object):
             else []
         )
 
+        managed_etcd_jobs = JobConfig(
+            "etcd",
+            "/metrics",
+            "http",
+            "localhost:2381",
+            [{"target_label": "job", "replacement": "etcd"}, instance_relabel],
+            [
+                {
+                    "targets": ["localhost:2381"],
+                    "labels": {"cluster": self.charm.model.name},
+                }
+            ],
+        )
+
         jobs = shared_jobs + kubelet_jobs
         if control_plane:
-            jobs += control_plane_jobs + kube_state_metrics
+            jobs.extend(control_plane_jobs + kube_state_metrics)
+            if datastore == DATASTORE_TYPE_ETCD:
+                jobs.append(managed_etcd_jobs)
 
         return [self._create_scrape_job(job, node_name, token) for job in jobs]
 

@@ -4,36 +4,52 @@ on:
   pull_request:
 
 jobs:
-  extra-args:
-    runs-on: ubuntu-latest
-    outputs:
-      args: ${{ steps.flags.outputs.args }}
-    steps:
-      - name: Determine extra args
-        id: flags
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-          JOB: ${{ github.job }}
-          WORKFLOW: ${{ github.workflow }}
-        run: |
-          EXTRA_ARGS="--crash-dump=on-failure"
-          if [[ "$TITLE" == *"[COS]"* ]]; then
-            EXTRA_ARGS="$EXTRA_ARGS --cos"
-          fi
-          echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
-
   charmcraft-channel:
     runs-on: ubuntu-24.04
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
+  select-tests:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      amd64: ${{ steps.select.outputs.amd64 }}
+      arm64: ${{ steps.select.outputs.arm64 }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Astral UV
+        uses: astral-sh/setup-uv@v6.6.1
+        with:
+          python-version: "3.12"
+      - name: Install tox with UV
+        run: uv tool install tox --with tox-uv
+      - name: Select tests
+        id: select
+        run: |
+          list_modules() {
+            ARCH=$1
+            MODULES=$(tox -e integration -- --collect-only -q --arch "$ARCH" 2>/dev/null \
+              | grep -E '<Module test_.*\.py>' \
+              | sed -E 's/.*<Module (test_[^.]*)\.py>.*/\1/' \
+              | sort -u)
+            jq -c -R -s 'split("\n")[:-1]' <<< "${MODULES}"
+          }
+          amd64=$(list_modules amd64)
+          arm64=$(list_modules arm64)
+          echo "amd64=${amd64}" >> "$GITHUB_OUTPUT"
+          echo "arm64=${arm64}" >> "$GITHUB_OUTPUT"
+
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
-    needs: [charmcraft-channel, extra-args]
+    needs: [charmcraft-channel, select-tests]
+    permissions:
+      contents: read
+      actions: write
     secrets: inherit
     strategy:
       matrix:
@@ -43,19 +59,18 @@ jobs:
             builder-label: ubuntu-22.04
             tester-arch: AMD64
             tester-size: xlarge
-            modules: '["test_k8s", "test_etcd", "test_dqlite", "test_ceph", "test_upgrade", "test_external_certs", "test_registry"]'
+            modules: ${{ needs.select-tests.outputs.amd64 }}
           # built and test on on self-hosted
           - id: arm64
             builder-label: ARM64
             tester-arch: ARM64
             tester-size: large
-            modules: '["test_k8s", "test_etcd", "test_dqlite"]'
+            modules: ${{ needs.select-tests.outputs.arm64 }}
     with:
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
-        ${{needs.extra-args.outputs.args}}
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=jammy' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
@@ -69,4 +84,5 @@ jobs:
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
+      with-uv: true
       zap-enabled: false
