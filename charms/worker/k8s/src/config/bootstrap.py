@@ -111,10 +111,18 @@ class Controller:
 
         try:
             cluster = self._charm.api_manager.get_cluster_config().metadata
-            snap_ds = cluster.datastore and cluster.datastore.type
-            opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
             opts.pod_cidr = cluster.pod_cidr
             opts.service_cidr = cluster.service_cidr
+            snap_ds = cluster.datastore and cluster.datastore.type
+            if not snap_ds:
+                # Fallback to the status datastore type if not set in config.
+                # This can happen if the cluster is running with a version
+                # of the k8s snap which doesn't copy the default datastore
+                # type to the config.
+                cluster = self._charm.api_manager.get_cluster_status().metadata
+                datastore = cluster and cluster.status.datastore
+                snap_ds = datastore and datastore.datastore_type
+            opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
         except (k8sd.K8sdConnectionError, k8sd.InvalidResponseError) as e:
             log.warning("Failed to load cluster config: %s", e)
             # Still return the options we have so far -- they will be validated later.
