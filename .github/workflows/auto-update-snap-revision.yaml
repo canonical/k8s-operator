@@ -88,6 +88,13 @@ jobs:
       run: |
         echo "Would have created pull-request"
         echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
+
+    - name: Setup Bot User
+      if: ${{ github.event_name == 'schedule' }}
+      run: |
+        git config user.name  "Canonical Github Bot"
+        git config user.email "actions@canonical.com"
+
     - name: Create pull request
       uses: peter-evans/create-pull-request@v7
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
