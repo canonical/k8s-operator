@@ -5,12 +5,11 @@
 
 import unittest.mock as mock
 
+import charms.contextual_status
+import charms.k8s.v0.k8sd_api_manager as k8sd
 import config.bootstrap
 import pytest
 from literals import DEFAULT_CERTIFICATE_PROVIDER
-
-import charms.contextual_status
-import charms.k8s.v0.k8sd_api_manager as k8sd
 
 
 @pytest.mark.parametrize(

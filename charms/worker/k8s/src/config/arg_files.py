@@ -14,6 +14,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import charms.operator_libs_linux.v2.snap as snap
 from literals import (
     CHARM_SYSD_ARGS_FILE,
     ETCD_ARGS_PATH,
@@ -33,8 +34,6 @@ from literals import (
     SNAP_NAME,
     SNAP_SYSD_ARGS_FILE,
 )
-
-import charms.operator_libs_linux.v2.snap as snap
 
 log = logging.getLogger(__name__)
 FileArgs = Dict[str, Optional[str]]
