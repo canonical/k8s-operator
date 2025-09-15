@@ -14,8 +14,13 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import charms.operator_libs_linux.v2.snap as snap
 from literals import (
     CHARM_SYSD_ARGS_FILE,
+    ETCD_ARGS_PATH,
+    ETCD_SYSD_PATH,
+    K8S_DQLITE_ARGS_PATH,
+    K8S_DQLITE_SYSD_PATH,
     KUBE_APISERVER_ARGS_PATH,
     KUBE_APISERVER_SYSD_PATH,
     KUBE_CONTROLLER_MANAGER_ARGS_PATH,
@@ -29,8 +34,6 @@ from literals import (
     SNAP_NAME,
     SNAP_SYSD_ARGS_FILE,
 )
-
-import charms.operator_libs_linux.v2.snap as snap
 
 log = logging.getLogger(__name__)
 FileArgs = Dict[str, Optional[str]]
@@ -50,6 +53,8 @@ class FileArgsConfig:
     """Configuration for file arguments."""
 
     def __init__(self):
+        self.extra_node_etcd_args = {}
+        self.extra_node_k8s_dqlite_args = {}
         self.extra_node_kube_apiserver_args = {}
         self.extra_node_kube_controller_manager_args = {}
         self.extra_node_kube_scheduler_args = {}
@@ -63,6 +68,18 @@ class FileArgsConfig:
     def _get_service_configs(self) -> List[ServiceConfig]:
         """Get the k8s service configurations."""
         return [
+            ServiceConfig(
+                name="etcd",
+                args_path=ETCD_ARGS_PATH,
+                systemd_args_path=ETCD_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_etcd_args,
+            ),
+            ServiceConfig(
+                name="k8s-dqlite",
+                args_path=K8S_DQLITE_ARGS_PATH,
+                systemd_args_path=K8S_DQLITE_SYSD_PATH / SNAP_SYSD_ARGS_FILE,
+                extra_args=self.extra_node_k8s_dqlite_args,
+            ),
             ServiceConfig(
                 name="kube-apiserver",
                 args_path=KUBE_APISERVER_ARGS_PATH,

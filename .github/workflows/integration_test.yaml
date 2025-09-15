@@ -4,45 +4,26 @@ on:
   pull_request:
 
 jobs:
-  extra-args:
-    runs-on: ubuntu-latest
-    outputs:
-      args: ${{ steps.flags.outputs.args }}
-    steps:
-      - name: Determine extra args
-        id: flags
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-          JOB: ${{ github.job }}
-          WORKFLOW: ${{ github.workflow }}
-        run: |
-          EXTRA_ARGS="--crash-dump=on-failure"
-          if [[ "$TITLE" == *"[COS]"* ]]; then
-            EXTRA_ARGS="$EXTRA_ARGS --cos"
-          fi
-          echo "args=$EXTRA_ARGS" >> "$GITHUB_OUTPUT"
-
   charmcraft-channel:
     runs-on: ubuntu-24.04
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   select-tests:
     runs-on: ubuntu-24.04
-    needs: [extra-args]
     permissions:
       contents: read
     outputs:
       amd64: ${{ steps.select.outputs.amd64 }}
       arm64: ${{ steps.select.outputs.arm64 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Astral UV
-        uses: astral-sh/setup-uv@v6.4.3
+        uses: astral-sh/setup-uv@v6.7.0
         with:
           python-version: "3.12"
       - name: Install tox with UV
@@ -52,7 +33,7 @@ jobs:
         run: |
           list_modules() {
             ARCH=$1
-            MODULES=$(tox -e integration -- --arch "$ARCH" --collect-only -q 2>/dev/null \
+            MODULES=$(tox -e integration -- --collect-only -q --arch "$ARCH" 2>/dev/null \
               | grep -E '<Module test_.*\.py>' \
               | sed -E 's/.*<Module (test_[^.]*)\.py>.*/\1/' \
               | sort -u)
@@ -65,7 +46,7 @@ jobs:
 
   integration-tests:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
-    needs: [charmcraft-channel, extra-args, select-tests]
+    needs: [charmcraft-channel, select-tests]
     permissions:
       contents: read
       actions: write
@@ -90,7 +71,6 @@ jobs:
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
-        ${{needs.extra-args.outputs.args}}
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=jammy' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable

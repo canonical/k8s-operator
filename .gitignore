@@ -9,6 +9,7 @@ __pycache__/
 .idea
 .vscode
 .mypy_cache
+.style-guide/
 *.egg-info/
 */*.rock
 

@@ -3,35 +3,14 @@
 
 """K8s Certificates module."""
 
-import ipaddress
 import logging
 from string import Template
 from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
 
-import ops
-from literals import (
-    APISERVER_CN_FORMATTER_CONFIG_KEY,
-    APISERVER_CSR_KEY,
-    BOOTSTRAP_CERTIFICATES,
-    BOOTSTRAP_SERVICE_CIDR,
-    CERTIFICATES_RELATION,
-    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
-    CLUSTER_CERTIFICATES_KEY,
-    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
-    CLUSTER_RELATION,
-    KUBELET_CN_FORMATTER_CONFIG_KEY,
-    KUBELET_CSR_KEY,
-    MAX_COMMON_NAME_SIZE,
-    SUPPORTED_CERTIFICATES,
-)
-from protocols import K8sCharmProtocol
-
 import charms.contextual_status as status
-from charms.k8s.v0.k8sd_api_manager import (
-    BootstrapConfig,
-    ControlPlaneNodeJoinConfig,
-    NodeJoinConfig,
-)
+import charms.k8s.v0.k8sd_api_manager as k8sd
+import config.bootstrap as bootstrap
+import ops
 from charms.tls_certificates_interface.v4.tls_certificates import (
     CertificateRequestAttributes,
     CertificatesRequirerCharmEvents,
@@ -40,6 +19,20 @@ from charms.tls_certificates_interface.v4.tls_certificates import (
     ProviderCertificate,
     TLSCertificatesRequiresV4,
 )
+from literals import (
+    APISERVER_CN_FORMATTER_CONFIG_KEY,
+    APISERVER_CSR_KEY,
+    CERTIFICATES_RELATION,
+    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
+    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
+    CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
+    COMMON_NAME_CONFIG_KEY,
+    KUBELET_CN_FORMATTER_CONFIG_KEY,
+    KUBELET_CSR_KEY,
+    MAX_COMMON_NAME_SIZE,
+)
+from protocols import K8sCharmProtocol
 
 log = logging.getLogger(__name__)
 
@@ -84,18 +77,24 @@ class K8sCertificates(ops.Object):
 
     Attributes:
         events (List[str]): A list of events emitted by the Certificates library.
-        using_external_certificates (bool): Whether the charm is using external certificates.
     """
 
-    def __init__(self, charm: K8sCharmProtocol, refresh_event: ops.BoundEvent) -> None:
+    def __init__(
+        self,
+        charm: K8sCharmProtocol,
+        bootstrap: bootstrap.Controller,
+        refresh_event: ops.BoundEvent,
+    ) -> None:
         """Initialize the K8sCertificates class.
 
         Args:
             charm: An instance of the charm.
+            bootstrap: An instance of the bootstrap controller.
             refresh_event: An event source that triggers certificate refresh.
         """
         super().__init__(charm, "certificates-integration")
         self._charm = charm
+        self._bootstrap = bootstrap
         self._refresh_event = refresh_event
         self._certificates = self._init_certificates_provider()
 
@@ -108,7 +107,7 @@ class K8sCertificates(ops.Object):
         Returns:
             CertificateProvider: An instance implementing the CertificateProvider protocol.
         """
-        if self._get_certificates_provider() == "external":
+        if self.get_provider_name() == "external":
             return TLSCertificatesRequiresV4(
                 charm=self._charm,
                 relationship_name=CERTIFICATES_RELATION,
@@ -116,7 +115,6 @@ class K8sCertificates(ops.Object):
                 mode=Mode.UNIT,
                 refresh_events=[self._refresh_event],
             )
-
         return NoOpCertificateProvider()
 
     @property
@@ -126,8 +124,8 @@ class K8sCertificates(ops.Object):
         return self._format_common_name(formatter)
 
     @property
-    def kubelet_common_name(self) -> str:
-        """Kubelet common name."""
+    def kubelet_common_name_formatter(self) -> str:
+        """Kubelet common name formatter."""
         formatter = ""
         if self._charm.is_control_plane:
             formatter = str(self._charm.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY, ""))
@@ -138,14 +136,18 @@ class K8sCertificates(ops.Object):
                 if relation and relation.app in relation.data
                 else ""
             )
+        return formatter
 
-        return self._format_common_name(formatter)
+    @property
+    def kubelet_common_name(self) -> str:
+        """Kubelet common name."""
+        return self._format_common_name(self.kubelet_common_name_formatter)
 
     @property
     def domain_name(self) -> str:
         """Certificates domain name."""
         if self._charm.is_control_plane:
-            return str(self._charm.config.get("external-certs-domain-name"))
+            return str(self._charm.config.get(COMMON_NAME_CONFIG_KEY))
         else:
             relation = self.model.get_relation(CLUSTER_RELATION)
             return (
@@ -153,11 +155,6 @@ class K8sCertificates(ops.Object):
                 if relation and relation.app in relation.data
                 else ""
             )
-
-    @property
-    def using_external_certificates(self) -> bool:
-        """Return whether the charm is using external certificates."""
-        return self._get_certificates_provider() == "external"
 
     @property
     def events(self) -> List[ops.BoundEvent]:
@@ -214,7 +211,7 @@ class K8sCertificates(ops.Object):
         }
 
         if self._charm.is_control_plane:
-            sans_ip.update(self._get_service_ips())
+            sans_ip.update(self._get_kubernetes_svc_ips())
 
         extra_ips, extra_dns = self._charm.split_sans_by_type()
         sans_ip.update(extra_ips)
@@ -250,27 +247,20 @@ class K8sCertificates(ops.Object):
             log.exception("Invalid common name formatter '%s'", formatter)
             raise
 
-    def _get_service_ips(self) -> Set[str]:
-        """Get Kubernetes service IPs from the CIDRs.
+    def _get_kubernetes_svc_ips(self) -> Set[str]:
+        """Get Internal Kubernetes service IPs from the CIDRs.
 
         Returns:
-            Set[str]: A set of Kubernetes service IPs.
+            Set[str]: A set of internal kubernetes service IPs.
 
         Raises:
             ValueError: If the service CIDR is invalid.
         """
-        service_ips = set()
-        cidrs = BOOTSTRAP_SERVICE_CIDR.get(self._charm).split(",")
-
-        for cidr in cidrs:
-            cidr = cidr.strip()
-            try:
-                network = ipaddress.ip_network(cidr)
-                service_ips.add(str(network[1]))
-            except ValueError:
-                log.exception("Invalid service CIDR: %s", cidr)
-                raise
-        return service_ips
+        service_cidr = self._bootstrap.config.service_cidr or ""
+        cidrs = bootstrap.valid_cidr(
+            service_cidr, bootstrap.BOOTSTRAP_SERVICE_CIDR.name, required=True
+        )
+        return {str(svc_ip[1]) for svc_ip in cidrs}
 
     def _get_validated_certificate(
         self, request: CertificateRequestAttributes
@@ -291,14 +281,14 @@ class K8sCertificates(ops.Object):
         # NOTE: (mateoflorido) Cast to non-None types since we've validated they exist.
         return cast(ProviderCertificate, certificate), cast(PrivateKey, key)
 
-    def _populate_join_certificates(self, config: NodeJoinConfig) -> None:
+    def _populate_join_certificates(self, config: k8sd.NodeJoinConfig) -> None:
         """Configure the provided NodeJoinConfig certificates.
 
         Args:
             config (NodeJoinConfig): An instance of NodeJoinConfig where the
                 certificates and keys will be stored.
         """
-        if isinstance(config, ControlPlaneNodeJoinConfig):
+        if isinstance(config, k8sd.ControlPlaneNodeJoinConfig):
             certificate, key = self._get_validated_certificate(
                 self._certificate_requests_mapping.get(APISERVER_CSR_KEY)
             )
@@ -315,7 +305,7 @@ class K8sCertificates(ops.Object):
         """Build the full certificate chain from a ProviderCertificate."""
         return "\n".join(str(cert) for cert in certificate.chain + [certificate.ca])
 
-    def _populate_bootstrap_certificates(self, bootstrap_config: BootstrapConfig) -> None:
+    def _populate_bootstrap_certificates(self, bootstrap_config: k8sd.BootstrapConfig) -> None:
         """Configure the provided BootstrapConfig certificates.
 
         Args:
@@ -335,26 +325,37 @@ class K8sCertificates(ops.Object):
         bootstrap_config.kubelet_cert = str(certificate.certificate)
         bootstrap_config.kubelet_key = str(key)
 
-    def _get_certificates_provider(self) -> Optional[str]:
-        """Get the certificates provider.
+    def get_provider_name(self) -> str:
+        """Get the certificates provider name.
 
         Returns:
             str: The certificates provider.
         """
-        if self._charm.is_control_plane:
-            return BOOTSTRAP_CERTIFICATES.get(self._charm)
+        return self._bootstrap.config.certificates
 
-        # NOTE: This operation is safe because we're validating the provider during the
-        # certificate configuration in the `configure_certificates` method.
-        relation = self.model.get_relation(CLUSTER_RELATION)
-        if not relation:
-            return None
+    def _validate_persistence(self):
+        """Validate the certificates provider can be persisted."""
+        if not self.model.get_relation(CLUSTER_RELATION):
+            log.error("Cluster relation not found, Cannot persist the certificates provider.")
+            status.add(ops.WaitingStatus("Persisting certificates provider."))
+            raise status.ReconcilerError(
+                "Cluster relation not found. Cannot persist the certificates provider."
+            )
 
-        if not (provider := relation.data[relation.app].get(CLUSTER_CERTIFICATES_KEY)):
-            log.info("Waiting for certificates provider")
-            return None
+    @status.on_error(ops.WaitingStatus("Announcing Certificates Provider"))
+    def announce_certificates_config(self) -> None:
+        """Announce the certificates provider to the cluster relation."""
+        self._bootstrap.persist_certificates()
 
-        return provider
+        for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
+            domain_name, kubelet_formatter = self.domain_name, self.kubelet_common_name_formatter
+            rel.data[self._charm.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = (
+                kubelet_formatter
+            )
+            rel.data[self._charm.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
+        else:
+            log.info("Cluster (worker) relation not found, skipping certificates sharing.")
+            return
 
     def _validate_common_name_size(self):
         """Validate that the common names do not exceed the maximum size."""
@@ -383,7 +384,7 @@ class K8sCertificates(ops.Object):
             status.add(ops.BlockedStatus(msg))
             raise status.ReconcilerError(msg)
 
-    def configure_certificates(self, config: Union[BootstrapConfig, NodeJoinConfig]):
+    def configure_certificates(self, config: Union[k8sd.BootstrapConfig, k8sd.NodeJoinConfig]):
         """Configure the certificates for the Kubernetes cluster.
 
         Args:
@@ -394,18 +395,9 @@ class K8sCertificates(ops.Object):
         Raises:
             ReconcilerError: If the certificates issuer is invalid.
         """
-        certificates_type = self._get_certificates_provider()
-
-        if certificates_type not in SUPPORTED_CERTIFICATES:
-            log.error(
-                "Unsupported certificate issuer: %s. Valid options: %s",
-                certificates_type,
-                ", ".join(SUPPORTED_CERTIFICATES),
-            )
-            status.add(ops.BlockedStatus(f"Invalid certificates issuer: {certificates_type}"))
-            raise status.ReconcilerError("Invalid certificates issuer")
-
-        if certificates_type == "external":
+        provider = self.get_provider_name()
+        self._validate_persistence()
+        if provider == "external":
             log.info("Using external certificates for kube-apiserver and kubelet.")
             if not self._charm.model.get_relation(CERTIFICATES_RELATION):
                 msg = "Missing required 'certificates' relation"
@@ -420,9 +412,11 @@ class K8sCertificates(ops.Object):
                 status.add(ops.BlockedStatus(msg))
                 raise status.ReconcilerError(msg)
 
-            if self._charm.lead_control_plane and isinstance(config, BootstrapConfig):
+            if self._charm.lead_control_plane and isinstance(config, k8sd.BootstrapConfig):
                 self._populate_bootstrap_certificates(config)
-            elif self._charm.is_control_plane and isinstance(config, ControlPlaneNodeJoinConfig):
+            elif self._charm.is_control_plane and isinstance(
+                config, k8sd.ControlPlaneNodeJoinConfig
+            ):
                 self._populate_join_certificates(config)
-            elif isinstance(config, NodeJoinConfig):
+            elif isinstance(config, k8sd.NodeJoinConfig):
                 self._populate_join_certificates(config)

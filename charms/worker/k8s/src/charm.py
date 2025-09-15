@@ -29,74 +29,17 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-import config.arg_files
-import config.bootstrap
-import config.extra_args
-import containerd
-import k8s.node
-import ops
-import utils
-import yaml
-from certificates import K8sCertificates, RefreshCertificates
-from cloud_integration import CloudIntegration
-from config.cluster import assemble_cluster_config
-from cos_integration import COSIntegration
-from endpoints import build_url
-from events import update_status
-from inspector import ClusterInspector
-from k8s.client import kubectl
-from kube_control import configure as configure_kube_control
-from literals import (
-    APISERVER_CERT,
-    APISERVER_PORT,
-    BOOTSTRAP_CERTIFICATES,
-    BOOTSTRAP_DATASTORE,
-    BOOTSTRAP_NODE_TAINTS,
-    BOOTSTRAP_POD_CIDR,
-    BOOTSTRAP_SERVICE_CIDR,
-    CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY,
-    CLUSTER_CERTIFICATES_KEY,
-    CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY,
-    CLUSTER_RELATION,
-    CLUSTER_WORKER_RELATION,
-    COMMON_NAME_CONFIG_KEY,
-    CONTAINERD_HTTP_PROXY,
-    CONTAINERD_RELATION,
-    CONTAINERD_SERVICE_NAME,
-    COS_RELATION,
-    COS_TOKENS_RELATION,
-    COS_TOKENS_WORKER_RELATION,
-    DATASTORE_NAME_MAPPING,
-    DATASTORE_TYPE_ETCD,
-    DATASTORE_TYPE_EXTERNAL,
-    DATASTORE_TYPE_K8S_DQLITE,
-    DEPENDENCIES,
-    ETC_KUBERNETES,
-    ETCD_RELATION,
-    EXTERNAL_LOAD_BALANCER_PORT,
-    EXTERNAL_LOAD_BALANCER_RELATION,
-    EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
-    EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
-    K8SD_PORT,
-    K8SD_SNAP_SOCKET,
-    KUBECONFIG,
-    KUBECTL_PATH,
-    KUBELET_CN_FORMATTER_CONFIG_KEY,
-    SUPPORTED_DATASTORES,
-)
-from loadbalancer_interface import LBProvider
-from ops.interface_kube_control import KubeControlProvides
-from pki import get_certificate_sans
-from pydantic import SecretStr
-from snap import management as snap_management
-from snap import version as snap_version
-from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
-from typing_extensions import Literal
-from upgrade import K8sDependenciesModel, K8sUpgrade
-
 import charms.contextual_status as status
 import charms.node_base.address as node_address
 import charms.operator_libs_linux.v2.snap as snap_lib
+import config.arg_files
+import config.bootstrap
+import config.extra_args
+import config.resource
+import containerd
+import k8s.node
+import ops
+import yaml
 from charms.contextual_status import ReconcilerError, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
@@ -117,6 +60,49 @@ from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.operator_libs_linux.v1 import systemd
 from charms.reconciler import Reconciler
+from cloud_integration import CloudIntegration
+from config.cluster import assemble_cluster_config
+from cos_integration import COSIntegration
+from endpoints import build_url
+from events import update_status
+from inspector import ClusterInspector
+from k8s.client import kubectl
+from kube_control import configure as configure_kube_control
+from literals import (
+    APISERVER_CERT,
+    APISERVER_PORT,
+    CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
+    CONTAINERD_HTTP_PROXY,
+    CONTAINERD_RELATION,
+    CONTAINERD_SERVICE_NAME,
+    COS_RELATION,
+    COS_TOKENS_RELATION,
+    COS_TOKENS_WORKER_RELATION,
+    DATASTORE_NAME_MAPPING,
+    DEPENDENCIES,
+    ETC_KUBERNETES,
+    ETCD_RELATION,
+    EXTERNAL_LOAD_BALANCER_PORT,
+    EXTERNAL_LOAD_BALANCER_RELATION,
+    EXTERNAL_LOAD_BALANCER_REQUEST_NAME,
+    EXTERNAL_LOAD_BALANCER_RESPONSE_NAME,
+    K8SD_PORT,
+    K8SD_SNAP_SOCKET,
+    KUBECONFIG,
+    KUBECTL_PATH,
+    SNAP_DATASTORE_TYPE_EXTERNAL,
+    SNAP_RESOURCE_NAME,
+)
+from loadbalancer_interface import LBProvider
+from ops.interface_kube_control import KubeControlProvides
+from pki import get_certificate_sans
+from pydantic import SecretStr
+from snap import management as snap_management
+from snap import version as snap_version
+from token_distributor import ClusterTokenType, TokenCollector, TokenDistributor, TokenStrategy
+from typing_extensions import Literal
+from upgrade import K8sDependenciesModel, K8sUpgrade
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -162,12 +148,10 @@ class K8sCharm(ops.CharmBase):
         lead_control_plane: true if this is a control-plane unit and its the leader
         is_upgrade_granted: true if the upgrade has been granted
         datastore: the datastore used for Kubernetes
-        certificate_refresh: event source for certificate refresh
         external_load_balancer_address: the external load balancer address, if available
     """
 
     _stored = ops.StoredState()
-    certificate_refresh = ops.EventSource(RefreshCertificates)
 
     def __init__(self, *args):
         """Initialise the K8s charm.
@@ -177,6 +161,7 @@ class K8sCharm(ops.CharmBase):
         """
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
+        self.snap_installation_resource = config.resource.CharmResource(self, SNAP_RESOURCE_NAME)
         self.api_manager = K8sdAPIManager(factory)
         xcp_relation = "external-cloud-provider" if self.is_control_plane else ""
         self.cloud_integration = CloudIntegration(self, self.is_control_plane)
@@ -190,7 +175,6 @@ class K8sCharm(ops.CharmBase):
             dependency_model=K8sDependenciesModel(**DEPENDENCIES),
         )
         self.cos = COSIntegration(self)
-        self.update_status = update_status.Handler(self, self.upgrade)
         self.distributor = TokenDistributor(self, self.get_node_name(), self.api_manager)
         self.collector = TokenCollector(self, self.get_node_name())
         self.labeller = LabelMaker(
@@ -200,8 +184,7 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._upgrade_snap = False
-        self._stored.set_default(is_dying=False, cluster_name=str(), upgrade_granted=False)
+        self._stored.set_default(is_dying=False, cluster_name=str())
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -222,14 +205,13 @@ class K8sCharm(ops.CharmBase):
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
-        self.certificates = K8sCertificates(self, self.certificate_refresh)
+        self.bootstrap = config.bootstrap.Controller(self)
+        self.update_status = update_status.Handler(self, self.bootstrap, self.upgrade)
         self.reconciler = Reconciler(
             self,
             self._reconcile,
             exit_status=self.update_status.active_status,
-            custom_events=self.certificates.events,
         )
-        self.framework.observe(self.on.refresh_certs_action, self._on_refresh_certs_action)
 
     @property
     def external_load_balancer_address(self) -> str:
@@ -317,15 +299,6 @@ class K8sCharm(ops.CharmBase):
                 if version := relation.data[unit].get("version"):
                     versions[version].append(unit)
         return versions
-
-    def grant_upgrade(self):
-        """Grant the upgrade to the charm."""
-        self._upgrade_snap = True
-
-    @property
-    def is_upgrade_granted(self) -> bool:
-        """Check if the upgrade has been granted."""
-        return self._upgrade_snap
 
     def _apply_proxy_environment(self):
         """Apply the proxy settings from environment variables."""
@@ -496,18 +469,18 @@ class K8sCharm(ops.CharmBase):
             BootstrapConfig: The bootstrap configuration object.
         """
         bootstrap_config = BootstrapConfig.model_construct()
-        self.certificates.configure_certificates(bootstrap_config)
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = assemble_cluster_config(
             self, "external" if self.xcp.has_xcp else None
         )
-        bootstrap_config.service_cidr = BOOTSTRAP_SERVICE_CIDR.get(self)
-        bootstrap_config.pod_cidr = BOOTSTRAP_POD_CIDR.get(self)
-        bootstrap_config.control_plane_taints = BOOTSTRAP_NODE_TAINTS.get(self).split()
+        bootstrap_config.service_cidr = self.bootstrap.config.service_cidr
+        bootstrap_config.pod_cidr = self.bootstrap.config.pod_cidr
+        bootstrap_config.control_plane_taints = config.bootstrap.node_taints(self)
         bootstrap_config.extra_sans = self._get_extra_sans()
         cluster_name = self.get_cluster_name()
         node_ips = self._get_node_ips()
-        config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips)
+        datastore = self.bootstrap.config.datastore
+        config.extra_args.craft(self.config, bootstrap_config, cluster_name, node_ips, datastore)
         return bootstrap_config
 
     def _configure_external_load_balancer(self) -> None:
@@ -571,8 +544,6 @@ class K8sCharm(ops.CharmBase):
             address=f"{node_ips[0]}:{K8SD_PORT}",
             config=self._assemble_bootstrap_config(),
         )
-
-        # TODO: Make port (and address) configurable.
         self.api_manager.bootstrap_k8s_snap(payload)
 
     @on_error(
@@ -648,18 +619,9 @@ class K8sCharm(ops.CharmBase):
                 The configuration object for the Kubernetes cluster. This object
                 will be modified in-place to include etcd's configuration details.
         """
-        datastore = BOOTSTRAP_DATASTORE.get(self)
+        snap_ds = DATASTORE_NAME_MAPPING.get(self.bootstrap.config.datastore)
 
-        if datastore not in SUPPORTED_DATASTORES:
-            log.error(
-                "Invalid datastore: %s. Supported values: %s",
-                datastore,
-                ", ".join(SUPPORTED_DATASTORES),
-            )
-            status.add(ops.BlockedStatus(f"Invalid datastore: {datastore}"))
-            raise ReconcilerError(f"Invalid datastore: {datastore}")
-
-        if datastore == DATASTORE_TYPE_EXTERNAL:
+        if snap_ds == SNAP_DATASTORE_TYPE_EXTERNAL:
             log.info("Using etcd as external datastore")
             etcd_relation = self.model.get_relation(ETCD_RELATION)
 
@@ -671,7 +633,7 @@ class K8sCharm(ops.CharmBase):
 
             etcd_config = self.etcd.get_client_credentials()
             if isinstance(config, BootstrapConfig):
-                config.datastore_type = DATASTORE_NAME_MAPPING.get(datastore)
+                config.datastore_type = snap_ds
                 config.datastore_servers = self.etcd.get_connection_string().split(",")
                 config.datastore_ca_cert = etcd_config.get("client_ca", "")
                 config.datastore_client_cert = etcd_config.get("client_cert", "")
@@ -679,19 +641,15 @@ class K8sCharm(ops.CharmBase):
                 log.info("etcd servers: %s", config.datastore_servers)
             elif isinstance(config, UpdateClusterConfigRequest):
                 config.datastore = UserFacingDatastoreConfig()
-                config.datastore.type = DATASTORE_NAME_MAPPING.get(datastore)
+                config.datastore.type = snap_ds
                 config.datastore.servers = self.etcd.get_connection_string().split(",")
                 config.datastore.ca_crt = etcd_config.get("client_ca", "")
                 config.datastore.client_crt = etcd_config.get("client_cert", "")
                 config.datastore.client_key = etcd_config.get("client_key", "")
                 log.info("etcd servers: %s", config.datastore.servers)
-
-        elif datastore == DATASTORE_TYPE_ETCD and isinstance(config, BootstrapConfig):
-            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_ETCD)
-            log.info("Using managed etcd as datastore")
-        elif datastore == DATASTORE_TYPE_K8S_DQLITE and isinstance(config, BootstrapConfig):
-            config.datastore_type = DATASTORE_NAME_MAPPING.get(DATASTORE_TYPE_K8S_DQLITE)
-            log.info("Using dqlite as datastore")
+        elif snap_ds and isinstance(config, BootstrapConfig):
+            config.datastore_type = snap_ds
+            log.info("Using %s as datastore", snap_ds)
 
     def _revoke_cluster_tokens(self, event: ops.EventBase):
         """Revoke tokens for the units in the cluster and k8s-cluster relations.
@@ -711,7 +669,7 @@ class K8sCharm(ops.CharmBase):
             to_remove = unit
 
         if peer := self.model.get_relation(CLUSTER_RELATION):
-            self.distributor.revoke_tokens(
+            self.distributor.remove_units(
                 relation=peer,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.CONTROL_PLANE,
@@ -719,7 +677,7 @@ class K8sCharm(ops.CharmBase):
             )
 
         for relation in self.model.relations[CLUSTER_WORKER_RELATION]:
-            self.distributor.revoke_tokens(
+            self.distributor.remove_units(
                 relation=relation,
                 token_strategy=TokenStrategy.CLUSTER,
                 token_type=ClusterTokenType.WORKER,
@@ -813,7 +771,10 @@ class K8sCharm(ops.CharmBase):
         try:
             with self.collector.recover_token(relation) as token:
                 return self.cos.get_metrics_endpoints(
-                    self.get_node_name(), token, self.is_control_plane
+                    self.get_node_name(),
+                    token,
+                    self.is_control_plane,
+                    self.bootstrap.config.datastore,
                 )
         except ReconcilerError:
             log.exception("Failed to get COS token.")
@@ -833,21 +794,6 @@ class K8sCharm(ops.CharmBase):
         version, _ = snap_version("k8s")
         if version:
             relation.data[self.unit]["version"] = version
-
-    @on_error(ops.WaitingStatus("Announcing Certificates Provider"))
-    def _announce_certificates_config(self) -> None:
-        if not (provider := BOOTSTRAP_CERTIFICATES.get(self)):
-            raise ReconcilerError("Missing certificates provider")
-
-        for rel in self.model.relations[CLUSTER_WORKER_RELATION]:
-            rel.data[self.app][CLUSTER_CERTIFICATES_KEY] = provider
-            kubelet_formatter = str(self.config.get(KUBELET_CN_FORMATTER_CONFIG_KEY))
-            rel.data[self.app][CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY] = kubelet_formatter
-            domain_name = str(self.config.get(COMMON_NAME_CONFIG_KEY))
-            rel.data[self.app][CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY] = domain_name
-        else:
-            log.info("Cluster (worker) relation not found, skipping certificates sharing.")
-            return
 
     @on_error(ops.WaitingStatus("Announcing Kubernetes version"))
     def _announce_kubernetes_version(self) -> None:
@@ -910,11 +856,11 @@ class K8sCharm(ops.CharmBase):
             str: A multi-line string containing the systemd [Service] section configuration
             with proxy environment variables.
         """
-        proxy_env_keys = {
+        proxy_env_keys = [
             "JUJU_CHARM_HTTP_PROXY",
             "JUJU_CHARM_HTTPS_PROXY",
             "JUJU_CHARM_NO_PROXY",
-        }
+        ]
         proxy_settings = []
         for key in proxy_env_keys:
             env_value = os.getenv(key)
@@ -970,15 +916,15 @@ class K8sCharm(ops.CharmBase):
         if self.is_control_plane:
             request.config = ControlPlaneNodeJoinConfig()
             request.config.extra_sans = self._get_extra_sans()
-            config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
+            datastore = self.bootstrap.config.datastore
+            config.extra_args.craft(self.config, request.config, cluster_name, node_ips, datastore)
         else:
             request.config = NodeJoinConfig()
             config.extra_args.craft(self.config, request.config, cluster_name, node_ips)
 
-            bootstrap_node_taints = BOOTSTRAP_NODE_TAINTS.get(self).strip().split()
+            bootstrap_node_taints = config.bootstrap.node_taints(self)
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
 
-        self.certificates.configure_certificates(request.config)
         self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)
 
@@ -1017,23 +963,24 @@ class K8sCharm(ops.CharmBase):
         if self._evaluate_removal(event):
             self._death_handler(event)
 
+        self.upgrade.handler(event)
         self._apply_proxy_environment()
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
-        config.bootstrap.detect_bootstrap_config_changes(self)
+        self.bootstrap.validate()
         self._update_kubernetes_version()
         if self.lead_control_plane:
             self._k8s_info(event)
             self._configure_external_load_balancer()
             self._bootstrap_k8s_snap()
+            self.bootstrap.persist()
             self._ensure_cluster_config()
             self._create_cluster_tokens()
             self._create_cos_tokens()
             self._apply_cos_requirements()
             self._revoke_cluster_tokens(event)
             self._announce_kubernetes_version()
-            self._announce_certificates_config()
         self._join_cluster(event)
         self._config_containerd_registries()
         self._configure_cos_integration()
@@ -1121,7 +1068,10 @@ class K8sCharm(ops.CharmBase):
             status.add(ops.MaintenanceStatus("Ensuring Kubernetes Extra Args"))
             file_args_config = config.arg_files.FileArgsConfig()
             node_ips = self._get_node_ips()
-            config.extra_args.craft(self.config, file_args_config, cluster_name, node_ips)
+            datastore = self.bootstrap.config.datastore
+            config.extra_args.craft(
+                self.config, file_args_config, cluster_name, node_ips, datastore
+            )
             file_args_config.ensure()
 
     @property
@@ -1215,12 +1165,6 @@ class K8sCharm(ops.CharmBase):
         """
         if not self.is_control_plane:
             return
-        if BOOTSTRAP_CERTIFICATES.get(self) == "external":
-            # TODO: This should be implemented once k8s-snap offers an API endpoint
-            # to update the certificates in the node.
-            log.info("External certificates are used, skipping SANs update")
-            return
-
         extra_sans = self._get_extra_sans()
         if not extra_sans:
             log.info("No extra SANs to update")
@@ -1236,24 +1180,10 @@ class K8sCharm(ops.CharmBase):
                 "%s not in cert SANs. Refreshing certs with new SANs: %s", missing_sans, all_sans
             )
             status.add(ops.MaintenanceStatus("Refreshing Certificates"))
-            if BOOTSTRAP_CERTIFICATES.get(self) == "self-signed":
-                self.api_manager.refresh_certs(all_sans)
-            elif BOOTSTRAP_CERTIFICATES.get(self) == "external":
-                self.certificate_refresh.emit()
+            self.api_manager.refresh_certs(all_sans)
             log.info("Certificates have been refreshed")
 
         log.info("Certificate SANs are up-to-date")
-
-    def _on_refresh_certs_action(self, event: ops.ActionEvent):
-        """Handle the refresh-certs action."""
-        if self.is_control_plane:
-            expires_in = event.params["expires-in"]
-            ttl_seconds = utils.ttl_to_seconds(expires_in)
-            sans = self._get_extra_sans()
-            try:
-                self.api_manager.refresh_certs(extra_sans=sans, expiration_seconds=ttl_seconds)
-            except (InvalidResponseError, K8sdConnectionError) as e:
-                event.fail(f"Failed to refresh certificates: {e}")
 
 
 if __name__ == "__main__":  # pragma: nocover

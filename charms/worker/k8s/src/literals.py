@@ -19,14 +19,15 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 # Charm
 SNAP_COMMON = "/var/snap/k8s/common"
 SERVICE_ARGS = Path(SNAP_COMMON) / "args"
-CONTAINERD_ARGS = SERVICE_ARGS / "containerd"
-K8S_DQLITE_ARGS = SERVICE_ARGS / "k8s-dqlite"
-K8SD_ARGS = SERVICE_ARGS / "k8sd"
+CONTAINERD_ARGS_PATH = SERVICE_ARGS / "containerd"
+K8S_DQLITE_ARGS_PATH = SERVICE_ARGS / "k8s-dqlite"
+K8SD_ARGS_PATH = SERVICE_ARGS / "k8sd"
 KUBE_APISERVER_ARGS_PATH = SERVICE_ARGS / "kube-apiserver"
 KUBE_CONTROLLER_MANAGER_ARGS_PATH = SERVICE_ARGS / "kube-controller-manager"
 KUBE_PROXY_ARGS_PATH = SERVICE_ARGS / "kube-proxy"
 KUBE_SCHEDULER_ARGS_PATH = SERVICE_ARGS / "kube-scheduler"
 KUBELET_ARGS_PATH = SERVICE_ARGS / "kubelet"
+ETCD_ARGS_PATH = SERVICE_ARGS / "etcd"
 # SystemD Args
 SNAP_SYSD_ARGS_FILE = "00-snap-managed"
 CHARM_SYSD_ARGS_FILE = "01-charm-managed"
@@ -35,6 +36,8 @@ KUBE_CONTROLLER_MANAGER_SYSD_PATH = SERVICE_ARGS / "kube-controller-manager.args
 KUBE_PROXY_SYSD_PATH = SERVICE_ARGS / "kube-proxy.args.d"
 KUBE_SCHEDULER_SYSD_PATH = SERVICE_ARGS / "kube-scheduler.args.d"
 KUBELET_SYSD_PATH = SERVICE_ARGS / "kubelet.args.d"
+ETCD_SYSD_PATH = SERVICE_ARGS / "etcd.args.d"
+K8S_DQLITE_SYSD_PATH = SERVICE_ARGS / "k8s-dqlite.args.d"
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
@@ -54,6 +57,7 @@ EXTERNAL_LOAD_BALANCER_PORT = 443
 APISERVER_PORT = 6443
 
 DATASTORE_NAME_MAPPING = {
+    None: None,
     DATASTORE_TYPE_EXTERNAL: SNAP_DATASTORE_TYPE_EXTERNAL,
     DATASTORE_TYPE_ETCD: SNAP_DATASTORE_TYPE_ETCD,
     DATASTORE_TYPE_K8S_DQLITE: SNAP_DATASTORE_TYPE_K8S_DQLITE,
@@ -92,6 +96,7 @@ NODE_LABELS = option.StrOption("node-labels")
 
 # Features
 SUPPORT_SNAP_INSTALLATION_OVERRIDE = True
+SNAP_RESOURCE_NAME = "snap-installation"
 
 # Relations
 CERTIFICATES_RELATION = "certificates"
@@ -106,16 +111,21 @@ UPGRADE_RELATION = "upgrade"
 EXTERNAL_LOAD_BALANCER_RELATION = "external-load-balancer"
 
 # Cluster Relation Keys
-CLUSTER_CERTIFICATES_KEY = "certs-provider"
 CLUSTER_CERTIFICATES_KUBELET_FORMATTER_KEY = "certs-kubelet-formatter"
 CLUSTER_CERTIFICATES_DOMAIN_NAME_KEY = "certs-domain-name"
+CLUSTER_CLUSTER_NAME = "cluster-name"
+CLUSTER_JOINED = "joined"
+CLUSTER_NODE_NAME = "node-name"
+CLUSTER_SECRET_ID = "{0}-secret-id"  # nosec
+CLUSTER_TOKEN_FAILURE = "token-failure"  # nosec
 
 # Certificates
 APISERVER_CN_FORMATTER_CONFIG_KEY = "external-certs-apiserver-common-name-format"
 KUBELET_CN_FORMATTER_CONFIG_KEY = "external-certs-kubelet-common-name-format"
 COMMON_NAME_CONFIG_KEY = "external-certs-domain-name"
 MAX_COMMON_NAME_SIZE = 64
-SUPPORTED_CERTIFICATES = ["external", "self-signed"]
+DEFAULT_CERTIFICATE_PROVIDER = "snap-managed"
+SUPPORTED_CERTIFICATES = [DEFAULT_CERTIFICATE_PROVIDER]
 
 APISERVER_CSR_KEY = "apiserver"
 KUBELET_CSR_KEY = "kubelet"
@@ -133,6 +143,7 @@ LEADER_CONTROL_PLANE_CERTIFICATES = ["apiserver-kubelet-client"] + CONTROL_PLANE
 
 # Kubernetes services
 K8S_COMMON_SERVICES = [
+    "containerd",
     "kubelet",
     "kube-proxy",
     "k8sd",
@@ -154,6 +165,10 @@ K8S_WORKER_SERVICES = [
     "k8s-apiserver-proxy",
     *K8S_COMMON_SERVICES,
 ]
+
+# etcd
+ETCD_LISTEN_METRICS_URLS_ARG = "--listen-metrics-urls"
+ETCD_DEFAULT_METRICS_URL = "http://localhost:2381"
 
 # Upgrade
 DEPENDENCIES = {

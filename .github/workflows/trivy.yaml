@@ -11,7 +11,7 @@ jobs:
       branches: ${{ steps.branches.outputs.branches }}
     steps:
       - name: Checking out repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: List branches to scan
@@ -35,12 +35,12 @@ jobs:
       security-events: write
     steps:
       - name: Checking out repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ matrix.branch }}
           fetch-depth: 0
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: "fs"
           ignore-unfixed: true

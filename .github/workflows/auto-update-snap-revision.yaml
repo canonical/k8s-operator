@@ -44,13 +44,13 @@ jobs:
         echo "TRACK=${BRANCH:8}" | tee -a "$GITHUB_ENV"
 
     - name: Checkout ${{ matrix.branch }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ matrix.branch }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -88,6 +88,13 @@ jobs:
       run: |
         echo "Would have created pull-request"
         echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
+
+    - name: Setup Bot User
+      if: ${{ github.event_name == 'schedule' }}
+      run: |
+        git config user.name  "Canonical Github Bot"
+        git config user.email "actions@canonical.com"
+
     - name: Create pull request
       uses: peter-evans/create-pull-request@v7
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}

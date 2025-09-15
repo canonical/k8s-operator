@@ -10,7 +10,7 @@ jobs:
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - id: charmcraft
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
