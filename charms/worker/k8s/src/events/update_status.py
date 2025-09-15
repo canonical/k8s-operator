@@ -11,6 +11,8 @@ This handler is responsible for updating the unit's workload version and status
 import logging
 from typing import List, Optional, cast
 
+import charms.contextual_status as status
+import charms.k8s.v0.k8sd_api_manager as api_manager
 import ops
 import reschedule
 from config.bootstrap import Controller as BootstrapController
@@ -19,9 +21,6 @@ from k8s.node import Status, ready
 from protocols import K8sCharmProtocol
 from snap import version as snap_version
 from upgrade import K8sUpgrade
-
-import charms.contextual_status as status
-import charms.k8s.v0.k8sd_api_manager as api_manager
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)

@@ -11,6 +11,8 @@ import ipaddress
 import logging
 from typing import List, Optional
 
+import charms.contextual_status as context_status
+import charms.k8s.v0.k8sd_api_manager as k8sd
 import ops
 from literals import (
     BOOTSTRAP_CERTIFICATES,
@@ -27,9 +29,6 @@ from literals import (
 from ops.interface_kube_control.model import Taint
 from protocols import K8sCharmProtocol
 from pydantic import TypeAdapter, ValidationError
-
-import charms.contextual_status as context_status
-import charms.k8s.v0.k8sd_api_manager as k8sd
 
 log = logging.getLogger(__name__)
 
