@@ -14,13 +14,12 @@ from unittest import mock
 import containerd
 import ops
 import pytest
-from literals import BOOTSTRAP_CERTIFICATES, DEFAULT_CERTIFICATE_PROVIDER
-from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
-
 from charms.k8s.v0.k8sd_api_manager import (
     BootstrapConfig,
     UpdateClusterConfigRequest,
 )
+from literals import BOOTSTRAP_CERTIFICATES, DEFAULT_CERTIFICATE_PROVIDER
+from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 
 @contextlib.contextmanager

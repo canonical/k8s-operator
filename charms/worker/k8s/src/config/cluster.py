@@ -9,7 +9,6 @@ from typing import Optional
 
 import literals
 import ops
-
 from charms.k8s.v0.k8sd_api_manager import (
     DNSConfig,
     GatewayConfig,

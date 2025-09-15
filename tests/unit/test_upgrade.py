@@ -6,6 +6,7 @@
 import unittest
 import unittest.mock as mock
 
+import charms.data_platform_libs.v0.upgrade as upgrade_lib
 import ops
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
@@ -14,8 +15,6 @@ from literals import (
     UPGRADE_RELATION,
 )
 from upgrade import K8sDependenciesModel, K8sUpgrade
-
-import charms.data_platform_libs.v0.upgrade as upgrade_lib
 
 
 class TestK8sUpgrade(unittest.TestCase):
