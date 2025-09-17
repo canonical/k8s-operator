@@ -13,6 +13,7 @@ import logging
 import os
 import shutil
 import subprocess
+from itertools import chain
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -21,10 +22,10 @@ import yaml
 
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "v0.16.0"
-SOURCE_URL = (
+KUBE_PROM_VER = "v0.16.0"
+KUBE_PROM_SRC = (
     "https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/"
-    f"{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
+    f"{KUBE_PROM_VER}/manifests/grafana-dashboardDefinitions.yaml"
 )
 DASHBOARDS = {
     "apiserver.json",
@@ -46,6 +47,10 @@ DASHBOARDS = {
     "scheduler.json",
     "workload-total.json",
 }
+ETCD_REV = "21473"
+ETCD_SRC = f"https://grafana.com/api/dashboards/{ETCD_REV}/revisions/3/download"
+ETCD_DASHBOARD = "etcd.json"
+
 TARGET_DIR = "src/grafana_dashboards"
 PATCHES_DIR = Path("scripts/dashboard-patches")
 
@@ -59,7 +64,7 @@ def apply_patches():
             to a regular expression to match any job ending with
             "node-exporter".
     """
-    for patch_file in PATCHES_DIR.glob("*"):
+    for patch_file in sorted(PATCHES_DIR.glob("*")):
         logging.info("Applying patch %s", patch_file)
         subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
 
@@ -141,14 +146,19 @@ def main():
         shutil.rmtree(TARGET_DIR)
     os.makedirs(TARGET_DIR, exist_ok=True)
 
-    dashboards = fetch_dashboards(SOURCE_URL)
-    if dashboards:
-        for name, data in dashboards_data(dashboards):
+    content = fetch_dashboards(KUBE_PROM_SRC)
+    if content:
+        kube_prom_dashboards = dashboards_data(content)
+        dashboards = []
+        if etcd_content := fetch_dashboards(ETCD_SRC):
+            dashboards.append((ETCD_DASHBOARD, etcd_content))
+        for name, data in chain(kube_prom_dashboards, dashboards):
             dashboard = prepare_dashboard(data)
             save_dashboard_to_file(name, dashboard)
         apply_patches()
     else:
         logging.info("No data fetched. Exiting.")
+
 
 
 if __name__ == "__main__":

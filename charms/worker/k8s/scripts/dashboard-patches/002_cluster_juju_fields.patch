@@ -112,15 +112,15 @@ index 2de7fc5..cadbf24 100644
 \ No newline at end of file
 +}
 diff --git a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-pod.json b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-pod.json
-index 9fdb7a9..84b882d 100644
+index 9fdb7a9..197aa29 100644
 --- a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-pod.json
 +++ b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-pod.json
-@@ -1329,7 +1329,7 @@
+@@ -1316,7 +1316,7 @@
                  "hide": 0,
-                 "label": "namespace",
-                 "name": "namespace",
--                "query": "label_values(kube_namespace_status_phase{job=\"kube-state-metrics\", cluster=\"$cluster\"}, namespace)",
-+                "query": "label_values(kube_namespace_status_phase{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\", cluster=\"$cluster\"}, namespace)",
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
                  "refresh": 2,
                  "sort": 1,
                  "type": "query"
@@ -128,6 +128,26 @@ index 9fdb7a9..84b882d 100644
      "timezone": "UTC",
      "title": "Kubernetes / Compute Resources / Pod",
      "uid": "6581e46e4e5c7ba40a07646395ef7b23"
+-}
+\ No newline at end of file
++}
+diff --git a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-workload.json b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-workload.json
+index f9c3488..05a4f53 100644
+--- a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-workload.json
++++ b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-workload.json
+@@ -984,7 +984,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -1038,4 +1038,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Workload",
+     "uid": "a164a7f0339f99e89cea5cb47e9be617"
 -}
 \ No newline at end of file
 +}
