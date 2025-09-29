@@ -1,0 +1,29 @@
+diff --git a/charms/worker/k8s/src/grafana_dashboards/etcd.json b/charms/worker/k8s/src/grafana_dashboards/etcd.json
+index 0cbd993..f33063d 100644
+--- a/charms/worker/k8s/src/grafana_dashboards/etcd.json
++++ b/charms/worker/k8s/src/grafana_dashboards/etcd.json
+@@ -3717,7 +3717,7 @@
+                     "type": "prometheus",
+                     "uid": "${prometheusds}"
+                 },
+-                "definition": "label_values({job=\"$job\"}, instance)",
++                "definition": "label_values({job=\"$job\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, instance)",
+                 "hide": 0,
+                 "includeAll": true,
+                 "label": "Instance",
+@@ -3725,7 +3725,7 @@
+                 "name": "instance",
+                 "options": [],
+                 "query": {
+-                    "query": "label_values({job=\"$job\"}, instance)",
++                    "query": "label_values({job=\"$job\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, instance)",
+                     "refId": "StandardVariableQuery"
+                 },
+                 "refresh": 1,
+@@ -3849,4 +3849,4 @@
+     "uid": "etcd_cluster",
+     "version": 3,
+     "weekStart": ""
+-}
+\ No newline at end of file
++}
