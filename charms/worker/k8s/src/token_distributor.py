@@ -629,6 +629,8 @@ class TokenDistributor:
                         unit.name,
                         node,
                     )
+                    # Prevent secret revision leakage
+                    secret.remove_revision(secret.get_info().revision)
                 else:
                     log.info(
                         "Waiting for %s token to be recovered %s unit=%s:%s (%s)",
