@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and platform_python_implementation != 'PyPy'",
@@ -201,7 +201,7 @@ name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
+    { name = "pycparser", marker = "(python_full_version < '3.11' and implementation_name != 'PyPy') or (implementation_name != 'PyPy' and platform_python_implementation != 'PyPy')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz", hash = "sha256:44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529", size = 523588, upload-time = "2025-09-08T23:24:04.541Z" }
 wheels = [
@@ -591,7 +591,7 @@ name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/9f/a65090624ecf468cdca03533906e7c69ed7588582240cfe7cc9e770b50eb/exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88", size = 29749, upload-time = "2025-05-10T17:42:51.123Z" }
 wheels = [
@@ -1652,7 +1652,7 @@ wheels = [
 
 [[package]]
 name = "pytest-operator"
-version = "0.43.1"
+version = "0.43.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ipdb" },
@@ -1662,9 +1662,9 @@ dependencies = [
     { name = "pytest-asyncio" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ea/e5/6bdb380d88a7c1bebf31a5e65e785e34dacec6ec1c8d8b4d0227322da828/pytest_operator-0.43.1.tar.gz", hash = "sha256:fd76c7e34c56624176405b47f981de3fe0c3efb71d7875109483cc01f221be99", size = 149695, upload-time = "2025-07-03T16:05:09.797Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/48/880facbcaca080b852854f60fd46b37ca2985b27dc7f1713857d9de6d469/pytest_operator-0.43.2.tar.gz", hash = "sha256:3db34dcd9c114a2e41a9bc61da72daf1264e7644fd5b92e855f250cb337e01c3", size = 149628, upload-time = "2025-10-04T14:38:45.16Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/a9/4bffc59bc343ca82ec0e9d6ae96a2ffd2de65e1eeb578523c2fc4e57cd71/pytest_operator-0.43.1-py3-none-any.whl", hash = "sha256:092e010fef884ea6166c3f71ec4ca717ed9158cf09de67f28e23cfdd780c46fa", size = 48338, upload-time = "2025-07-03T16:05:08.644Z" },
+    { url = "https://files.pythonhosted.org/packages/96/a0/22b018287f4ff7a36cdb79745c196f28897184d27e18b90177f5dfc2a0f4/pytest_operator-0.43.2-py3-none-any.whl", hash = "sha256:d7d01ffe35d14b75577fd80a07c34f0a9f4835cfc6d373b8e2f995bcb4146bda", size = 48322, upload-time = "2025-10-04T14:38:43.763Z" },
 ]
 
 [[package]]
