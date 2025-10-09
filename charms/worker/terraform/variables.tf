@@ -63,3 +63,12 @@ variable "machines" {
   type        = set(string)
   default     = null
 }
+
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for the application."
+  type = set(object({
+    space    = string
+    endpoint = optional(string)
+  }))
+  default = null
+}

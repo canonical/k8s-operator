@@ -19,6 +19,7 @@ The module offers the following configurable inputs:
 | `channel`| string | Channel that the charm is deployed from | False | 1.30/edge |
 | `config`| map(string) | Map of the charm configuration options | False | {} |
 | `constraints` | string | Juju constraints to apply for this application | False | arch=amd64 |
+| `endpoint_bindings`| set(object) | Configure endpoint bindings for interfaces and spaces | False | null |
 | `model`| string | Name of the model that the charm is deployed on | True | - |
 | `machines`| set(string) | Placement info for the application's units | False | null |
 | `resources`| map(string) | Map of the charm resources | False | {} |

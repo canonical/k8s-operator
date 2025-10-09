@@ -12,9 +12,10 @@ resource "juju_application" "k8s_worker" {
     base     = var.base
   }
 
-  config      = var.config
-  constraints = var.constraints
-  units       = var.units
-  resources   = var.resources
-  machines    = var.machines
+  config            = var.config
+  constraints       = var.constraints
+  endpoint_bindings = var.endpoint_bindings
+  machines          = var.machines
+  resources         = var.resources
+  units             = var.units
 }
