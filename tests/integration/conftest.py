@@ -313,7 +313,7 @@ async def api_client(
 
 @pytest_asyncio.fixture(scope="module", params=METRICS_AGENTS)
 async def metrics_agent(kubernetes_cluster: Model, request):
-    """Deploy Grafana Agent."""
+    """Deploy Metrics Agent Charm."""
     apps = ["k8s", "k8s-worker"]
     option = request.config.option.metrics_agent_charm
     if option and option not in request.param:
