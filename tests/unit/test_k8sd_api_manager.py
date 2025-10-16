@@ -340,7 +340,7 @@ class TestK8sdAPIManager(unittest.TestCase):
             "/1.0/k8sd/cluster/remove",
             "POST",
             EmptyResponse,
-            {"name": "test-node", "force": True},
+            {"name": "test-node", "force": False},
         )
 
     @patch("charms.k8s.v0.k8sd_api_manager.K8sdAPIManager._send_request")

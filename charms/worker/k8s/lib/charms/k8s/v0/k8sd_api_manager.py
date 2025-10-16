@@ -1183,7 +1183,7 @@ class K8sdAPIManager:
         )
         self._send_request(endpoint, "POST", EmptyResponse, request)
 
-    def remove_node(self, name: str, force: bool = True):
+    def remove_node(self, name: str, force: bool = False):
         """Remove a node from the cluster.
 
         Args:
