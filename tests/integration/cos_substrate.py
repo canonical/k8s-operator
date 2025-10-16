@@ -155,7 +155,7 @@ class COSSubstrate(LXDSubstrate):
                 "snap",
                 "install",
                 "microk8s",
-                "--channel=1.28/stable",
+                "--channel=latest/stable",
                 "--classic",
             ],
         )

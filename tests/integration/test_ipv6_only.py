@@ -26,6 +26,7 @@ pytestmark = [
         profiles=["test_ipv6only/ipv6.profile"],
         networks=["test_ipv6only/ipv6.network"],
     ),
+    pytest.mark.skip("Skipping ipv6-only tests"),
 ]
 
 

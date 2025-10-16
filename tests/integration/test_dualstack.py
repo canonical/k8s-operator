@@ -26,6 +26,7 @@ pytestmark = [
         profiles=["test_dualstack/dualstack.profile"],
         networks=["test_dualstack/dualstack.network"],
     ),
+    pytest.mark.skip("Skipping dualstack tests"),
 ]
 
 

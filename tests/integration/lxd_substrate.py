@@ -3,6 +3,7 @@
 """Helper for interacting with LXD."""
 
 import logging
+import shlex
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -79,7 +80,7 @@ class LXDSubstrate:
         Returns:
             container: The created container instance, or None if creation fails.
         """
-        log.info("Creating container")
+        log.info("Creating container: %s", name)
         config: Dict[str, Any] = {
             "name": name,
             "source": {
@@ -102,13 +103,13 @@ class LXDSubstrate:
             }
         try:
             container = self.client.instances.create(config, wait=True)
-            log.info("Starting Container")
+            log.info("Starting Container: %s", name)
             container.start(wait=True)
             time.sleep(60)
             return container
 
         except LXDExceptions:
-            log.exception("Failed to create or start container")
+            log.exception("Failed to create or start container: %s", name)
             return None
 
     def delete_container(self, container: Instance):
@@ -159,7 +160,7 @@ class LXDSubstrate:
             network.config[key] = value
         if network.dirty:
             network.save()
-        log.info("Network created successfully.")
+        log.info("Network '%s' created successfully.", name)
         return network
 
     def delete_network(self, network_name: str):
@@ -170,6 +171,7 @@ class LXDSubstrate:
         """
         network = self.client.networks.get(network_name)
         network.delete(wait=True)
+        log.info("Network '%s' deleted successfully.", network_name)
 
     def execute_command(self, container: Instance, command: List[str]):
         """Execute a command inside a container.
@@ -181,19 +183,19 @@ class LXDSubstrate:
         Returns:
             Tuple[int, bytes, bytes]: rc, stdout, and stderr
         """
-        log.info("Running command")
+        _cmd = shlex.join(command)
+        log.info("Running command: %s", _cmd)
         try:
-            rc, stdout, stderr = container.execute(command)
+            rc, stdout, stderr = container.execute(command, decode=False)
             if rc != 0:
                 log.error(
                     "Failed to run %s with return code %s. stdout: %s, stderr: %s",
-                    command,
+                    _cmd,
                     rc,
                     stdout,
                     stderr,
                 )
-
             return rc, stdout, stderr
         except LXDExceptions:
-            log.exception("Failed to execute command")
+            log.exception("Failed to execute command: %s", _cmd)
             return -1, b"", b""
