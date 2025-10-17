@@ -61,6 +61,8 @@ def pytest_addoption(parser: pytest.Parser):
         Set timeout for tests
     --upgrade-from
         Instruct tests to start with a specific channel, and upgrade to these charms.
+    --sonobuoy-version
+        Specify the sonobuoy version to use for CNCF conformance tests.
 
     Args:
         parser: Pytest parser.
@@ -120,6 +122,12 @@ def pytest_addoption(parser: pytest.Parser):
             "Run test_cos module only with this metrics agent charm, "
             "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
         ),
+    )
+    parser.addoption(
+        "--sonobuoy-version",
+        dest="sonobuoy_version",
+        default="v0.57.3",
+        help="Specify the sonobuoy version to use for CNCF conformance tests",
     )
 
 
