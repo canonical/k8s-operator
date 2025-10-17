@@ -59,6 +59,8 @@ def pytest_addoption(parser: pytest.Parser):
         Set timeout for tests
     --upgrade-from
         Instruct tests to start with a specific channel, and upgrade to these charms.
+    --sonobuoy-version
+        Specify the sonobuoy version to use for CNCF conformance tests.
 
     Args:
         parser: Pytest parser.
@@ -108,6 +110,12 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
+    )
+    parser.addoption(
+        "--sonobuoy-version",
+        dest="sonobuoy_version",
+        default="v0.57.3",
+        help="Specify the sonobuoy version to use for CNCF conformance tests",
     )
 
 

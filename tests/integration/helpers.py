@@ -649,3 +649,9 @@ def url_representer(dumper: yaml.Dumper, data: URL) -> yaml.ScalarNode:
 
 
 yaml.add_representer(URL, url_representer)
+
+
+# sonobuoy_tar_gz returns the download URL of sonobuoy.
+async def sonobuoy_tar_gz(ops_test: OpsTest, architecture: str) -> str:
+    version = ops_test.request.config.getoption("--sonobuoy-version")
+    return f"https://github.com/vmware-tanzu/sonobuoy/releases/download/{version}/sonobuoy_{version[1:]}_linux_{architecture}.tar.gz"
