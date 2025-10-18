@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 # bundle for cncf conformance testing, for all the test within this module.
 pytestmark = [
     pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
+    pytest.mark.run_with_k,
 ]
 
 
@@ -65,5 +66,6 @@ async def test_cncf_conformance(ops_test: OpsTest, kubernetes_cluster: model.Mod
     result = await action.wait()
     output = result.results["stdout"]
     log.info(output)
-    failed_tests = int(re.search("Failed: (\\d+)", output).group(1))
+    match = re.search("Failed: (\\d+)", output)
+    failed_tests = int(match.group(1)) if match else 1
     assert failed_tests == 0, f"{failed_tests} tests failed"
