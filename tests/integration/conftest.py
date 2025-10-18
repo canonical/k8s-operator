@@ -59,6 +59,8 @@ def pytest_addoption(parser: pytest.Parser):
         Set timeout for tests
     --upgrade-from
         Instruct tests to start with a specific channel, and upgrade to these charms.
+    --sonobuoy-version
+        Specify the sonobuoy version to use for CNCF conformance tests.
 
     Args:
         parser: Pytest parser.
@@ -109,6 +111,12 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
+    parser.addoption(
+        "--sonobuoy-version",
+        dest="sonobuoy_version",
+        default="v0.57.3",
+        help="Specify the sonobuoy version to use for CNCF conformance tests",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -139,6 +147,22 @@ def pytest_collection_modifyitems(config, items):
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
+
+    # Get the selection expressions from the command line arguments
+    keyword_expression = config.getoption("keyword", "")
+    marker_expression = config.getoption("markexpr", "")
+
+    # Combine the selections into a single string to check against
+    # Pytest implicitly selects items that match -k or -m
+    explicit_selection = keyword_expression or marker_expression
+
+    if not explicit_selection:
+        # If no -k or -m is provided, skip all tests marked 'run_with_k'
+        for item in items:
+            if item.get_closest_marker("run_with_k"):
+                item.add_marker(
+                    pytest.mark.skip(reason="Skipped by default. Use -k or -m run_with_k to run.")
+                )
 
 
 async def cloud_proxied(ops_test: OpsTest):
