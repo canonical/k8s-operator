@@ -354,7 +354,7 @@ async def cos_model(ops_test: OpsTest, kubernetes_cluster, metrics_agent):
 
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_text(config)
+    kubeconfig_path.write_bytes(config)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
 
