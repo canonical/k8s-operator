@@ -299,7 +299,7 @@ class ClusterTokenManager(TokenManager):
             K8sdConnectionError: reraises cluster token remove failures
         """
         try:
-            self.api_manager.remove_node(name)
+            self.api_manager.remove_node(name, force=ignore_errors)
         except (K8sdConnectionError, InvalidResponseError) as e:
             if ignore_errors or getattr(e, "code") == ErrorCodes.STATUS_NODE_UNAVAILABLE:
                 # Let's just ignore some of these expected errors:
@@ -629,6 +629,8 @@ class TokenDistributor:
                         unit.name,
                         node,
                     )
+                    # Prevent secret revision leakage
+                    secret.remove_revision(secret.get_info().revision)
                 else:
                     log.info(
                         "Waiting for %s token to be recovered %s unit=%s:%s (%s)",
