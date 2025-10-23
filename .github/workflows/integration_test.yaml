@@ -76,7 +76,6 @@ jobs:
       juju-channel: 3/stable
       load-test-enabled: false
       provider: lxd
-      channel: 5.21/stable  # lxd channel
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
       self-hosted-runner-label: ${{ matrix.arch.tester-size }}
