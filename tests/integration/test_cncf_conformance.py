@@ -7,7 +7,6 @@
 
 import logging
 import re
-from pathlib import Path
 
 import pytest
 from helpers import get_kubeconfig, ready_nodes, run_command, sonobuoy_tar_gz
@@ -61,10 +60,10 @@ async def test_cncf_conformance(
 
     run_command(
         [
-            f"HOME={Path.home()}",
             "/tmp/sonobuoy",
             "run",
-            f"--kubeconfig {kubeconfig_path}",
+            "--kubeconfig",
+            f"{kubeconfig_path}",
             "--plugin",
             "e2e",
             "--wait",
