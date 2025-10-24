@@ -57,9 +57,7 @@ async def test_cncf_conformance(
             "-o/tmp/sonobuoy.tar.gz",
         ]
     )
-
     run_command(["tar", "-xvzf", "/tmp/sonobuoy.tar.gz", "-C", "/tmp"])
-    run_command(["/tmp/sonobuoy", "version"])
 
     run_command(
         [
@@ -67,7 +65,8 @@ async def test_cncf_conformance(
             "/tmp/sonobuoy",
             "run",
             f"--kubeconfig {kubeconfig_path}",
-            "--plugin e2e",
+            "--plugin",
+            "e2e",
             "--wait",
         ]
     )
@@ -75,7 +74,7 @@ async def test_cncf_conformance(
     run_command(["/tmp/sonobuoy", "retrieve", "-f", "/tmp/sonobuoy_e2e.tar.gz"])
 
     output = run_command(
-        ["/tmp/sonobuoy", "results /tmp/sonobuoy_e2e.tar.gz"], capture_output=True
+        ["/tmp/sonobuoy", "results", "/tmp/sonobuoy_e2e.tar.gz"], capture_output=True
     )
     log.info(output)
     match = re.search("Failed: (\\d+)", str(output))
