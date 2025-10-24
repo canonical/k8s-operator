@@ -160,6 +160,22 @@ def pytest_collection_modifyitems(config, items):
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
 
+    # Get the selection expressions from the command line arguments
+    keyword_expression = config.getoption("keyword", "")
+    marker_expression = config.getoption("markexpr", "")
+
+    # Combine the selections into a single string to check against
+    # Pytest implicitly selects items that match -k or -m
+    explicit_selection = keyword_expression or marker_expression
+
+    if not explicit_selection:
+        # If no -k or -m is provided, skip all tests marked 'run_with_k'
+        for item in items:
+            if item.get_closest_marker("run_with_k"):
+                item.add_marker(
+                    pytest.mark.skip(reason="Skipped by default. Use -k or -m run_with_k to run.")
+                )
+
 
 async def cloud_proxied(ops_test: OpsTest):
     """Set up a cloud proxy settings if necessary.
