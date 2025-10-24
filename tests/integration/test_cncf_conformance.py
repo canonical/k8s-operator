@@ -7,9 +7,10 @@
 
 import logging
 import re
+from pathlib import Path
 
 import pytest
-from helpers import ready_nodes, sonobuoy_tar_gz
+from helpers import get_kubeconfig, ready_nodes, run_command, sonobuoy_tar_gz
 from juju import model, unit
 from pytest_operator.plugin import OpsTest
 
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 # bundle for cncf conformance testing, for all the test within this module.
 pytestmark = [
     pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
+    pytest.mark.run_with_k,
 ]
 
 
@@ -32,38 +34,50 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
     await ready_nodes(k8s.units[0], expected_nodes)
 
 
-async def test_cncf_conformance(ops_test: OpsTest, kubernetes_cluster: model.Model):
+@pytest.mark.abort_on_fail
+async def test_cncf_conformance(
+    request, ops_test: OpsTest, kubernetes_cluster: model.Model, timeout: int
+):
     """Run CNCF conformance test."""
     k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
 
     data = k8s.machine.safe_data
     arch = data["hardware-characteristics"]["arch"]
-
     sonobuoy_url = await sonobuoy_tar_gz(ops_test, arch)
 
-    action = await k8s.run(
-        " && ".join(
-            [
-                f"curl -L {sonobuoy_url} -o sonobuoy.tar.gz",
-                "tar xvzf sonobuoy.tar.gz",
-                "./sonobuoy version",
-            ]
-        )
+    module_name = request.module.__name__
+    kubeconfig_path = await get_kubeconfig(ops_test, module_name)
+
+    run_command(
+        [
+            "curl",
+            "-L",
+            f"{sonobuoy_url}",
+            "-o/tmp/sonobuoy.tar.gz",
+        ]
     )
-    result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to install sonobuoy"
 
-    action = await k8s.run("./sonobuoy run --plugin e2e --wait")
-    result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to run e2e plugin"
+    run_command(["tar", "-xvzf", "/tmp/sonobuoy.tar.gz", "-C", "/tmp"])
+    run_command(["/tmp/sonobuoy", "version"])
 
-    action = await k8s.run("./sonobuoy retrieve -f sonobuoy_e2e.tar.gz")
-    result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to retrieve e2e results"
+    run_command(
+        [
+            f"HOME={Path.home()}",
+            "/tmp/sonobuoy",
+            "run",
+            f"--kubeconfig {kubeconfig_path}",
+            "--plugin e2e",
+            "--wait",
+        ]
+    )
 
-    action = await k8s.run("./sonobuoy results sonobuoy_e2e.tar.gz")
-    result = await action.wait()
-    output = result.results["stdout"]
+    run_command(["/tmp/sonobuoy", "retrieve", "-f", "/tmp/sonobuoy_e2e.tar.gz"])
+
+    output = run_command(
+        ["/tmp/sonobuoy", "results /tmp/sonobuoy_e2e.tar.gz"], capture_output=True
+    )
     log.info(output)
-    failed_tests = int(re.search("Failed: (\\d+)", output).group(1))
+    match = re.search("Failed: (\\d+)", str(output))
+    failed_tests = int(match.group(1)) if match else 1
     assert failed_tests == 0, f"{failed_tests} tests failed"
