@@ -4,6 +4,7 @@
 
 import ipaddress
 import logging
+import shlex
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Protocol, Tuple, Union
@@ -20,7 +21,7 @@ LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
 class COSSubstrate(Protocol):
     """Interface for managing a COS substrate."""
 
-    def create_substrate(self) -> str:
+    def create_substrate(self) -> bytes:
         """Create a COS substrate."""
 
     def teardown_substrate(self):
@@ -173,11 +174,11 @@ class LXDSubstrate(COSSubstrate):
             log.exception("Failed to create network")
             raise
 
-    def create_substrate(self) -> str:
+    def create_substrate(self) -> bytes:
         """Create a COS substrate.
 
         Returns:
-            str: The generated kubeconfig.
+            bytes: The generated kubeconfig.
 
         Raises:
             RuntimeError: when the container's snapd fails to load seed
@@ -241,24 +242,24 @@ class LXDSubstrate(COSSubstrate):
         Returns:
             Tuple[int, bytes, bytes]: rc, stdout, and stderr
         """
-        log.info("Running command")
+        _cmd = shlex.join(command)
+        log.info("Running command: %s", _cmd)
         try:
-            rc, stdout, stderr = container.execute(command)
+            rc, stdout, stderr = container.execute(command, decode=False)
             if rc != 0:
                 log.error(
                     "Failed to run %s with return code %s. stdout: %s, stderr: %s",
-                    command,
+                    _cmd,
                     rc,
                     stdout,
                     stderr,
                 )
-
             return rc, stdout, stderr
         except LXDExceptions:
-            log.exception("Failed to execute command")
-            return None
+            log.exception("Failed to execute command: %s", _cmd)
+            return -1, b"", b""
 
-    def get_kubeconfig(self, container) -> str:
+    def get_kubeconfig(self, container) -> bytes:
         """Get kubeconfig from a container.
 
         Args:

@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Setup Astral UV
-        uses: astral-sh/setup-uv@v6.7.0
+        uses: astral-sh/setup-uv@v6.8.0
         with:
           python-version: "3.12"
       - name: Install tox with UV
@@ -71,7 +71,7 @@ jobs:
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
-        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=jammy' || '' }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
       load-test-enabled: false

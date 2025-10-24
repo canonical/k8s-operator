@@ -170,7 +170,7 @@ async def cloud_profile(ops_test: OpsTest):
     if _type == "lxd" and not _vms and ops_test.model:
         # lxd-profile to the model if the juju cloud is lxd.
         lxd = LXDSubstrate("", "")
-        profile_name = f"juju-{ops_test.model.name}"
+        profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
         lxd.remove_profile(profile_name)
         lxd.apply_profile("k8s.profile", profile_name)
     elif _type in ("ec2", "openstack") and ops_test.model:
@@ -340,7 +340,7 @@ async def cos_model(
 
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_text(config)
+    kubeconfig_path.write_bytes(config)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
 
