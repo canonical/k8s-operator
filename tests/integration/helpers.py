@@ -392,7 +392,7 @@ class Bundle:
         arch = await cloud_arch(ops_test)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        series = ops_test.request.config.getoption("--series")
+        series = ops_test.request.config.option.series
 
         bundle = cls(path=path, arch=arch, series=series)
         assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
@@ -410,7 +410,7 @@ class Bundle:
         """
         if not self._content:
             loaded = yaml.safe_load(self.path.read_bytes())
-            self.series = loaded.get("series")
+            self.series = self.series or loaded.get("series")
             for app in loaded["applications"].values():
                 url = URL.parse(app["charm"])
                 url.architecture = self.arch
