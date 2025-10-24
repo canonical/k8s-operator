@@ -73,3 +73,18 @@ variable "expose" {
     error_message = "If provided, expose must only contain the keys: cidrs, endpoints, spaces."
   }
 }
+
+variable "machines" {
+  description = "Placement info for the application's units."
+  type        = set(string)
+  default     = null
+}
+
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for the application."
+  type = set(object({
+    space    = string
+    endpoint = optional(string)
+  }))
+  default = null
+}

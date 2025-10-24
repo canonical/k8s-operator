@@ -19,7 +19,9 @@ The module offers the following configurable inputs:
 | `channel`| string | Channel that the charm is deployed from | False | 1.30/edge |
 | `config`| map(string) | Map of the charm configuration options | False | {} |
 | `constraints` | string | Juju constraints to apply for this application | False | arch=amd64 |
+| `endpoint_bindings`| set(object) | Configure endpoint bindings for interfaces and spaces | False | null |
 | `model`| string | Name of the model that the charm is deployed on | True | null |
+| `machines`| set(string) | Placement info for the application's units | False | null |
 | `resources`| map(string) | Map of the charm resources | False | {} |
 | `revision`| number | Revision number of the charm name | False | null |
 | `units` | number | Number of units to deploy | False | 1 |
@@ -33,6 +35,7 @@ Upon applied, the module exports the following outputs:
 | `app_name`|  Application name |
 | `provides`| Map of `provides` endpoints |
 | `requires`|  Map of `requires` endpoints |
+| `machines`|  List of machines hosting the application units |
 
 ## Usage
 
