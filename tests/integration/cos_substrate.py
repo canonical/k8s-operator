@@ -7,6 +7,7 @@ import logging
 import shlex
 import time
 from pathlib import Path
+from platform import freedesktop_os_release as os_release
 from typing import Any, Dict, List, Protocol, Tuple, Union
 
 import yaml
@@ -38,7 +39,7 @@ class LXDSubstrate(COSSubstrate):
             container_name (str): Name of the container.
             network_name (str): Name of the network.
         """
-        self.client = Client()
+        self.client = Client(timeout=1200)  # 20 minutes
         self.container_name = container_name
         self.network_name = network_name
 
@@ -76,6 +77,8 @@ class LXDSubstrate(COSSubstrate):
             container: The created container instance, or None if creation fails.
         """
         log.info("Creating container")
+        release = os_release()
+
         config: Dict[str, Any] = {
             "name": name,
             "source": {
@@ -83,7 +86,7 @@ class LXDSubstrate(COSSubstrate):
                 "mode": "pull",
                 "server": "https://cloud-images.ubuntu.com/releases",
                 "protocol": "simplestreams",
-                "alias": "22.04",
+                "alias": release["VERSION_ID"],
             },
             "type": "container",
             "devices": {},
@@ -188,7 +191,9 @@ class LXDSubstrate(COSSubstrate):
         container = self.create_container(self.container_name)
         max_attempts, sleep_duration = 10, 30
         for _ in range(max_attempts):
-            rc, _, _ = self.execute_command(container, ["snap", "wait", "system", "seed.loaded"])
+            rc, _, _ = self.execute_command(
+                container, ["snap", "wait", "system", "seed.loaded"], check=True
+            )
             if rc == 0:
                 break
             time.sleep(sleep_duration)
@@ -232,32 +237,25 @@ class LXDSubstrate(COSSubstrate):
         for addon in addons:
             self.execute_command(container, ["sudo", "microk8s", "enable", addon])
 
-    def execute_command(self, container, command: List[str]):
+    def execute_command(self, container, command: List[str], check: bool = True):
         """Execute a command inside a container.
 
         Args:
             container: Container instance.
             command (list): Command to execute.
+            check (bool): Whether to raise an error on non-zero return code.
 
         Returns:
             Tuple[int, bytes, bytes]: rc, stdout, and stderr
         """
         _cmd = shlex.join(command)
         log.info("Running command: %s", _cmd)
-        try:
-            rc, stdout, stderr = container.execute(command, decode=False)
-            if rc != 0:
-                log.error(
-                    "Failed to run %s with return code %s. stdout: %s, stderr: %s",
-                    _cmd,
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            return rc, stdout, stderr
-        except LXDExceptions:
-            log.exception("Failed to execute command: %s", _cmd)
-            return -1, b"", b""
+        rc, stdout, stderr = container.execute(command, decode=False)
+        if check and rc != 0:
+            raise RuntimeError(
+                f"Failed to run {_cmd} with {rc=}. {stdout=}, {stderr=}",
+            )
+        return rc, stdout, stderr
 
     def get_kubeconfig(self, container) -> bytes:
         """Get kubeconfig from a container.
@@ -268,9 +266,7 @@ class LXDSubstrate(COSSubstrate):
         Returns:
             str: The kubeconfig.
         """
-        rc, stdout, stderr = self.execute_command(container, ["microk8s", "config"])
-        if rc != 0:
-            log.error("Failed to get kubeconfig: %s, %s", stdout, stderr)
+        _, stdout, _ = self.execute_command(container, ["microk8s", "config"])
         return stdout
 
     def install_k8s(self, container):
