@@ -172,7 +172,7 @@ async def cloud_profile(ops_test: OpsTest):
         lxd = LXDSubstrate("", "")
         profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
         lxd.remove_profile(profile_name)
-        lxd.apply_profile("k8s.profile", profile_name)
+        lxd.apply_profile(profile_name)
     elif _type in ("ec2", "openstack") and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 

@@ -2,12 +2,20 @@
 # See LICENSE file for licensing details.
 """Aids in testing COS substrate on LXD."""
 
+import gzip
 import ipaddress
+import json
 import logging
+import lzma
+import re
 import shlex
+import subprocess
 import time
+from io import BytesIO
 from pathlib import Path
+from platform import freedesktop_os_release as os_release
 from typing import Any, Dict, List, Protocol, Tuple, Union
+from urllib.request import urlopen
 
 import yaml
 from pylxd import Client
@@ -16,6 +24,38 @@ from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
+K8S_PROFILE_URL = "https://raw.githubusercontent.com/canonical/k8s-snap/refs/heads/main/tests/integration/lxd-profile.yaml"
+
+
+def _adjust_loopback_device(devices: Dict[str, Any]) -> Dict[str, Any]:
+    """Adjust loopback devices."""
+    # loopback device configuration for LXD profile based on current
+    # system usage, intentionally avoiding conflicts with existing loop devices.
+
+    lsblk = subprocess.check_output(["lsblk"])
+    loop_lines = filter(lambda ln: "loop" in ln, lsblk.decode().strip().splitlines())
+    in_use = {int(line.split()[0][4:]) for line in loop_lines}
+    free = filter(lambda x: x not in in_use, range(2**20))
+
+    replacement = {**devices}
+    for device_name, device in devices.items():
+        if device_name.startswith("dev-loop") and device.get("type") == "unix-block":
+            del replacement[device_name]
+            device["minor"] = loop = str(next(free))
+            device["path"] = f"/dev/loop{loop}"
+            replacement[f"dev-loop{loop}"] = device
+    return replacement
+
+
+def _gzip_to_xz(input_bytes: bytes) -> bytes:
+    """Convert gzip bytes to xz compressed bytes."""
+    xz_buffer = BytesIO()
+    with gzip.GzipFile(fileobj=BytesIO(input_bytes)) as gz:
+        with lzma.LZMAFile(xz_buffer, mode="wb") as xz_file:
+            decompressed_data = gz.read()
+            xz_file.write(decompressed_data)
+
+    return xz_buffer.getvalue()
 
 
 class COSSubstrate(Protocol):
@@ -38,13 +78,12 @@ class LXDSubstrate(COSSubstrate):
             container_name (str): Name of the container.
             network_name (str): Name of the network.
         """
-        self.client = Client()
+        self.client = Client(timeout=1200)  # 20 minutes
         self.container_name = container_name
         self.network_name = network_name
 
     def apply_profile(
         self,
-        profile_name: str = "microk8s.profile",
         target_profile_name: str = "cos-profile",
     ):
         """Apply LXD profile.
@@ -54,13 +93,11 @@ class LXDSubstrate(COSSubstrate):
             target_profile_name (Optional[str]): Name of the target profile.
                 Defaults to 'cos-profile'.
         """
-        profile_path = Path("tests/integration/data") / profile_name
-
-        with profile_path.open() as file:
+        with urlopen(K8S_PROFILE_URL) as file:
             try:
                 raw_profile = yaml.safe_load(file)
                 config = raw_profile.get("config", {})
-                devices = raw_profile.get("devices", {})
+                devices = _adjust_loopback_device(raw_profile.get("devices", {}))
                 self.client.profiles.create(target_profile_name, config=config, devices=devices)
                 log.info("Profile %s applied successfully.", target_profile_name)
             except (yaml.YAMLError, *LXDExceptions):
@@ -76,6 +113,8 @@ class LXDSubstrate(COSSubstrate):
             container: The created container instance, or None if creation fails.
         """
         log.info("Creating container")
+        release = os_release()
+
         config: Dict[str, Any] = {
             "name": name,
             "source": {
@@ -83,7 +122,7 @@ class LXDSubstrate(COSSubstrate):
                 "mode": "pull",
                 "server": "https://cloud-images.ubuntu.com/releases",
                 "protocol": "simplestreams",
-                "alias": "22.04",
+                "alias": release["VERSION_ID"],
             },
             "type": "container",
             "devices": {},
@@ -188,15 +227,17 @@ class LXDSubstrate(COSSubstrate):
         container = self.create_container(self.container_name)
         max_attempts, sleep_duration = 10, 30
         for _ in range(max_attempts):
-            rc, _, _ = self.execute_command(container, ["snap", "wait", "system", "seed.loaded"])
+            rc, _, _ = self.execute_command(
+                container, ["snap", "wait", "system", "seed.loaded"], check=False
+            )
             if rc == 0:
                 break
             time.sleep(sleep_duration)
         else:
             raise RuntimeError("Failed to wait for system seed")
 
-        self.install_k8s(container)
-        self.enable_microk8s_addons(container, f"{reserved_start}-{reserved_stop}")
+        self.bootstrap_k8s(container, f"{reserved_start}-{reserved_stop}")
+        self.ready_k8s(container)
         return self.get_kubeconfig(container)
 
     def delete_container(self, container):
@@ -221,43 +262,84 @@ class LXDSubstrate(COSSubstrate):
         network = self.client.networks.get(network_name)
         network.delete(wait=True)
 
-    def enable_microk8s_addons(self, container, ranges: str):
+    def bootstrap_k8s(self, container, range: str):
         """Enable MicroK8s addons.
 
         Args:
             container: Container instance.
-            ranges (str): MetalLB IP ranges.
+            range (str): CIDR range for load balancer.
         """
-        addons = ["dns", "hostpath-storage", f"metallb:{ranges}"]
-        for addon in addons:
-            self.execute_command(container, ["sudo", "microk8s", "enable", addon])
+        cidrs = json.dumps([range])
+        commands = [
+            "snap install k8s --classic",
+            "k8s bootstrap",
+            "k8s status --wait-ready",
+            f"k8s set load-balancer.cidrs='{cidrs}'",
+            "k8s enable load-balancer",
+        ]
+        for cmd in commands:
+            self.execute_command(container, shlex.split("sudo " + cmd))
 
-    def execute_command(self, container, command: List[str]):
+    def ready_k8s(self, container):
+        """Wait for K8s to be ready.
+
+        Args:
+            container: Container instance.
+        """
+        max_attempts, sleep_duration = 10, 30
+        command = "k8s status --wait-ready"
+        for _ in range(max_attempts):
+            rc, stdout, stderr = self.execute_command(container, shlex.split(command), check=False)
+            if rc == 0 and b"failed" not in stdout.lower():
+                break
+            log.warning("K8s not ready yet, retrying...")
+            log.info("K8s status output: %s", stdout.decode())
+            log.info("K8s status errors: %s", stderr.decode())
+            time.sleep(sleep_duration)
+        else:
+            raise RuntimeError("Failed to wait for system seed")
+
+    def inspect_k8s(self, container):
+        """Inspect K8s status.
+
+        Args:
+            container: Container instance.
+        """
+        command = "k8s inspect"
+        rc, stdout, stderr = self.execute_command(container, shlex.split(command), check=False)
+        if rc != 0:
+            log.error("K8s inspect failed with rc=%s", rc)
+            log.error("K8s inspect stdout: %s", stdout.decode())
+            log.error("K8s inspect stderr: %s", stderr.decode())
+            return
+        artifacts = re.findall(r"(\S+\.tar\.gz)", stdout.decode())
+        log.info("K8s inspect artifacts: %s", list(artifacts))
+        for artifact in artifacts:
+            local = f"juju-crashdump-{self.container_name}-{Path(artifact).stem}.xz"
+            log.info("Retrieving artifact: %s to %s", artifact, local)
+            with open(local, "wb") as f:
+                xz = _gzip_to_xz(container.files.get(artifact))
+                f.write(xz)
+
+    def execute_command(self, container, command: List[str], check: bool = True):
         """Execute a command inside a container.
 
         Args:
             container: Container instance.
             command (list): Command to execute.
+            check (bool): Whether to raise an error on non-zero return code.
 
         Returns:
             Tuple[int, bytes, bytes]: rc, stdout, and stderr
         """
         _cmd = shlex.join(command)
         log.info("Running command: %s", _cmd)
-        try:
-            rc, stdout, stderr = container.execute(command, decode=False)
-            if rc != 0:
-                log.error(
-                    "Failed to run %s with return code %s. stdout: %s, stderr: %s",
-                    _cmd,
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            return rc, stdout, stderr
-        except LXDExceptions:
-            log.exception("Failed to execute command: %s", _cmd)
-            return -1, b"", b""
+        rc, stdout, stderr = container.execute(command, decode=False)
+        if check and rc != 0:
+            raise RuntimeError(
+                f"Failed to run {_cmd} with {rc=}. {stdout=}, {stderr=}",
+            )
+        return rc, stdout, stderr
 
     def get_kubeconfig(self, container) -> bytes:
         """Get kubeconfig from a container.
@@ -268,31 +350,9 @@ class LXDSubstrate(COSSubstrate):
         Returns:
             str: The kubeconfig.
         """
-        rc, stdout, stderr = self.execute_command(container, ["microk8s", "config"])
-        if rc != 0:
-            log.error("Failed to get kubeconfig: %s, %s", stdout, stderr)
+        command = "sudo k8s config"
+        _, stdout, _ = self.execute_command(container, shlex.split(command))
         return stdout
-
-    def install_k8s(self, container):
-        """Install Kubernetes inside a container.
-
-        Args:
-            container: Container instance.
-
-        Returns:
-            Tuple[str, bytes, bytes]: rc, stdout, stderr
-        """
-        return self.execute_command(
-            container,
-            [
-                "sudo",
-                "snap",
-                "install",
-                "microk8s",
-                "--channel=1.28/stable",
-                "--classic",
-            ],
-        )
 
     def remove_profile(self, profile_name: str = "cos-profile"):
         """Remove an LXD profile.
@@ -310,6 +370,7 @@ class LXDSubstrate(COSSubstrate):
     def teardown_substrate(self):
         """Teardown the COS substrate."""
         container = self.client.instances.get(self.container_name)
+        self.inspect_k8s(container)
         self.delete_container(container)
         self.delete_network(self.network_name)
         self.remove_profile()
