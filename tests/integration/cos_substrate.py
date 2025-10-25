@@ -2,12 +2,17 @@
 # See LICENSE file for licensing details.
 """Aids in testing COS substrate on LXD."""
 
+import gzip
 import ipaddress
 import json
 import logging
+import lzma
+import re
 import shlex
 import subprocess
 import time
+from io import BytesIO
+from pathlib import Path
 from platform import freedesktop_os_release as os_release
 from typing import Any, Dict, List, Protocol, Tuple, Union
 from urllib.request import urlopen
@@ -40,6 +45,17 @@ def _adjust_loopback_device(devices: Dict[str, Any]) -> Dict[str, Any]:
             device["path"] = f"/dev/loop{loop}"
             replacement[f"dev-loop{loop}"] = device
     return replacement
+
+
+def _gzip_to_xz(input_bytes: bytes) -> bytes:
+    """Convert gzip bytes to xz compressed bytes."""
+    xz_buffer = BytesIO()
+    with gzip.GzipFile(fileobj=BytesIO(input_bytes)) as gz:
+        with lzma.LZMAFile(xz_buffer, mode="wb") as xz_file:
+            decompressed_data = gz.read()
+            xz_file.write(decompressed_data)
+
+    return xz_buffer.getvalue()
 
 
 class COSSubstrate(Protocol):
@@ -283,6 +299,28 @@ class LXDSubstrate(COSSubstrate):
         else:
             raise RuntimeError("Failed to wait for system seed")
 
+    def inspect_k8s(self, container):
+        """Inspect K8s status.
+
+        Args:
+            container: Container instance.
+        """
+        command = "k8s inspect"
+        rc, stdout, stderr = self.execute_command(container, shlex.split(command), check=False)
+        if rc != 0:
+            log.error("K8s inspect failed with rc=%s", rc)
+            log.error("K8s inspect stdout: %s", stdout.decode())
+            log.error("K8s inspect stderr: %s", stderr.decode())
+            return
+        artifacts = re.findall(r"(\S+\.tar\.gz)", stdout.decode())
+        log.info("K8s inspect artifacts: %s", list(artifacts))
+        for artifact in artifacts:
+            local = f"juju-crashdump-{self.container_name}-{Path(artifact).stem}.xz"
+            log.info("Retrieving artifact: %s to %s", artifact, local)
+            with open(local, "wb") as f:
+                xz = _gzip_to_xz(container.files.get(artifact))
+                f.write(xz)
+
     def execute_command(self, container, command: List[str], check: bool = True):
         """Execute a command inside a container.
 
@@ -332,6 +370,7 @@ class LXDSubstrate(COSSubstrate):
     def teardown_substrate(self):
         """Teardown the COS substrate."""
         container = self.client.instances.get(self.container_name)
+        self.inspect_k8s(container)
         self.delete_container(container)
         self.delete_network(self.network_name)
         self.remove_profile()
