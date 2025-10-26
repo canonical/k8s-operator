@@ -18,7 +18,7 @@ import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
-from cos_substrate import LXDSubstrate
+from cos_substrate import LXDSubstrate, VMOptions
 from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
@@ -334,9 +334,10 @@ async def cos_model(
     _grafana_agent,  # pylint: disable=W0613
 ):
     """Create a COS substrate and a K8s model."""
-    container_name = "cos-substrate"
+    instance_name = "cos-substrate"
     network_name = "cos-network"
-    manager = LXDSubstrate(container_name, network_name)
+    vm_opts = VMOptions()
+    manager = LXDSubstrate(instance_name, network_name, vm_opts)
 
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
