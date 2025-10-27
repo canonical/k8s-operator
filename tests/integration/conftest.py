@@ -166,7 +166,7 @@ def pytest_collection_modifyitems(config, items):
 
     if not explicit_selection:
         # If no -k or -m is provided, skip all tests marked 'run_with_k'
-        for item in selected:
+        for item in selected[:]:
             if item.get_closest_marker("run_with_k"):
                 deselected.append(item)
                 selected.remove(item)
