@@ -185,7 +185,7 @@ async def cloud_profile(ops_test: OpsTest):
             if profiles := cloud_mark.kwargs.get("profiles"):
                 lxd_profiles.extend(profiles)
 
-        profile_name = f"juju-{ops_test.model.name}"
+        profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
         lxd.configure_networks(lxd_networks)
         lxd.remove_profile(profile_name)
         lxd.apply_profile(lxd_profiles, profile_name)
