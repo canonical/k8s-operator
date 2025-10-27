@@ -673,6 +673,7 @@ def run_command(
         The command's output if `capture_output` is `True`, otherwise `None`.
     """
     try:
+        log.info("Execute command %s", command)
         result = subprocess.run(command, check=True, text=True, capture_output=capture_output)
         return result.stdout.strip() if capture_output else None
     except subprocess.CalledProcessError as e:

@@ -7,7 +7,6 @@
 
 import logging
 import re
-from pathlib import Path
 
 import pytest
 from helpers import get_kubeconfig, ready_nodes, run_command, sonobuoy_tar_gz
@@ -54,28 +53,36 @@ async def test_cncf_conformance(
             "curl",
             "-L",
             f"{sonobuoy_url}",
-            "-o/tmp/sonobuoy.tar.gz",
+            "-o",
+            "/tmp/sonobuoy.tar.gz",
         ]
     )
     run_command(["tar", "-xvzf", "/tmp/sonobuoy.tar.gz", "-C", "/tmp"])
 
     run_command(
         [
-            f"HOME={Path.home()}",
             "/tmp/sonobuoy",
             "run",
-            f"--kubeconfig {kubeconfig_path}",
+            "--kubeconfig",
+            f"{kubeconfig_path}",
             "--plugin",
             "e2e",
             "--wait",
         ]
     )
 
-    run_command(["/tmp/sonobuoy", "retrieve", "-f", "/tmp/sonobuoy_e2e.tar.gz"])
-
-    output = run_command(
-        ["/tmp/sonobuoy", "results", "/tmp/sonobuoy_e2e.tar.gz"], capture_output=True
+    run_command(
+        [
+            "/tmp/sonobuoy",
+            "retrieve",
+            "--kubeconfig",
+            f"{kubeconfig_path}",
+            "-f",
+            "sonobuoy_e2e.tar.gz",
+        ]
     )
+
+    output = run_command(["/tmp/sonobuoy", "results", "sonobuoy_e2e.tar.gz"], capture_output=True)
     log.info(output)
     match = re.search("Failed: (\\d+)", str(output))
     failed_tests = int(match.group(1)) if match else 1
