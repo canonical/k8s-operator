@@ -156,10 +156,6 @@ def pytest_collection_modifyitems(config, items):
         else:
             selected.append(item)
 
-    if deselected:
-        config.hook.pytest_deselected(items=deselected)
-        items[:] = selected
-
     # Get the selection expressions from the command line arguments
     keyword_expression = config.getoption("keyword", "")
     marker_expression = config.getoption("markexpr", "")
@@ -170,11 +166,14 @@ def pytest_collection_modifyitems(config, items):
 
     if not explicit_selection:
         # If no -k or -m is provided, skip all tests marked 'run_with_k'
-        for item in items:
+        for item in selected:
             if item.get_closest_marker("run_with_k"):
-                item.add_marker(
-                    pytest.mark.skip(reason="Skipped by default. Use -k or -m run_with_k to run.")
-                )
+                deselected.append(item)
+                selected.remove(item)
+
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 async def cloud_proxied(ops_test: OpsTest):
