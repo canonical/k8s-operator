@@ -26,7 +26,7 @@ from juju.url import URL
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from literals import ONE_MIN
-from lxd_substrate import LXDSubstrate
+from lxd_substrate import LXDSubstrate, VMOptions
 from pytest_operator.plugin import OpsTest
 
 log = logging.getLogger(__name__)
@@ -173,10 +173,6 @@ async def cloud_profile(ops_test: OpsTest):
         lxd = LXDSubstrate()
 
         lxd_profiles, lxd_networks = [], []
-        if not _vms:
-            # If we're using LXD containers, apply the container profile.
-            lxd_profiles.append("k8s.profile")
-
         # -- Setup LXD networks and profiles for the model.
         cloud_mark = ops_test.request.node.get_closest_marker("clouds")
         if cloud_mark and "lxd" in cloud_mark.args:
@@ -351,10 +347,10 @@ async def cos_model(
     _grafana_agent,  # pylint: disable=W0613
 ):
     """Create a COS substrate and a K8s model."""
-    container_name = "cos-substrate"
-    network_name = "cos-network"
-    manager = COSSubstrate(container_name, network_name)
+    _type, _vms = await cloud_type(ops_test)
+    assert _type == "lxd", "COS tests only supported on LXD clouds"
 
+    manager = COSSubstrate(VMOptions() if _vms else None)
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
     kubeconfig_path.write_bytes(config)

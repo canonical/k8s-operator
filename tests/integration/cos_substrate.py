@@ -2,30 +2,46 @@
 # See LICENSE file for licensing details.
 """Aids in testing COS substrate on LXD."""
 
+import gzip
 import ipaddress
+import json
 import logging
+import lzma
+import re
+import shlex
 import time
-from typing import Tuple, Union
+from io import BytesIO
+from pathlib import Path
+from typing import Optional, Tuple, Union
 
-from lxd_substrate import LXDSubstrate
+from lxd_substrate import LXDSubstrate, VMOptions
+from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
+TEST_DATA = Path(__file__).parent / "data"
+K8S_PROFILE_URL = "https://raw.githubusercontent.com/canonical/k8s-snap/refs/heads/main/tests/integration/lxd-profile.yaml"
+
+
+def _gzip_to_xz(input_bytes: bytes) -> bytes:
+    """Convert gzip bytes to xz compressed bytes."""
+    xz_buffer = BytesIO()
+    with gzip.GzipFile(fileobj=BytesIO(input_bytes)) as gz:
+        with lzma.LZMAFile(xz_buffer, mode="wb") as xz_file:
+            decompressed_data = gz.read()
+            xz_file.write(decompressed_data)
+
+    return xz_buffer.getvalue()
 
 
 class COSSubstrate(LXDSubstrate):
-    """A COS substrate."""
+    """A COS Substrate."""
 
-    def __init__(self, container_name: str, network_name: str) -> None:
-        """Initialize LXDSubstrate instance.
-
-        Args:
-            container_name (str): Name of the container.
-            network_name (str): Name of the network.
-        """
-        super().__init__()
-        self.container_name = container_name
-        self.network_name = network_name
+    def __init__(self, vm: Optional[VMOptions] = None) -> None:
+        super().__init__(vm)
+        self.instance_name = "cos-substrate"
+        self.network_name = "cos-network"
 
     def create_network(
         self,
@@ -96,73 +112,103 @@ class COSSubstrate(LXDSubstrate):
             bytes: The generated kubeconfig.
 
         Raises:
-            RuntimeError: when the container's snapd fails to load seed
+            RuntimeError: when the instance's snapd fails to load seed
         """
-        self.apply_profile(["microk8s.profile"], "cos-profile")
+        self.apply_profile([], "cos-profile")
         reserved_start, reserved_stop = self.create_network(self.network_name)
-        container = self.create_container(self.container_name, self.network_name)
+        instance = self.create_instance(self.instance_name, self.network_name)
         max_attempts, sleep_duration = 10, 30
         for _ in range(max_attempts):
-            rc, _, _ = self.execute_command(container, ["snap", "wait", "system", "seed.loaded"])
+            rc, _, _ = self.execute_command(
+                instance, ["snap", "wait", "system", "seed.loaded"], check=False
+            )
             if rc == 0:
                 break
             time.sleep(sleep_duration)
         else:
             raise RuntimeError("Failed to wait for system seed")
 
-        self.install_k8s(container)
-        self.enable_microk8s_addons(container, f"{reserved_start}-{reserved_stop}")
-        return self.get_kubeconfig(container)
+        self.bootstrap_k8s(instance, f"{reserved_start}-{reserved_stop}")
+        self.ready_k8s(instance)
+        return self.get_kubeconfig(instance)
 
-    def enable_microk8s_addons(self, container, ranges: str):
+    def bootstrap_k8s(self, instance, range: str):
         """Enable MicroK8s addons.
 
         Args:
-            container: Container instance.
-            ranges (str): MetalLB IP ranges.
+            instance: Container instance.
+            range (str): CIDR range for load balancer.
         """
-        addons = ["dns", "hostpath-storage", f"metallb:{ranges}"]
-        for addon in addons:
-            self.execute_command(container, ["sudo", "microk8s", "enable", addon])
+        cidrs = json.dumps([range])
+        commands = [
+            "snap install k8s --classic",
+            "k8s bootstrap",
+            "k8s status --wait-ready",
+            f"k8s set load-balancer.cidrs='{cidrs}'",
+            "k8s enable load-balancer",
+        ]
+        for cmd in commands:
+            self.execute_command(instance, shlex.split("sudo " + cmd))
 
-    def get_kubeconfig(self, container) -> bytes:
-        """Get kubeconfig from a container.
+    def ready_k8s(self, instance):
+        """Wait for K8s to be ready.
 
         Args:
-            container: Container instance.
+            instance: Container instance.
+        """
+        max_attempts, sleep_duration = 10, 30
+        command = "k8s status --wait-ready"
+        for _ in range(max_attempts):
+            rc, stdout, stderr = self.execute_command(instance, shlex.split(command), check=False)
+            if rc == 0 and b"failed" not in stdout.lower():
+                break
+            log.warning("K8s not ready yet, retrying...")
+            log.info("K8s status output: %s", stdout.decode())
+            log.info("K8s status errors: %s", stderr.decode())
+            time.sleep(sleep_duration)
+        else:
+            raise RuntimeError("Failed to wait for system seed")
+
+    def inspect_k8s(self, instance):
+        """Inspect K8s status.
+
+        Args:
+            instance: Container instance.
+        """
+        command = "k8s inspect"
+        rc, stdout, stderr = self.execute_command(instance, shlex.split(command), check=False)
+        if rc != 0:
+            log.error("K8s inspect failed with rc=%s", rc)
+            log.error("K8s inspect stdout: %s", stdout.decode())
+            log.error("K8s inspect stderr: %s", stderr.decode())
+            return
+        artifacts = re.findall(r"(\S+\.tar\.gz)", stdout.decode())
+        log.info("K8s inspect artifacts: %s", list(artifacts))
+        for artifact in artifacts:
+            local = f"juju-crashdump-{self.instance_name}-{Path(artifact).stem}.xz"
+            log.info("Retrieving artifact: %s to %s", artifact, local)
+            with open(local, "wb") as f:
+                xz = _gzip_to_xz(instance.files.get(artifact))
+                f.write(xz)
+
+    def get_kubeconfig(self, instance) -> bytes:
+        """Get kubeconfig from a instance.
+
+        Args:
+            instance: Container instance.
 
         Returns:
             str: The kubeconfig.
         """
-        rc, stdout, stderr = self.execute_command(container, ["microk8s", "config"])
-        if rc != 0:
-            log.error("Failed to get kubeconfig: %s, %s", stdout, stderr)
+        command = "sudo k8s config"
+        _, stdout, _ = self.execute_command(instance, shlex.split(command))
         return stdout
-
-    def install_k8s(self, container):
-        """Install Kubernetes inside a container.
-
-        Args:
-            container: Container instance.
-
-        Returns:
-            Tuple[str, bytes, bytes]: rc, stdout, stderr
-        """
-        return self.execute_command(
-            container,
-            [
-                "sudo",
-                "snap",
-                "install",
-                "microk8s",
-                "--channel=latest/stable",
-                "--classic",
-            ],
-        )
 
     def teardown_substrate(self):
         """Teardown the COS substrate."""
-        container = self.client.instances.get(self.container_name)
-        self.delete_container(container)
+        instance = self.client.instances.get(self.instance_name)
+        self.inspect_k8s(instance)
+        self.delete_instance(instance)
         self.delete_network(self.network_name)
-        self.remove_profile()
+        if profile := self.profile_name:
+            self.remove_profile(profile)

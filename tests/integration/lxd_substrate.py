@@ -2,11 +2,16 @@
 # See LICENSE file for licensing details.
 """Helper for interacting with LXD."""
 
+import dataclasses
+import ipaddress
 import logging
 import shlex
+import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from platform import freedesktop_os_release as os_release
+from typing import Any, Dict, List, Optional, Union
+from urllib.request import urlopen
 
 import yaml
 from pylxd import Client
@@ -14,8 +19,47 @@ from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 from pylxd.models import Instance
 
 log = logging.getLogger(__name__)
-TEST_DATA = Path(__file__).parent / "data"
+IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
+TEST_DATA = Path(__file__).parent / "data"
+K8S_PROFILE_URL = "https://raw.githubusercontent.com/canonical/k8s-snap/refs/heads/main/tests/integration/lxd-profile.yaml"
+
+
+@dataclasses.dataclass
+class VMOptions:
+    disk_size_gb: int = 32
+    memory_size_gb: int = 4
+    cpu_count: int = 2
+    profile_config: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    profile_devices: Dict[str, Any] = dataclasses.field(default_factory=dict)
+
+
+def _adjust_loopback_device(devices: Dict[str, Any]) -> Dict[str, Any]:
+    """Adjust loopback devices."""
+    # loopback device configuration for LXD profile based on current
+    # system usage, intentionally avoiding conflicts with existing loop devices.
+
+    lsblk = subprocess.check_output(["lsblk"])
+    loop_lines = filter(lambda ln: "loop" in ln, lsblk.decode().strip().splitlines())
+    in_use = {int(line.split()[0][4:]) for line in loop_lines}
+    free = filter(lambda x: x not in in_use, range(2**20))
+
+    replacement = {**devices}
+    for device_name, device in devices.items():
+        if device_name.startswith("dev-loop") and device.get("type") == "unix-block":
+            del replacement[device_name]
+            device["minor"] = loop = str(next(free))
+            device["path"] = f"/dev/loop{loop}"
+            replacement[f"dev-loop{loop}"] = device
+    return replacement
+
+
+def _default_container_profile() -> Dict[str, Any]:
+    """Load the default lxd container profile for k8s tuned for this machine."""
+    with urlopen(K8S_PROFILE_URL) as file:
+        default = yaml.safe_load(file)
+        devices = _adjust_loopback_device(default.get("devices", {}))
+        return {**default, "devices": devices}
 
 
 def _merge_dicts(a: dict, b: dict) -> dict:
@@ -38,49 +82,70 @@ def _merge_yaml_files(paths: list[str]):
 
 
 class LXDSubstrate:
-    """A LXD substrate."""
+    """A LXD Substrate."""
 
-    def __init__(self) -> None:
-        """Initialize LXDSubstrate instance."""
-        self.client = Client()
+    def __init__(self, vm: Optional[VMOptions] = None) -> None:
+        """Initialize LXDSubstrate instance.
 
-    def apply_profile(self, profiles: List[str], target_profile_name: str):
+        Args:
+            vm (Optional[VMOptions]): VM options. If provided, a virtual machine
+                will be created instead of a instance.
+        """
+        self.client = Client(timeout=1200)  # 20 minutes
+        self.vm_opts = vm
+        self.profile_name: Optional[str] = None
+
+    def apply_profile(self, profile_paths: List[str], profile_name: str):
         """Apply LXD profile.
 
         Args:
-            profiles (List[str]): Name of the profiles to apply together.
-            target_profile_name (str): Name of the target profile.
+            profile_paths (List[str]): Paths to the profile files to apply.
+            profile_name (str): Name of the target profile.
         """
-        raw_profile = _merge_yaml_files(profiles)
-        config = raw_profile.get("config", {})
-        devices = raw_profile.get("devices", {})
-        self.client.profiles.create(target_profile_name, config=config, devices=devices)
-        log.info("Profile %s applied successfully.", target_profile_name)
+        profile = {}
+        if self.vm_opts:
+            profile = {
+                "config": self.vm_opts.profile_config,
+                "devices": self.vm_opts.profile_devices,
+            }
+        else:
+            profile = _default_container_profile()
 
-    def remove_profile(self, profile_name: str = "cos-profile"):
+        merged = _merge_dicts(profile, _merge_yaml_files(profile_paths))
+        config = merged.get("config", {})
+        devices = merged.get("devices", {})
+        self.client.profiles.create(profile_name, config=config, devices=devices)
+        self.profile_name = profile_name
+        log.info("Profile %s applied successfully.", profile_name)
+
+    def remove_profile(self, profile_name: str):
         """Remove an LXD profile.
 
         Args:
-            profile_name (Optional[str]): Name of the profile to remove. Defaults to 'cos-profile'.
+            profile_name (str): Name of the profile to remove.
         """
         try:
             profile = self.client.profiles.get(profile_name)
             profile.delete()
+            if self.profile_name == profile_name:
+                self.profile_name = None
             log.info("Profile %s removed successfully.", profile_name)
         except LXDExceptions:
             log.exception("Failed to remove profile %s", profile_name)
 
-    def create_container(self, name: str, network: Optional[str]) -> Optional[Instance]:
-        """Create a container.
+    def create_instance(self, name: str, network: Optional[str]) -> Optional[Instance]:
+        """Create a instance.
 
         Args:
-            name (str): Name of the container.
-            network (Optional[str]): Name of the network to attach the container to.
+            name (str): Name of the instance.
+            network (Optional[str]): Name of the network to attach the instance to.
 
         Returns:
-            container: The created container instance, or None if creation fails.
+            instance: The created instance, or None if creation fails.
         """
-        log.info("Creating container: %s", name)
+        log.info("Creating instance %s", name)
+        release = os_release()
+
         config: Dict[str, Any] = {
             "name": name,
             "source": {
@@ -88,12 +153,26 @@ class LXDSubstrate:
                 "mode": "pull",
                 "server": "https://cloud-images.ubuntu.com/releases",
                 "protocol": "simplestreams",
-                "alias": "22.04",
+                "alias": release["VERSION_ID"],
             },
             "type": "container",
             "devices": {},
-            "profiles": ["default", "cos-profile"],
+            "profiles": [p for p in ("default", self.profile_name) if p],
         }
+        if self.vm_opts:
+            config["type"] = "virtual-machine"
+            config["config"] = {
+                "limits.cpu": str(self.vm_opts.cpu_count),
+                "limits.memory": f"{self.vm_opts.memory_size_gb * 1024}MiB",
+            }
+            config["devices"] = {
+                "root": {
+                    "path": "/",
+                    "pool": "default",
+                    "size": f"{self.vm_opts.disk_size_gb * 1024}MiB",
+                    "type": "disk",
+                }
+            }
         if network:
             config["devices"]["eth0"] = {
                 "name": "eth0",
@@ -101,29 +180,24 @@ class LXDSubstrate:
                 "parent": network,
                 "type": "nic",
             }
-        try:
-            container = self.client.instances.create(config, wait=True)
-            log.info("Starting Container: %s", name)
-            container.start(wait=True)
-            time.sleep(60)
-            return container
+        instance = self.client.instances.create(config, wait=True)
+        log.info("Starting Instance %s", name)
+        instance.start(wait=True)
+        time.sleep(60)
+        return instance
 
-        except LXDExceptions:
-            log.exception("Failed to create or start container: %s", name)
-            return None
-
-    def delete_container(self, container: Instance):
-        """Delete a container.
+    def delete_instance(self, instance: Instance):
+        """Delete a instance.
 
         Args:
-            container: Container instance to be deleted.
+            instance: Lxd instance to be deleted.
         """
         try:
-            container.stop(wait=True)
-            container.delete(wait=True)
-            log.info("Container deleted successfully.")
+            instance.stop(wait=True)
+            instance.delete(wait=True)
+            log.info("Instance %s deleted successfully.", instance.name)
         except LXDExceptions:
-            log.error("Failed to delete container")
+            log.error("Failed to delete instance %s", instance.name)
 
     def configure_networks(self, networks: List[str]):
         """Configure LXD networks.
@@ -161,6 +235,7 @@ class LXDSubstrate:
         if network.dirty:
             network.save()
         log.info("Network '%s' created successfully.", name)
+
         return network
 
     def delete_network(self, network_name: str):
@@ -173,29 +248,22 @@ class LXDSubstrate:
         network.delete(wait=True)
         log.info("Network '%s' deleted successfully.", network_name)
 
-    def execute_command(self, container: Instance, command: List[str]):
-        """Execute a command inside a container.
+    def execute_command(self, instance, command: List[str], check: bool = True):
+        """Execute a command inside a instance.
 
         Args:
-            container: Container instance.
+            instance: Container instance.
             command (list): Command to execute.
+            check (bool): Whether to raise an error on non-zero return code.
 
         Returns:
             Tuple[int, bytes, bytes]: rc, stdout, and stderr
         """
         _cmd = shlex.join(command)
         log.info("Running command: %s", _cmd)
-        try:
-            rc, stdout, stderr = container.execute(command, decode=False)
-            if rc != 0:
-                log.error(
-                    "Failed to run %s with return code %s. stdout: %s, stderr: %s",
-                    _cmd,
-                    rc,
-                    stdout,
-                    stderr,
-                )
-            return rc, stdout, stderr
-        except LXDExceptions:
-            log.exception("Failed to execute command: %s", _cmd)
-            return -1, b"", b""
+        rc, stdout, stderr = instance.execute(command, decode=False)
+        if check and rc != 0:
+            raise RuntimeError(
+                f"Failed to run {_cmd} with {rc=}. {stdout=}, {stderr=}",
+            )
+        return rc, stdout, stderr
