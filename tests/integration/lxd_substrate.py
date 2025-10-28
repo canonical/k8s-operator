@@ -9,7 +9,6 @@ import shlex
 import subprocess
 import time
 from pathlib import Path
-from platform import freedesktop_os_release as os_release
 from typing import Any, Dict, List, Optional, Union
 from urllib.request import urlopen
 
@@ -17,6 +16,20 @@ import yaml
 from pylxd import Client
 from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 from pylxd.models import Instance
+
+try:
+    from platform import freedesktop_os_release as os_release  # type: ignore[attr-defined]
+except ImportError:
+
+    def os_release() -> Dict[str, str]:
+        """Fallback os_release for Python < 3.10."""
+        release_info = {}
+        with open("/etc/os-release") as f:
+            for line in f:
+                key, _, value = line.partition("=")
+                release_info[key] = value.strip().strip('"')
+        return release_info
+
 
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -72,7 +85,7 @@ def _merge_dicts(a: dict, b: dict) -> dict:
     return a
 
 
-def _merge_yaml_files(paths: list[str]):
+def _merge_yaml_files(paths: List[str]):
     merged: Dict[str, Any] = {}
     for path in paths:
         full_path = TEST_DATA / path

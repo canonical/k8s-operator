@@ -14,8 +14,9 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-from lxd_substrate import LXDSubstrate, VMOptions
 from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
+
+from .lxd_substrate import LXDSubstrate, VMOptions
 
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
