@@ -18,7 +18,7 @@ import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
-from cos_substrate import LXDSubstrate
+from cos_substrate import COSSubstrate, LXDSubstrate, VMOptions
 from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
@@ -180,10 +180,10 @@ async def cloud_profile(ops_test: OpsTest):
     _type, _vms = await cloud_type(ops_test)
     if _type == "lxd" and not _vms and ops_test.model:
         # lxd-profile to the model if the juju cloud is lxd.
-        lxd = LXDSubstrate("", "")
+        lxd = LXDSubstrate()
         profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
         lxd.remove_profile(profile_name)
-        lxd.apply_profile("k8s.profile", profile_name)
+        lxd.apply_profile([], profile_name)
     elif _type in ("ec2", "openstack") and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
@@ -348,9 +348,10 @@ async def metrics_agent(kubernetes_cluster: Model, request):
 @pytest_asyncio.fixture(scope="module")
 async def cos_model(ops_test: OpsTest, kubernetes_cluster, metrics_agent):
     """Create a COS substrate and a K8s model."""
-    container_name = "cos-substrate"
-    network_name = "cos-network"
-    manager = LXDSubstrate(container_name, network_name)
+    _type, _vms = await cloud_type(ops_test)
+    assert _type == "lxd", "COS tests only supported on LXD clouds"
+
+    manager = COSSubstrate(VMOptions() if _vms else None)
 
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
