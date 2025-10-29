@@ -21,10 +21,10 @@ import yaml
 
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "v0.16.0"
-SOURCE_URL = (
+KUBE_PROM_VER = "v0.16.0"
+KUBE_PROM_SRC = (
     "https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/"
-    f"{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
+    f"{KUBE_PROM_VER}/manifests/grafana-dashboardDefinitions.yaml"
 )
 DASHBOARDS = {
     "apiserver.json",
@@ -46,6 +46,10 @@ DASHBOARDS = {
     "scheduler.json",
     "workload-total.json",
 }
+ETCD_REV = "21473"
+ETCD_SRC = f"https://grafana.com/api/dashboards/{ETCD_REV}/revisions/3/download"
+ETCD_DASHBOARD = "etcd.json"
+
 TARGET_DIR = "src/grafana_dashboards"
 PATCHES_DIR = Path("scripts/dashboard-patches")
 
@@ -59,12 +63,12 @@ def apply_patches():
             to a regular expression to match any job ending with
             "node-exporter".
     """
-    for patch_file in PATCHES_DIR.glob("*"):
+    for patch_file in sorted(PATCHES_DIR.glob("*")):
         logging.info("Applying patch %s", patch_file)
         subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
 
 
-def fetch_dashboards(source_url: str):
+def fetch_yaml(source_url: str):
     """Fetch and load dashboard definitions from the specified URL.
 
     Args:
@@ -90,9 +94,6 @@ def dashboards_data(data):
     Yields:
         Tuple[str, Any]: key and values from the dashboard data
     """
-    if not data:
-        return
-
     for config_map in data["items"]:
         for key, value in config_map["data"].items():
             if key in DASHBOARDS:
@@ -135,20 +136,31 @@ def save_dashboard_to_file(name, data: str):
     logging.info("Dashboard '%s' saved to %s", name, filepath)
 
 
+def collect_dashboards():
+    """Collect dashboards from the specified sources."""
+    if kube_prom_content := fetch_yaml(KUBE_PROM_SRC):
+        yield from dashboards_data(kube_prom_content)
+
+    if etcd_content := fetch_yaml(ETCD_SRC):
+        yield (ETCD_DASHBOARD, etcd_content)
+
+
 def main():
     """Fetch, process, and save Grafana dashboards."""
     if os.path.exists(TARGET_DIR):
         shutil.rmtree(TARGET_DIR)
     os.makedirs(TARGET_DIR, exist_ok=True)
 
-    dashboards = fetch_dashboards(SOURCE_URL)
-    if dashboards:
-        for name, data in dashboards_data(dashboards):
-            dashboard = prepare_dashboard(data)
-            save_dashboard_to_file(name, dashboard)
-        apply_patches()
-    else:
+    fetched_any = False
+    for name, data in collect_dashboards():
+        fetched_any = True
+        dashboard = prepare_dashboard(data)
+        save_dashboard_to_file(name, dashboard)
+
+    if not fetched_any:
         logging.info("No data fetched. Exiting.")
+    else:
+        apply_patches()
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
-        python-version: '3.12'
+        python-version: '3.14'
 
     - run: "pip install pyyaml"
     - name: Update amd64 Revision
@@ -88,6 +88,7 @@ jobs:
       run: |
         echo "Would have created pull-request"
         echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
+
     - name: Create pull request
       uses: peter-evans/create-pull-request@v7
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
@@ -101,6 +102,7 @@ jobs:
           automerge
         branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.Revisions), '-') }}
         base: ${{ matrix.branch }}
+        author: Canonical Github Bot <actions@canonical.com>
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
         add-paths: |
           charms/worker/k8s/templates/*.yaml

@@ -18,7 +18,7 @@ import kubernetes.client.models as k8s_models
 import pytest
 import pytest_asyncio
 import yaml
-from cos_substrate import LXDSubstrate
+from cos_substrate import COSSubstrate
 from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
 from juju.model import Model
 from juju.tag import untag
@@ -26,11 +26,13 @@ from juju.url import URL
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from literals import ONE_MIN
+from lxd_substrate import LXDSubstrate, VMOptions
 from pytest_operator.plugin import OpsTest
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
+METRICS_AGENTS = ["grafana-agent:1/stable", "opentelemetry-collector:2/edge"]
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -109,6 +111,16 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
+    parser.addoption(
+        "--metrics-agent-charm",
+        dest="metrics_agent_charm",
+        type=str,
+        default="",  # empty string means all
+        help=(
+            "Run test_cos module only with this metrics agent charm, "
+            "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
+        ),
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -167,12 +179,24 @@ async def cloud_profile(ops_test: OpsTest):
         ops_test (OpsTest): ops_test plugin
     """
     _type, _vms = await cloud_type(ops_test)
-    if _type == "lxd" and not _vms and ops_test.model:
+    if _type == "lxd" and ops_test.model:
         # lxd-profile to the model if the juju cloud is lxd.
-        lxd = LXDSubstrate("", "")
-        profile_name = f"juju-{ops_test.model.name}"
+        lxd = LXDSubstrate()
+
+        lxd_profiles, lxd_networks = [], []
+        # -- Setup LXD networks and profiles for the model.
+        cloud_mark = ops_test.request.node.get_closest_marker("clouds")
+        if cloud_mark and "lxd" in cloud_mark.args:
+            if networks := cloud_mark.kwargs.get("networks"):
+                lxd_networks.extend(networks)
+            if profiles := cloud_mark.kwargs.get("profiles"):
+                lxd_profiles.extend(profiles)
+
+        profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
+        lxd.configure_networks(lxd_networks)
         lxd.remove_profile(profile_name)
-        lxd.apply_profile("k8s.profile", profile_name)
+        lxd.apply_profile(lxd_profiles, profile_name)
+
     elif _type in ("ec2", "openstack") and ops_test.model:
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
@@ -300,27 +324,34 @@ async def api_client(
     v1.delete_namespace(name=namespace)
 
 
-@pytest_asyncio.fixture(name="_grafana_agent", scope="module")
-async def grafana_agent(kubernetes_cluster: Model):
-    """Deploy Grafana Agent."""
+@pytest_asyncio.fixture(scope="module", params=METRICS_AGENTS)
+async def metrics_agent(kubernetes_cluster: Model, request):
+    """Deploy Metrics Agent Charm."""
     apps = ["k8s", "k8s-worker"]
+    option = request.config.option.metrics_agent_charm
+    if option and option not in request.param:
+        pytest.skip(
+            f"Skipping metrics agent charm {request.param} due to --metrics-agent-charm={option}"
+        )
+
+    metrics_agent, metrics_agent_channel = request.param.split(":")
     k8s, worker = (kubernetes_cluster.applications.get(a) for a in apps)
     if not k8s:
         pytest.fail("k8s application not found in the model")
     data = k8s.units[0].machine.safe_data
     arch = data["hardware-characteristics"]["arch"]
     series = juju.utils.get_version_series(data["base"].split("@")[1])
-    url = URL("ch", name="grafana-agent", series=series, architecture=arch)
+    url = URL("ch", name=metrics_agent, series=series, architecture=arch)
 
-    await kubernetes_cluster.deploy(url, channel="1/stable", series=series)
-    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
+    await kubernetes_cluster.deploy(url, channel=metrics_agent_channel, series=series)
+    await kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s:cos-agent")
     if worker:
-        await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
+        await kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s-worker:cos-agent")
         await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
 
-    yield
+    yield metrics_agent
 
-    await kubernetes_cluster.remove_application("grafana-agent")
+    await kubernetes_cluster.remove_application(metrics_agent)
     if worker:
         await kubernetes_cluster.applications["k8s"].destroy_relation(
             "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
@@ -328,19 +359,15 @@ async def grafana_agent(kubernetes_cluster: Model):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def cos_model(
-    ops_test: OpsTest,
-    kubernetes_cluster,
-    _grafana_agent,  # pylint: disable=W0613
-):
+async def cos_model(ops_test: OpsTest, kubernetes_cluster, metrics_agent):
     """Create a COS substrate and a K8s model."""
-    container_name = "cos-substrate"
-    network_name = "cos-network"
-    manager = LXDSubstrate(container_name, network_name)
+    _type, _vms = await cloud_type(ops_test)
+    assert _type == "lxd", "COS tests only supported on LXD clouds"
 
+    manager = COSSubstrate(VMOptions() if _vms else None)
     config = manager.create_substrate()
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_text(config)
+    kubeconfig_path.write_bytes(config)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
 
@@ -423,7 +450,8 @@ async def expected_dashboard_titles():
 
 
 @pytest_asyncio.fixture(name="_related_grafana", scope="module")
-async def related_grafana(ops_test: OpsTest, cos_model: Model, _cos_lite_installed):
+@pytest.mark.usefixtures("_cos_lite_installed")
+async def related_grafana(ops_test: OpsTest, cos_model: Model, metrics_agent):
     """Fixture to integrate with Grafana."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
@@ -431,7 +459,7 @@ async def related_grafana(ops_test: OpsTest, cos_model: Model, _cos_lite_install
     with ops_test.model_context("main") as model:
         log.info("Integrating with Grafana")
         await model.integrate(
-            "grafana-agent",
+            metrics_agent,
             f"{model_owner}/{cos_model_name}.grafana-dashboards",
         )
         with ops_test.model_context("cos") as k8s_model:
@@ -457,7 +485,8 @@ async def grafana_password(cos_model, _related_grafana):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
+@pytest.mark.usefixtures("_cos_lite_installed")
+async def related_prometheus(ops_test: OpsTest, cos_model, metrics_agent):
     """Fixture to integrate with Prometheus."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
@@ -465,7 +494,7 @@ async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
     with ops_test.model_context("main") as model:
         log.info("Integrating with Prometheus")
         await model.integrate(
-            "grafana-agent",
+            metrics_agent,
             f"{model_owner}/{cos_model_name}.prometheus-receive-remote-write",
         )
         await model.wait_for_idle(status="active")
