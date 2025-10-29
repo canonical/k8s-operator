@@ -1,7 +1,26 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Charm library for managing TLS certificates (V4).
+"""Legacy Charmhub-hosted lib, deprecated in favour of ``charmlibs.interfaces.tls_certificates``.
+
+WARNING: This library is deprecated.
+It will not receive feature updates or bugfixes.
+``charmlibs.interfaces.tls_certificates`` 1.0 is a bug-for-bug compatible migration of this library.
+
+To migrate:
+1. Add 'charmlibs-interfaces-tls-certificates~=1.0' to your charm's dependencies,
+   and remove this Charmhub-hosted library from your charm.
+2. You can also remove any dependencies added to your charm only because of this library.
+3. Replace `from charms.tls_certificates_interface.v4 import tls_certificates`
+   with `from charmlibs.interfaces import tls_certificates`.
+
+Read more:
+- https://documentation.ubuntu.com/charmlibs
+- https://pypi.org/project/charmlibs-interfaces-tls-certificates
+
+---
+
+Charm library for managing TLS certificates (V4).
 
 This library contains the Requires and Provides classes for handling the tls-certificates
 interface.
@@ -22,10 +41,10 @@ import json
 import logging
 import uuid
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import FrozenSet, List, MutableMapping, Optional, Tuple, Union
+from typing import Dict, FrozenSet, List, MutableMapping, Optional, Tuple, Union
 
 import pydantic
 from cryptography import x509
@@ -36,13 +55,7 @@ from cryptography.x509.oid import ExtensionOID, NameOID
 from ops import BoundEvent, CharmBase, CharmEvents, Secret, SecretExpiredEvent, SecretRemoveEvent
 from ops.framework import EventBase, EventSource, Handle, Object
 from ops.jujuversion import JujuVersion
-from ops.model import (
-    Application,
-    ModelError,
-    Relation,
-    SecretNotFoundError,
-    Unit,
-)
+from ops.model import Application, ModelError, Relation, SecretNotFoundError, Unit
 
 # The unique Charmhub library identifier, never change it
 LIBID = "afd8c2bccf834997afce12c2706d2ede"
@@ -52,14 +65,57 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 21
+LIBPATCH = 24
 
 PYDEPS = [
     "cryptography>=43.0.0",
     "pydantic",
 ]
+IS_PYDANTIC_V1 = int(pydantic.version.VERSION.split(".")[0]) < 2
 
 logger = logging.getLogger(__name__)
+
+NESTED_JSON_KEY = "owasp_event"
+
+
+@dataclass
+class _OWASPLogEvent:
+    """OWASP-compliant log event."""
+
+    datetime: str
+    event: str
+    level: str
+    description: str
+    type: str = "security"
+    labels: Dict[str, str] = field(default_factory=dict)
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    def to_dict(self) -> Dict:
+        log_event = dict(asdict(self), **self.labels)
+        log_event.pop("labels", None)
+        return {k: v for k, v in log_event.items() if v is not None}
+
+
+class _OWASPLogger:
+    """OWASP-compliant logger for security events."""
+
+    def __init__(self, application: Optional[str] = None):
+        self.application = application
+        self._logger = logging.getLogger(__name__)
+
+    def log_event(self, event: str, level: int, description: str, **labels: str):
+        if self.application and "application" not in labels:
+            labels["application"] = self.application
+        log = _OWASPLogEvent(
+            datetime=datetime.now(timezone.utc).astimezone().isoformat(),
+            event=event,
+            level=logging.getLevelName(level),
+            description=description,
+            labels=labels,
+        )
+        self._logger.log(level, log.to_json(), extra={NESTED_JSON_KEY: log.to_dict()})
 
 
 class TLSCertificatesError(Exception):
@@ -70,10 +126,13 @@ class DataValidationError(TLSCertificatesError):
     """Raised when data validation fails."""
 
 
-if int(pydantic.version.VERSION.split(".")[0]) < 2:
+class _DatabagModel(pydantic.BaseModel):
+    """Base databag model.
 
-    class _DatabagModel(pydantic.BaseModel):  # type: ignore
-        """Base databag model."""
+    Supports both pydantic v1 and v2.
+    """
+
+    if IS_PYDANTIC_V1:
 
         class Config:
             """Pydantic config."""
@@ -86,123 +145,116 @@ if int(pydantic.version.VERSION.split(".")[0]) < 2:
 
         _NEST_UNDER = None
 
-        @classmethod
-        def load(cls, databag: MutableMapping):
-            """Load this model from a Juju databag."""
-            if cls._NEST_UNDER:
-                return cls.parse_obj(json.loads(databag[cls._NEST_UNDER]))
+    model_config = pydantic.ConfigDict(
+        # tolerate additional keys in databag
+        extra="ignore",
+        # Allow instantiating this class by field name (instead of forcing alias).
+        populate_by_name=True,
+        # Custom config key: whether to nest the whole datastructure (as json)
+        # under a field or spread it out at the toplevel.
+        _NEST_UNDER=None,
+    )  # type: ignore
+    """Pydantic config."""
 
-            try:
-                data = {
-                    k: json.loads(v)
-                    for k, v in databag.items()
-                    # Don't attempt to parse model-external values
-                    if k in {f.alias for f in cls.__fields__.values()}
-                }
-            except json.JSONDecodeError as e:
-                msg = f"invalid databag contents: expecting json. {databag}"
-                logger.error(msg)
-                raise DataValidationError(msg) from e
+    @classmethod
+    def load(cls, databag: MutableMapping):
+        """Load this model from a Juju databag."""
+        if IS_PYDANTIC_V1:
+            return cls._load_v1(databag)
+        nest_under = cls.model_config.get("_NEST_UNDER")
+        if nest_under:
+            return cls.model_validate(json.loads(databag[nest_under]))
 
-            try:
-                return cls.parse_raw(json.dumps(data))  # type: ignore
-            except pydantic.ValidationError as e:
-                msg = f"failed to validate databag: {databag}"
-                logger.debug(msg, exc_info=True)
-                raise DataValidationError(msg) from e
+        try:
+            data = {
+                k: json.loads(v)
+                for k, v in databag.items()
+                # Don't attempt to parse model-external values
+                if k in {(f.alias or n) for n, f in cls.model_fields.items()}
+            }
+        except json.JSONDecodeError as e:
+            msg = f"invalid databag contents: expecting json. {databag}"
+            logger.error(msg)
+            raise DataValidationError(msg) from e
 
-        def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
-            """Write the contents of this model to Juju databag.
+        try:
+            return cls.model_validate_json(json.dumps(data))
+        except pydantic.ValidationError as e:
+            msg = f"failed to validate databag: {databag}"
+            logger.debug(msg, exc_info=True)
+            raise DataValidationError(msg) from e
 
-            :param databag: the databag to write the data to.
-            :param clear: ensure the databag is cleared before writing it.
-            """
-            if clear and databag:
-                databag.clear()
+    @classmethod
+    def _load_v1(cls, databag: MutableMapping):
+        """Load implementation for pydantic v1."""
+        if cls._NEST_UNDER:
+            return cls.parse_obj(json.loads(databag[cls._NEST_UNDER]))
 
-            if databag is None:
-                databag = {}
+        try:
+            data = {
+                k: json.loads(v)
+                for k, v in databag.items()
+                # Don't attempt to parse model-external values
+                if k in {f.alias for f in cls.__fields__.values()}
+            }
+        except json.JSONDecodeError as e:
+            msg = f"invalid databag contents: expecting json. {databag}"
+            logger.error(msg)
+            raise DataValidationError(msg) from e
 
-            if self._NEST_UNDER:
-                databag[self._NEST_UNDER] = self.json(by_alias=True, exclude_defaults=True)
-                return databag
+        try:
+            return cls.parse_raw(json.dumps(data))  # type: ignore
+        except pydantic.ValidationError as e:
+            msg = f"failed to validate databag: {databag}"
+            logger.debug(msg, exc_info=True)
+            raise DataValidationError(msg) from e
 
-            dct = self.dict(by_alias=True, exclude_defaults=True)
-            databag.update({k: json.dumps(v) for k, v in dct.items()})
+    def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+        """Write the contents of this model to Juju databag.
 
+        Args:
+            databag: The databag to write to.
+            clear: Whether to clear the databag before writing.
+
+        Returns:
+            MutableMapping: The databag.
+        """
+        if IS_PYDANTIC_V1:
+            return self._dump_v1(databag, clear)
+        if clear and databag:
+            databag.clear()
+
+        if databag is None:
+            databag = {}
+        nest_under = self.model_config.get("_NEST_UNDER")
+        if nest_under:
+            databag[nest_under] = self.model_dump_json(
+                by_alias=True,
+                # skip keys whose values are default
+                exclude_defaults=True,
+            )
             return databag
 
-else:
-    from pydantic import ConfigDict
+        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=True)
+        databag.update({k: json.dumps(v) for k, v in dct.items()})
+        return databag
 
-    class _DatabagModel(pydantic.BaseModel):
-        """Base databag model."""
+    def _dump_v1(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+        """Dump implementation for pydantic v1."""
+        if clear and databag:
+            databag.clear()
 
-        model_config = ConfigDict(
-            # tolerate additional keys in databag
-            extra="ignore",
-            # Allow instantiating this class by field name (instead of forcing alias).
-            populate_by_name=True,
-            # Custom config key: whether to nest the whole datastructure (as json)
-            # under a field or spread it out at the toplevel.
-            _NEST_UNDER=None,  # type: ignore
-        )
-        """Pydantic config."""
+        if databag is None:
+            databag = {}
 
-        @classmethod
-        def load(cls, databag: MutableMapping):
-            """Load this model from a Juju databag."""
-            nest_under = cls.model_config.get("_NEST_UNDER")
-            if nest_under:
-                return cls.model_validate(json.loads(databag[nest_under]))
-
-            try:
-                data = {
-                    k: json.loads(v)
-                    for k, v in databag.items()
-                    # Don't attempt to parse model-external values
-                    if k in {(f.alias or n) for n, f in cls.model_fields.items()}
-                }
-            except json.JSONDecodeError as e:
-                msg = f"invalid databag contents: expecting json. {databag}"
-                logger.error(msg)
-                raise DataValidationError(msg) from e
-
-            try:
-                return cls.model_validate_json(json.dumps(data))
-            except pydantic.ValidationError as e:
-                msg = f"failed to validate databag: {databag}"
-                logger.debug(msg, exc_info=True)
-                raise DataValidationError(msg) from e
-
-        def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
-            """Write the contents of this model to Juju databag.
-
-            Args:
-                databag: The databag to write to.
-                clear: Whether to clear the databag before writing.
-
-            Returns:
-                MutableMapping: The databag.
-            """
-            if clear and databag:
-                databag.clear()
-
-            if databag is None:
-                databag = {}
-            nest_under = self.model_config.get("_NEST_UNDER")
-            if nest_under:
-                databag[nest_under] = self.model_dump_json(
-                    by_alias=True,
-                    # skip keys whose values are default
-                    exclude_defaults=True,
-                )
-                return databag
-
-            dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=True)
-            databag.update({k: json.dumps(v) for k, v in dct.items()})
-
+        if self._NEST_UNDER:
+            databag[self._NEST_UNDER] = self.json(by_alias=True, exclude_defaults=True)
             return databag
+
+        dct = json.loads(self.json(by_alias=True, exclude_defaults=True))
+        databag.update({k: json.dumps(v) for k, v in dct.items()})
+
+        return databag
 
 
 class _Certificate(pydantic.BaseModel):
@@ -735,7 +787,14 @@ def generate_private_key(
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    return PrivateKey.from_string(key_bytes.decode())
+    key = PrivateKey.from_string(key_bytes.decode())
+    _OWASPLogger().log_event(
+        event="private_key_generated",
+        level=logging.INFO,
+        description="Private key generated",
+        key_size=str(key_size),
+    )
+    return key
 
 
 def calculate_relative_datetime(target_time: datetime, fraction: float) -> datetime:
@@ -959,6 +1018,13 @@ def generate_ca(
         builder = builder.add_extension(san_extension, critical=False)
     cert = builder.sign(private_key_object, hashes.SHA256())  # type: ignore[arg-type]
     ca_cert_str = cert.public_bytes(serialization.Encoding.PEM).decode().strip()
+    _OWASPLogger().log_event(
+        event="ca_certificate_generated",
+        level=logging.INFO,
+        description="CA certificate generated",
+        common_name=common_name,
+        validity_days=str(validity.days),
+    )
     return Certificate.from_string(ca_cert_str)
 
 
@@ -1035,6 +1101,14 @@ def generate_certificate(
 
     cert = certificate_builder.sign(private_key, hashes.SHA256())  # type: ignore[arg-type]
     cert_bytes = cert.public_bytes(serialization.Encoding.PEM)
+    _OWASPLogger().log_event(
+        event="certificate_generated",
+        level=logging.INFO,
+        description="Certificate generated from CSR",
+        common_name=csr.common_name,
+        is_ca=str(is_ca),
+        validity_days=str(validity.days),
+    )
     return Certificate.from_string(cert_bytes.decode().strip())
 
 
@@ -1221,7 +1295,7 @@ class TLSCertificatesRequiresV4(Object):
             raise TLSCertificatesError("Invalid private key")
         if renewal_relative_time <= 0.5 or renewal_relative_time > 1.0:
             raise TLSCertificatesError(
-                "Invalid renewal relative time. Must be between 0.0 and 1.0"
+                "Invalid renewal relative time. Must be between 0.5 and 1.0"
             )
         self._private_key = private_key
         self.renewal_relative_time = renewal_relative_time
@@ -1231,6 +1305,7 @@ class TLSCertificatesRequiresV4(Object):
         self.framework.observe(charm.on.secret_remove, self._on_secret_remove)
         for event in refresh_events:
             self.framework.observe(event, self._configure)
+        self._security_logger = _OWASPLogger(application=f"tls-certificates-{charm.app.name}")
 
     def _configure(self, _: Optional[EventBase] = None):
         """Handle TLS Certificates Relation Data.
@@ -1658,7 +1733,10 @@ class TLSCertificatesRequiresV4(Object):
                             }
                         )
                         secret.set_info(
-                            expire=provider_certificate.certificate.expiry_time,
+                            expire=calculate_relative_datetime(
+                                target_time=provider_certificate.certificate.expiry_time,
+                                fraction=self.renewal_relative_time,
+                            ),
                         )
                         secret.get_content(refresh=True)
                     except SecretNotFoundError:
@@ -1750,6 +1828,7 @@ class TLSCertificatesProvidesV4(Object):
         self.framework.observe(charm.on.update_status, self._configure)
         self.charm = charm
         self.relationship_name = relationship_name
+        self._security_logger = _OWASPLogger(application=f"tls-certificates-{charm.app.name}")
 
     def _configure(self, _: EventBase) -> None:
         """Handle update status and tls relation changed events.
@@ -1895,6 +1974,11 @@ class TLSCertificatesProvidesV4(Object):
             for certificate in provider_certificates:
                 certificate.revoked = True
             self._dump_provider_certificates(relation=relation, certificates=provider_certificates)
+        self._security_logger.log_event(
+            event="all_certificates_revoked",
+            level=logging.WARNING,
+            description="All certificates revoked",
+        )
 
     def set_relation_certificate(
         self,
@@ -1923,6 +2007,13 @@ class TLSCertificatesProvidesV4(Object):
         self._add_provider_certificate(
             relation=certificates_relation,
             provider_certificate=provider_certificate,
+        )
+        self._security_logger.log_event(
+            event="certificate_provided",
+            level=logging.INFO,
+            description="Certificate provided to requirer",
+            relation_id=str(provider_certificate.relation_id),
+            common_name=provider_certificate.certificate.common_name,
         )
 
     def get_issued_certificates(

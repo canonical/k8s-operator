@@ -12,7 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Representations of the system's Snaps, and abstractions around managing them.
+"""Legacy Charmhub-hosted snap library, deprecated in favour of ``charmlibs.snap``.
+
+WARNING: This library is deprecated and will no longer receive feature updates or bugfixes.
+``charmlibs.snap`` version 1.0 is a bug-for-bug compatible migration of this library.
+Add 'charmlibs-snap~=1.0' to your charm's dependencies, and remove this Charmhub-hosted library.
+Then replace `from charms.operator_libs_linux.v2 import snap` with `from charmlibs import snap`.
+Read more:
+- https://documentation.ubuntu.com/charmlibs
+- https://pypi.org/project/charmlibs-snap
+
+---
+
+Representations of the system's Snaps, and abstractions around managing them.
 
 The `snap` module provides convenience methods for listing, installing, refreshing, and removing
 Snap packages, in addition to setting and getting configuration options for them.
@@ -109,7 +121,7 @@ LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 14
+LIBPATCH = 15
 
 PYDEPS = ["opentelemetry-api"]
 
