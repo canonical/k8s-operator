@@ -1,16 +1,13 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""Aids in testing COS substrate on LXD."""
+"""Helper for interacting with LXD."""
 
 import dataclasses
-import gzip
 import ipaddress
 import logging
-import lzma
 import shlex
 import subprocess
 import time
-from io import BytesIO
 from pathlib import Path
 from platform import freedesktop_os_release as os_release
 from typing import Any, Dict, List, Optional, Union
@@ -82,17 +79,6 @@ def _merge_yaml_files(paths: list[str]):
         if data := yaml.safe_load(full_path.read_text()):
             merged = _merge_dicts(merged, data)
     return merged
-
-
-def _gzip_to_xz(input_bytes: bytes) -> bytes:
-    """Convert gzip bytes to xz compressed bytes."""
-    xz_buffer = BytesIO()
-    with gzip.GzipFile(fileobj=BytesIO(input_bytes)) as gz:
-        with lzma.LZMAFile(xz_buffer, mode="wb") as xz_file:
-            decompressed_data = gz.read()
-            xz_file.write(decompressed_data)
-
-    return xz_buffer.getvalue()
 
 
 class LXDSubstrate:
@@ -213,6 +199,16 @@ class LXDSubstrate:
         except LXDExceptions:
             log.error("Failed to delete instance %s", instance.name)
 
+    def configure_networks(self, networks: List[str]):
+        """Configure LXD networks.
+
+        Args:
+            networks (List[str]): List of network configuration files.
+        """
+        for network in networks:
+            config = _merge_yaml_files([network])
+            self.apply_networks(config["name"], config)
+
     def apply_networks(self, name: str, config: Dict[str, Any]):
         """Configure LXD networks.
 
@@ -238,7 +234,8 @@ class LXDSubstrate:
             network.config[key] = value
         if network.dirty:
             network.save()
-        log.info("Network '%s' applied successfully.", name)
+        log.info("Network '%s' created successfully.", name)
+
         return network
 
     def delete_network(self, network_name: str):
