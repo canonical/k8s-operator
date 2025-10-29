@@ -35,9 +35,21 @@ variable "constraints" {
   default     = "arch=amd64"
 }
 
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for the application."
+  type        = map(string)
+  default     = {}
+}
+
 variable "model" {
   description = "Reference to a `juju_model`."
   type        = string
+}
+
+variable "placement" {
+  description = "Placement constraints for the application."
+  type        = string
+  default     = ""
 }
 
 variable "resources" {
