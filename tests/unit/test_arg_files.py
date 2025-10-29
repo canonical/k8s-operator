@@ -57,7 +57,7 @@ def test_file_args_config_with_file(read_text):
 @mock.patch("pathlib.Path.exists", mock.Mock(return_value=True))
 @mock.patch("pathlib.Path.read_text", mock.Mock(return_value=""))
 @mock.patch("pathlib.Path.write_text")
-@mock.patch("charms.operator_libs_linux.v2.snap.SnapCache")
+@mock.patch("charmlibs.snap.SnapCache")
 def test_file_args_config_ensure_content(snap_cache, write_text):
     """Test the FileArgsConfig class with a file."""
     config = FileArgsConfig()
@@ -70,7 +70,7 @@ def test_file_args_config_ensure_content(snap_cache, write_text):
 @mock.patch("pathlib.Path.exists", mock.Mock(return_value=True))
 @mock.patch("pathlib.Path.read_text", mock.Mock(return_value='--remove-arg="bar"\n'))
 @mock.patch("pathlib.Path.write_text")
-@mock.patch("charms.operator_libs_linux.v2.snap.SnapCache")
+@mock.patch("charmlibs.snap.SnapCache")
 def test_file_args_config_ensure_content_removal(snap_cache, write_text: mock.MagicMock):
     """Test the FileArgsConfig class with a file."""
     config = FileArgsConfig()

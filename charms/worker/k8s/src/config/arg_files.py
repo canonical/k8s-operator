@@ -14,7 +14,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import charms.operator_libs_linux.v2.snap as snap
+import charmlibs.snap as snap
 from literals import (
     CHARM_SYSD_ARGS_FILE,
     ETCD_ARGS_PATH,

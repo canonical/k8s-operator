@@ -29,9 +29,9 @@ from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
+import charmlibs.snap as snap_lib
 import charms.contextual_status as status
 import charms.node_base.address as node_address
-import charms.operator_libs_linux.v2.snap as snap_lib
 import config.arg_files
 import config.bootstrap
 import config.extra_args
