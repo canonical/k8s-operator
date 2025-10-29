@@ -1,0 +1,11 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: ipv6-br0
+description: "LXD network for Canonical Kubernetes with ipv6 only"
+type: bridge
+config:
+  ipv4.address: none
+  ipv4.nat: "false"
+  ipv6.address: auto
+  ipv6.nat: "true"
