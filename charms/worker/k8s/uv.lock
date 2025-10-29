@@ -307,6 +307,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "charmlibs-interfaces-tls-certificates"
+version = "1.0.0.post1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "ops" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/94/457790b681e67f2238b3b1f0ec524bf76082b4c2a20ab198f50b6a430d36/charmlibs_interfaces_tls_certificates-1.0.0.post1.tar.gz", hash = "sha256:ed0df3b7599b21d7f019edac4ec3e5ccd08536a9d08d423060d06897291ac7fb", size = 109365, upload-time = "2025-10-12T21:26:46.377Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/e6/c9184b01cb85ea674e1f7e81994e1ad2eb7077d5540d8a3c13305320ac4c/charmlibs_interfaces_tls_certificates-1.0.0.post1-py3-none-any.whl", hash = "sha256:7a47dd90b9b94791ddaf63c0aae7d7688adc59bd5ed79787b2eeceb24db88d1d", size = 18538, upload-time = "2025-10-12T21:26:44.88Z" },
+]
+
+[[package]]
+name = "charmlibs-snap"
+version = "1.0.0.post0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/e9/a8b75f6e9e7daf7392c66c68eaea70ab63a617cbff48fd79aa06794d8da6/charmlibs_snap-1.0.0.post0.tar.gz", hash = "sha256:8ba0d0791459da0083f992747bce407b523e2ae2e9bb312d11af5334e7d9857c", size = 29228, upload-time = "2025-10-15T02:40:28.204Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3d/cb/7f1f0b78d1d084416b68de416e3c085058ce1be2acb4c9ae6508abb55d59/charmlibs_snap-1.0.0.post0-py3-none-any.whl", hash = "sha256:5436a6149c9fc5e9b5c02b22f4a8ae28f229c26bef979e860496db3279630463", size = 15389, upload-time = "2025-10-15T02:40:27.162Z" },
+]
+
+[[package]]
 name = "charms-contextual-status"
 version = "0.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -880,6 +906,8 @@ source = { virtual = "." }
 dependencies = [
     { name = "charm-lib-interface-external-cloud-provider" },
     { name = "charm-lib-node-base" },
+    { name = "charmlibs-interfaces-tls-certificates" },
+    { name = "charmlibs-snap" },
     { name = "charms-contextual-status" },
     { name = "charms-reconciler" },
     { name = "cosl" },
@@ -939,6 +967,8 @@ update = [
 requires-dist = [
     { name = "charm-lib-interface-external-cloud-provider", git = "https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider?rev=e9cadd749ff8e2a6c81fadb0268a8b10e26876be" },
     { name = "charm-lib-node-base", git = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base?subdirectory=ops&rev=3d7b34bd10aa5ef8dfca4f671a6e4757ec6c153a" },
+    { name = "charmlibs-interfaces-tls-certificates" },
+    { name = "charmlibs-snap" },
     { name = "charms-contextual-status" },
     { name = "charms-reconciler" },
     { name = "cosl" },

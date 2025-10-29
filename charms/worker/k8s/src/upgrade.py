@@ -9,6 +9,7 @@ from typing import List, Optional, Union
 import charms.contextual_status as status
 import ops
 import reschedule
+from charmlibs.snap import SnapError
 from charms.data_platform_libs.v0.upgrade import (
     ClusterNotReadyError,
     DataUpgrade,
@@ -17,7 +18,6 @@ from charms.data_platform_libs.v0.upgrade import (
     UpgradeGrantedEvent,
     verify_requirements,
 )
-from charms.operator_libs_linux.v2.snap import SnapError
 from inspector import ClusterInspector
 from literals import (
     SNAP_NAME,
