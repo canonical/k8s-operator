@@ -980,7 +980,7 @@ requires-dist = [
     { name = "ops-interface-aws", git = "https://github.com/charmed-kubernetes/interface-aws-integration?subdirectory=ops&rev=main" },
     { name = "ops-interface-azure", git = "https://github.com/charmed-kubernetes/interface-azure-integration?subdirectory=ops&rev=main" },
     { name = "ops-interface-gcp", git = "https://github.com/charmed-kubernetes/interface-gcp-integration?subdirectory=ops&rev=main" },
-    { name = "ops-interface-kube-control", specifier = "==0.3.1" },
+    { name = "ops-interface-kube-control" },
     { name = "poetry-core" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -1356,15 +1356,15 @@ dependencies = [
 
 [[package]]
 name = "ops-interface-kube-control"
-version = "0.3.1"
+version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ops" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/46/e32dc6a71383d6d9e74536e1c4a78b4a9511c6864b1b9750a35d85cc2753/ops_interface_kube_control-0.3.1.tar.gz", hash = "sha256:bce33c5ba410c71898377034458f8b8d0334facee8d31ddb95b457228a65c02b", size = 52806, upload-time = "2025-02-14T22:19:53.046Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/e5/48efe8f62354efe0d588cd0e80e5540ec8657ebcdf4a89e04fbaa9ba1f66/ops_interface_kube_control-0.3.2.tar.gz", hash = "sha256:328b63c5dac51d4d53a0fd8afb7f3512017db229419112313d6e8c3006d1b76a", size = 97012, upload-time = "2025-10-30T15:32:49.545Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/cb/3f759088008972601a3639ee7d346f356e0e5b7bbb1de2c76286ad68f485/ops.interface_kube_control-0.3.1-py3-none-any.whl", hash = "sha256:ce51334b21ea9bb284294495c81ebec145377a42d3cce6012b74532578286073", size = 10132, upload-time = "2025-02-14T22:19:51.298Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/bd/ea36c5d401a3f7adc0a666bafefed2ac85b240a127aac058ef01d265eecf/ops_interface_kube_control-0.3.2-py3-none-any.whl", hash = "sha256:c8e6aedfa7734b176edf719078d53c91a97f6eb99a76def61f2fdcd9acf6be4e", size = 10334, upload-time = "2025-10-30T15:32:48.398Z" },
 ]
 
 [[package]]
