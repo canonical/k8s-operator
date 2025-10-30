@@ -11,7 +11,7 @@ import charms.contextual_status as status
 import charms.k8s.v0.k8sd_api_manager as k8sd
 import config.bootstrap as bootstrap
 import ops
-from charms.tls_certificates_interface.v4.tls_certificates import (
+from charmlibs.interfaces.tls_certificates import (
     CertificateRequestAttributes,
     CertificatesRequirerCharmEvents,
     Mode,
@@ -263,9 +263,12 @@ class K8sCertificates(ops.Object):
         return {str(svc_ip[1]) for svc_ip in cidrs}
 
     def _get_validated_certificate(
-        self, request: CertificateRequestAttributes
+        self, request: Optional[CertificateRequestAttributes]
     ) -> Tuple[ProviderCertificate, PrivateKey]:
         """Get and validate a certificate/key pair for a given request.
+
+        Args:
+            request (CertificateRequestAttributes): The certificate request attributes.
 
         Returns:
             Tuple[ProviderCertificate, PrivateKey]: A tuple containing the certificate and key.
@@ -273,6 +276,10 @@ class K8sCertificates(ops.Object):
         Raises:
             ReconcilerError: If the certificate/key pair is missing.
         """
+        if not request:
+            self._refresh_event.emit()
+            raise status.ReconcilerError("Invalid certificate request.")
+
         certificate, key = self._certificates.get_assigned_certificate(request)
         if not certificate or not key:
             self._refresh_event.emit()
