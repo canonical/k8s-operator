@@ -24,5 +24,5 @@ output "provides" {
 }
 
 output "machines" {
-  value = juju_application.k8s.machines
+  value = juju_application.k8s_worker.machines
 }
