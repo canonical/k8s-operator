@@ -12,7 +12,7 @@ from typing import Dict, Generator, Optional, Union
 import charms.contextual_status as status
 import ops
 from charms.contextual_status import ReconcilerError
-from charms.k8s.v0.k8sd_api_manager import (
+from k8sd_api_manager import (
     ErrorCodes,
     InvalidResponseError,
     K8sdAPIManager,

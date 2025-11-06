@@ -12,7 +12,7 @@ import logging
 from typing import List, Optional, cast
 
 import charms.contextual_status as status
-import charms.k8s.v0.k8sd_api_manager as api_manager
+import k8sd_api_manager as api_manager
 import ops
 import reschedule
 from config.bootstrap import Controller as BootstrapController
