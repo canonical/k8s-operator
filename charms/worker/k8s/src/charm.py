@@ -43,7 +43,18 @@ import yaml
 from charms.contextual_status import ReconcilerError, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_external_cloud_provider import ExternalCloudProvider
-from charms.k8s.v0.k8sd_api_manager import (
+from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
+from charms.node_base import LabelMaker
+from charms.operator_libs_linux.v1 import systemd
+from charms.reconciler import Reconciler
+from cloud_integration import CloudIntegration
+from config.cluster import assemble_cluster_config
+from cos_integration import COSIntegration
+from endpoints import build_url
+from events import update_status
+from inspector import ClusterInspector
+from k8s.client import kubectl
+from k8sd_api_manager import (
     BootstrapConfig,
     ControlPlaneNodeJoinConfig,
     CreateClusterRequest,
@@ -56,17 +67,6 @@ from charms.k8s.v0.k8sd_api_manager import (
     UpdateClusterConfigRequest,
     UserFacingDatastoreConfig,
 )
-from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
-from charms.node_base import LabelMaker
-from charms.operator_libs_linux.v1 import systemd
-from charms.reconciler import Reconciler
-from cloud_integration import CloudIntegration
-from config.cluster import assemble_cluster_config
-from cos_integration import COSIntegration
-from endpoints import build_url
-from events import update_status
-from inspector import ClusterInspector
-from k8s.client import kubectl
 from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
