@@ -53,6 +53,9 @@ jobs:
     secrets: inherit
     strategy:
       matrix:
+        juju:
+          - channel: 3/stable
+          - channel: 4/candidate
         arch:
           # built on azure, test on self-hosted
           - id: amd64
@@ -73,7 +76,7 @@ jobs:
       extra-arguments: >-
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
       modules: ${{ matrix.arch.modules }}
-      juju-channel: 3/stable
+      juju-channel: ${{ matrix.juju.channel }}
       load-test-enabled: false
       provider: lxd
       self-hosted-runner: true
