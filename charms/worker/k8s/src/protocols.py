@@ -8,10 +8,10 @@ from typing import Dict, FrozenSet, List, Tuple
 
 import ops
 from charms.interface_external_cloud_provider import ExternalCloudProvider
-from charms.k8s.v0.k8sd_api_manager import K8sdAPIManager
 from charms.reconciler import Reconciler
 from config.resource import CharmResource
 from inspector import ClusterInspector
+from k8sd_api_manager import K8sdAPIManager
 from ops.interface_kube_control import KubeControlProvides
 
 

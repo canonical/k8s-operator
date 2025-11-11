@@ -14,7 +14,7 @@ from unittest import mock
 import containerd
 import ops
 import pytest
-from charms.k8s.v0.k8sd_api_manager import (
+from k8sd_api_manager import (
     BootstrapConfig,
     UpdateClusterConfigRequest,
 )
