@@ -1,10 +1,12 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Module for managing k8sd API interactions.
+"""K8sd API Manager - Internal API for k8s charm.
 
-This module provides a high-level interface for interacting with K8sd. It
-simplifies tasks such as token management and component updates.
+This module provides the interface for the k8s and k8s-worker charms to
+interact with the k8sd snap via Unix socket or HTTP connections.
+
+NOT INTENDED FOR USE BY OTHER CHARMS - This is internal to k8s-operator.
 
 The core of the module is the K8sdAPIManager, which handles the creation
 and management of HTTP connections to interact with the k8sd API. This
@@ -34,7 +36,7 @@ import socket
 from contextlib import contextmanager
 from datetime import datetime
 from http.client import HTTPConnection, HTTPException
-from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Dict, Generator, List, Mapping, Optional, Tuple, Type, TypeVar
 
 import yaml
 from pydantic import (
@@ -46,16 +48,6 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
-
-# The unique Charmhub library identifier, never change it
-LIBID = "6a5f235306864667a50437c08ba7e83f"
-
-# Increment this major API version when introducing breaking changes
-LIBAPI = 0
-
-# Increment this PATCH version before using `charmcraft publish-lib` or reset
-# to 0 if you are raising the major API version
-LIBPATCH = 8
 
 logger = logging.getLogger(__name__)
 
@@ -500,31 +492,31 @@ class BootstrapConfig(BaseModel):
         default=None, alias="extra-node-config-files"
     )
     # Extra service arguments (values can be None to delete)
-    extra_node_kube_apiserver_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_apiserver_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
     )
-    extra_node_kube_controller_manager_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_controller_manager_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
     )
-    extra_node_kube_scheduler_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_scheduler_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
     )
-    extra_node_kube_proxy_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_proxy_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-proxy-args"
     )
-    extra_node_kubelet_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kubelet_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kubelet-args"
     )
-    extra_node_containerd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_containerd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-containerd-args"
     )
-    extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_k8s_dqlite_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
-    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
     )
-    extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
+    extra_node_containerd_config: Optional[Mapping[str, Any]] = Field(
         default=None, alias="extra-node-containerd-config"
     )
     containerd_base_dir: Optional[str] = Field(default=None, alias="containerd-base-dir")
@@ -655,19 +647,19 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
     extra_node_config_files: Optional[Dict[str, str]] = Field(
         default=None, alias="extra-node-config-files"
     )
-    extra_node_kube_apiserver_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_apiserver_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-apiserver-args"
     )
-    extra_node_kube_controller_manager_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_controller_manager_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-controller-manager-args"
     )
-    extra_node_kube_scheduler_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_kube_scheduler_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
     )
-    extra_node_k8s_dqlite_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_k8s_dqlite_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-k8s-dqlite-args"
     )
-    extra_node_etcd_args: Optional[Dict[str, Optional[str]]] = Field(
+    extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
     )
     extra_node_containerd_config: Optional[Dict[str, Any]] = Field(
@@ -1183,7 +1175,7 @@ class K8sdAPIManager:
         )
         self._send_request(endpoint, "POST", EmptyResponse, request)
 
-    def remove_node(self, name: str, force: bool = True):
+    def remove_node(self, name: str, force: bool = False):
         """Remove a node from the cluster.
 
         Args:

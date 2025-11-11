@@ -11,10 +11,10 @@ import unittest.mock as mock
 import k8s.node
 import ops
 import pytest
+from config.bootstrap import Controller as BootstrapController
 from events.update_status import Handler
+from k8sd_api_manager import K8sdAPIManagerError
 from upgrade import K8sUpgrade
-
-from charms.k8s.v0.k8sd_api_manager import K8sdAPIManagerError
 
 
 @pytest.fixture
@@ -33,6 +33,12 @@ def upgrader() -> K8sUpgrade:
     return mock.MagicMock(spec=K8sUpgrade)
 
 
+@pytest.fixture
+def bootstrap() -> BootstrapController:
+    """Fixture for BootstrapController."""
+    return mock.MagicMock(spec=BootstrapController)
+
+
 @pytest.mark.parametrize(
     "worker, expected_status",
     [
@@ -45,9 +51,9 @@ def upgrader() -> K8sUpgrade:
 )
 @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
 @mock.patch("events.update_status.status")
-def test_feature_failures(mock_status, charm, upgrader, worker, expected_status):
+def test_feature_failures(mock_status, charm, upgrader, bootstrap, worker, expected_status):
     """Test the update_status function."""
-    handler = Handler(charm, upgrader)
+    handler = Handler(charm, bootstrap, upgrader)
     charm.is_worker = worker
 
     cluster_status = charm.api_manager.get_cluster_status.return_value
@@ -77,11 +83,21 @@ def test_feature_failures(mock_status, charm, upgrader, worker, expected_status)
 )
 @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
 @mock.patch("events.update_status.status")
-def test_cant_get_features(mock_status, charm, upgrader):
+def test_cant_get_features(mock_status, charm, bootstrap, upgrader):
     """Test the update_status function when features cannot be retrieved."""
-    handler = Handler(charm, upgrader)
+    handler = Handler(charm, bootstrap, upgrader)
     charm.is_worker = False
 
     charm.api_manager.get_cluster_status.side_effect = K8sdAPIManagerError("API error")
     handler.run()
     mock_status.add.assert_called_once_with(ops.WaitingStatus("Waiting to verify features"))
+
+
+@mock.patch("events.update_status.ready", new=mock.MagicMock(return_value=k8s.node.Status.READY))
+@mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
+def test_bootstrap_prevent(bootstrap, charm, upgrader):
+    """Test that bootstrap prevent method is called."""
+    bootstrap.prevent.return_value = ops.BlockedStatus("Bootstrap config is immutable")
+    handler = Handler(charm, bootstrap, upgrader)
+    handler.run()
+    bootstrap.prevent.assert_called_once()

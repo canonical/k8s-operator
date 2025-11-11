@@ -12,12 +12,11 @@ acquire client credentials for secure communication with etcd.
 import logging
 from typing import Optional
 
-from literals import CHARMED_ETCD_TLS_CA, CHARMED_ETCD_URIS
-from ops import Object, Relation
-
+from charmlibs.interfaces.tls_certificates import TLSCertificatesRequiresV4
 from charms.data_platform_libs.v0.data_interfaces import EtcdRequires
 from charms.kubernetes_libs.v0.etcd import EtcdRequiresProtocol
-from charms.tls_certificates_interface.v4.tls_certificates import TLSCertificatesRequiresV4
+from literals import CHARMED_ETCD_TLS_CA, CHARMED_ETCD_URIS
+from ops import Object, Relation
 
 log = logging.getLogger(__name__)
 

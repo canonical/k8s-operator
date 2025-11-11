@@ -6,8 +6,18 @@
 import logging
 from typing import List, Optional, Union
 
+import charms.contextual_status as status
 import ops
 import reschedule
+from charmlibs.snap import SnapError
+from charms.data_platform_libs.v0.upgrade import (
+    ClusterNotReadyError,
+    DataUpgrade,
+    DependencyModel,
+    UpgradeFinishedEvent,
+    UpgradeGrantedEvent,
+    verify_requirements,
+)
 from inspector import ClusterInspector
 from literals import (
     SNAP_NAME,
@@ -18,21 +28,8 @@ from protocols import K8sCharmProtocol
 # TODO: (mateoflorido) We are using the compatibility layer for pydantic.v1
 #  because the upgrade model does not support pydantic v2 yet.
 from pydantic.v1 import BaseModel
-from snap import list as list_services
 from snap import management as snap_management
-from snap import start, stop
 from snap import version as snap_version
-
-import charms.contextual_status as status
-from charms.data_platform_libs.v0.upgrade import (
-    ClusterNotReadyError,
-    DataUpgrade,
-    DependencyModel,
-    UpgradeFinishedEvent,
-    UpgradeGrantedEvent,
-    verify_requirements,
-)
-from charms.operator_libs_linux.v2.snap import SnapError
 
 log = logging.getLogger(__name__)
 
@@ -184,19 +181,6 @@ class K8sUpgrade(DataUpgrade):
 
         return not incompatible
 
-    def _perform_upgrade(self, services: List[str]) -> None:
-        """Perform the upgrade.
-
-        Args:
-            services: The services to stop and start during the upgrade.
-        """
-        status.add(ops.MaintenanceStatus("Stopping the K8s services"))
-        stop(SNAP_NAME, services)
-        status.add(ops.MaintenanceStatus("Upgrading the k8s snap."))
-        snap_management(self.charm)
-        status.add(ops.MaintenanceStatus("Starting the K8s services"))
-        start(SNAP_NAME, services)
-
     def _on_upgrade_granted(self, event: UpgradeGrantedEvent) -> None:
         """Handle the upgrade granted event.
 
@@ -227,18 +211,13 @@ class K8sUpgrade(DataUpgrade):
             trigger.cancel()
             return ops.BlockedStatus(message)
 
-        snap_services = list_services(SNAP_NAME)
-        services = sorted(name for name, service in snap_services.items() if service["enabled"])
-
         self._upgrade_granted = True
-        status.add(ops.MaintenanceStatus("Upgrading the charm."))
+        status.add(ops.MaintenanceStatus("Upgrading the snap."))
         try:
-            self._perform_upgrade(services=services)
+            snap_management(self.charm)
             self.set_unit_completed()
-
             if self.charm.unit.is_leader():
                 self.on_upgrade_changed(event)
-
             trigger.cancel()
         except SnapError:
             log.exception("Failed to upgrade the snap. Will retry...")

@@ -1,0 +1,11 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: dualstack-br0
+description: "LXD network for Canonical Kubernetes with dualstack"
+type: bridge
+config:
+  ipv4.address: auto
+  ipv4.nat: "true"
+  ipv6.address: auto
+  ipv6.nat: "true"

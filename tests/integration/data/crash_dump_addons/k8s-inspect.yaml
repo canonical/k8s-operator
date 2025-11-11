@@ -1,0 +1,7 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+k8s-inspect:
+  remote: |
+    sudo k8s inspect | tee {output}/k8s-inspect.txt
+    mv {location}/inspection-report-* {output}/
