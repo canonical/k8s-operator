@@ -46,6 +46,12 @@ jobs:
     - name: Run CNCF conformance test
       run: |
         tox -e integration -- -s -k test_cncf_conformance --model ${{env.TF_VAR_model}} --no-deploy
+    - name: Upload CNCF conformance report artifact
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: sonobuoy-e2e-${{ env.test_name }}
+        path: tests/integration/sonobuoy_e2e.tar.gz
     - name: Tmate debugging session (self-hosted)
       if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: canonical/action-tmate@main
