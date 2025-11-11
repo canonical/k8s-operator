@@ -1,0 +1,10 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+description: "LXD profile for Canonical Kubernetes with dualstack networking"
+devices:
+  eth0:
+    name: eth0
+    nictype: bridged
+    parent: dualstack-br0
+    type: nic

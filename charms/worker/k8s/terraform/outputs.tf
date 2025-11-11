@@ -10,7 +10,6 @@ output "requires" {
   value = {
     aws                     = "aws"
     azure                   = "azure"
-    certificates            = "certificates"
     etcd                    = "etcd"
     external_cloud_provider = "external-cloud-provider"
     gcp                     = "gcp"
@@ -27,4 +26,8 @@ output "provides" {
     k8s_cluster       = "k8s-cluster"
     kube_control      = "kube-control"
   }
+}
+
+output "machines" {
+  value = juju_application.k8s.machines
 }

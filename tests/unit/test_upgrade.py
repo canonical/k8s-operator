@@ -6,20 +6,15 @@
 import unittest
 import unittest.mock as mock
 
+import charms.data_platform_libs.v0.upgrade as upgrade_lib
 import ops
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
 from literals import (
-    K8S_CONTROL_PLANE_SERVICES,
-    K8S_DQLITE_SERVICE,
-    K8S_WORKER_SERVICES,
-    MANAGED_ETCD_SERVICE,
     UPGRADE_RELATION,
 )
 from upgrade import K8sDependenciesModel, K8sUpgrade
-
-import charms.data_platform_libs.v0.upgrade as upgrade_lib
 
 
 class TestK8sUpgrade(unittest.TestCase):
@@ -158,18 +153,6 @@ class TestK8sUpgrade(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @mock.patch("upgrade.start")
-    @mock.patch("upgrade.stop")
-    @mock.patch("upgrade.snap_management")
-    def test_perform_upgrade(self, management, stop, start):
-        """Test perform_upgrade method."""
-        services = mock.MagicMock()
-
-        self.upgrade._perform_upgrade(services)
-        management.assert_called_once_with(self.charm)
-        stop.assert_called_once_with("k8s", services)
-        start.assert_called_once_with("k8s", services)
-
     @mock.patch("upgrade.K8sUpgrade._upgrade")
     def test_on_upgrade_granted(self, mock_upgrade):
         """Test _on_upgrade_granted method."""
@@ -184,34 +167,16 @@ class TestK8sUpgrade(unittest.TestCase):
         "upgrade.K8sUpgrade._verify_worker_versions",
         new=mock.MagicMock(return_value=True),
     )
-    @mock.patch("upgrade.list_services")
-    @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
+    @mock.patch("upgrade.snap_management")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
-    def test_upgrade_control_plane(self, on_upgrade_changed, perform_upgrade, list_services):
+    def test_upgrade_control_plane(self, on_upgrade_changed, snap_management):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
-        list_services.return_value = {
-            "containerd": {"enabled": True, "active": True},
-            "k8s-apiserver-proxy": {"enabled": False, "active": False},
-            "k8s-dqlite": {"enabled": False, "active": False},
-            "k8sd": {"enabled": True, "active": True},
-            "kube-apiserver": {"enabled": True, "active": True},
-            "kube-controller-manager": {"enabled": True, "active": True},
-            "kube-proxy": {"enabled": True, "active": True},
-            "kube-scheduler": {"enabled": True, "active": True},
-            "kubelet": {"enabled": True, "active": True},
-            "etcd": {"enabled": False, "active": False},
-        }
         self.charm.is_control_plane = True
         self.charm.is_worker = False
 
         self.upgrade._upgrade(event)
-        services = sorted(
-            s
-            for s in K8S_CONTROL_PLANE_SERVICES
-            if s != K8S_DQLITE_SERVICE and s != MANAGED_ETCD_SERVICE
-        )
-        perform_upgrade.assert_called_once_with(services=services)
+        snap_management.assert_called_once_with(self.charm)
         on_upgrade_changed.assert_called_once_with(event)
 
     @mock.patch("reschedule.PeriodicEvent", new=mock.MagicMock())
@@ -220,29 +185,16 @@ class TestK8sUpgrade(unittest.TestCase):
         "upgrade.K8sUpgrade._verify_worker_versions",
         new=mock.MagicMock(return_value=True),
     )
-    @mock.patch("upgrade.list_services")
-    @mock.patch("upgrade.K8sUpgrade._perform_upgrade")
+    @mock.patch("upgrade.snap_management")
     @mock.patch("upgrade.K8sUpgrade.on_upgrade_changed")
-    def test_upgrade_worker(self, on_upgrade_changed, perform_upgrade, list_services):
+    def test_upgrade_worker(self, on_upgrade_changed, snap_management):
         """Test _upgrade method for control plane."""
         event = mock.MagicMock()
-        list_services.return_value = {
-            "containerd": {"enabled": True, "active": True},
-            "k8s-apiserver-proxy": {"enabled": True, "active": True},
-            "k8s-dqlite": {"enabled": False, "active": False},
-            "k8sd": {"enabled": True, "active": True},
-            "kube-apiserver": {"enabled": False, "active": True},
-            "kube-controller-manager": {"enabled": False, "active": True},
-            "kube-proxy": {"enabled": True, "active": True},
-            "kube-scheduler": {"enabled": False, "active": True},
-            "kubelet": {"enabled": True, "active": True},
-            "etcd": {"enabled": False, "active": False},
-        }
         self.charm.is_control_plane = False
         self.charm.is_worker = True
 
         self.upgrade._upgrade(event)
-        perform_upgrade.assert_called_once_with(services=sorted(K8S_WORKER_SERVICES))
+        snap_management.assert_called_once_with(self.charm)
         on_upgrade_changed.assert_called_once_with(event)
 
     def test_handler_proceed(self):

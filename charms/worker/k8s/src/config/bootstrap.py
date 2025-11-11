@@ -5,190 +5,285 @@
 
 """Bootstrap configuration options."""
 
-import http
+import collections
+import dataclasses
+import ipaddress
 import logging
-from collections import Counter
-from typing import Optional
+from typing import List, Optional
 
+import charms.contextual_status as context_status
+import charms.k8s.v0.k8sd_api_manager as k8sd
 import ops
-import pki
-from config.option import CharmOption
 from literals import (
     BOOTSTRAP_CERTIFICATES,
     BOOTSTRAP_DATASTORE,
     BOOTSTRAP_NODE_TAINTS,
     BOOTSTRAP_POD_CIDR,
     BOOTSTRAP_SERVICE_CIDR,
+    CLUSTER_RELATION,
+    CLUSTER_WORKER_RELATION,
     DATASTORE_NAME_MAPPING,
+    DEFAULT_CERTIFICATE_PROVIDER,
+    SUPPORTED_CERTIFICATES,
 )
+from ops.interface_kube_control.model import Taint
 from protocols import K8sCharmProtocol
-from pydantic import BaseModel, Field
-
-import charms.contextual_status as context_status
-import charms.k8s.v0.k8sd_api_manager as k8sd_api_manager
+from pydantic import TypeAdapter, ValidationError
 
 log = logging.getLogger(__name__)
 
 
-class ConfigComparison:
-    """A class to represent a changed configuration."""
+@dataclasses.dataclass
+class ConfigOptions:
+    """Charm options that has a `bootstrap-` prefix."""
 
-    def __init__(
-        self, charm: ops.CharmBase, option: CharmOption, current, eq=None, mapping=None
-    ) -> None:
-        """Initialize the ConfigComparison instance.
-
-        Args:
-            charm: The charm instance to fetch the current config
-            option: The charm option to compare against.
-            current: The current value of the configuration option from the snap.
-            eq: A function to compare the current and configured values. Defaults to equality.
-            mapping: A mapping of charm values to snap values.
-        """
-        self._charm = charm
-        self._option = option
-        self._mapping = mapping or {}
-        # The equality function to compare the charm and current values
-        self._eq = eq or (lambda x, y: x == y)
-        # Represents the model's config value
-        self._charm_val = self._option.get(self._charm)
-        # Represents the charm config which would set this in the snap
-        self._cur_val = self._unmapped(current)
-
-    def _unmapped(self, snap_value: str) -> str:
-        """Return the charm value for the given snap value."""
-        return {v: k for k, v in self._mapping.items()}.get(snap_value, snap_value)
-
-    @property
-    def matching(self) -> bool:
-        """Check if the configuration has matches."""
-        if not (matches := self._eq(self._cur_val, self._charm_val)):
-            log.warning(
-                "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
-                self._option.name,
-                self._charm_val,
-                self._charm.app.name,
-                self._option.name,
-                self._cur_val,
-            )
-        return matches
-
-    @property
-    def user_status(self) -> ops.BlockedStatus:
-        """Return a user-friendly block status."""
-        return ops.BlockedStatus(
-            f"Expected {self._option.name}='{self._cur_val}' not '{self._charm_val}'"
-        )
+    datastore: Optional[str] = dataclasses.field(
+        default=None, metadata={"option": BOOTSTRAP_DATASTORE}
+    )
+    certificates: str = dataclasses.field(default="")
+    pod_cidr: Optional[str] = dataclasses.field(
+        default=None, metadata={"option": BOOTSTRAP_POD_CIDR}
+    )
+    service_cidr: Optional[str] = dataclasses.field(
+        default=None, metadata={"option": BOOTSTRAP_SERVICE_CIDR}
+    )
 
 
-class BootstrapConfigOptions(BaseModel):
-    """Charm config options that has a `bootstrap-` prefix."""
-
-    certificates: str = Field()
-    datastore: str = Field()
-    node_taints: str = Field()
-    pod_cidr: str = Field()
-    service_cidr: str = Field()
-
-    @classmethod
-    def build(
-        cls,
-        node_status: k8sd_api_manager.GetNodeStatusMetadata,
-        cluster_config: Optional[k8sd_api_manager.GetClusterConfigMetadata] = None,
-    ) -> "BootstrapConfigOptions":
-        """Return a BootstrapCharmConfig instance from cluster config and node status.
-
-        Args:
-            cluster_config: The cluster configuration.
-            node_status: The node status.
-
-        Returns:
-            A BootstrapConfigOptions instance with the configuration options.
-        """
-        # NOTE(Hue): certificates type should be determined based on the presence of the CA key.
-        certificates = "self-signed" if pki.check_ca_key() else "external"
-
-        datastore = (
-            cluster_config and cluster_config.datastore and cluster_config.datastore.type or ""
-        )
-
-        return BootstrapConfigOptions(
-            certificates=certificates,
-            datastore=datastore,
-            node_taints=" ".join(node_status.taints) if node_status.taints else "",
-            pod_cidr=cluster_config and cluster_config.pod_cidr or "",
-            service_cidr=cluster_config and cluster_config.service_cidr or "",
-        )
-
-    def prevent(self, charm: K8sCharmProtocol) -> Optional[ops.BlockedStatus]:
-        """Prevent bootstrap config changes after bootstrap.
-
-        Args:
-            charm: The charm instance to check the bootstrap config options for.
-            ref_config: The reference bootstrap config options to compare against.
-
-        Returns:
-            An ops.BlockedStatus if any bootstrap options have changed, None otherwise.
-        """
-        test = []
-        if charm.is_control_plane:
-            test.append(
-                ConfigComparison(
-                    charm,
-                    BOOTSTRAP_DATASTORE,
-                    self.datastore,
-                    mapping=DATASTORE_NAME_MAPPING,
-                )
-            )
-            test.append(ConfigComparison(charm, BOOTSTRAP_CERTIFICATES, self.certificates))
-            test.append(ConfigComparison(charm, BOOTSTRAP_POD_CIDR, self.pod_cidr))
-            test.append(ConfigComparison(charm, BOOTSTRAP_SERVICE_CIDR, self.service_cidr))
-        test += [
-            ConfigComparison(charm, BOOTSTRAP_NODE_TAINTS, self.node_taints, eq=_equal_taints)
-        ]
-
-        if reports := [c for c in test if not c.matching]:
-            return reports[0].user_status
-        return None
-
-
-def _equal_taints(t1: str, t2: str) -> bool:
-    """Check if two taint strings are equal.
-
-    The strings can be in any order and individual taints can be separated by spaces.
+def valid_cidr(
+    cidr: str, name: str, required: bool = False
+) -> set[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Validate a CIDR block.
 
     Args:
-        t1: The first taint string.
-        t2: The second taint string.
+        cidr: The CIDR block to validate.
+        name: The name of the configuration option for logging.
+        required: Whether the CIDR block is required.
+
+    Raises:
+        ValueError: If the CIDR block is invalid.
+    """
+    if not cidr and required:
+        raise ValueError(f"{name} is required.")
+
+    user_cidr: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for cidr in cidr.strip().split(","):
+        if not cidr.strip():
+            continue
+        net = ipaddress.ip_network(cidr)  # Validate the CIDR format.
+        if net.prefixlen == net.max_prefixlen:
+            raise ValueError(f"CIDR '{cidr}' is a single IP address.")
+        user_cidr.append(net)
+
+    if not (1 <= len(user_cidr) <= 2):
+        raise ValueError(f"{name} must contain 1 or 2 CIDR blocks, not {len(user_cidr)}.")
+
+    if len(user_cidr) == 2:
+        counter = collections.Counter(ipaddress.ip_network(c).version for c in user_cidr)
+        if counter[4] != 1 or counter[6] != 1:
+            raise ValueError(f"{name} must contain one IPv4 and one IPv6 CIDR block.")
+    return set(user_cidr)
+
+
+def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
+    """Load the certificate provider name from the cluster relation.
+
+    Args:
+        charm: An instance of the charm.
 
     Returns:
-        True if the two taint strings are equal, False otherwise.
+        str: The certificate provider name.
     """
-    return Counter(t1.split()) == Counter(t2.split())
+    app = charm.is_control_plane and charm.app or None
+    relation = charm.model.get_relation(CLUSTER_RELATION)
+    provider = relation and relation.data[app or relation.app].get(BOOTSTRAP_CERTIFICATES.name)
+    return provider or ""
+
+
+def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> None:
+    """Persist the certificates provider in the cluster relation.
+
+    Write-once into the cluster relation at the cluster-certificates key.
+
+    Args:
+        charm: An instance of the charm.
+        provider (str): The certificates provider to persist.
+    """
+    peers = charm.model.relations[CLUSTER_RELATION]
+    workers = charm.model.relations.get(CLUSTER_WORKER_RELATION, [])
+    for relation in peers + workers:
+        app_data = relation.data[charm.app]
+        if not app_data.get(BOOTSTRAP_CERTIFICATES.name):
+            app_data[BOOTSTRAP_CERTIFICATES.name] = provider
+
+
+class Controller:
+    """A store for bootstrap configuration options."""
+
+    def __init__(self, charm: K8sCharmProtocol) -> None:
+        """Initialize the BootstrapStore instance.
+
+        Args:
+            charm: The charm instance.
+        """
+        self._charm = charm
+        self.immutable = self.load_immutable()
+
+    def load_immutable(self) -> ConfigOptions:
+        """Load the bootstrap immutable storage options.
+
+        Args:
+            charm: The charm instance.
+
+        Returns:
+            A BootstrapStore instance with the configuration options.
+        """
+        opts = ConfigOptions()
+        opts.certificates = _load_certificates_provider(self._charm)
+
+        # Load from the immutable cluster storage.
+        if self._charm.is_worker:
+            log.debug("Loaded immutable config for worker")
+            return opts
+
+        if not self._charm.api_manager.is_cluster_bootstrapped():
+            log.debug("Cluster not bootstrapped, no immutable cluster config")
+            return opts
+
+        try:
+            cluster = self._charm.api_manager.get_cluster_config().metadata
+            snap_ds = cluster.datastore and cluster.datastore.type
+            opts.datastore = {v: k for k, v in DATASTORE_NAME_MAPPING.items()}.get(snap_ds)
+            opts.pod_cidr = cluster.pod_cidr
+            opts.service_cidr = cluster.service_cidr
+        except (k8sd.K8sdConnectionError, k8sd.InvalidResponseError) as e:
+            log.warning("Failed to load cluster config: %s", e)
+            # Still return the options we have so far -- they will be validated later.
+
+        return opts
+
+    @property
+    def config(self) -> ConfigOptions:
+        """Return the current bootstrap configuration options."""
+        immutable, juju = self.immutable, self._juju
+        return ConfigOptions(
+            datastore=immutable.datastore or juju.datastore,
+            certificates=immutable.certificates or juju.certificates,
+            pod_cidr=immutable.pod_cidr or juju.pod_cidr,
+            service_cidr=immutable.service_cidr or juju.service_cidr,
+        )
+
+    def validate(self) -> None:
+        """Validate the bootstrap options."""
+        config = self.config
+        try:
+            if config.datastore not in DATASTORE_NAME_MAPPING:
+                name = BOOTSTRAP_DATASTORE.name
+                drop_none = DATASTORE_NAME_MAPPING.keys() - {None}
+                log.error(
+                    "Invalid %s: %s. Valid Options are: %s",
+                    name,
+                    config.datastore,
+                    ", ".join(sorted(drop_none)),
+                )
+                raise ValueError(f"{name}='{config.datastore}' is invalid.")
+            if config.certificates not in SUPPORTED_CERTIFICATES:
+                name = BOOTSTRAP_CERTIFICATES.name
+                log.error(
+                    "Invalid %s: %s. Valid Options are: %s",
+                    name,
+                    config.certificates,
+                    ", ".join(sorted(SUPPORTED_CERTIFICATES)),
+                )
+                # TODO: eventually re-enable this error when certificates feature is stable
+                # raise ValueError(f"{name}='{config.certificates}' is invalid.")
+            if self._charm.is_worker:
+                return  # Workers do not validate CIDRs.
+            if (cidr := config.service_cidr) or config.certificates == "external":
+                required = config.certificates == "external"
+                valid_cidr(cidr or "", BOOTSTRAP_SERVICE_CIDR.name, required)
+            if cidr := config.pod_cidr:
+                valid_cidr(cidr, BOOTSTRAP_POD_CIDR.name)
+        except ValueError as e:
+            m = str(e)
+            log.error("Invalid bootstrap configuration: %s", m)
+            context_status.add(ops.BlockedStatus(m))
+            raise context_status.ReconcilerError(m) from e
+
+    def persist(self) -> None:
+        """Persist the bootstrap configuration options."""
+        config = self.config
+        self.immutable.datastore = config.datastore
+        self.immutable.pod_cidr = config.pod_cidr
+        self.immutable.service_cidr = config.service_cidr
+        self.immutable.certificates = self.persist_certificates()
+
+    def persist_certificates(self) -> str:
+        """Persist the certificates provider in the cluster relation."""
+        if not (provider := self.config.certificates):
+            raise context_status.ReconcilerError("Missing certificates provider")
+
+        _persist_certificates_provider(self._charm, provider)
+        return provider
+
+    @property
+    def _juju(self) -> ConfigOptions:
+        """Return the bootstrap configuration options from the juju config with auto-mapping.
+
+        Options are always loaded from the charm config, or mapped through the default
+        if they are set to "".
+        """
+        juju, empty = ConfigOptions(), ""
+        if self._charm.is_control_plane:
+            # Default to self-signed only if the charm is a control plane.
+            juju.certificates = DEFAULT_CERTIFICATE_PROVIDER
+            if (val := BOOTSTRAP_DATASTORE.get(self._charm)) != empty:
+                juju.datastore = val
+            if (val := BOOTSTRAP_POD_CIDR.get(self._charm)) != empty:
+                juju.pod_cidr = val
+            if (val := BOOTSTRAP_SERVICE_CIDR.get(self._charm)) != empty:
+                juju.service_cidr = val
+
+        return juju
+
+    def prevent(self) -> Optional[ops.BlockedStatus]:
+        """Prevent bootstrap config changes after bootstrap."""
+        if not self._charm.is_control_plane:
+            # Only control plane nodes can have immutable bootstrap config.
+            return None
+        blockers = []
+        for field in dataclasses.fields(self.immutable):
+            cur_val = getattr(self.immutable, field.name)
+            option = field.metadata.get("option")
+            if cur_val is None or option is None:
+                # If the current value is None, it means it was never set.
+                log.info("Skipping immutability check for %s==None", field.name)
+                continue
+
+            if not (juju := option.get(self._charm)):
+                # Auto-mapped options are not immutable.
+                log.info("Skipping immutability check for %s=''", field.name)
+                continue
+            if cur_val != juju:
+                log.warning(
+                    "Cannot satisfy configuration %s='%s'. Run `juju config %s %s='%s'`",
+                    option.name,
+                    juju,
+                    self._charm.app.name,
+                    option.name,
+                    cur_val,
+                )
+                msg = f"{option.name} is immutable; revert to '{cur_val}'"
+                blockers.append(ops.BlockedStatus(msg))
+        return next(iter(blockers), None)
 
 
 @context_status.on_error(
-    ops.WaitingStatus("Failed to get communicate with k8sd."),
-    k8sd_api_manager.InvalidResponseError,
-    k8sd_api_manager.K8sdConnectionError,
+    ops.BlockedStatus("Invalid config on bootstrap-node-taints"),
+    ValidationError,
 )
-def detect_bootstrap_config_changes(charm: K8sCharmProtocol):
-    """Prevent bootstrap config changes after bootstrap."""
-    log.info("Preventing bootstrap config changes after bootstrap")
-
-    try:
-        ref_config = BootstrapConfigOptions.build(
-            node_status=charm.api_manager.get_node_status().metadata,
-            cluster_config=charm.api_manager.get_cluster_config().metadata
-            if charm.is_control_plane
-            else None,
-        )
-    except k8sd_api_manager.InvalidResponseError as e:
-        if e.code == http.HTTPStatus.SERVICE_UNAVAILABLE:
-            log.info("k8sd is not ready, skipping bootstrap config check")
-            return
-        raise
-
-    if blocked := ref_config.prevent(charm):
-        context_status.add(blocked)
-        raise context_status.ReconcilerError(blocked.message)
+def node_taints(charm: ops.CharmBase) -> List[str]:
+    """Share node taints with the kube-control interface."""
+    taints = BOOTSTRAP_NODE_TAINTS.get(charm).split()
+    for taint in taints:
+        TypeAdapter(Taint).validate_python(taint)
+    return taints

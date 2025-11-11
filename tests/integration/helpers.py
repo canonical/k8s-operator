@@ -18,6 +18,7 @@ import juju.model
 import juju.unit
 import juju.utils
 import yaml
+from async_lru import alru_cache
 from juju.url import URL
 from pytest_operator.plugin import OpsTest
 from tenacity import (
@@ -390,7 +391,7 @@ class Bundle:
         arch = await cloud_arch(ops_test)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        series = ops_test.request.config.getoption("--series")
+        series = ops_test.request.config.option.series
 
         bundle = cls(path=path, arch=arch, series=series)
         assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
@@ -408,7 +409,7 @@ class Bundle:
         """
         if not self._content:
             loaded = yaml.safe_load(self.path.read_bytes())
-            self.series = loaded.get("series")
+            self.series = self.series or loaded.get("series")
             for app in loaded["applications"].values():
                 url = URL.parse(app["charm"])
                 url.architecture = self.arch
@@ -592,6 +593,7 @@ class Bundle:
         return True
 
 
+@alru_cache
 async def cloud_arch(ops_test: OpsTest) -> str:
     """Return current architecture of the selected controller.
 
@@ -611,6 +613,7 @@ async def cloud_arch(ops_test: OpsTest) -> str:
     return arch.pop().strip()
 
 
+@alru_cache
 async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller.
 

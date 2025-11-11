@@ -13,11 +13,8 @@ import juju.model
 import juju.unit
 import pytest
 import pytest_asyncio
-from grafana import Grafana
 from helpers import get_leader, get_rsc, ready_nodes, wait_pod_phase
 from literals import ONE_MIN
-from prometheus import Prometheus
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
 
@@ -133,17 +130,24 @@ async def test_nodes_labelled(
 
 
 @pytest.mark.usefixtures("preserve_charm_config")
+@pytest.mark.parametrize(
+    "config_key, config_value",
+    [
+        ("bootstrap-pod-cidr", "10.0.0.0/8"),
+        ("bootstrap-service-cidr", "10.128.0.0/16"),
+        ("bootstrap-datastore", "etcd"),
+    ],
+)
 async def test_prevent_bootstrap_config_changes(
-    ops_test, kubernetes_cluster: juju.model.Model, timeout: int
+    kubernetes_cluster: juju.model.Model, timeout: int, config_key: str, config_value: str
 ):
     """Test that the bootstrap config cannot be changed."""
     apps = ["k8s", "k8s-worker"]
     k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
     expected_nodes = len(k8s.units) + len(worker.units)
     await ready_nodes(k8s.units[0], expected_nodes)
-    new_config = {"bootstrap-node-taints": "new-taint"}
-    await asyncio.gather(k8s.set_config(new_config), worker.set_config(new_config))
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="blocked", timeout=timeout * 60)
+    await k8s.set_config({config_key: config_value})
+    await kubernetes_cluster.wait_for_idle(apps=apps[:1], status="blocked", timeout=timeout * 60)
 
 
 async def test_remove_worker(kubernetes_cluster: juju.model.Model, timeout: int):
@@ -232,47 +236,3 @@ async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, requ
         with revert.open("rb") as obj:
             k8s.attach_resource("snap-installation", revert, obj)
             await kubernetes_cluster.wait_for_idle(status="active")
-
-
-@pytest.mark.cos
-@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_grafana(
-    traefik_url: str,
-    grafana_password: str,
-    expected_dashboard_titles: set,
-    cos_model: juju.model.Model,
-    timeout: int,
-):
-    """Test integration with Grafana."""
-    grafana = Grafana(model_name=cos_model.name, base=traefik_url, password=grafana_password)
-    await asyncio.wait_for(grafana.is_ready(), timeout=timeout * 60)
-    dashboards = await grafana.dashboards_all()
-    actual_dashboard_titles = set()
-
-    for dashboard in dashboards:
-        actual_dashboard_titles.add(dashboard.get("title"))
-
-    assert expected_dashboard_titles.issubset(actual_dashboard_titles)
-
-
-@pytest.mark.cos
-@pytest.mark.usefixtures("related_prometheus")
-@retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout: int):
-    """Test integration with Prometheus."""
-    prometheus = Prometheus(model_name=cos_model.name, base=traefik_url)
-    await asyncio.wait_for(prometheus.is_ready(), timeout=timeout * 60)
-
-    queries = [
-        'up{job="kubelet", metrics_path="/metrics"} > 0',
-        'up{job="kubelet", metrics_path="/metrics/cadvisor"} > 0',
-        'up{job="kubelet", metrics_path="/metrics/probes"} > 0',
-        'up{job="apiserver"} > 0',
-        'up{job="kube-controller-manager"} > 0',
-        'up{job="kube-scheduler"} > 0',
-        'up{job="kube-proxy"} > 0',
-        'up{job="kube-state-metrics"} > 0',
-    ]
-    results = await asyncio.gather(*[prometheus.get_metrics(query) for query in queries])
-    failed = [query for query, result in zip(queries, results) if not result]
-    assert not failed, f"Failed queries: {failed}"
