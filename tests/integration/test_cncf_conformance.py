@@ -67,6 +67,8 @@ async def test_cncf_conformance(
             f"{kubeconfig_path}",
             "--plugin",
             "e2e",
+            "--mode",
+            "certified-conformance",
             "--wait",
         ]
     )
