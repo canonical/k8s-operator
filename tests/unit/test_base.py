@@ -201,8 +201,7 @@ def test_configure_datastore_bootstrap_config_etcd(harness):
 
 
 @mock.patch("containerd.hostsd_path", mock.Mock(return_value=Path("/path/to/hostsd")))
-@mock.patch("config.bootstrap.detect_bootstrap_config_changes")
-def test_set_leader_etcd_missing(mock_detect_bootstrap, harness):
+def test_set_leader_etcd_missing(harness):
     """Test emitting the set_leader hook while not reconciled.
 
     Args:

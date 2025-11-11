@@ -69,7 +69,6 @@ from k8sd_api_manager import (
     UpdateClusterConfigRequest,
     UserFacingDatastoreConfig,
 )
-
 from kube_control import configure as configure_kube_control
 from literals import (
     APISERVER_CERT,
