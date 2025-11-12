@@ -25,7 +25,6 @@ jobs:
     runs-on: ['self-hosted', 'linux', '${{ matrix.arch }}', '${{ matrix.os }}', 'xlarge']
     env:
       TF_VAR_model: my-canonical-k8s
-      TF_VAR_csi_integration: '[]'
     steps:
     - name: Setup Astral UV
       uses: astral-sh/setup-uv@v6.7.0
