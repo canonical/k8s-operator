@@ -61,6 +61,8 @@ def pytest_addoption(parser: pytest.Parser):
         Set timeout for tests
     --upgrade-from
         Instruct tests to start with a specific channel, and upgrade to these charms.
+    --sonobuoy-version
+        Specify the sonobuoy version to use for CNCF conformance tests.
 
     Args:
         parser: Pytest parser.
@@ -121,6 +123,12 @@ def pytest_addoption(parser: pytest.Parser):
             "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
         ),
     )
+    parser.addoption(
+        "--sonobuoy-version",
+        dest="sonobuoy_version",
+        default="v0.57.3",
+        help="Specify the sonobuoy version to use for CNCF conformance tests",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -147,6 +155,21 @@ def pytest_collection_modifyitems(config, items):
             deselected.append(item)
         else:
             selected.append(item)
+
+    # Get the selection expressions from the command line arguments
+    keyword_expression = config.getoption("keyword", "")
+    marker_expression = config.getoption("markexpr", "")
+
+    # Combine the selections into a single string to check against
+    # Pytest implicitly selects items that match -k or -m
+    explicit_selection = keyword_expression or marker_expression
+
+    if not explicit_selection:
+        # If no -k or -m is provided, skip all tests marked 'run_with_k'
+        for item in selected[:]:
+            if item.get_closest_marker("run_with_k"):
+                deselected.append(item)
+                selected.remove(item)
 
     if deselected:
         config.hook.pytest_deselected(items=deselected)
