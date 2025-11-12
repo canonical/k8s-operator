@@ -73,7 +73,7 @@ jobs:
       extra-arguments: >-
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
       modules: ${{ matrix.arch.modules }}
-      juju-channel: 3/stable
+      juju-channel: 4/candidate
       load-test-enabled: false
       provider: lxd
       self-hosted-runner: true

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and platform_python_implementation != 'PyPy'",
@@ -876,6 +876,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jubilant"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d1/af/2c7d2a677389eb4de3bb841f399b749ca2fd4c6c1b70313e21249536e6be/jubilant-1.5.0.tar.gz", hash = "sha256:055c65a662586191939a1a3d3e2b6d08b71ecf0c7f403a1c7ba0cde6ecaf3bbd", size = 28433, upload-time = "2025-10-10T01:08:06.58Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/c9/05e5aa65baa7b71b17c1314b8f25744f36fd9aad60ef9fb46fd84347885a/jubilant-1.5.0-py3-none-any.whl", hash = "sha256:eec58340b9d3d478f31e18e33281638fdf0d9b84608c8935368f7a1bb1972255", size = 28275, upload-time = "2025-10-10T01:08:04.963Z" },
+]
+
+[[package]]
 name = "juju"
 version = "3.6.1.3"
 source = { registry = "https://pypi.org/simple" }
@@ -940,6 +952,7 @@ integration = [
     { name = "pylxd" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-jubilant" },
     { name = "pytest-operator" },
     { name = "pytest-sugar" },
     { name = "requests" },
@@ -999,6 +1012,7 @@ integration = [
     { name = "pylxd" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-jubilant" },
     { name = "pytest-operator" },
     { name = "pytest-sugar" },
     { name = "requests", specifier = "<2.33" },
@@ -1770,6 +1784,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ae/53/57663d99acaac2fcdafdc697e52a9b1b7d6fcf36616281ff9768a44e7ff3/pytest_asyncio-0.21.2.tar.gz", hash = "sha256:d67738fc232b94b326b9d060750beb16e0074210b98dd8b58a5239fa2a154f45", size = 30656, upload-time = "2024-04-29T13:23:24.738Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9c/ce/1e4b53c213dce25d6e8b163697fbce2d43799d76fa08eea6ad270451c370/pytest_asyncio-0.21.2-py3-none-any.whl", hash = "sha256:ab664c88bb7998f711d8039cacd4884da6430886ae8bbd4eded552ed2004f16b", size = 13368, upload-time = "2024-04-29T13:23:23.126Z" },
+]
+
+[[package]]
+name = "pytest-jubilant"
+version = "1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jubilant" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/73/01/a089e0b323d87519e19425809062090a615cc10fdf8879ecf0ec5c5dfc36/pytest_jubilant-1.1.tar.gz", hash = "sha256:755dd5a1b4c295773a01ed3005cec1bd106a46bf51ec041ae56004dd558e8f9c", size = 12368, upload-time = "2025-07-28T06:42:44.808Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/e2/0d9124119c994aba4fbb48457a3dde01d5af5db1cd095be7b03bc6b21215/pytest_jubilant-1.1-py3-none-any.whl", hash = "sha256:1c643b0e64173e405988074e551dd2101805412d807c3c0e51983b52f8b198d4", size = 12040, upload-time = "2025-07-28T06:42:43.518Z" },
 ]
 
 [[package]]

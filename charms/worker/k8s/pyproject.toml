@@ -52,6 +52,7 @@ integration = [
     "pylxd",
     "pytest",
     "pytest-asyncio",
+    "pytest-jubilant",
     "pytest-operator",
     "pytest-sugar",
     "tenacity",

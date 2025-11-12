@@ -10,13 +10,12 @@ import random
 import shlex
 import string
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import Generator, Optional
 
 import juju.controller
 import juju.utils
 import kubernetes.client.models as k8s_models
 import pytest
-import pytest_asyncio
 import yaml
 from cos_substrate import COSSubstrate
 from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
@@ -27,7 +26,9 @@ from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from literals import ONE_MIN
 from lxd_substrate import LXDSubstrate, VMOptions
-from pytest_operator.plugin import OpsTest
+
+# Enable pytest-jubilant plugin
+pytest_plugins = ["pytest_jubilant"]
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
@@ -153,73 +154,76 @@ def pytest_collection_modifyitems(config, items):
         items[:] = selected
 
 
-async def cloud_proxied(ops_test: OpsTest):
+def cloud_proxied(jubilant):
     """Set up a cloud proxy settings if necessary.
 
     If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        jubilant: jubilant plugin fixture
     """
-    assert ops_test.model, "Model must be present"
-    controller: juju.controller.Controller = await ops_test.model.get_controller()
-    controller_model = await controller.get_model("controller")
+    assert jubilant.model, "Model must be present"
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    controller: juju.controller.Controller = jubilant.model.get_controller()
+    controller_model = controller.get_model("controller")
     proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
     proxy_configs = yaml.safe_load(proxy_config_file.read_text())
-    local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
+    local_no_proxy = get_unit_cidrs(controller_model, "controller", 0)
     no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
     proxy_configs["juju-no-proxy"] = ",".join(sorted(no_proxy))
-    await ops_test.model.set_config(proxy_configs)
+    jubilant.model.set_config(proxy_configs)
 
 
-async def cloud_profile(ops_test: OpsTest):
+def cloud_profile(jubilant):
     """Apply Cloud Specific Settings to the model.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        jubilant: jubilant plugin fixture
     """
-    _type, _vms = await cloud_type(ops_test)
-    if _type == "lxd" and ops_test.model:
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    _type, _vms = cloud_type(jubilant)
+    if _type == "lxd" and jubilant.model:
         # lxd-profile to the model if the juju cloud is lxd.
         lxd = LXDSubstrate()
 
         lxd_profiles, lxd_networks = [], []
         # -- Setup LXD networks and profiles for the model.
-        cloud_mark = ops_test.request.node.get_closest_marker("clouds")
+        cloud_mark = jubilant.request.node.get_closest_marker("clouds")
         if cloud_mark and "lxd" in cloud_mark.args:
             if networks := cloud_mark.kwargs.get("networks"):
                 lxd_networks.extend(networks)
             if profiles := cloud_mark.kwargs.get("profiles"):
                 lxd_profiles.extend(profiles)
 
-        profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
+        profile_name = f"juju-{jubilant.model.name}-{jubilant.model.uuid[:6]}"
         lxd.configure_networks(lxd_networks)
         lxd.remove_profile(profile_name)
         lxd.apply_profile(lxd_profiles, profile_name)
 
-    elif _type in ("ec2", "openstack") and ops_test.model:
-        await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
+    elif _type in ("ec2", "openstack") and jubilant.model:
+        jubilant.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def skip_by_cloud_type(request, ops_test):
+@pytest.fixture(scope="module", autouse=True)
+def skip_by_cloud_type(request, jubilant):
     """Skip tests based on cloud type."""
     if cloud_markers := request.node.get_closest_marker("clouds"):
-        _type, _ = await cloud_type(ops_test)
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        _type, _ = cloud_type(jubilant)
         if _type not in cloud_markers.args:
             pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
 
 
-@contextlib.asynccontextmanager
-async def deploy_model(
-    ops_test: OpsTest,
+@contextlib.contextmanager
+def deploy_model(
+    jubilant,
     model_name: str,
     bundle: Bundle,
 ):
     """Add a juju model, deploy apps into it, wait for them to be active.
 
     Args:
-        ops_test:          Instance of the pytest-operator plugin
+        jubilant:          Instance of the pytest-jubilant plugin
         model_name:        name of the model in which to deploy
         bundle:            Bundle object to deploy or redeploy into the model
 
@@ -227,23 +231,25 @@ async def deploy_model(
         model object
     """
     config: Optional[dict] = {}
-    at_least_60 = max(60, ops_test.request.config.option.timeout)
-    if ops_test.request.config.option.model_config:
-        config = ops_test.read_model_config(ops_test.request.config.option.model_config)
-    credential_name = ops_test.cloud_name
-    if model_name not in ops_test.models:
-        await ops_test.track_model(
+    at_least_60 = max(60, jubilant.request.config.option.timeout)
+    if jubilant.request.config.option.model_config:
+        config = jubilant.read_model_config(jubilant.request.config.option.model_config)
+    credential_name = jubilant.cloud_name
+    if model_name not in jubilant.models:
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        jubilant.track_model(
             model_name,
             model_name=model_name,
             credential_name=credential_name,
             config=config,
         )
-    with ops_test.model_context(model_name) as the_model:
-        await cloud_profile(ops_test)
-        async with ops_test.fast_forward(ONE_MIN):
-            bundle_yaml = bundle.render(ops_test.tmp_path)
-            await the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
-            await the_model.wait_for_idle(
+    with jubilant.model_context(model_name) as the_model:
+        cloud_profile(jubilant)
+        # MIGRATION: switched to non-async context manager (jubilant)
+        with jubilant.fast_forward(ONE_MIN):
+            bundle_yaml = bundle.render(jubilant.tmp_path)
+            the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
+            the_model.wait_for_idle(
                 apps=list(bundle.applications),
                 status="active",
                 timeout=at_least_60 * 60,
@@ -254,16 +260,15 @@ async def deploy_model(
             log.fatal("Failed to determine model: model_name=%s", model_name)
 
 
-@pytest_asyncio.fixture(scope="module")
-async def kubernetes_cluster(
-    request: pytest.FixtureRequest, ops_test: OpsTest
-) -> AsyncGenerator[Model, None]:
+@pytest.fixture(scope="module")
+def kubernetes_cluster(request: pytest.FixtureRequest, jubilant) -> Generator[Model, None, None]:
     """Deploy kubernetes charms according to the bundle_marker."""
     model = "main"
-    bundle, markings = await Bundle.create(ops_test)
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    bundle, markings = Bundle.create(jubilant)
 
-    with ops_test.model_context(model) as the_model:
-        if await bundle.is_deployed(the_model):
+    with jubilant.model_context(model) as the_model:
+        if bundle.is_deployed(the_model):
             log.info("Using existing model=%s.", the_model.uuid)
             yield the_model
             return
@@ -273,10 +278,10 @@ async def kubernetes_cluster(
 
     log.info("Deploying new cluster using %s bundle.", bundle.path)
     if request.config.option.apply_proxy:
-        await cloud_proxied(ops_test)
+        cloud_proxied(jubilant)
 
-    await bundle.apply_marking(ops_test, markings)
-    async with deploy_model(ops_test, model, bundle) as the_model:
+    bundle.apply_marking(jubilant, markings)
+    with deploy_model(jubilant, model, bundle) as the_model:
         yield the_model
 
 
@@ -295,23 +300,24 @@ def valid_namespace_name(s: str) -> str:
     return sanitized[-63:]
 
 
-@pytest_asyncio.fixture(scope="module")
-async def api_client(
+@pytest.fixture(scope="module")
+def api_client(
     kubernetes_cluster,
-    ops_test: OpsTest,
+    jubilant,
     request,  # pylint: disable=unused-argument
 ):
     """Create a k8s API client and namespace for the test.
 
     Args:
         kubernetes_cluster: The k8s model.
-        ops_test: The pytest-operator plugin.
+        jubilant: The pytest-jubilant plugin.
         request: The pytest request object.
     """
     module_name = request.module.__name__
     rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
     namespace = valid_namespace_name(f"{module_name}-{rand_str}")
-    kubeconfig_path = await get_kubeconfig(ops_test, module_name)
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    kubeconfig_path = get_kubeconfig(jubilant, module_name)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
     client = ApiClient(configuration=config)
@@ -324,8 +330,8 @@ async def api_client(
     v1.delete_namespace(name=namespace)
 
 
-@pytest_asyncio.fixture(scope="module", params=METRICS_AGENTS)
-async def metrics_agent(kubernetes_cluster: Model, request):
+@pytest.fixture(scope="module", params=METRICS_AGENTS)
+def metrics_agent(kubernetes_cluster: Model, request):
     """Deploy Metrics Agent Charm."""
     apps = ["k8s", "k8s-worker"]
     option = request.config.option.metrics_agent_charm
@@ -343,47 +349,47 @@ async def metrics_agent(kubernetes_cluster: Model, request):
     series = juju.utils.get_version_series(data["base"].split("@")[1])
     url = URL("ch", name=metrics_agent, series=series, architecture=arch)
 
-    await kubernetes_cluster.deploy(url, channel=metrics_agent_channel, series=series)
-    await kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s:cos-agent")
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    kubernetes_cluster.deploy(url, channel=metrics_agent_channel, series=series)
+    kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s:cos-agent")
     if worker:
-        await kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s-worker:cos-agent")
-        await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
+        kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s-worker:cos-agent")
+        kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
 
     yield metrics_agent
 
-    await kubernetes_cluster.remove_application(metrics_agent)
+    kubernetes_cluster.remove_application(metrics_agent)
     if worker:
-        await kubernetes_cluster.applications["k8s"].destroy_relation(
+        kubernetes_cluster.applications["k8s"].destroy_relation(
             "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
         )
 
 
-@pytest_asyncio.fixture(scope="module")
-async def cos_model(ops_test: OpsTest, kubernetes_cluster, metrics_agent):
+@pytest.fixture(scope="module")
+def cos_model(jubilant, kubernetes_cluster, metrics_agent):
     """Create a COS substrate and a K8s model."""
-    _type, _vms = await cloud_type(ops_test)
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    _type, _vms = cloud_type(jubilant)
     assert _type == "lxd", "COS tests only supported on LXD clouds"
 
     manager = COSSubstrate(VMOptions() if _vms else None)
     config = manager.create_substrate()
-    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
+    kubeconfig_path = jubilant.tmp_path / "kubeconfig"
     kubeconfig_path.write_bytes(config)
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
 
-    k8s_cloud = await ops_test.add_k8s(kubeconfig=config, skip_storage=False)
-    k8s_model = await ops_test.track_model(
-        "cos", cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
-    )
+    k8s_cloud = jubilant.add_k8s(kubeconfig=config, skip_storage=False)
+    k8s_model = jubilant.track_model("cos", cloud_name=k8s_cloud, keep=jubilant.ModelKeep.NEVER)
     yield k8s_model
 
-    await ops_test.forget_model("cos", timeout=10 * 60, allow_failure=True)
+    jubilant.forget_model("cos", timeout=10 * 60, allow_failure=True)
 
     manager.teardown_substrate()
 
 
-@pytest_asyncio.fixture(name="_cos_lite_installed", scope="module")
-async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
+@pytest.fixture(name="_cos_lite_installed", scope="module")
+def cos_lite_installed(jubilant, cos_model: Model):
     """Install COS Lite bundle."""
     log.info("Deploying COS bundle ...")
     cos_charms = [
@@ -395,50 +401,52 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
         "traefik",
     ]
     bundles = (
-        ops_test.Bundle("cos-lite", "edge"),
+        jubilant.Bundle("cos-lite", "edge"),
         "tests/integration/data/cos-offers-overlay.yaml",
     )
 
-    bundle, *overlays = await ops_test.async_render_bundles(*bundles)
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    bundle, *overlays = jubilant.async_render_bundles(*bundles)
     cmd = f"juju deploy -m {cos_model.name} {bundle} --trust " + " ".join(
         f"--overlay={f}" for f in overlays
     )
-    rc, stdout, stderr = await ops_test.run(*shlex.split(cmd))
+    rc, stdout, stderr = jubilant.run(*shlex.split(cmd))
     assert rc == 0, f"COS Lite failed to deploy: {(stderr or stdout).strip()}"
 
-    await cos_model.block_until(
+    cos_model.block_until(
         lambda: all(app in cos_model.applications for app in cos_charms),
         timeout=5 * 60,
     )
-    await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
+    cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
 
     yield
     log.info("Removing COS Lite charms...")
-    with ops_test.model_context("cos"):
+    with jubilant.model_context("cos"):
         for charm in cos_charms:
             log.info("Removing %s...", charm)
             cmd = f"remove-application {charm} --destroy-storage --force --no-prompt"
-            rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
+            rc, stdout, stderr = jubilant.juju(*shlex.split(cmd))
             log.info("%s", stdout or stderr)
             assert rc == 0
-        await cos_model.block_until(
+        cos_model.block_until(
             lambda: all(app not in cos_model.applications for app in cos_charms),
             timeout=60 * 10,
         )
 
 
-@pytest_asyncio.fixture(scope="module")
-async def traefik_url(cos_model: Model, _cos_lite_installed):
+@pytest.fixture(scope="module")
+def traefik_url(cos_model: Model, _cos_lite_installed):
     """Fixture to fetch Traefik url."""
-    action = await cos_model.applications["traefik"].units[0].run_action("show-proxied-endpoints")
-    action = await action.wait()
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    action = cos_model.applications["traefik"].units[0].run_action("show-proxied-endpoints")
+    action = action.wait()
     p_e = json.loads(action.results["proxied-endpoints"])
 
     yield p_e["traefik"]["url"]
 
 
-@pytest_asyncio.fixture(scope="module")
-async def expected_dashboard_titles():
+@pytest.fixture(scope="module")
+def expected_dashboard_titles():
     """Fixture to get expected Grafana dashboard titles."""
     grafana_dir = Path("charms/worker/k8s/src/grafana_dashboards")
     grafana_files = [p for p in grafana_dir.iterdir() if p.is_file() and p.name.endswith(".json")]
@@ -449,67 +457,70 @@ async def expected_dashboard_titles():
     return set(titles)
 
 
-@pytest_asyncio.fixture(name="_related_grafana", scope="module")
+@pytest.fixture(name="_related_grafana", scope="module")
 @pytest.mark.usefixtures("_cos_lite_installed")
-async def related_grafana(ops_test: OpsTest, cos_model: Model, metrics_agent):
+def related_grafana(jubilant, cos_model: Model, metrics_agent):
     """Fixture to integrate with Grafana."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
 
-    with ops_test.model_context("main") as model:
+    with jubilant.model_context("main") as model:
         log.info("Integrating with Grafana")
-        await model.integrate(
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        model.integrate(
             metrics_agent,
             f"{model_owner}/{cos_model_name}.grafana-dashboards",
         )
-        with ops_test.model_context("cos") as k8s_model:
-            await k8s_model.wait_for_idle(status="active")
-        await model.wait_for_idle(status="active")
+        with jubilant.model_context("cos") as k8s_model:
+            k8s_model.wait_for_idle(status="active")
+        model.wait_for_idle(status="active")
 
     yield
 
-    with ops_test.model_context("main") as model:
+    with jubilant.model_context("main") as model:
         log.info("Removing Grafana SAAS ...")
-        await model.remove_saas("grafana-dashboards")
-    with ops_test.model_context("cos") as model:
+        model.remove_saas("grafana-dashboards")
+    with jubilant.model_context("cos") as model:
         log.info("Removing Grafana Offer...")
-        await model.remove_offer(f"{model.name}.grafana-dashboards", force=True)
+        model.remove_offer(f"{model.name}.grafana-dashboards", force=True)
 
 
-@pytest_asyncio.fixture(scope="module")
-async def grafana_password(cos_model, _related_grafana):
+@pytest.fixture(scope="module")
+def grafana_password(cos_model, _related_grafana):
     """Fixture to get Grafana password."""
-    action = await cos_model.applications["grafana"].units[0].run_action("get-admin-password")
-    action = await action.wait()
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    action = cos_model.applications["grafana"].units[0].run_action("get-admin-password")
+    action = action.wait()
     yield action.results["admin-password"]
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest.fixture(scope="module")
 @pytest.mark.usefixtures("_cos_lite_installed")
-async def related_prometheus(ops_test: OpsTest, cos_model, metrics_agent):
+def related_prometheus(jubilant, cos_model, metrics_agent):
     """Fixture to integrate with Prometheus."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
 
-    with ops_test.model_context("main") as model:
+    with jubilant.model_context("main") as model:
         log.info("Integrating with Prometheus")
-        await model.integrate(
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        model.integrate(
             metrics_agent,
             f"{model_owner}/{cos_model_name}.prometheus-receive-remote-write",
         )
-        await model.wait_for_idle(status="active")
-        with ops_test.model_context("cos") as model:
-            await model.wait_for_idle(status="active")
+        model.wait_for_idle(status="active")
+        with jubilant.model_context("cos") as model:
+            model.wait_for_idle(status="active")
 
     yield
 
-    with ops_test.model_context("main") as model:
+    with jubilant.model_context("main") as model:
         log.info("Removing Prometheus Remote Write SAAS ...")
-        await model.remove_saas("prometheus-receive-remote-write")
+        model.remove_saas("prometheus-receive-remote-write")
 
-    with ops_test.model_context("cos") as model:
+    with jubilant.model_context("cos") as model:
         log.info("Removing Prometheus Offer...")
-        await model.remove_offer(f"{model.name}.prometheus-receive-remote-write", force=True)
+        model.remove_offer(f"{model.name}.prometheus-receive-remote-write", force=True)
 
 
 @pytest.fixture(scope="module")
