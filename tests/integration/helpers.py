@@ -4,12 +4,11 @@
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 
-import asyncio
 import ipaddress
 import json
 import logging
 from dataclasses import dataclass, field
-from functools import cached_property
+from functools import cached_property, lru_cache
 from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
@@ -18,11 +17,9 @@ import juju.model
 import juju.unit
 import juju.utils
 import yaml
-from async_lru import alru_cache
 from juju.url import URL
-from pytest_operator.plugin import OpsTest
 from tenacity import (
-    AsyncRetrying,
+    Retrying,
     before_sleep_log,
     retry,
     stop_after_attempt,
@@ -36,7 +33,7 @@ CHARMCRAFT_DIRS = {
 }
 
 
-async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
+def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
     """Find unit network cidrs on a unit.
 
     Args:
@@ -48,8 +45,9 @@ async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) 
         list of network cidrs
     """
     unit = model.applications[app_name].units[unit_num]
-    action = await unit.run("ip --json route show")
-    result = await action.wait()
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    action = unit.run("ip --json route show")
+    result = action.wait()
     assert result.results["return-code"] == 0, "Failed to get routes"
     routes = json.loads(result.results["stdout"])
     local_cidrs = set()
@@ -63,7 +61,7 @@ async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) 
     return sorted(local_cidrs)
 
 
-async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
+def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
     """Get Resource list optionally filtered by namespace and labels.
 
     Args:
@@ -79,8 +77,9 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
     labeled = " ".join(f"-l {k}={v}" for k, v in labels.items()) if labels else ""
     cmd = f"k8s kubectl get {resource} {labeled} {namespaced} -o json"
 
-    action = await k8s.run(cmd)
-    result = await action.wait()
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    action = k8s.run(cmd)
+    result = action.wait()
     stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
     assert result.results["return-code"] == 0, (
         f"\nFailed to get {resource} with kubectl\n\tstdout: '{stdout}'\n\tstderr: '{stderr}'"
@@ -94,7 +93,7 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
 
 
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(15))
-async def ready_nodes(k8s, expected_count):
+def ready_nodes(k8s, expected_count):
     """Get a list of the ready nodes.
 
     Args:
@@ -102,7 +101,8 @@ async def ready_nodes(k8s, expected_count):
         expected_count: number of expected nodes
     """
     log.info("Finding all nodes...")
-    nodes = await get_rsc(k8s, "nodes")
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    nodes = get_rsc(k8s, "nodes")
     ready_nodes = {
         node["metadata"]["name"]: all(
             condition["status"] == "False"
@@ -118,7 +118,7 @@ async def ready_nodes(k8s, expected_count):
         assert ready, f"Node not yet ready: {node}."
 
 
-async def wait_pod_phase(
+def wait_pod_phase(
     k8s: juju.unit.Unit,
     name: Optional[str],
     *phase: str,
@@ -138,18 +138,19 @@ async def wait_pod_phase(
 
     """
     pod_resource = "pod" if name is None else f"pod/{name}"
-    async for attempt in AsyncRetrying(
+    # MIGRATION: switched from AsyncRetrying to sync Retrying (jubilant)
+    for attempt in Retrying(
         stop=stop_after_attempt(retry_times),
         wait=wait_fixed(retry_delay_s),
         before_sleep=before_sleep_log(log, logging.WARNING),
     ):
         with attempt:
-            for pod in await get_rsc(k8s, pod_resource, namespace=namespace):
+            for pod in get_rsc(k8s, pod_resource, namespace=namespace):
                 _phase, _name = pod["status"]["phase"], pod["metadata"]["name"]
                 assert _phase in phase, f"Pod {_name} not yet in phase {phase}"
 
 
-async def get_pod_logs(
+def get_pod_logs(
     k8s: juju.unit.Unit,
     name: str,
     namespace: str = "default",
@@ -165,13 +166,14 @@ async def get_pod_logs(
         the pod logs as string.
     """
     cmd = " ".join(["k8s kubectl logs", f"--namespace {namespace}", f"pod/{name}"])
-    action = await k8s.run(cmd)
-    result = await action.wait()
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    action = k8s.run(cmd)
+    result = action.wait()
     assert result.results["return-code"] == 0, f"Failed to retrieve pod {name} logs."
     return result.results["stdout"]
 
 
-async def get_leader(app) -> int:
+def get_leader(app) -> int:
     """Find leader unit of an application.
 
     Args:
@@ -183,31 +185,33 @@ async def get_leader(app) -> int:
     Raises:
         ValueError: No leader found
     """
-    is_leader = await asyncio.gather(*(u.is_leader_from_status() for u in app.units))
+    # MIGRATION: replaced asyncio.gather with list comprehension (jubilant)
+    is_leader = [u.is_leader_from_status() for u in app.units]
     for idx, flag in enumerate(is_leader):
         if flag:
             return idx
     raise ValueError("No leader found")
 
 
-async def get_kubeconfig(ops_test, module_name: str):
+def get_kubeconfig(jubilant, module_name: str):
     """Retrieve kubeconfig from the k8s leader.
 
     Args:
-        ops_test: pytest-operator plugin
+        jubilant: pytest-jubilant plugin
         module_name: name of the test module
 
     Returns:
         path to the kubeconfig file
     """
-    kubeconfig_path = ops_test.tmp_path / module_name / "kubeconfig"
+    kubeconfig_path = jubilant.tmp_path / module_name / "kubeconfig"
     if kubeconfig_path.exists() and kubeconfig_path.stat().st_size:
         return kubeconfig_path
-    k8s = ops_test.model.applications["k8s"]
-    leader_idx = await get_leader(k8s)
+    k8s = jubilant.model.applications["k8s"]
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    leader_idx = get_leader(k8s)
     leader = k8s.units[leader_idx]
-    action = await leader.run_action("get-kubeconfig")
-    result = await action.wait()
+    action = leader.run_action("get-kubeconfig")
+    result = action.wait()
     completed = result.status == "completed" or result.results["return-code"] == 0
     assert completed, f"Failed to get kubeconfig {result=}"
     kubeconfig_path.parent.mkdir(exist_ok=True, parents=True)
@@ -287,11 +291,11 @@ class Charm:
             return cls(charmcraft, url)
         return None
 
-    async def resolve(self, ops_test: OpsTest, arch: str, base: str) -> "Charm":
-        """Build or find the charm with ops_test.
+    def resolve(self, jubilant, arch: str, base: str) -> "Charm":
+        """Build or find the charm with jubilant.
 
         Args:
-            ops_test:   Instance of the pytest-operator plugin
+            jubilant:   Instance of the pytest-jubilant plugin
             arch (str): Cloud architecture
             base (str): Base release for the charm
 
@@ -325,7 +329,7 @@ class Charm:
 
         prefix = f"{self.name}_"
         if self._charmfile is None:
-            charm_files = ops_test.request.config.option.charm_files or []
+            charm_files = jubilant.request.config.option.charm_files or []
             try:
                 charm_name = prefix + "*.charm"
                 potentials = chain(
@@ -340,7 +344,8 @@ class Charm:
 
         if self._charmfile is None:
             log.info("For %s build charmfiles", self.name)
-            potentials = await ops_test.build_charm(self.path, return_all=True)
+            # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+            potentials = jubilant.build_charm(self.path, return_all=True)
             self._charmfile = _narrow(potentials)
             log.info("For %s built charmfile %s", self.name, self._charmfile)
 
@@ -368,17 +373,17 @@ class Bundle:
     _content: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    async def create(cls, ops_test) -> Tuple["Bundle", Markings]:
-        """Craft a bundle for the given ops_test environment.
+    def create(cls, jubilant) -> Tuple["Bundle", Markings]:
+        """Craft a bundle for the given jubilant environment.
 
         Args:
-            ops_test: Instance of the pytest-operator plugin
+            jubilant: Instance of the pytest-jubilant plugin
 
         Returns:
             Bundle object for the test
             Markings from the test
         """
-        bundle_marker = ops_test.request.node.get_closest_marker("bundle")
+        bundle_marker = jubilant.request.node.get_closest_marker("bundle")
         assert bundle_marker, "No bundle marker found"
         kwargs = {**bundle_marker.kwargs}
 
@@ -388,10 +393,11 @@ class Bundle:
             log.warning("No file specified, using default test-bundle.yaml")
             path = Path(__file__).parent / "data" / "test-bundle.yaml"
 
-        arch = await cloud_arch(ops_test)
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        arch = cloud_arch(jubilant)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        series = ops_test.request.config.option.series
+        series = jubilant.request.config.option.series
 
         bundle = cls(path=path, arch=arch, series=series)
         assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
@@ -435,11 +441,11 @@ class Bundle:
         """
         return any(app.get("trust", False) for app in self.applications.values())
 
-    async def discover_charm_files(self, ops_test: OpsTest) -> Dict[str, Charm]:
+    def discover_charm_files(self, jubilant) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
 
         Args:
-            ops_test: Instance of the pytest-operator plugin
+            jubilant: Instance of the pytest-jubilant plugin
 
         Returns:
             Mapping: application name to Charm object
@@ -447,22 +453,24 @@ class Bundle:
         app_to_charm = {}
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
-                await charm.resolve(
-                    ops_test,
+                # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+                charm.resolve(
+                    jubilant,
                     self.arch,
                     juju.utils.get_series_version(self.series or "jammy"),
                 )
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
-    async def apply_marking(self, ops_test: OpsTest, markings: Markings):
+    def apply_marking(self, jubilant, markings: Markings):
         """Customize the bundle for the test.
 
         Args:
-            ops_test: Instance of the pytest-operator plugin
+            jubilant: Instance of the pytest-jubilant plugin
             markings: Markings from the test
         """
-        _type, _vms = await cloud_type(ops_test)
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        _type, _vms = cloud_type(jubilant)
         if _type == "lxd" and not _vms:
             log.info("Drop lxd machine constraints")
             self.drop_constraints()
@@ -470,13 +478,13 @@ class Bundle:
             log.info("Constrain lxd machines with virt-type: virtual-machine")
             self.add_constraints({"virt-type": "virtual-machine"})
 
-        charms = await self.discover_charm_files(ops_test)
+        charms = self.discover_charm_files(jubilant)
 
         empty_resource = {
-            "snap-installation": ops_test.request.config.option.snap_installation_resource
+            "snap-installation": jubilant.request.config.option.snap_installation_resource
         }
 
-        if series := ops_test.request.config.option.series or markings.series:
+        if series := jubilant.request.config.option.series or markings.series:
             self.content["series"] = self.series = series
 
         for app in markings.apps_local:
@@ -555,7 +563,7 @@ class Bundle:
         yaml.dump(self.content, target.open("w"))
         return target
 
-    async def is_deployed(self, model: juju.model.Model) -> bool:
+    def is_deployed(self, model: juju.model.Model) -> bool:
         """Check if model has apps defined by the bundle.
 
         If all apps are deployed, wait for model to be idle
@@ -589,23 +597,25 @@ class Bundle:
                     min_units,
                 )
                 return False
-        await model.wait_for_idle(timeout=20 * 60, raise_on_error=False)
+        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+        model.wait_for_idle(timeout=20 * 60, raise_on_error=False)
         return True
 
 
-@alru_cache
-async def cloud_arch(ops_test: OpsTest) -> str:
+@lru_cache
+def cloud_arch(jubilant) -> str:
     """Return current architecture of the selected controller.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        jubilant: jubilant plugin
 
     Returns:
         string describing current architecture of the underlying cloud
     """
-    assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
-    controller_model = await controller.get_model("controller")
+    assert jubilant.model, "Model must be present"
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    controller = jubilant.model.get_controller()
+    controller_model = controller.get_model("controller")
     arch: Set[str] = {
         machine.safe_data["hardware-characteristics"]["arch"]
         for machine in controller_model.machines.values()
@@ -613,25 +623,26 @@ async def cloud_arch(ops_test: OpsTest) -> str:
     return arch.pop().strip()
 
 
-@alru_cache
-async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
+@lru_cache
+def cloud_type(jubilant) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        jubilant: jubilant plugin
 
     Returns:
         Tuple:
             string describing current type of the underlying cloud
             bool   describing if VMs are enabled
     """
-    assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
-    cloud = await controller.cloud()
+    assert jubilant.model, "Model must be present"
+    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
+    controller = jubilant.model.get_controller()
+    cloud = controller.cloud()
     _type = cloud.cloud.type_
     vms = True  # Assume VMs are enabled
     if _type == "lxd":
-        vms = not ops_test.request.config.getoption("--lxd-containers")
+        vms = not jubilant.request.config.getoption("--lxd-containers")
     return _type, vms
 
 

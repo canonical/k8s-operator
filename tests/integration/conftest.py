@@ -174,11 +174,12 @@ def cloud_proxied(jubilant):
     jubilant.model.set_config(proxy_configs)
 
 
-def cloud_profile(jubilant):
+def cloud_profile(jubilant, request):
     """Apply Cloud Specific Settings to the model.
 
     Args:
         jubilant: jubilant plugin fixture
+        request: pytest request fixture
     """
     # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
     _type, _vms = cloud_type(jubilant)
@@ -188,7 +189,7 @@ def cloud_profile(jubilant):
 
         lxd_profiles, lxd_networks = [], []
         # -- Setup LXD networks and profiles for the model.
-        cloud_mark = jubilant.request.node.get_closest_marker("clouds")
+        cloud_mark = request.node.get_closest_marker("clouds")
         if cloud_mark and "lxd" in cloud_mark.args:
             if networks := cloud_mark.kwargs.get("networks"):
                 lxd_networks.extend(networks)
@@ -217,6 +218,7 @@ def skip_by_cloud_type(request, jubilant):
 @contextlib.contextmanager
 def deploy_model(
     jubilant,
+    request,
     model_name: str,
     bundle: Bundle,
 ):
@@ -224,6 +226,7 @@ def deploy_model(
 
     Args:
         jubilant:          Instance of the pytest-jubilant plugin
+        request:           pytest request fixture
         model_name:        name of the model in which to deploy
         bundle:            Bundle object to deploy or redeploy into the model
 
@@ -231,9 +234,9 @@ def deploy_model(
         model object
     """
     config: Optional[dict] = {}
-    at_least_60 = max(60, jubilant.request.config.option.timeout)
-    if jubilant.request.config.option.model_config:
-        config = jubilant.read_model_config(jubilant.request.config.option.model_config)
+    at_least_60 = max(60, request.config.option.timeout)
+    if request.config.option.model_config:
+        config = jubilant.read_model_config(request.config.option.model_config)
     credential_name = jubilant.cloud_name
     if model_name not in jubilant.models:
         # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
@@ -244,7 +247,7 @@ def deploy_model(
             config=config,
         )
     with jubilant.model_context(model_name) as the_model:
-        cloud_profile(jubilant)
+        cloud_profile(jubilant, request)
         # MIGRATION: switched to non-async context manager (jubilant)
         with jubilant.fast_forward(ONE_MIN):
             bundle_yaml = bundle.render(jubilant.tmp_path)
@@ -281,7 +284,7 @@ def kubernetes_cluster(request: pytest.FixtureRequest, jubilant) -> Generator[Mo
         cloud_proxied(jubilant)
 
     bundle.apply_marking(jubilant, markings)
-    with deploy_model(jubilant, model, bundle) as the_model:
+    with deploy_model(jubilant, request, model, bundle) as the_model:
         yield the_model
 
 
