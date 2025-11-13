@@ -46,14 +46,11 @@ lint = [
     "types-PyYAML"
 ]
 integration = [
-    "async-lru",
     "juju",
     "pydantic",
     "pylxd",
     "pytest",
-    "pytest-asyncio",
     "pytest-jubilant",
-    "pytest-operator",
     "pytest-sugar",
     "tenacity",
     "requests <2.33",  # https://github.com/canonical/pylxd/issues/579
