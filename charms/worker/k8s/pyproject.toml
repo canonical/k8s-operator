@@ -46,7 +46,6 @@ lint = [
     "types-PyYAML"
 ]
 integration = [
-    "juju",
     "pydantic",
     "pylxd",
     "pytest",
