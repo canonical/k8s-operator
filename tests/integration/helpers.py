@@ -4,20 +4,22 @@
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 
+import contextlib
 import ipaddress
 import json
 import logging
+import shlex
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from itertools import chain
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
-import juju.model
-import juju.unit
-import juju.utils
+import jubilant
+import jubilant.statustypes
 import yaml
-from juju.url import URL
+from literals import TEST_DATA
+from pytest_jubilant import pack
 from tenacity import (
     Retrying,
     before_sleep_log,
@@ -33,23 +35,109 @@ CHARMCRAFT_DIRS = {
 }
 
 
-def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
+PRECISE = "precise"
+QUANTAL = "quantal"
+RARING = "raring"
+SAUCY = "saucy"
+TRUSTY = "trusty"
+UTOPIC = "utopic"
+VIVID = "vivid"
+WILY = "wily"
+XENIAL = "xenial"
+YAKKETY = "yakkety"
+ZESTY = "zesty"
+ARTFUL = "artful"
+BIONIC = "bionic"
+COSMIC = "cosmic"
+DISCO = "disco"
+EOAN = "eoan"
+FOCAL = "focal"
+GROOVY = "groovy"
+HIRSUTE = "hirsute"
+IMPISH = "impish"
+JAMMY = "jammy"
+KINETIC = "kinetic"
+LUNAR = "lunar"
+MANTIC = "mantic"
+NOBLE = "noble"
+
+UBUNTU_SERIES = {
+    PRECISE: "12.04",
+    QUANTAL: "12.10",
+    RARING: "13.04",
+    SAUCY: "13.10",
+    TRUSTY: "14.04",
+    UTOPIC: "14.10",
+    VIVID: "15.04",
+    WILY: "15.10",
+    XENIAL: "16.04",
+    YAKKETY: "16.10",
+    ZESTY: "17.04",
+    ARTFUL: "17.10",
+    BIONIC: "18.04",
+    COSMIC: "18.10",
+    DISCO: "19.04",
+    EOAN: "19.10",
+    FOCAL: "20.04",
+    GROOVY: "20.10",
+    HIRSUTE: "21.04",
+    IMPISH: "21.10",
+    JAMMY: "22.04",
+    KINETIC: "22.10",
+    LUNAR: "23.04",
+    MANTIC: "23.10",
+    NOBLE: "24.04",
+}
+
+KUBERNETES = "kubernetes"
+KUBERNETES_SERIES = {KUBERNETES: "kubernetes"}
+
+ALL_SERIES_VERSIONS = {**UBUNTU_SERIES, **KUBERNETES_SERIES}
+
+
+def get_series_version(series_name: str) -> str:
+    """Get the OS version for a given series.
+
+    Args:
+        series_name (str): name of the series
+
+    Returns:
+        os version
+    """
+    if series_name not in ALL_SERIES_VERSIONS:
+        raise NameError("Unknown series : %s", series_name)
+    return ALL_SERIES_VERSIONS[series_name]
+
+
+def get_version_series(version: str) -> str:
+    """Get the series based on given OS version.
+
+    Args:
+        version (str): version of the OS
+
+    Returns:
+        series name
+    """
+    if version not in UBUNTU_SERIES.values():
+        raise NameError("Unknown version : %s", version)
+    return list(UBUNTU_SERIES.keys())[list(UBUNTU_SERIES.values()).index(version)]
+
+
+def get_unit_cidrs(juju: jubilant.Juju, app_name: str, unit_num: int) -> List[str]:
     """Find unit network cidrs on a unit.
 
     Args:
-        model: juju model
+        juju: jubilant juju object
         app_name: string name of application
         unit_num: integer number of a juju unit
 
     Returns:
         list of network cidrs
     """
-    unit = model.applications[app_name].units[unit_num]
-    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    action = unit.run("ip --json route show")
-    result = action.wait()
-    assert result.results["return-code"] == 0, "Failed to get routes"
-    routes = json.loads(result.results["stdout"])
+    cmd = shlex.split("ip --json route show")
+    result = juju.exec(*cmd, unit=f"{app_name}/{unit_num}")
+    assert result.return_code == 0, "Failed to get routes"
+    routes = json.loads(result.stdout)
     local_cidrs = set()
     for rt in routes:
         try:
@@ -61,11 +149,14 @@ def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> Lis
     return sorted(local_cidrs)
 
 
-def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
+def get_rsc(
+    juju: jubilant.Juju, unit_name: str, resource: str, namespace=None, labels=None
+) -> List[Dict[str, Any]]:
     """Get Resource list optionally filtered by namespace and labels.
 
     Args:
-        k8s: any k8s unit
+        juju: any juju object
+        unit_name: the k8s unit name
         resource: string resource type (e.g. pods, services, nodes)
         namespace: string namespace
         labels: dict of labels to use for filtering
@@ -75,13 +166,11 @@ def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
     """
     namespaced = f"-n {namespace}" if namespace else ""
     labeled = " ".join(f"-l {k}={v}" for k, v in labels.items()) if labels else ""
-    cmd = f"k8s kubectl get {resource} {labeled} {namespaced} -o json"
+    cmd = shlex.split(f"k8s kubectl get {resource} {labeled} {namespaced} -o json")
 
-    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    action = k8s.run(cmd)
-    result = action.wait()
-    stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
-    assert result.results["return-code"] == 0, (
+    result = juju.exec(*cmd, unit=unit_name)  # Preload any missing binaries
+    stdout, stderr = result.stdout, result.stderr
+    assert result.return_code == 0, (
         f"\nFailed to get {resource} with kubectl\n\tstdout: '{stdout}'\n\tstderr: '{stderr}'"
     )
     log.info("Parsing %s list...", resource)
@@ -93,16 +182,17 @@ def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
 
 
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(15))
-def ready_nodes(k8s, expected_count):
+def ready_nodes(juju: jubilant.Juju, unit_name: str, expected_count: int):
     """Get a list of the ready nodes.
 
     Args:
-        k8s: k8s unit
+        juju: juju object
+        unit_name: the k8s unit name
         expected_count: number of expected nodes
     """
     log.info("Finding all nodes...")
     # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    nodes = get_rsc(k8s, "nodes")
+    nodes = get_rsc(juju, unit_name, "nodes")
     ready_nodes = {
         node["metadata"]["name"]: all(
             condition["status"] == "False"
@@ -119,7 +209,8 @@ def ready_nodes(k8s, expected_count):
 
 
 def wait_pod_phase(
-    k8s: juju.unit.Unit,
+    juju: jubilant.Juju,
+    unit_name: str,
     name: Optional[str],
     *phase: str,
     namespace: str = "default",
@@ -129,7 +220,8 @@ def wait_pod_phase(
     """Wait for the pod to reach the specified phase (e.g. Succeeded).
 
     Args:
-        k8s: k8s unit
+        juju: jubilant object
+        unit_name: the k8s unit name
         name: the pod name or all pods if None
         phase: expected phase
         namespace: pod namespace
@@ -145,20 +237,22 @@ def wait_pod_phase(
         before_sleep=before_sleep_log(log, logging.WARNING),
     ):
         with attempt:
-            for pod in get_rsc(k8s, pod_resource, namespace=namespace):
+            for pod in get_rsc(juju, unit_name, pod_resource, namespace=namespace):
                 _phase, _name = pod["status"]["phase"], pod["metadata"]["name"]
                 assert _phase in phase, f"Pod {_name} not yet in phase {phase}"
 
 
 def get_pod_logs(
-    k8s: juju.unit.Unit,
+    juju: jubilant.Juju,
+    unit_name: str,
     name: str,
     namespace: str = "default",
 ) -> str:
     """Retrieve pod logs.
 
     Args:
-        k8s: k8s unit
+        juju: jubilant object
+        unit_name: the k8s unit name
         name: pod name
         namespace: pod namespace
 
@@ -166,30 +260,28 @@ def get_pod_logs(
         the pod logs as string.
     """
     cmd = " ".join(["k8s kubectl logs", f"--namespace {namespace}", f"pod/{name}"])
-    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    action = k8s.run(cmd)
-    result = action.wait()
-    assert result.results["return-code"] == 0, f"Failed to retrieve pod {name} logs."
-    return result.results["stdout"]
+    result = juju.exec(*cmd, unit=unit_name)
+    assert result.return_code == 0, f"Failed to retrieve pod {name} logs."
+    return result.stdout
 
 
-def get_leader(app) -> int:
+def get_leader(app: jubilant.statustypes.AppStatus) -> Tuple[str, jubilant.statustypes.UnitStatus]:
     """Find leader unit of an application.
 
     Args:
         app: Juju application
 
     Returns:
-        int: index to leader unit
+        Tuple[str, jubilant.statustypes.UnitStatus]:
+        str: name to leader unit
+        status: leader unit status
 
     Raises:
         ValueError: No leader found
     """
-    # MIGRATION: replaced asyncio.gather with list comprehension (jubilant)
-    is_leader = [u.is_leader_from_status() for u in app.units]
-    for idx, flag in enumerate(is_leader):
-        if flag:
-            return idx
+    for name, unit in app.units.items():
+        if unit.leader:
+            return name, unit
     raise ValueError("No leader found")
 
 
@@ -250,7 +342,7 @@ class Charm:
     """
 
     path: Path
-    url: URL
+    url: str
     _charmfile: Optional[Path] = None
 
     @cached_property
@@ -277,7 +369,7 @@ class Charm:
         return self._charmfile
 
     @classmethod
-    def find(cls, url: Union[URL, str]) -> Optional["Charm"]:
+    def find(cls, url: str) -> Optional["Charm"]:
         """Find a charm managed in this repo based on its name.
 
         Args:
@@ -286,16 +378,15 @@ class Charm:
         Returns:
             Charm object or None
         """
-        url = url if isinstance(url, URL) else URL.parse(url)
-        if charmcraft := CHARMCRAFT_DIRS.get(url.name):
+        if charmcraft := CHARMCRAFT_DIRS.get(url):
             return cls(charmcraft, url)
         return None
 
-    def resolve(self, jubilant, arch: str, base: str) -> "Charm":
+    def resolve(self, request, arch: str, base: str) -> "Charm":
         """Build or find the charm with jubilant.
 
         Args:
-            jubilant:   Instance of the pytest-jubilant plugin
+            request: pytest request object
             arch (str): Cloud architecture
             base (str): Base release for the charm
 
@@ -329,7 +420,7 @@ class Charm:
 
         prefix = f"{self.name}_"
         if self._charmfile is None:
-            charm_files = jubilant.request.config.option.charm_files or []
+            charm_files = request.config.option.charm_files or []
             try:
                 charm_name = prefix + "*.charm"
                 potentials = chain(
@@ -344,9 +435,8 @@ class Charm:
 
         if self._charmfile is None:
             log.info("For %s build charmfiles", self.name)
-            # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-            potentials = jubilant.build_charm(self.path, return_all=True)
-            self._charmfile = _narrow(potentials)
+            potentials = pack(self.path, platform=f"ubuntu@{base}:{arch}")
+            self._charmfile = _narrow([potentials])
             log.info("For %s built charmfile %s", self.name, self._charmfile)
 
         if self._charmfile is None:
@@ -373,17 +463,18 @@ class Bundle:
     _content: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def create(cls, jubilant) -> Tuple["Bundle", Markings]:
+    def create(cls, juju, request) -> Tuple["Bundle", Markings]:
         """Craft a bundle for the given jubilant environment.
 
         Args:
-            jubilant: Instance of the pytest-jubilant plugin
+            juju: Instance of the jubilant.Juju
+            request: pytest request object
 
         Returns:
             Bundle object for the test
             Markings from the test
         """
-        bundle_marker = jubilant.request.node.get_closest_marker("bundle")
+        bundle_marker = request.node.get_closest_marker("bundle")
         assert bundle_marker, "No bundle marker found"
         kwargs = {**bundle_marker.kwargs}
 
@@ -393,11 +484,10 @@ class Bundle:
             log.warning("No file specified, using default test-bundle.yaml")
             path = Path(__file__).parent / "data" / "test-bundle.yaml"
 
-        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-        arch = cloud_arch(jubilant)
+        arch = cloud_arch(juju)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        series = jubilant.request.config.option.series
+        series = request.config.option.series
 
         bundle = cls(path=path, arch=arch, series=series)
         assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
@@ -416,10 +506,10 @@ class Bundle:
         if not self._content:
             loaded = yaml.safe_load(self.path.read_bytes())
             self.series = self.series or loaded.get("series")
-            for app in loaded["applications"].values():
-                url = URL.parse(app["charm"])
-                url.architecture = self.arch
-                app["charm"] = url
+            # for app in loaded["applications"].values():
+            #     url = URL.parse(app["charm"])
+            #     url.architecture = self.arch
+            #     app["charm"] = url
             self._content = loaded
         return self._content
 
@@ -441,11 +531,12 @@ class Bundle:
         """
         return any(app.get("trust", False) for app in self.applications.values())
 
-    def discover_charm_files(self, jubilant) -> Dict[str, Charm]:
+    def discover_charm_files(self, juju: jubilant.Juju, request) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
 
         Args:
-            jubilant: Instance of the pytest-jubilant plugin
+            juju: Instance of the pytest-jubilant plugin
+            request:  pytest request object
 
         Returns:
             Mapping: application name to Charm object
@@ -453,24 +544,25 @@ class Bundle:
         app_to_charm = {}
         for app in self.applications.values():
             if charm := Charm.find(app["charm"]):
-                # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
                 charm.resolve(
-                    jubilant,
+                    juju,
+                    request,
                     self.arch,
-                    juju.utils.get_series_version(self.series or "jammy"),
+                    get_series_version(self.series or "jammy"),
                 )
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
-    def apply_marking(self, jubilant, markings: Markings):
+    def apply_marking(self, juju: jubilant.Juju, request, markings: Markings):
         """Customize the bundle for the test.
 
         Args:
-            jubilant: Instance of the pytest-jubilant plugin
+            juju: Instance of the pytest-jubilant plugin
+            request:  pytest request object
             markings: Markings from the test
         """
         # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-        _type, _vms = cloud_type(jubilant)
+        _type, _vms = cloud_type(juju, request)
         if _type == "lxd" and not _vms:
             log.info("Drop lxd machine constraints")
             self.drop_constraints()
@@ -478,13 +570,11 @@ class Bundle:
             log.info("Constrain lxd machines with virt-type: virtual-machine")
             self.add_constraints({"virt-type": "virtual-machine"})
 
-        charms = self.discover_charm_files(jubilant)
+        charms = self.discover_charm_files(juju, request)
 
-        empty_resource = {
-            "snap-installation": jubilant.request.config.option.snap_installation_resource
-        }
+        empty_resource = {"snap-installation": request.config.option.snap_installation_resource}
 
-        if series := jubilant.request.config.option.series or markings.series:
+        if series := request.config.option.series or markings.series:
             self.content["series"] = self.series = series
 
         for app in markings.apps_local:
@@ -563,100 +653,138 @@ class Bundle:
         yaml.dump(self.content, target.open("w"))
         return target
 
-    def is_deployed(self, model: juju.model.Model) -> bool:
+    def is_deployed(self, juju: jubilant.Juju) -> bool:
         """Check if model has apps defined by the bundle.
 
         If all apps are deployed, wait for model to be idle
 
         Args:
             self:  Bundle object
-            model: juju model
+            juju:  juju from jubilant
 
         Returns:
             true if all apps and relations are in place and units are idle
         """
         bundle = yaml.safe_load(self.path.open())
         apps = bundle["applications"]
+        status = juju.status()
         for app, conf in apps.items():
-            if app not in model.applications:
+            if app not in status.apps:
                 log.warning(
                     "Cannot use existing model(%s): Application (%s) isn't deployed",
-                    model.name,
+                    juju.model,
                     app,
                 )
                 return False
             min_units = conf.get("num_units") or 1
-            num_units = len(model.applications[app].units)
+            num_units = len(status.apps[app].units)
             if num_units < min_units:
                 log.warning(
                     "Cannot use existing model(%s): "
                     "Application(%s) has insufficient units %d < %d",
-                    model.name,
+                    juju.model,
                     app,
                     num_units,
                     min_units,
                 )
                 return False
-        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-        model.wait_for_idle(timeout=20 * 60, raise_on_error=False)
+        juju.wait(jubilant.all_agents_idle, timeout=20 * 60)
         return True
 
 
 @lru_cache
-def cloud_arch(jubilant) -> str:
+def cloud_arch(juju: jubilant.Juju) -> str:
     """Return current architecture of the selected controller.
 
     Args:
-        jubilant: jubilant plugin
+        juju: jubilant.juju plugin
 
     Returns:
         string describing current architecture of the underlying cloud
     """
-    assert jubilant.model, "Model must be present"
+    assert juju.model, "Model must be present"
     # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    controller = jubilant.model.get_controller()
-    controller_model = controller.get_model("controller")
-    arch: Set[str] = {
-        machine.safe_data["hardware-characteristics"]["arch"]
-        for machine in controller_model.machines.values()
-    }
+    controller = jubilant.Juju(model="controller")
+    status = controller.status()
+    hardware_status = [m.hardware for m in status.machines.values()]
+    arch: Set[str] = set()
+    for hardware in hardware_status:
+        arches = filter(lambda s: "arch" in s, hardware.split())
+        arch.update(arch.split("=")[1].strip() for arch in arches)
     return arch.pop().strip()
 
 
 @lru_cache
-def cloud_type(jubilant) -> Tuple[str, bool]:
+def cloud_type(juju: jubilant.Juju, request) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller.
 
     Args:
-        jubilant: jubilant plugin
+        juju: jubilant plugin
+        request: pytest request object
 
     Returns:
         Tuple:
             string describing current type of the underlying cloud
             bool   describing if VMs are enabled
     """
-    assert jubilant.model, "Model must be present"
-    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    controller = jubilant.model.get_controller()
-    cloud = controller.cloud()
-    _type = cloud.cloud.type_
+    assert juju.model, "Model must be present"
+    controller = jubilant.Juju(model="controller")
+    status = controller.status()
+    clouds = json.loads(controller.cli("clouds", "--format=json", include_model=False))
+    _type = clouds[status.model.cloud]["type"]
+
     vms = True  # Assume VMs are enabled
     if _type == "lxd":
-        vms = not jubilant.request.config.getoption("--lxd-containers")
+        vms = not request.config.getoption("--lxd-containers")
     return _type, vms
 
 
-def url_representer(dumper: yaml.Dumper, data: URL) -> yaml.ScalarNode:
-    """Yaml representer for the Charm URL object.
+@lru_cache
+def cloud_proxied(juju: jubilant.Juju):
+    """Set up a cloud proxy settings if necessary.
+
+    If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
 
     Args:
-        dumper: yaml dumper
-        data: URL object
-
-    Returns:
-        yaml.ScalarNode: yaml node
+        juju: jubilant.juju plugin
     """
-    return dumper.represent_scalar("tag:yaml.org,2002:str", str(data))
+    proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
+    proxy_configs = yaml.safe_load(proxy_config_file.read_text())
+    controller = jubilant.Juju(model="controller")
+    local_no_proxy = get_unit_cidrs(controller, "controller", 0)
+    no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
+    proxy_configs["juju-no-proxy"] = ",".join(sorted(no_proxy))
+    juju.model_config(proxy_configs)
 
 
-yaml.add_representer(URL, url_representer)
+@contextlib.contextmanager
+def fast_forward(juju: jubilant.Juju, duration: str):
+    """Context manager that temporarily speeds up update-status hooks to fire every 10s."""
+    old = juju.model_config()["update-status-hook-interval"]
+    juju.model_config({"update-status-hook-interval": duration})
+    try:
+        yield
+    finally:
+        juju.model_config({"update-status-hook-interval": old})
+
+
+def untag(prefix: str, s: str) -> str:
+    if s and s.startswith(prefix):
+        return s[len(prefix) :]
+    return s
+
+
+# def url_representer(dumper: yaml.Dumper, data: URL) -> yaml.ScalarNode:
+#     """Yaml representer for the Charm URL object.
+
+#     Args:
+#         dumper: yaml dumper
+#         data: URL object
+
+#     Returns:
+#         yaml.ScalarNode: yaml node
+#     """
+#     return dumper.represent_scalar("tag:yaml.org,2002:str", str(data))
+
+
+# yaml.add_representer(URL, url_representer)

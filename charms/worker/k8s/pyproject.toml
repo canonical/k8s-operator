@@ -46,6 +46,8 @@ lint = [
     "types-PyYAML"
 ]
 integration = [
+    "kubernetes",
+    "jubilant @ git+https://github.com/canonical/jubilant@main",
     "pydantic",
     "pylxd",
     "pytest",
@@ -150,7 +152,10 @@ markers = [
     "architecture(*args): mark tests to run only on specific architectures.",
     "bundle(file='', series='', apps_local=[], apps_channel={}, apps_resources={}): specify a YAML bundle file for a test.",
     "clouds(*args): mark tests to run only on specific clouds.",
-    "cos: mark COS integration tests."
+    "cos: mark COS integration tests.",
+]
+addopts = [
+    
 ]
 
 [tool.pyright]

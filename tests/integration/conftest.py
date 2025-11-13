@@ -10,28 +10,27 @@ import random
 import shlex
 import string
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator
 
-import juju.controller
-import juju.utils
+import jubilant
 import kubernetes.client.models as k8s_models
 import pytest
-import yaml
 from cos_substrate import COSSubstrate
-from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
-from juju.model import Model
-from juju.tag import untag
-from juju.url import URL
+from helpers import (
+    Bundle,
+    cloud_proxied,
+    cloud_type,
+    fast_forward,
+    get_kubeconfig,
+    get_version_series,
+    untag,
+)
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
-from literals import ONE_MIN
+from literals import ONE_MIN, TEST_DATA
 from lxd_substrate import LXDSubstrate, VMOptions
 
-# Enable pytest-jubilant plugin
-pytest_plugins = ["pytest_jubilant"]
-
 log = logging.getLogger(__name__)
-TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
 METRICS_AGENTS = ["grafana-agent:1/stable", "opentelemetry-collector:2/edge"]
 
@@ -122,6 +121,12 @@ def pytest_addoption(parser: pytest.Parser):
             "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
         ),
     )
+    parser.addoption(
+        "--no-deploy",
+        action="store_true",
+        help="This, together with the `--model` parameter, ensures that all functions "
+        "marked with the` skip_if_deployed` tag are skipped.",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -154,36 +159,16 @@ def pytest_collection_modifyitems(config, items):
         items[:] = selected
 
 
-def cloud_proxied(jubilant):
-    """Set up a cloud proxy settings if necessary.
-
-    If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
-
-    Args:
-        jubilant: jubilant plugin fixture
-    """
-    assert jubilant.model, "Model must be present"
-    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    controller: juju.controller.Controller = jubilant.model.get_controller()
-    controller_model = controller.get_model("controller")
-    proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
-    proxy_configs = yaml.safe_load(proxy_config_file.read_text())
-    local_no_proxy = get_unit_cidrs(controller_model, "controller", 0)
-    no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
-    proxy_configs["juju-no-proxy"] = ",".join(sorted(no_proxy))
-    jubilant.model.set_config(proxy_configs)
-
-
-def cloud_profile(jubilant, request):
+def cloud_profile(juju: jubilant.Juju, request):
     """Apply Cloud Specific Settings to the model.
 
     Args:
-        jubilant: jubilant plugin fixture
+        juju: Instance of the pytest-jubilant juju
         request: pytest request fixture
     """
     # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    _type, _vms = cloud_type(jubilant)
-    if _type == "lxd" and jubilant.model:
+    _type, _vms = cloud_type(juju, request)
+    if _type == "lxd" and juju.model:
         # lxd-profile to the model if the juju cloud is lxd.
         lxd = LXDSubstrate()
 
@@ -195,96 +180,97 @@ def cloud_profile(jubilant, request):
                 lxd_networks.extend(networks)
             if profiles := cloud_mark.kwargs.get("profiles"):
                 lxd_profiles.extend(profiles)
+        model_status = juju.show_model(juju.model)
 
-        profile_name = f"juju-{jubilant.model.name}-{jubilant.model.uuid[:6]}"
+        profile_name = f"juju-{juju.model}-{model_status.model_uuid[:6]}"
         lxd.configure_networks(lxd_networks)
         lxd.remove_profile(profile_name)
         lxd.apply_profile(lxd_profiles, profile_name)
 
-    elif _type in ("ec2", "openstack") and jubilant.model:
-        jubilant.model.set_config({"container-networking-method": "local", "fan-config": ""})
+    elif _type in ("ec2", "openstack") and juju.model:
+        juju.model_config({"container-networking-method": "local", "fan-config": ""})
 
 
 @pytest.fixture(scope="module", autouse=True)
-def skip_by_cloud_type(request, jubilant):
+def skip_by_cloud_type(request, juju: jubilant.Juju):
     """Skip tests based on cloud type."""
     if cloud_markers := request.node.get_closest_marker("clouds"):
         # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-        _type, _ = cloud_type(jubilant)
+        _type, _ = cloud_type(juju)
         if _type not in cloud_markers.args:
             pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
 
 
+@pytest.fixture(scope="module")
+def model_tmp_path(juju: jubilant.Juju, tmp_path_factory):
+    """Get the temporary path for the juju model.
+
+    Args:
+        juju: Instance of the pytest-jubilant juju
+        tmp_path_factory: pytest tmp_path_factory fixture
+    """
+    return tmp_path_factory.mktemp(juju.model or "juju")
+
+
 @contextlib.contextmanager
 def deploy_model(
-    jubilant,
+    juju: jubilant.Juju,
+    model_tmp_path: Path,
     request,
-    model_name: str,
     bundle: Bundle,
 ):
     """Add a juju model, deploy apps into it, wait for them to be active.
 
     Args:
-        jubilant:          Instance of the pytest-jubilant plugin
+        juju:              Instance of the pytest-jubilant juju
+        model_tmp_path:    Temporary path for the juju model
         request:           pytest request fixture
-        model_name:        name of the model in which to deploy
         bundle:            Bundle object to deploy or redeploy into the model
 
     Yields:
         model object
     """
-    config: Optional[dict] = {}
     at_least_60 = max(60, request.config.option.timeout)
-    if request.config.option.model_config:
-        config = jubilant.read_model_config(request.config.option.model_config)
-    credential_name = jubilant.cloud_name
-    if model_name not in jubilant.models:
-        # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-        jubilant.track_model(
-            model_name,
-            model_name=model_name,
-            credential_name=credential_name,
-            config=config,
+    # TODO: re-implement model config options if necessary
+    # if request.config.option.model_config:
+    #     config = juju.model_config(request.config.option.model_config)
+    cloud_profile(juju, request)
+    with fast_forward(juju, ONE_MIN):
+        bundle_yaml = bundle.render(model_tmp_path)
+        juju.deploy(bundle_yaml, trust=bundle.needs_trust)
+        juju.wait(
+            lambda status: jubilant.all_active(status, *bundle.applications),
+            timeout=at_least_60 * 60,
         )
-    with jubilant.model_context(model_name) as the_model:
-        cloud_profile(jubilant, request)
-        # MIGRATION: switched to non-async context manager (jubilant)
-        with jubilant.fast_forward(ONE_MIN):
-            bundle_yaml = bundle.render(jubilant.tmp_path)
-            the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
-            the_model.wait_for_idle(
-                apps=list(bundle.applications),
-                status="active",
-                timeout=at_least_60 * 60,
-            )
-        try:
-            yield the_model
-        except GeneratorExit:
-            log.fatal("Failed to determine model: model_name=%s", model_name)
+    try:
+        yield juju
+    except GeneratorExit:
+        log.fatal("Failed to determine model: model_name=%s", juju.model)
 
 
 @pytest.fixture(scope="module")
-def kubernetes_cluster(request: pytest.FixtureRequest, jubilant) -> Generator[Model, None, None]:
+def kubernetes_cluster(
+    request: pytest.FixtureRequest, juju: jubilant.Juju, model_tmp_path: Path
+) -> Generator[jubilant.Juju, None, None]:
     """Deploy kubernetes charms according to the bundle_marker."""
-    model = "main"
     # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    bundle, markings = Bundle.create(jubilant)
+    bundle, markings = Bundle.create(juju, request)
+    model_status = juju.show_model(juju.model)
 
-    with jubilant.model_context(model) as the_model:
-        if bundle.is_deployed(the_model):
-            log.info("Using existing model=%s.", the_model.uuid)
-            yield the_model
-            return
+    if bundle.is_deployed(juju):
+        log.info("Using existing model=%s.", model_status.model_uuid)
+        yield juju
+        return
 
     if request.config.option.no_deploy:
         pytest.skip("Skipping because of --no-deploy")
 
     log.info("Deploying new cluster using %s bundle.", bundle.path)
     if request.config.option.apply_proxy:
-        cloud_proxied(jubilant)
+        cloud_proxied(juju)
 
-    bundle.apply_marking(jubilant, markings)
-    with deploy_model(jubilant, request, model, bundle) as the_model:
+    bundle.apply_marking(juju, request, markings)
+    with deploy_model(juju, model_tmp_path, request, bundle) as the_model:
         yield the_model
 
 
@@ -334,7 +320,7 @@ def api_client(
 
 
 @pytest.fixture(scope="module", params=METRICS_AGENTS)
-def metrics_agent(kubernetes_cluster: Model, request):
+def metrics_agent(kubernetes_cluster: jubilant.Juju, request):
     """Deploy Metrics Agent Charm."""
     apps = ["k8s", "k8s-worker"]
     option = request.config.option.metrics_agent_charm
@@ -349,11 +335,11 @@ def metrics_agent(kubernetes_cluster: Model, request):
         pytest.fail("k8s application not found in the model")
     data = k8s.units[0].machine.safe_data
     arch = data["hardware-characteristics"]["arch"]
-    series = juju.utils.get_version_series(data["base"].split("@")[1])
-    url = URL("ch", name=metrics_agent, series=series, architecture=arch)
+    base = data["base"].split("@")[1]
+    series = get_version_series(base)
+    url = f"ch:{metrics_agent}/{arch}/{series}"
 
-    # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
-    kubernetes_cluster.deploy(url, channel=metrics_agent_channel, series=series)
+    kubernetes_cluster.deploy(url, channel=metrics_agent_channel, base=base)
     kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s:cos-agent")
     if worker:
         kubernetes_cluster.integrate(f"{metrics_agent}:cos-agent", "k8s-worker:cos-agent")
@@ -392,7 +378,7 @@ def cos_model(jubilant, kubernetes_cluster, metrics_agent):
 
 
 @pytest.fixture(name="_cos_lite_installed", scope="module")
-def cos_lite_installed(jubilant, cos_model: Model):
+def cos_lite_installed(jubilant, cos_model: jubilant.Juju):
     """Install COS Lite bundle."""
     log.info("Deploying COS bundle ...")
     cos_charms = [
@@ -438,7 +424,7 @@ def cos_lite_installed(jubilant, cos_model: Model):
 
 
 @pytest.fixture(scope="module")
-def traefik_url(cos_model: Model, _cos_lite_installed):
+def traefik_url(cos_model: jubilant.Juju, _cos_lite_installed):
     """Fixture to fetch Traefik url."""
     # MIGRATION: removed await per jubilant; verify this method is sync in jubilant
     action = cos_model.applications["traefik"].units[0].run_action("show-proxied-endpoints")
@@ -462,7 +448,7 @@ def expected_dashboard_titles():
 
 @pytest.fixture(name="_related_grafana", scope="module")
 @pytest.mark.usefixtures("_cos_lite_installed")
-def related_grafana(jubilant, cos_model: Model, metrics_agent):
+def related_grafana(jubilant, cos_model: jubilant.Juju, metrics_agent):
     """Fixture to integrate with Grafana."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
