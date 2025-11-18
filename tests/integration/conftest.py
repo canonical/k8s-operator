@@ -28,11 +28,14 @@ from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from literals import ONE_MIN
 from lxd_substrate import LXDSubstrate, VMOptions
 from pytest_operator.plugin import OpsTest
+from tags import TEST_TAGS
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
 METRICS_AGENTS = ["grafana-agent:1/stable", "opentelemetry-collector:2/edge"]
+
+pytest_plugins = "pytest_tagging"
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -156,24 +159,20 @@ def pytest_collection_modifyitems(config, items):
         else:
             selected.append(item)
 
-    # Get the selection expressions from the command line arguments
-    keyword_expression = config.getoption("keyword", "")
-    marker_expression = config.getoption("markexpr", "")
-
-    # Combine the selections into a single string to check against
-    # Pytest implicitly selects items that match -k or -m
-    explicit_selection = keyword_expression or marker_expression
-
-    if not explicit_selection:
-        # If no -k or -m is provided, skip all tests marked 'run_with_k'
-        for item in selected[:]:
-            if item.get_closest_marker("run_with_k"):
-                deselected.append(item)
-                selected.remove(item)
-
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
+
+
+def pytest_itemcollected(item):
+    """Ensure all tests have at least one tag before execution."""
+    # Check for tags in the pytest.mark attributes
+    marked_tags = list(item.iter_markers(name="tags"))
+    if not marked_tags or not any(tag.args[0] in TEST_TAGS for tag in marked_tags):
+        pytest.fail(
+            f"The test {item.nodeid} does not have one of the test level tags."
+            f"Please add at least one test tag using @pytest.mark.tags ({TEST_TAGS})."
+        )
 
 
 async def cloud_proxied(ops_test: OpsTest):

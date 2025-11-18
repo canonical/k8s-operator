@@ -12,6 +12,7 @@ import pytest
 from helpers import get_kubeconfig, ready_nodes, run_command, sonobuoy_tar_gz
 from juju import model, unit
 from pytest_operator.plugin import OpsTest
+from tags import CONFORMANCE
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ log = logging.getLogger(__name__)
 # bundle for cncf conformance testing, for all the test within this module.
 pytestmark = [
     pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
-    pytest.mark.run_with_k,
+    pytest.mark.tags(CONFORMANCE),
 ]
 
 

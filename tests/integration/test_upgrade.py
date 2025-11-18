@@ -18,6 +18,7 @@ import pytest
 import yaml
 from helpers import CHARMCRAFT_DIRS, Bundle, get_leader, wait_pod_phase
 from pytest_operator.plugin import OpsTest
+from tags import PULL_REQUEST
 from tenacity import (
     before_sleep_log,
     retry,
@@ -81,6 +82,7 @@ pytestmark = [
         apps_channel={CONTROL_PLANE_APP: CHARM_UPGRADE_FROM, "k8s-worker": CHARM_UPGRADE_FROM},
     ),
     pytest.mark.architecture("amd64"),
+    pytest.mark.tags(PULL_REQUEST),
 ]
 
 
