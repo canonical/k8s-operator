@@ -1,3 +1,6 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 PULL_REQUEST = "pull_request"
 CONFORMANCE = "conformance_tests"
 
