@@ -973,6 +973,7 @@ integration = [
     { name = "pytest-asyncio" },
     { name = "pytest-operator" },
     { name = "pytest-sugar" },
+    { name = "pytest-tagging" },
     { name = "requests" },
     { name = "tenacity" },
 ]
@@ -1032,6 +1033,7 @@ integration = [
     { name = "pytest-asyncio" },
     { name = "pytest-operator" },
     { name = "pytest-sugar" },
+    { name = "pytest-tagging" },
     { name = "requests", specifier = "<2.33" },
     { name = "tenacity" },
 ]
@@ -1909,6 +1911,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0b/4e/60fed105549297ba1a700e1ea7b828044842ea27d72c898990510b79b0e2/pytest-sugar-1.1.1.tar.gz", hash = "sha256:73b8b65163ebf10f9f671efab9eed3d56f20d2ca68bda83fa64740a92c08f65d", size = 16533, upload-time = "2025-08-23T12:19:35.737Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/87/d5/81d38a91c1fdafb6711f053f5a9b92ff788013b19821257c2c38c1e132df/pytest_sugar-1.1.1-py3-none-any.whl", hash = "sha256:2f8319b907548d5b9d03a171515c1d43d2e38e32bd8182a1781eb20b43344cc8", size = 11440, upload-time = "2025-08-23T12:19:34.894Z" },
+]
+
+[[package]]
+name = "pytest-tagging"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/64/6f/04cf9f808df000e76e8b86045d86b0972b3b72e92c991bf61e85279bd9d4/pytest_tagging-1.6.0.tar.gz", hash = "sha256:950ab148a27f688a322cde656248cdcb97d75f88f0b91e26312c2e005ec9dab2", size = 5408, upload-time = "2024-11-08T14:37:42.118Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/68/04/e7d37635b8d1a835a45e741fbdbe9708e1cc62329ee2e61cb871f81d7b8a/pytest_tagging-1.6.0-py3-none-any.whl", hash = "sha256:2b6ba4053b226a4911a749ecdc2dacce04337d2748682a5cb6bbcec3a401be1c", size = 6758, upload-time = "2024-11-08T14:37:41.27Z" },
 ]
 
 [[package]]

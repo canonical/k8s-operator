@@ -12,6 +12,7 @@ import juju.model
 import pytest
 from grafana import Grafana
 from prometheus import Prometheus
+from tags import PULL_REQUEST
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 log = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.bundle(file="test-bundle-cos.yaml", apps_local=["k8s"]),
     pytest.mark.architecture("amd64"),
+    pytest.mark.tags(PULL_REQUEST),
 ]
 
 

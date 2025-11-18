@@ -10,10 +10,14 @@ import json
 import pytest
 from helpers import get_leader, ready_nodes, wait_pod_phase
 from juju import model, unit
+from tags import PULL_REQUEST
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with managed etcd, for all the test within this module.
-pytestmark = [pytest.mark.bundle(file="test-bundle-dqlite.yaml", apps_local=["k8s", "k8s-worker"])]
+pytestmark = [
+    pytest.mark.bundle(file="test-bundle-dqlite.yaml", apps_local=["k8s", "k8s-worker"]),
+    pytest.mark.tags(PULL_REQUEST),
+]
 
 
 @pytest.mark.abort_on_fail

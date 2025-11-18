@@ -44,7 +44,7 @@ jobs:
         tox -e deploy-terraform -- --model ${{env.TF_VAR_model}} --manifest-yaml ${{ github.workspace }}/tests/integration/terraform/default-manifest.yaml
     - name: Run CNCF conformance test
       run: |
-        tox -e integration -- -s -k test_cncf_conformance --model ${{env.TF_VAR_model}} --no-deploy
+        tox -e integration -- -s --tags cncf_conformance --model ${{env.TF_VAR_model}} --no-deploy
     - name: Upload CNCF conformance report artifact
       if: failure()
       uses: actions/upload-artifact@v4

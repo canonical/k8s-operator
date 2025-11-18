@@ -15,12 +15,14 @@ import pytest
 import pytest_asyncio
 from helpers import get_leader, ready_nodes, wait_pod_phase
 from literals import ONE_MIN
+from tags import PULL_REQUEST
 
 log = logging.getLogger(__name__)
 LOCAL_APPS = ["k8s"]
 
 pytestmark = [
     pytest.mark.bundle(file="test-smoke.yaml", apps_local=LOCAL_APPS),
+    pytest.mark.tags(PULL_REQUEST),
 ]
 
 pinned_revision = (

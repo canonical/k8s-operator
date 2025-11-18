@@ -19,12 +19,14 @@ import yaml
 from juju import model
 from kubernetes.utils import create_from_yaml
 from literals import ONE_MIN
+from tags import PULL_REQUEST
 
 pytestmark = [
     pytest.mark.bundle(
         file="test_registries/test-bundle-docker-registry.yaml", apps_local=["k8s"]
     ),
     pytest.mark.architecture("amd64"),
+    pytest.mark.tags(PULL_REQUEST),
 ]
 
 log = logging.getLogger(__name__)
