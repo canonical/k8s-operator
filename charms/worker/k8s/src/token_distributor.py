@@ -612,8 +612,6 @@ class TokenDistributor:
                 self.update_node(relation, unit, f"joined-{node}")
                 if tokenizer.revoke_on_join:
                     tokenizer.revoke(relation, self.charm, unit)
-                elif secret:
-                    tokenizer.grant(relation, self.charm, unit, secret)
                 continue  # unit reports its joined already
             if secret:
                 # unit has been assigned a join-token
@@ -640,7 +638,6 @@ class TokenDistributor:
                         unit.name,
                         node,
                     )
-                    tokenizer.grant(relation, self.charm, unit, secret)
                     continue
 
             log.info(
