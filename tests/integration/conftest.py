@@ -450,8 +450,7 @@ async def expected_dashboard_titles():
 
 
 @pytest_asyncio.fixture(name="_related_grafana", scope="module")
-@pytest.mark.usefixtures("_cos_lite_installed")
-async def related_grafana(ops_test: OpsTest, cos_model: Model, metrics_agent):
+async def related_grafana(ops_test: OpsTest, cos_model: Model, metrics_agent, _cos_lite_installed):
     """Fixture to integrate with Grafana."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
@@ -485,8 +484,7 @@ async def grafana_password(cos_model, _related_grafana):
 
 
 @pytest_asyncio.fixture(scope="module")
-@pytest.mark.usefixtures("_cos_lite_installed")
-async def related_prometheus(ops_test: OpsTest, cos_model, metrics_agent):
+async def related_prometheus(ops_test: OpsTest, cos_model, metrics_agent, _cos_lite_installed):
     """Fixture to integrate with Prometheus."""
     model_owner = untag("user-", cos_model.info.owner_tag)
     cos_model_name = cos_model.name
