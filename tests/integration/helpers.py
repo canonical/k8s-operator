@@ -8,8 +8,6 @@ import asyncio
 import ipaddress
 import json
 import logging
-import subprocess
-import sys
 from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import chain
@@ -651,33 +649,3 @@ def url_representer(dumper: yaml.Dumper, data: URL) -> yaml.ScalarNode:
 
 
 yaml.add_representer(URL, url_representer)
-
-
-# sonobuoy_tar_gz returns the download URL of sonobuoy.
-async def sonobuoy_tar_gz(ops_test: OpsTest, architecture: str) -> str:
-    version = ops_test.request.config.getoption("--sonobuoy-version")
-    return f"https://github.com/vmware-tanzu/sonobuoy/releases/download/{version}/sonobuoy_{version[1:]}_linux_{architecture}.tar.gz"
-
-
-def run_command(
-    command: List[str], capture_output: bool = False, fail_on_error: bool = True
-) -> Optional[str]:
-    """Run a shell command safely.
-
-    Args:
-        command: List of command arguments.
-        capture_output: Whether to capture the command's output.
-        fail_on_error: Whether to exit the script if the command fails.
-
-    Returns:
-        The command's output if `capture_output` is `True`, otherwise `None`.
-    """
-    try:
-        log.info("Execute command %s", command)
-        result = subprocess.run(command, check=True, text=True, capture_output=capture_output)
-        return result.stdout.strip() if capture_output else None
-    except subprocess.CalledProcessError as e:
-        if fail_on_error:
-            print(f"Error running command: {' '.join(command)}\n{e.stderr or e}")
-            sys.exit(1)
-        return None

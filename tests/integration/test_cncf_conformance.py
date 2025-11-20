@@ -7,10 +7,14 @@
 
 import logging
 import re
+import shlex
+import subprocess
+import sys
 
 import pytest
-from helpers import get_kubeconfig, ready_nodes, run_command, sonobuoy_tar_gz
-from juju import model, unit
+import pytest_asyncio
+from helpers import cloud_arch, get_kubeconfig, ready_nodes
+from juju import model
 from pytest_operator.plugin import OpsTest
 from tags import CONFORMANCE
 
@@ -25,6 +29,14 @@ pytestmark = [
 ]
 
 
+@pytest_asyncio.fixture
+async def sonobuoy_url(request, ops_test):
+    """Fixture to return the download URL of sonobuoy."""
+    arch = await cloud_arch(ops_test)
+    if ver := ops_test.request.config.getoption("--sonobuoy-version"):
+        return f"https://github.com/vmware-tanzu/sonobuoy/releases/download/{ver}/sonobuoy_{ver[1:]}_linux_{arch}.tar.gz"
+
+
 @pytest.mark.abort_on_fail
 async def test_nodes_ready(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
@@ -36,57 +48,35 @@ async def test_nodes_ready(kubernetes_cluster: model.Model):
 
 @pytest.mark.abort_on_fail
 async def test_cncf_conformance(
-    request, ops_test: OpsTest, kubernetes_cluster: model.Model, timeout: int
+    request, ops_test: OpsTest, sonobuoy_url, kubernetes_cluster: model.Model, timeout: int
 ):
     """Run CNCF conformance test."""
-    k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
     await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
-
-    data = k8s.machine.safe_data
-    arch = data["hardware-characteristics"]["arch"]
-    sonobuoy_url = await sonobuoy_tar_gz(ops_test, arch)
 
     module_name = request.module.__name__
     kubeconfig_path = await get_kubeconfig(ops_test, module_name)
 
-    run_command(
-        [
-            "curl",
-            "-L",
-            f"{sonobuoy_url}",
-            "-o",
-            "/tmp/sonobuoy.tar.gz",
-        ]
-    )
-    run_command(["tar", "-xvzf", "/tmp/sonobuoy.tar.gz", "-C", "/tmp"])
+    execute_sonobouy_cmds = [
+        f"curl -L {sonobuoy_url} -o /tmp/sonobuoy.tar.gz",
+        "tar -xvzf /tmp/sonobuoy.tar.gz -C /tmp",
+        f"/tmp/sonobuoy run --kubeconfig {kubeconfig_path}"
+        f" --plugin e2e --mode certified-conformance --wait",
+        f"/tmp/sonobuoy retrieve --kubeconfig {kubeconfig_path} -f sonobuoy_e2e.tar.gz",
+        "/tmp/sonobuoy results sonobuoy_e2e.tar.gz",
+    ]
 
-    run_command(
-        [
-            "/tmp/sonobuoy",
-            "run",
-            "--kubeconfig",
-            f"{kubeconfig_path}",
-            "--plugin",
-            "e2e",
-            "--mode",
-            "certified-conformance",
-            "--wait",
-        ]
-    )
+    output: str = ""
+    for cmd in execute_sonobouy_cmds:
+        try:
+            log.info("Execute command %s", cmd)
+            result = subprocess.run(shlex.split(cmd), check=True, text=True, capture_output=True)
+            output = result.stdout.strip()
+            log.info(output)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running command: {cmd}\n{e.stderr or e}")
+            sys.exit(1)
 
-    run_command(
-        [
-            "/tmp/sonobuoy",
-            "retrieve",
-            "--kubeconfig",
-            f"{kubeconfig_path}",
-            "-f",
-            "sonobuoy_e2e.tar.gz",
-        ]
-    )
-
-    output = run_command(["/tmp/sonobuoy", "results", "sonobuoy_e2e.tar.gz"], capture_output=True)
-    log.info(output)
-    match = re.search("Failed: (\\d+)", str(output))
-    failed_tests = int(match.group(1)) if match else 1
+    match = re.search(r"Failed: (\d+)", output)
+    assert match, f"No reported failures in {output}"
+    failed_tests = int(match.group(1))
     assert failed_tests == 0, f"{failed_tests} tests failed"
