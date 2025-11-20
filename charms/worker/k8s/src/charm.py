@@ -924,8 +924,17 @@ class K8sCharm(ops.CharmBase):
 
             bootstrap_node_taints = config.bootstrap.node_taints(self)
             config.extra_args.taint_worker(request.config, bootstrap_node_taints)
+        try:
+            self.api_manager.join_cluster(request)
+        except InvalidResponseError as e:
+            # NOTE (mateoflorido): Using error code 521 as it's defined in the
+            # k8s snap code:
+            # https://github.com/canonical/k8s-snap/blob/6f1adf57f26719573e92cf5074ac7d89d4e97203/src/k8s/pkg/k8sd/api/response.go#L10-L11
+            if e.code == 521:
+                log.info("Node %s is already part of the cluster, continuing", node_name)
+            else:
+                raise
 
-        self.api_manager.join_cluster(request)
         log.info("Joined %s(%s)", self.unit, node_name)
 
     @on_error(ops.WaitingStatus("Awaiting cluster removal"))
