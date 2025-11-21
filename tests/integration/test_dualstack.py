@@ -15,6 +15,7 @@ import pytest
 from helpers import get_leader, ready_nodes, wait_pod_phase
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.utils import create_from_yaml
+from tags import PULL_REQUEST
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ pytestmark = [
         profiles=["test_dualstack/dualstack.profile"],
         networks=["test_dualstack/dualstack.network"],
     ),
+    pytest.mark.tags(PULL_REQUEST),
     pytest.mark.skip("Skipping dualstack tests"),
 ]
 
