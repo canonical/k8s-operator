@@ -20,7 +20,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout the Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{matrix.branch}}
           fetch-depth: 0
