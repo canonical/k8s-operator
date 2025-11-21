@@ -11,9 +11,11 @@ output "requires" {
     aws                     = "aws"
     azure                   = "azure"
     etcd                    = "etcd"
+    etcd_client             = "etcd-client"
+    etcd_certificates       = "etcd-certificates"
     external_cloud_provider = "external-cloud-provider"
-    gcp                     = "gcp"
     external_load_balancer  = "external-load-balancer"
+    gcp                     = "gcp"
   }
 }
 
