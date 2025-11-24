@@ -125,6 +125,8 @@ config:
         Registry endpoints and credentials. Setting this config allows containerd
         to pull images from registries where auth is required.
 
+        https://documentation.ubuntu.com/canonical-kubernetes/latest/charm/howto/custom-registry/
+
         The value for this config must be a JSON array of credential objects, like this:
           e.g.: [{"url": "https://registry.example.com", "host": "my.registry:port", "username": "user", "password": "pass"}]
 
