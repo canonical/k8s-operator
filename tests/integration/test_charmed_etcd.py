@@ -21,7 +21,7 @@ pytestmark = [
 ]
 
 
-async def get_certificate_from_k8s(
+async def get_etcd_certificate_from_k8s(
     kubernetes_cluster: model.Model, certificate: Literal["client", "ca"] = "client"
 ):
     """Get the certificate from a k8s unit."""
@@ -122,44 +122,52 @@ async def test_update_etcd_cluster(kubernetes_cluster: model.Model):
 
 
 @pytest.mark.abort_on_fail
-async def test_certificate_rotation_k8s(kubernetes_cluster: model.Model):
+async def test_certificate_rotation(kubernetes_cluster: model.Model):
     """Test apiserver certificate rotation."""
-    old_cert_k8s = await get_certificate_from_k8s(kubernetes_cluster)
-    old_client_cas_etcd = await get_client_cas_etcd(kubernetes_cluster)
-    assert old_cert_k8s in old_client_cas_etcd, "Old cert not in etcd client CA"
+    # Retrieve initial k8s client certificate and verify it's trusted by etcd
+    initial_k8s_client_cert = await get_etcd_certificate_from_k8s(kubernetes_cluster)
+    initial_etcd_client_ca_bundle = await get_client_cas_etcd(kubernetes_cluster)
+    assert initial_k8s_client_cert in initial_etcd_client_ca_bundle, (
+        "Initial k8s client certificate not found in etcd's client CA bundle"
+    )
 
-    ssc_k8s: application.Application = kubernetes_cluster.applications["ssc-k8s"]
-    await ssc_k8s.set_config({"ca-common-name": "NEW_CN_CA"})
+    # Verify initial CA certificate synchronization between k8s and etcd
+    initial_etcd_tls_ca = await get_etcd_tls_ca(kubernetes_cluster)
+    assert initial_etcd_tls_ca, "Initial etcd TLS CA certificate is empty"
+    initial_k8s_etcd_ca = await get_etcd_certificate_from_k8s(kubernetes_cluster, certificate="ca")
+    assert initial_k8s_etcd_ca, "Initial k8s etcd CA certificate is empty"
+    assert initial_etcd_tls_ca == initial_k8s_etcd_ca, (
+        "Initial etcd TLS CA does not match k8s etcd CA certificate"
+    )
+
+    # Trigger certificate rotation by changing CA configuration
+    ssc: application.Application = kubernetes_cluster.applications["self-signed-certificates"]
+    await ssc.set_config({"ca-common-name": "NEW_CN_CA"})
 
     await kubernetes_cluster.wait_for_idle(status="active", timeout=20 * 60)
 
-    new_cert_k8s = await get_certificate_from_k8s(kubernetes_cluster)
-    new_client_cas_etcd = await get_client_cas_etcd(kubernetes_cluster)
-    assert new_cert_k8s != old_cert_k8s, "Certificate did not rotate"
-    assert new_cert_k8s in new_client_cas_etcd, "New cert not in etcd client CA"
-    assert old_cert_k8s not in new_client_cas_etcd, "Old cert still in etcd client CA"
+    # Verify k8s client certificate has been rotated and is now trusted by etcd
+    rotated_k8s_client_cert = await get_etcd_certificate_from_k8s(kubernetes_cluster)
+    rotated_etcd_client_ca_bundle = await get_client_cas_etcd(kubernetes_cluster)
+    assert rotated_k8s_client_cert != initial_k8s_client_cert, (
+        "k8s client certificate was not rotated after CA change"
+    )
+    assert rotated_k8s_client_cert in rotated_etcd_client_ca_bundle, (
+        "Rotated k8s client certificate not found in etcd's client CA bundle"
+    )
+    assert initial_k8s_client_cert not in rotated_etcd_client_ca_bundle, (
+        "Initial k8s client certificate still present in etcd's client CA bundle after rotation"
+    )
     await assert_cluster_ready(kubernetes_cluster)
 
-
-@pytest.mark.abort_on_fail
-async def test_certificate_rotation_etcd(kubernetes_cluster: model.Model):
-    """Test etcd TLS CA rotation."""
-    current_etcd_tls_ca = await get_etcd_tls_ca(kubernetes_cluster)
-    assert current_etcd_tls_ca, "Current etcd TLS CA is empty"
-    current_k8s_client_ca = await get_certificate_from_k8s(kubernetes_cluster, certificate="ca")
-    assert current_k8s_client_ca, "Current k8s client CA is empty"
-    assert current_etcd_tls_ca == current_k8s_client_ca, "etcd TLS CA does not match k8s client CA"
-
-    ssc_etcd: application.Application = kubernetes_cluster.applications["ssc-charmed-etcd"]
-    await ssc_etcd.set_config({"ca-common-name": "NEW_ETCD_CN_CA"})
-
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=20 * 60)
-
-    new_etcd_tls_ca = await get_etcd_tls_ca(kubernetes_cluster)
-    assert new_etcd_tls_ca, "New etcd TLS CA is empty"
-    new_k8s_client_ca = await get_certificate_from_k8s(kubernetes_cluster, certificate="ca")
-    assert new_k8s_client_ca, "New k8s client CA is empty"
-    assert new_etcd_tls_ca == new_k8s_client_ca, "New etcd TLS CA does not match new k8s client CA"
+    # Verify CA certificate synchronization after rotation
+    rotated_etcd_tls_ca = await get_etcd_tls_ca(kubernetes_cluster)
+    assert rotated_etcd_tls_ca, "Rotated etcd TLS CA certificate is empty"
+    rotated_k8s_etcd_ca = await get_etcd_certificate_from_k8s(kubernetes_cluster, certificate="ca")
+    assert rotated_k8s_etcd_ca, "Rotated k8s etcd CA certificate is empty"
+    assert rotated_etcd_tls_ca == rotated_k8s_etcd_ca, (
+        "Rotated etcd TLS CA does not match rotated k8s etcd CA certificate"
+    )
 
     await assert_cluster_ready(kubernetes_cluster)
 
