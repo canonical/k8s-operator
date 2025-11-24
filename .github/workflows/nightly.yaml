@@ -19,11 +19,14 @@ jobs:
           manifest-yaml: default-manifest.yaml
         - name: test_ceph
           manifest-yaml: ceph-manifest.yaml
+        - name: test_charmed_etcd
+          manifest-yaml: charmed-etcd-manifest.yaml
     name: integration-tests-terraform-${{ matrix.test.name }}
     runs-on: self-hosted-linux-amd64-jammy-xlarge
     env:
       TF_VAR_model: my-canonical-k8s
       TF_VAR_csi_integration: ${{ matrix.test.name == 'test_ceph' && '["ceph"]' || '[]'}}
+      TF_VAR_external_datastore: ${{ matrix.test.name == 'test_charmed_etcd' && 'charmed-etcd' || ''}}
     steps:
     - name: Setup Astral UV
       uses: astral-sh/setup-uv@v7.1.4

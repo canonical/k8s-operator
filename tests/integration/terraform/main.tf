@@ -38,16 +38,23 @@ variable "csi_integration" {
   default     = []
 }
 
+variable "external_datastore" {
+  description = "Selection of a csi integration."
+  type        = string
+  default     = ""
+}
+
 module "k8s" {
-  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=main"
-  model         = {
-    name = var.model
+  source = "git::https://github.com/canonical/k8s-bundles//terraform?ref=KU-4013/charmed-etcd"
+  model = {
+    name  = var.model
     cloud = var.cloud
     config = {
       "test" = true
     }
   }
-  cloud_integration = var.cloud_integration
-  csi_integration = var.csi_integration
-  manifest_yaml = var.manifest_yaml
+  cloud_integration  = var.cloud_integration
+  csi_integration    = var.csi_integration
+  external_datastore = var.external_datastore
+  manifest_yaml      = var.manifest_yaml
 }

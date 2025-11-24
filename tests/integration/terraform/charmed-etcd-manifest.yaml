@@ -1,0 +1,22 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+k8s:
+  units: 1
+  base: ubuntu@24.04
+  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
+  channel: latest/edge
+  config:
+    bootstrap-datastore: etcd
+    bootstrap-node-taints: "node-role.kubernetes.io/control-plane=:NoSchedule"
+k8s-worker:
+  units: 1
+  base: ubuntu@24.04
+  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
+  channel: latest/edge
+charmed-etcd:
+  charm: charmed-etcd
+  channel: "3.6/edge"
+  base: ubuntu@24.04
+  constraints: arch=amd64 cores=2 mem=8192M root-disk=16384M virt-type=virtual-machine
+  units: 1
