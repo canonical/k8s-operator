@@ -77,6 +77,7 @@ async def get_etcd_tls_ca(kubernetes_cluster: model.Model):
 @pytest.mark.abort_on_fail
 async def test_nodes_ready(kubernetes_cluster: model.Model):
     """Deploy the charm and wait for active/idle status."""
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=20 * 60)
     k8s = kubernetes_cluster.applications["k8s"]
     worker = kubernetes_cluster.applications["k8s-worker"]
     expected_nodes = len(k8s.units) + len(worker.units)
