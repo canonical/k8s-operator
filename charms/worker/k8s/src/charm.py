@@ -165,6 +165,7 @@ class K8sCharm(ops.CharmBase):
         Args:
             args: Arguments passed to the CharmBase parent constructor.
         """
+        utils.setup_root_logger()
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.snap_installation_resource = config.resource.CharmResource(self, SNAP_RESOURCE_NAME)
