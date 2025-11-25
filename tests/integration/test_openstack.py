@@ -13,7 +13,6 @@ import yaml
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
 from literals import ONE_MIN
-from tags import PULL_REQUEST
 
 CLOUD_TYPE = "openstack"
 CONTROLLER_NAME = "openstack-cloud-controller-manager"
@@ -23,7 +22,6 @@ pytestmark = [
     pytest.mark.bundle(file="test-bundle-openstack.yaml", apps_local=["k8s"]),
     pytest.mark.clouds(CLOUD_TYPE),
     pytest.mark.architecture("amd64"),
-    pytest.mark.tags(PULL_REQUEST),
 ]
 
 

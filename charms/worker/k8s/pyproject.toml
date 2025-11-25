@@ -55,9 +55,9 @@ integration = [
     "pytest-operator",
     "pytest-sugar",
     "tenacity",
-    "pytest_tagging",
     "requests <2.33",  # https://github.com/canonical/pylxd/issues/579
 ]
+conformance = ["yq"]
 
 [tool.bandit]
 exclude_dirs = ["charms/worker/k8s/lib"]
@@ -154,8 +154,7 @@ markers = [
     "architecture(*args): mark tests to run only on specific architectures.",
     "bundle(file='', series='', apps_local=[], apps_channel={}, apps_resources={}): specify a YAML bundle file for a test.",
     "clouds(*args): mark tests to run only on specific clouds.",
-    "cos: mark COS integration tests.",
-    "tags: partition tests based on the event(s) that trigger each test."
+    "cos: mark COS integration tests."
 ]
 
 [tool.pyright]
