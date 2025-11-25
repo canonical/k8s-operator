@@ -16,14 +16,12 @@ from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
 from literals import ONE_MIN
 from pytest_operator.plugin import OpsTest
-from tags import PULL_REQUEST
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
 pytestmark = [
     pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=["k8s"]),
     pytest.mark.architecture("amd64"),
-    pytest.mark.tags(PULL_REQUEST),
 ]
 CEPH_CSI_MISSING_NS = re.compile(r"Missing namespace '(\S+)'")
 

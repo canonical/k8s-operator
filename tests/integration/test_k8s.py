@@ -15,14 +15,12 @@ import pytest
 import pytest_asyncio
 from helpers import get_leader, get_rsc, ready_nodes, wait_pod_phase
 from literals import ONE_MIN
-from tags import PULL_REQUEST
 
 log = logging.getLogger(__name__)
 
 
 pytestmark = [
     pytest.mark.bundle(file="test-bundle.yaml", apps_local=["k8s", "k8s-worker"]),
-    pytest.mark.tags(PULL_REQUEST),
 ]
 
 pinned_revision = (

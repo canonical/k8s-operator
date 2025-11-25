@@ -44,13 +44,13 @@ jobs:
         tox -e deploy-terraform -- --model ${{env.TF_VAR_model}} --manifest-yaml ${{ github.workspace }}/tests/integration/terraform/default-manifest.yaml
     - name: Run CNCF conformance test
       run: |
-        tox -e integration -- -s --tags conformance_tests --model ${{env.TF_VAR_model}} --no-deploy
+        tox -e conformance
     - name: Upload CNCF conformance report artifact
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: sonobuoy-e2e-${{ env.test_name }}
-        path: tests/integration/sonobuoy_e2e.tar.gz
+        path: tests/conformance/sonobuoy_e2e.tar.gz
     - name: Tmate debugging session (self-hosted)
       if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: canonical/action-tmate@main

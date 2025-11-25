@@ -28,14 +28,11 @@ from kubernetes.client import ApiClient, Configuration, CoreV1Api
 from literals import ONE_MIN
 from lxd_substrate import LXDSubstrate, VMOptions
 from pytest_operator.plugin import OpsTest
-from tags import TEST_TAGS
 
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
 METRICS_AGENTS = ["grafana-agent:1/stable", "opentelemetry-collector:2/edge"]
-
-pytest_plugins = "pytest_tagging"
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -64,8 +61,6 @@ def pytest_addoption(parser: pytest.Parser):
         Set timeout for tests
     --upgrade-from
         Instruct tests to start with a specific channel, and upgrade to these charms.
-    --sonobuoy-version
-        Specify the sonobuoy version to use for CNCF conformance tests.
 
     Args:
         parser: Pytest parser.
@@ -126,12 +121,6 @@ def pytest_addoption(parser: pytest.Parser):
             "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
         ),
     )
-    parser.addoption(
-        "--sonobuoy-version",
-        dest="sonobuoy_version",
-        default="v0.57.3",
-        help="Specify the sonobuoy version to use for CNCF conformance tests",
-    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -162,17 +151,6 @@ def pytest_collection_modifyitems(config, items):
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
-
-
-def pytest_itemcollected(item):
-    """Ensure all tests have at least one tag before execution."""
-    # Check for tags in the pytest.mark attributes
-    marked_tags = list(item.iter_markers(name="tags"))
-    if not marked_tags or not any(tag.args[0] in TEST_TAGS for tag in marked_tags):
-        pytest.fail(
-            f"The test {item.nodeid} does not have one of the test level tags."
-            f"Please add at least one test tag using @pytest.mark.tags ({TEST_TAGS})."
-        )
 
 
 async def cloud_proxied(ops_test: OpsTest):
