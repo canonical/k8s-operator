@@ -57,6 +57,7 @@ integration = [
     "tenacity",
     "requests <2.33",  # https://github.com/canonical/pylxd/issues/579
 ]
+conformance = ["yq"]
 
 [tool.bandit]
 exclude_dirs = ["charms/worker/k8s/lib"]
