@@ -264,7 +264,7 @@ config:
 
         For example a value like this:
           --heartbeat-interval=100 listen-peer-urls=http://10.0.0.1:2380
-        will result in kube-controller-manager being run with the following options:
+        will result in the datastore being run with the following options:
           --heartbeat-interval=100 --listen-peer-urls=http://10.0.0.1:2380
     kube-scheduler-extra-args:
       type: string
