@@ -30,6 +30,8 @@ jobs:
       uses: astral-sh/setup-uv@v6.7.0
     - name: Install tox with UV
       run: uv tool install tox --with tox-uv
+    - name: Install juju-wait snap
+      run: sudo snap install juju-wait --classic
     - name: Setup operator environment
       uses: charmed-kubernetes/actions-operator@main
       with:
