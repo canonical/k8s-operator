@@ -20,6 +20,16 @@ if ! command -v yq &> /dev/null; then
     exit 1
 fi
 
+if ! command -v juju-wait &> /dev/null; then
+     echo "Error: 'juju-wait' is not installed."
+     exit 1
+fi
+if [[ -n "${TF_VAR_model:-}" ]]; then
+    export JUJU_MODEL=${TF_VAR_model}
+fi
+# wait for the workload to be stable
+timeout 60m juju-wait -w -v
+
 echo "--> Fetching kubeconfig from k8s/leader..."
 juju run k8s/leader get-kubeconfig | yq -r '.kubeconfig' > "$KUBECONFIG_PATH"
 
