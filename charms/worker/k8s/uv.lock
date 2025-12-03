@@ -306,16 +306,16 @@ dependencies = [
 
 [[package]]
 name = "charmlibs-interfaces-tls-certificates"
-version = "1.0.0.post2"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "ops" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/40/6a/99235b7049a32ceb14360194c800725dba7621dcbe9d408d07acc021d610/charmlibs_interfaces_tls_certificates-1.0.0.post2.tar.gz", hash = "sha256:7ae0535a2742ea4fc9920a2dff65ef104e298061ccfe4a13ffa038816a03b521", size = 119873, upload-time = "2025-11-19T09:34:57.669Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/eb/68cea4bed3d36a8a7afdd625e7f4563218bfff2de6cea9f987470b0fec86/charmlibs_interfaces_tls_certificates-1.1.0.tar.gz", hash = "sha256:1dd9b4bcc3e25734d49e4be6022f8a77dd3e4b2a29fc95435ac297fa3f455303", size = 122378, upload-time = "2025-11-27T13:09:50.836Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/3a/01b1f92b4403e8c80b5e4e24b0c88f0c230b7a348364731f13d56e76a0a4/charmlibs_interfaces_tls_certificates-1.0.0.post2-py3-none-any.whl", hash = "sha256:df54b6c5573162eb63d6139e0c67b703e3e670a3ea4a58ed431f5d656186a5ef", size = 18545, upload-time = "2025-11-19T09:34:56.464Z" },
+    { url = "https://files.pythonhosted.org/packages/42/fe/8b9a9632b75810bda19b58615efe66ce2525dc68171aedc1896c6f2c9e19/charmlibs_interfaces_tls_certificates-1.1.0-py3-none-any.whl", hash = "sha256:6214a59699a22b2948a9e7250b4d44908a044bbfefef493bb94f2d5375a355db", size = 21143, upload-time = "2025-11-27T13:09:49.237Z" },
 ]
 
 [[package]]
@@ -652,7 +652,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [

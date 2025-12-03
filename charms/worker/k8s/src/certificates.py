@@ -443,6 +443,7 @@ class EtcdCertificates(ops.Object):
         self._charm = charm
         self.certificates = TLSCertificatesRequiresV4(
             charm=self._charm,
+            mode=Mode.APP,
             relationship_name=ETCD_CERTIFICATES_RELATION,
             certificate_requests=[
                 CertificateRequestAttributes(

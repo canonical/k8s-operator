@@ -207,15 +207,15 @@ class K8sCharm(ops.CharmBase):
         )
 
         custom_events = []
-        if self.lead_control_plane:
-            self.etcd_certificates = EtcdCertificates(self)
-            custom_events += self.etcd_certificates.events
 
         if self.is_control_plane:
+            self.etcd_certificates = EtcdCertificates(self)
+            custom_events += self.etcd_certificates.events
             self.etcd = self._initialize_external_etcd()
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
             self.external_load_balancer = LBProvider(self, EXTERNAL_LOAD_BALANCER_RELATION)
+
         self.bootstrap = config.bootstrap.Controller(self)
         self.update_status = update_status.Handler(self, self.bootstrap, self.upgrade)
         self.reconciler = Reconciler(
