@@ -40,7 +40,6 @@ import containerd
 import k8s.node
 import ops
 import yaml
-from certificates import EtcdCertificates
 from charmed_etcd import CharmedEtcdRequires
 from charms.contextual_status import ReconcilerError, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -205,11 +204,11 @@ class K8sCharm(ops.CharmBase):
         )
 
         custom_events = []
-        if self.lead_control_plane:
-            self.etcd_certificates = EtcdCertificates(self)
-            custom_events += self.etcd_certificates.events
-
         if self.is_control_plane:
+            # NOTE: (mateo) Remove EtcdCertificates instantiation until the charm
+            # supports the relation.
+            # self.etcd_certificates = EtcdCertificates(self)
+            # custom_events += self.etcd_certificates.events
             self.etcd = self._initialize_external_etcd()
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
