@@ -38,6 +38,9 @@ jobs:
         juju-channel: 3/stable
     - name: Checking out repo
       uses: actions/checkout@v5
+    - name: Install dependencies
+      run: |
+        sudo snap install juju-wait --classic
     - name: Setup cluster with terraform
       timeout-minutes: 15
       run: |
