@@ -359,27 +359,36 @@ async def metrics_agent(kubernetes_cluster: Model, request):
 
 
 @pytest_asyncio.fixture(scope="module")
-async def cos_model(ops_test: OpsTest, kubernetes_cluster, metrics_agent):
-    """Create a COS substrate and a K8s model."""
+async def cos_substrate(ops_test: OpsTest, kubernetes_cluster, metrics_agent):
+    """Create a COS substrate and yield a kubeconfig to it."""
     _type, _vms = await cloud_type(ops_test)
     assert _type == "lxd", "COS tests only supported on LXD clouds"
+    manager: Optional[COSSubstrate] = None
+    config: Optional[bytes] = None
+    try:
+        manager = COSSubstrate(VMOptions() if _vms else None)
+        config = manager.create_substrate()
+        kubeconfig_path = ops_test.tmp_path / "kubeconfig"
+        kubeconfig_path.write_bytes(config)
+        yield kubeconfig_path
+    finally:
+        if config and manager:
+            manager.teardown_substrate()
 
-    manager = COSSubstrate(VMOptions() if _vms else None)
-    config = manager.create_substrate()
-    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_bytes(config)
-    config = type.__call__(Configuration)
-    k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
 
-    k8s_cloud = await ops_test.add_k8s(kubeconfig=config, skip_storage=False)
-    k8s_model = await ops_test.track_model(
-        "cos", cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
-    )
-    yield k8s_model
-
-    await ops_test.forget_model("cos", timeout=10 * 60, allow_failure=True)
-
-    manager.teardown_substrate()
+@pytest_asyncio.fixture(scope="module")
+async def cos_model(ops_test: OpsTest, cos_substrate: Path):
+    """Create a Juju model into which COS can be deployed."""
+    try:
+        config = type.__call__(Configuration)
+        k8s_config.load_config(client_configuration=config, config_file=str(cos_substrate))
+        k8s_cloud = await ops_test.add_k8s(kubeconfig=config, skip_storage=False)
+        k8s_model = await ops_test.track_model(
+            "cos", cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
+        )
+        yield k8s_model
+    finally:
+        await ops_test.forget_model("cos", timeout=10 * 60, allow_failure=True)
 
 
 @pytest_asyncio.fixture(name="_cos_lite_installed", scope="module")
