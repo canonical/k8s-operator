@@ -95,11 +95,12 @@ def locate(arch: str, track: str, risk: str) -> None | str:
         update_current_revision(arch, snapstore_rev)
         update_github_output("revision", snapstore_rev)
         commit_sha(snapstore_rev)
-    if current_rev and current_rev == snapstore_rev:
+    elif current_rev and current_rev == snapstore_rev:
         log.info("No change for arch=%s current=%s", arch, current_rev)
         commit_sha(current_rev)
     else:
         log.info("No change arch=%s current=%s snapstore=%s", arch, current_rev, snapstore_rev)
+    return snapstore_rev
 
 
 def commit_sha(revision: int|str) -> str:
@@ -113,7 +114,9 @@ def commit_sha(revision: int|str) -> str:
         bom_file = Path(tmpdir) / "snapdir" / "bom.json"
         bom_data = json.loads(bom_file.read_text())
         sha = bom_data["k8s"]["revision"]
+        log.info("Commit ID for revision=%s sha=%s", revision, sha)
         update_github_output("commit_sha", sha)
+    return sha
 
 
 def get_arg_or_default(name: str, arg_value: str | None, default: str | None) -> str:
