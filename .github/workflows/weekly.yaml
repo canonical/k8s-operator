@@ -50,7 +50,7 @@ jobs:
         tox -e conformance
     - name: Upload CNCF conformance report artifact
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: sonobuoy-e2e-${{ env.test_name }}
         path: tests/conformance/sonobuoy_e2e.tar.gz
