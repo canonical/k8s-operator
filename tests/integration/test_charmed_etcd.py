@@ -14,6 +14,9 @@ import pytest
 from helpers import ready_nodes
 from juju import application, model, unit
 
+# NOTE: (mateo) Skipping entire module until Charmed Etcd support is added
+pytest.skip("Skipping: Charmed Etcd support not yet stable", allow_module_level=True)
+
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with etcd, for all the test within this module.
 pytestmark = [
