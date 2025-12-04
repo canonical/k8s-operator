@@ -103,8 +103,8 @@ jobs:
         echo "Would have created pull-request"
         echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
         echo 'Commits for each architecture:'
-        echo "  * amd64: $${{ steps.update-amd64-revision.outputs.commit_sha }}"
-        echo "  * arm64: $${{ steps.update-arm64-revision.outputs.commit_sha }}"
+        echo "  * amd64: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
+        echo "  * arm64: ${{ steps.update-arm64-revision.outputs.commit_sha }}"
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v7
@@ -114,12 +114,12 @@ jobs:
         title: "[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}"
         body: |-
           Updates K8s revisions for ${{ env.TRACK }}
-          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '& ') }}
+          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), ' & ') }}
           * amd64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
           * arm64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-arm64-revision.outputs.commit_sha }}
         labels: |
           automerge
-        branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.Revisions), '-') }}
+        branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '-') }}
         base: ${{ matrix.branch }}
         author: Canonical Github Bot <actions@canonical.com>
         token: ${{ secrets.REPO_ACCESS_TOKEN }}

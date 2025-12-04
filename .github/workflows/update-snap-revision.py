@@ -10,6 +10,7 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Optional
 from urllib.request import Request, urlopen
 import yaml
 
@@ -27,7 +28,7 @@ def _multiline_log(logger, message, *args, **kwargs):
     logger(message.replace("\n", NEWLINE_INDENT), *args, **kwargs)
 
 
-def find_current_revision(arch: str) -> None | str:
+def find_current_revision(arch: str) -> Optional[str]:
     content = yaml.safe_load(INSTALLATION.read_text())
     if arch_spec := content.get(arch):
         for value in arch_spec:
@@ -37,9 +38,9 @@ def find_current_revision(arch: str) -> None | str:
                 return rev
 
 
-def find_snapstore_revision(arch: str, track: str, risk: str) -> str:
+def find_snapstore_revision(arch: str, track: str, risk: str) -> Optional[str]:
     URL = f"https://api.snapcraft.io/v2/snaps/info/k8s?architecture={arch}&fields=revision"
-    HEADER = {"Snap-Device-Series": 16}
+    HEADER = {"Snap-Device-Series": "16"}
     req = Request(URL, headers=HEADER)
     with urlopen(req) as response:
         snap_resp = json.loads(response.read())
@@ -87,7 +88,7 @@ def update_github_output(variable: str, value: str):
             f.write(f"{variable}={value}\n")
 
 
-def locate(arch: str, track: str, risk: str) -> None | str:
+def locate(arch: str, track: str, risk: str) -> Optional[str]:
     log.info("Locating snap revision for arch='%s' track='%s' risk='%s'", arch, track, risk)
     current_rev = find_current_revision(arch)
     snapstore_rev = find_snapstore_revision(arch, track, risk)
@@ -119,12 +120,13 @@ def commit_sha(revision: int|str) -> str:
     return sha
 
 
-def get_arg_or_default(name: str, arg_value: str | None, default: str | None) -> str:
+def get_arg_or_default(parser, name: str, arg_value: Optional[str], default: Optional[str]) -> str:
     if arg_value:
         return arg_value
     if default:
         return default
     parser.error(f"{name} must be provided either as an argument or through environment variable")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Multi-command script")
@@ -141,8 +143,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "locate":
-        track = get_arg_or_default("track", args.track, TRACK)
-        risk = get_arg_or_default("risk", args.risk, RISK)
+        track = get_arg_or_default(parser, "track", args.track, TRACK)
+        risk = get_arg_or_default(parser, "risk", args.risk, RISK)
         locate(args.arch, track, risk)
     elif args.command == "commit-sha":
         commit_sha(args.revision)
