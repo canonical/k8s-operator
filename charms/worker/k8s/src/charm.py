@@ -40,7 +40,6 @@ import containerd
 import k8s.node
 import ops
 import yaml
-from certificates import EtcdCertificates
 from charmed_etcd import CharmedEtcdRequires
 from charms.contextual_status import ReconcilerError, on_error
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -74,7 +73,6 @@ from literals import (
     APISERVER_CERT,
     APISERVER_PORT,
     BOOTSTRAP_DATASTORE,
-    CHARMED_ETCD_RELATION,
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     CONTAINERD_HTTP_PROXY,
@@ -87,7 +85,6 @@ from literals import (
     DATASTORE_TYPE_EXTERNAL,
     DEPENDENCIES,
     ETC_KUBERNETES,
-    ETCD_CERTIFICATES_RELATION,
     ETCD_RELATION,
     EXTERNAL_LOAD_BALANCER_PORT,
     EXTERNAL_LOAD_BALANCER_RELATION,
@@ -207,11 +204,11 @@ class K8sCharm(ops.CharmBase):
         )
 
         custom_events = []
-        if self.lead_control_plane:
-            self.etcd_certificates = EtcdCertificates(self)
-            custom_events += self.etcd_certificates.events
-
         if self.is_control_plane:
+            # NOTE: (mateo) Remove EtcdCertificates instantiation until the charm
+            # supports the relation.
+            # self.etcd_certificates = EtcdCertificates(self)
+            # custom_events += self.etcd_certificates.events
             self.etcd = self._initialize_external_etcd()
             self.kube_control = KubeControlProvides(self, endpoint="kube-control")
             self.framework.observe(self.on.get_kubeconfig_action, self._get_external_kubeconfig)
@@ -1219,8 +1216,12 @@ class K8sCharm(ops.CharmBase):
             return
 
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
-        charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
-        etcd_certificate_relation = self.model.get_relation(ETCD_CERTIFICATES_RELATION)
+
+        # NOTE: (mateo) Force charmed-etcd relation to None
+        # charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
+        # etcd_certificate_relation = self.model.get_relation(ETCD_CERTIFICATES_RELATION)
+        charmed_etcd = None
+        etcd_certificate_relation = None
 
         if not legacy_etcd and not charmed_etcd:
             msg = "Missing etcd relation"
@@ -1258,7 +1259,10 @@ class K8sCharm(ops.CharmBase):
     def _initialize_external_etcd(self) -> Optional[EtcdRequiresProtocol]:
         """Initialize etcd instance or block charm."""
         legacy_etcd = self.model.get_relation(ETCD_RELATION)
-        charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
+
+        # NOTE: (mateo) Force charmed-etcd relation to None
+        # charmed_etcd = self.model.get_relation(CHARMED_ETCD_RELATION)
+        charmed_etcd = None
 
         if legacy_etcd:
             log.info("Using legacy etcd relation")
