@@ -225,11 +225,13 @@ def test_set_leader_etcd_missing(harness):
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
     assert harness.model.unit.status == ops.BlockedStatus("Missing etcd relation")
-    etcd_relation = harness.add_relation("etcd", "etcd")
+    harness.add_relation("etcd", "etcd")
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
         harness.set_leader(True)
     assert harness.model.unit.status == ops.ActiveStatus("Ready")
+    # NOTE: (mateo) Skipping this fragment until the integration is added again.
+    """
     etcd_client_relation = harness.add_relation("etcd-client", "charmed-etcd")
     with mock_reconciler_handlers(harness) as handlers:
         handlers["_evaluate_removal"].return_value = False
@@ -255,6 +257,7 @@ def test_set_leader_etcd_missing(harness):
     assert harness.model.unit.status == ops.BlockedStatus(
         "etcd-client relation requires etcd-certificates relation"
     )
+    """
 
 
 def test_configure_datastore_runtime_config_dqlite(harness):

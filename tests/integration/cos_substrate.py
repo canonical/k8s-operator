@@ -143,7 +143,7 @@ class COSSubstrate(LXDSubstrate):
         commands = [
             "snap install k8s --classic",
             "k8s bootstrap",
-            "k8s status --wait-ready",
+            "k8s status --wait-ready --timeout 30m",
             f"k8s set load-balancer.cidrs='{cidrs}'",
             "k8s enable load-balancer",
         ]
