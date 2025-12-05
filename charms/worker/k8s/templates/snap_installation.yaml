@@ -4,8 +4,8 @@
 amd64:
 - install-type: store
   name: k8s
-  revision: 4501
+  revision: 4531
 arm64:
 - install-type: store
   name: k8s
-  revision: 4505
+  revision: 4532
