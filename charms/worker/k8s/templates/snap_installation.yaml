@@ -5,9 +5,9 @@ amd64:
   - name: k8s
     install-type: store
     classic: true
-    revision: 4539
+    channel: latest/edge
 arm64:
   - name: k8s
     install-type: store
     classic: true
-    revision: 4540
+    channel: latest/edge
