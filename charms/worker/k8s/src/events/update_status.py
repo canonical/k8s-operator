@@ -18,7 +18,7 @@ import reschedule
 from config.bootstrap import Controller as BootstrapController
 from inspector import ClusterInspector
 from k8s.node import Status, ready
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 from snap import version as snap_version
 from upgrade import K8sUpgrade
 
@@ -70,9 +70,7 @@ class Handler(ops.Object):
             the unit's status during the update process.
     """
 
-    def __init__(
-        self, charm: K8sCharmProtocol, bootstrap: BootstrapController, upgrade: K8sUpgrade
-    ):
+    def __init__(self, charm: K8sCharmBase, bootstrap: BootstrapController, upgrade: K8sUpgrade):
         """Initialize the UpdateStatusEvent.
 
         Args:

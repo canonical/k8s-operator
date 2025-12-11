@@ -27,7 +27,7 @@ from literals import (
     SUPPORTED_CERTIFICATES,
 )
 from ops.interface_kube_control.model import Taint
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 from pydantic import TypeAdapter, ValidationError
 
 log = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def valid_cidr(
     return set(user_cidr)
 
 
-def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
+def _load_certificates_provider(charm: K8sCharmBase) -> str:
     """Load the certificate provider name from the cluster relation.
 
     Args:
@@ -99,7 +99,7 @@ def _load_certificates_provider(charm: K8sCharmProtocol) -> str:
     return provider or ""
 
 
-def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> None:
+def _persist_certificates_provider(charm: K8sCharmBase, provider: str) -> None:
     """Persist the certificates provider in the cluster relation.
 
     Write-once into the cluster relation at the cluster-certificates key.
@@ -119,7 +119,7 @@ def _persist_certificates_provider(charm: K8sCharmProtocol, provider: str) -> No
 class Controller:
     """A store for bootstrap configuration options."""
 
-    def __init__(self, charm: K8sCharmProtocol) -> None:
+    def __init__(self, charm: K8sCharmBase) -> None:
         """Initialize the BootstrapStore instance.
 
         Args:

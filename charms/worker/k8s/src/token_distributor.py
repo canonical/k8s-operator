@@ -25,7 +25,7 @@ from literals import (
     CLUSTER_SECRET_ID,
     CLUSTER_TOKEN_FAILURE,
 )
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 from pydantic import (
     BaseModel,
     Field,
@@ -364,7 +364,7 @@ class CosTokenManager(TokenManager):
 class TokenCollector:
     """Helper class for collecting tokens for units in a relation."""
 
-    def __init__(self, charm: K8sCharmProtocol, node_name: str):
+    def __init__(self, charm: K8sCharmBase, node_name: str):
         """Initialize a TokenCollector instance.
 
         Args:
@@ -475,7 +475,7 @@ class TokenCollector:
 class TokenDistributor:
     """Helper class for distributing tokens to units in a relation."""
 
-    def __init__(self, charm: K8sCharmProtocol, node_name: str, api_manager: K8sdAPIManager):
+    def __init__(self, charm: K8sCharmBase, node_name: str, api_manager: K8sdAPIManager):
         """Initialize a TokenDistributor instance.
 
         Args:

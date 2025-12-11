@@ -33,7 +33,7 @@ from literals import (
     KUBELET_CSR_KEY,
     MAX_COMMON_NAME_SIZE,
 )
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class K8sCertificates(ops.Object):
 
     def __init__(
         self,
-        charm: K8sCharmProtocol,
+        charm: K8sCharmBase,
         bootstrap: bootstrap.Controller,
         refresh_event: ops.BoundEvent,
     ) -> None:
@@ -433,7 +433,7 @@ class K8sCertificates(ops.Object):
 class EtcdCertificates(ops.Object):
     """A class for managing etcd certificates associated with the apiserver."""
 
-    def __init__(self, charm: K8sCharmProtocol) -> None:
+    def __init__(self, charm: K8sCharmBase) -> None:
         """Initialize the EtcdCertificates class.
 
         Args:

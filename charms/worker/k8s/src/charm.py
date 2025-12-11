@@ -23,8 +23,6 @@ import shlex
 import socket
 import subprocess
 from collections import defaultdict
-from functools import cached_property
-from pathlib import Path
 from time import sleep
 from typing import Dict, FrozenSet, List, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -84,7 +82,6 @@ from literals import (
     DATASTORE_NAME_MAPPING,
     DATASTORE_TYPE_EXTERNAL,
     DEPENDENCIES,
-    ETC_KUBERNETES,
     ETCD_RELATION,
     EXTERNAL_LOAD_BALANCER_PORT,
     EXTERNAL_LOAD_BALANCER_RELATION,
@@ -100,6 +97,7 @@ from literals import (
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from pki import get_certificate_sans
+from protocols import K8sCharmBase
 from pydantic import SecretStr
 from snap import management as snap_management
 from snap import version as snap_version
@@ -142,7 +140,7 @@ class NodeRemovedError(Exception):
     """Raised to prevent reconciliation of dying node."""
 
 
-class K8sCharm(ops.CharmBase):
+class K8sCharm(K8sCharmBase):
     """A charm for managing a K8s cluster via the k8s snap.
 
     Attrs:
@@ -203,7 +201,7 @@ class K8sCharm(ops.CharmBase):
             ],
         )
 
-        custom_events = []
+        custom_events: list[ops.EventBase] = []
         if self.is_control_plane:
             # NOTE: (mateo) Remove EtcdCertificates instantiation until the charm
             # supports the relation.
@@ -280,21 +278,6 @@ class K8sCharm(ops.CharmBase):
         kubectl("apply", "-f", "templates/cos_roles.yaml", kubeconfig=self.kubeconfig)
         kubectl("apply", "-f", "templates/ksm.yaml", kubeconfig=self.kubeconfig)
         self.cos.trigger_jobs_refresh()
-
-    @property
-    def is_control_plane(self) -> bool:
-        """Returns true if the unit is a control-plane."""
-        return not self.is_worker
-
-    @property
-    def lead_control_plane(self) -> bool:
-        """Returns true if the unit is the leader control-plane."""
-        return self.is_control_plane and self.unit.is_leader()
-
-    @cached_property
-    def is_worker(self) -> bool:
-        """Returns true if the unit is a worker."""
-        return self.meta.name == "k8s-worker"
 
     def get_worker_versions(self) -> Dict[str, List[ops.Unit]]:
         """Get the versions of the worker units.
@@ -1093,11 +1076,6 @@ class K8sCharm(ops.CharmBase):
                 self.config, file_args_config, cluster_name, node_ips, datastore
             )
             file_args_config.ensure()
-
-    @property
-    def kubeconfig(self) -> Path:
-        """Return the highest authority kube config for this unit."""
-        return ETC_KUBERNETES / ("admin.conf" if self.is_control_plane else "kubelet.conf")
 
     @on_error(ops.WaitingStatus(""))
     def _copy_internal_kubeconfig(self):

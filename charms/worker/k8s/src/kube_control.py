@@ -11,7 +11,7 @@ import ops
 import yaml
 from charms.contextual_status import on_error
 from literals import APISERVER_PORT, BOOTSTRAP_NODE_TAINTS, NODE_LABELS
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
     ValueError,
     TypeError,
 )
-def _share_labels_and_taints(charm: K8sCharmProtocol):
+def _share_labels_and_taints(charm: K8sCharmBase):
     """Share labels and taints with the kube-control interface.
 
     Args:
@@ -35,7 +35,7 @@ def _share_labels_and_taints(charm: K8sCharmProtocol):
     charm.kube_control.set_taints(taints.split())
 
 
-def configure(charm: K8sCharmProtocol):
+def configure(charm: K8sCharmBase):
     """Configure kube-control for the Kubernetes cluster.
 
     Args:

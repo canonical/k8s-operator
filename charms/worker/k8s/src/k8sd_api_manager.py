@@ -1346,7 +1346,7 @@ class K8sdAPIManager:
             expiration_seconds = int((twenty_years_later - now).total_seconds())
 
         run_endpoint = "/1.0/k8sd/refresh-certs/run"
-        run_req = RefreshCertificatesRunRequest(  # type: ignore
+        run_req = RefreshCertificatesRunRequest(
             seed=plan_resp.metadata.seed,
             expiration_seconds=expiration_seconds,
             extra_sans=extra_sans,

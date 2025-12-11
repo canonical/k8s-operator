@@ -11,7 +11,7 @@ import ops
 from ops.interface_aws.requires import AWSIntegrationRequires
 from ops.interface_azure.requires import AzureIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class CloudIntegration:
         cloud (CloudSpecificIntegration): Reference to the cloud-specific integration.
     """
 
-    def __init__(self, charm: K8sCharmProtocol, is_control_plane: bool) -> None:
+    def __init__(self, charm: K8sCharmBase, is_control_plane: bool) -> None:
         """Integrate with all possible clouds.
 
         Args:

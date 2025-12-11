@@ -14,13 +14,14 @@ with API command.
 import logging
 import subprocess
 from pathlib import Path
+from typing import Union
 
 from literals import KUBECTL_PATH
 
 log = logging.getLogger(__name__)
 
 
-def kubectl(*args: str, kubeconfig: None | Path = None, **kwds) -> str:
+def kubectl(*args: str, kubeconfig: None | Path = None, **kwds) -> Union[str, bytes]:
     """Run kubectl command.
 
     Arguments:

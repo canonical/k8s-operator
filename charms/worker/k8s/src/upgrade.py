@@ -23,7 +23,7 @@ from literals import (
     SNAP_NAME,
     UPGRADE_RELATION,
 )
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 
 # TODO: (mateoflorido) We are using the compatibility layer for pydantic.v1
 #  because the upgrade model does not support pydantic v2 yet.
@@ -49,7 +49,7 @@ class K8sDependenciesModel(BaseModel):
 class K8sUpgrade(DataUpgrade):
     """A helper class for upgrading the k8s and k8s-worker charms."""
 
-    def __init__(self, charm: K8sCharmProtocol, cluster_inspector: ClusterInspector, **kwargs):
+    def __init__(self, charm: K8sCharmBase, cluster_inspector: ClusterInspector, **kwargs):
         """Initialize the K8sUpgrade.
 
         Args:

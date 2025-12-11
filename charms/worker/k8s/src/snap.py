@@ -19,7 +19,7 @@ import charmlibs.snap as snap_lib
 import yaml
 from config.resource import CharmResource
 from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE
-from protocols import K8sCharmProtocol
+from protocols import K8sCharmBase
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
 from typing_extensions import Annotated
 
@@ -274,7 +274,7 @@ def _parse_management_arguments(resource: CharmResource) -> List[SnapArgument]:
     return args
 
 
-def management(charm: K8sCharmProtocol, remove: bool = False) -> None:
+def management(charm: K8sCharmBase, remove: bool = False) -> None:
     """Manage snap installations on this machine.
 
     Arguments:
