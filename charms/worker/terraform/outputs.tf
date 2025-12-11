@@ -22,3 +22,7 @@ output "provides" {
     cos_agent = "cos-agent"
   }
 }
+
+output "machines" {
+  value = juju_application.k8s_worker.machines
+}

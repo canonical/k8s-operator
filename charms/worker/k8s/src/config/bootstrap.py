@@ -12,7 +12,7 @@ import logging
 from typing import List, Optional
 
 import charms.contextual_status as context_status
-import charms.k8s.v0.k8sd_api_manager as k8sd
+import k8sd_api_manager as k8sd
 import ops
 from literals import (
     BOOTSTRAP_CERTIFICATES,

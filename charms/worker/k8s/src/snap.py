@@ -15,7 +15,7 @@ import tarfile
 from pathlib import Path
 from typing import List, Literal, Optional, Tuple, Union
 
-import charms.operator_libs_linux.v2.snap as snap_lib
+import charmlibs.snap as snap_lib
 import yaml
 from config.resource import CharmResource
 from literals import SUPPORT_SNAP_INSTALLATION_OVERRIDE

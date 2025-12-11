@@ -1,10 +1,12 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Module for managing k8sd API interactions.
+"""K8sd API Manager - Internal API for k8s charm.
 
-This module provides a high-level interface for interacting with K8sd. It
-simplifies tasks such as token management and component updates.
+This module provides the interface for the k8s and k8s-worker charms to
+interact with the k8sd snap via Unix socket or HTTP connections.
+
+NOT INTENDED FOR USE BY OTHER CHARMS - This is internal to k8s-operator.
 
 The core of the module is the K8sdAPIManager, which handles the creation
 and management of HTTP connections to interact with the k8sd API. This
@@ -34,7 +36,7 @@ import socket
 from contextlib import contextmanager
 from datetime import datetime
 from http.client import HTTPConnection, HTTPException
-from typing import Any, Dict, Generator, List, Optional, Tuple, Type, TypeVar, Mapping
+from typing import Any, Dict, Generator, List, Mapping, Optional, Tuple, Type, TypeVar
 
 import yaml
 from pydantic import (
@@ -46,16 +48,6 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
-
-# The unique Charmhub library identifier, never change it
-LIBID = "6a5f235306864667a50437c08ba7e83f"
-
-# Increment this major API version when introducing breaking changes
-LIBAPI = 0
-
-# Increment this PATCH version before using `charmcraft publish-lib` or reset
-# to 0 if you are raising the major API version
-LIBPATCH = 9
 
 logger = logging.getLogger(__name__)
 

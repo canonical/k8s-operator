@@ -8,10 +8,10 @@ from string import Template
 from typing import Dict, List, Optional, Protocol, Set, Tuple, Union, cast
 
 import charms.contextual_status as status
-import charms.k8s.v0.k8sd_api_manager as k8sd
 import config.bootstrap as bootstrap
+import k8sd_api_manager as k8sd
 import ops
-from charms.tls_certificates_interface.v4.tls_certificates import (
+from charmlibs.interfaces.tls_certificates import (
     CertificateRequestAttributes,
     CertificatesRequirerCharmEvents,
     Mode,
@@ -28,6 +28,7 @@ from literals import (
     CLUSTER_RELATION,
     CLUSTER_WORKER_RELATION,
     COMMON_NAME_CONFIG_KEY,
+    ETCD_CERTIFICATES_RELATION,
     KUBELET_CN_FORMATTER_CONFIG_KEY,
     KUBELET_CSR_KEY,
     MAX_COMMON_NAME_SIZE,
@@ -263,9 +264,12 @@ class K8sCertificates(ops.Object):
         return {str(svc_ip[1]) for svc_ip in cidrs}
 
     def _get_validated_certificate(
-        self, request: CertificateRequestAttributes
+        self, request: Optional[CertificateRequestAttributes]
     ) -> Tuple[ProviderCertificate, PrivateKey]:
         """Get and validate a certificate/key pair for a given request.
+
+        Args:
+            request (CertificateRequestAttributes): The certificate request attributes.
 
         Returns:
             Tuple[ProviderCertificate, PrivateKey]: A tuple containing the certificate and key.
@@ -273,6 +277,10 @@ class K8sCertificates(ops.Object):
         Raises:
             ReconcilerError: If the certificate/key pair is missing.
         """
+        if not request:
+            self._refresh_event.emit()
+            raise status.ReconcilerError("Invalid certificate request.")
+
         certificate, key = self._certificates.get_assigned_certificate(request)
         if not certificate or not key:
             self._refresh_event.emit()
@@ -420,3 +428,30 @@ class K8sCertificates(ops.Object):
                 self._populate_join_certificates(config)
             elif isinstance(config, k8sd.NodeJoinConfig):
                 self._populate_join_certificates(config)
+
+
+class EtcdCertificates(ops.Object):
+    """A class for managing etcd certificates associated with the apiserver."""
+
+    def __init__(self, charm: K8sCharmProtocol) -> None:
+        """Initialize the EtcdCertificates class.
+
+        Args:
+            charm: An instance of the charm.
+        """
+        super().__init__(charm, "etcd-certificates-integration")
+        self._charm = charm
+        self.certificates = TLSCertificatesRequiresV4(
+            charm=self._charm,
+            relationship_name=ETCD_CERTIFICATES_RELATION,
+            certificate_requests=[
+                CertificateRequestAttributes(
+                    common_name="kube-apiserver-etcd-client",
+                )
+            ],
+        )
+
+    @property
+    def events(self) -> List[ops.BoundEvent]:
+        """Return the events that the Certificates library emits."""
+        return [self.certificates.on.certificate_available]

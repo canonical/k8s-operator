@@ -44,10 +44,24 @@ jobs:
         echo "TRACK=${BRANCH:8}" | tee -a "$GITHUB_ENV"
 
     - name: Checkout ${{ matrix.branch }}
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         ref: ${{ matrix.branch }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
+
+    - name: Fetch update-snap-revision.py into a separate path
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ github.repository }}
+        path: update-scripts
+        sparse-checkout: |
+          .github/workflows/update-snap-revision.py
+        sparse-checkout-cone-mode: false
+
+    - name: Place update-snap-revision.py into working directory
+      run: |
+        mkdir -p .github/workflows
+        cp update-scripts/.github/workflows/update-snap-revision.py .github/workflows/update-snap-revision.py
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -58,18 +72,18 @@ jobs:
     - name: Update amd64 Revision
       id: update-amd64-revision
       run: |
-        python3 .github/workflows/update-snap-revision.py amd64
+        python3 .github/workflows/update-snap-revision.py locate amd64
 
     - name: Update arm64 Revision
       id: update-arm64-revision
       run: |
-        python3 .github/workflows/update-snap-revision.py arm64
+        python3 .github/workflows/update-snap-revision.py locate arm64
 
     - name: Assemble Revisions
       id: assemble-revisions
       run: |
-        AMD64_REVISION=${{ steps.update-amd64-revision.outputs.result }}
-        ARM64_REVISION=${{ steps.update-arm64-revision.outputs.result }}
+        AMD64_REVISION=${{ steps.update-amd64-revision.outputs.revision }}
+        ARM64_REVISION=${{ steps.update-arm64-revision.outputs.revision }}
         REVISIONS=()
         if [[ -n $AMD64_REVISION ]]; then
             REVISIONS+=("amd64-${AMD64_REVISION}")
@@ -88,19 +102,24 @@ jobs:
       run: |
         echo "Would have created pull-request"
         echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
+        echo 'Commits for each architecture:'
+        echo "  * amd64: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
+        echo "  * arm64: ${{ steps.update-arm64-revision.outputs.commit_sha }}"
 
     - name: Create pull request
-      uses: peter-evans/create-pull-request@v7
+      uses: peter-evans/create-pull-request@v8
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
         commit-message: '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
         title: "[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}"
         body: |-
           Updates K8s revisions for ${{ env.TRACK }}
-          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '\n *') }}
+          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), ' & ') }}
+          * amd64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
+          * arm64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-arm64-revision.outputs.commit_sha }}
         labels: |
           automerge
-        branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.Revisions), '-') }}
+        branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '-') }}
         base: ${{ matrix.branch }}
         author: Canonical Github Bot <actions@canonical.com>
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
