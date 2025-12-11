@@ -107,7 +107,7 @@ jobs:
         echo "  * arm64: ${{ steps.update-arm64-revision.outputs.commit_sha }}"
 
     - name: Create pull request
-      uses: peter-evans/create-pull-request@v7
+      uses: peter-evans/create-pull-request@v8
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
         commit-message: '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
