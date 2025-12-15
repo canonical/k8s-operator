@@ -27,7 +27,7 @@ jobs:
       TF_VAR_model: my-canonical-k8s
     steps:
     - name: Setup Astral UV
-      uses: astral-sh/setup-uv@v6.7.0
+      uses: astral-sh/setup-uv@v7.1.5
     - name: Install tox with UV
       run: uv tool install tox --with tox-uv
     - name: Setup operator environment
@@ -37,7 +37,7 @@ jobs:
         channel: latest/stable
         juju-channel: 3/stable
     - name: Checking out repo
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     - name: Install dependencies
       run: |
         sudo snap install juju-wait --classic
@@ -50,7 +50,7 @@ jobs:
         tox -e conformance -- DOCKER_REGISTRY_USERNAME=${{ secrets.DOCKER_REGISTRY_USERNAME }} DOCKER_REGISTRY_PASSWORD=${{ secrets.DOCKER_REGISTRY_PASSWORD }}
     - name: Upload CNCF conformance report artifact
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: sonobuoy-e2e-${{ env.test_name }}
         path: tests/conformance/sonobuoy_e2e.tar.gz
