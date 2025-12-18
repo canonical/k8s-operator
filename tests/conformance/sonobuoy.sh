@@ -5,7 +5,9 @@
 
 set -euo pipefail
 
-SONOBUOY_VERSION="${1:-v0.57.3}"
+SONOBUOY_VERSION="${SONOBUOY_VERSION:-v0.57.3}"
+DOCKER_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME:-}"
+DOCKER_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD:-}"
 KUBECONFIG_PATH="./kube-config"
 SONOBUOY_BIN="/tmp/sonobuoy"
 RESULTS_FILE="sonobuoy_e2e.tar.gz"
@@ -48,9 +50,31 @@ echo "--> Extracting Sonobuoy..."
 tar -xzf /tmp/sonobuoy.tar.gz -C /tmp
 rm /tmp/sonobuoy.tar.gz
 
+
+echo "--> Generating sonobuoy manifests for the test"
+if [[ -n "$DOCKER_REGISTRY_USERNAME" && -n "$DOCKER_REGISTRY_PASSWORD" ]]; then
+    echo "--> Docker registry credentials are provided, configuring them..."
+    juju exec --unit k8s/leader -- k8s kubectl create secret docker-registry docker-registry-secret \
+        --dry-run=client \
+        -o yaml \
+        --namespace sonobuoy \
+        --docker-server=https://index.docker.io/v1/ \
+        --docker-username="$DOCKER_REGISTRY_USERNAME" \
+        --docker-password="$DOCKER_REGISTRY_PASSWORD" \
+        --docker-email=k8s-team@canonical.com \
+        | sed '1s/^/---\n/' >> /tmp/sonobuoy_manifests.yaml
+    echo '{"ImagePullSecrets":"docker-registry-secret"}' > /tmp/secretconfig.json
+    "$SONOBUOY_BIN" gen \
+        --config /tmp/secretconfig.json \
+        --kubeconfig "$KUBECONFIG_PATH" > /tmp/sonobuoy_manifests.yaml
+else 
+    "$SONOBUOY_BIN" gen --kubeconfig "$KUBECONFIG_PATH" > /tmp/sonobuoy_manifests.yaml
+fi
+    
 echo "--> Starting Sonobuoy Conformance Run (this may take a while)..."
 "$SONOBUOY_BIN" run \
     --kubeconfig "$KUBECONFIG_PATH" \
+    -f /tmp/sonobuoy_manifests.yaml \
     --plugin e2e \
     --mode certified-conformance \
     --wait
