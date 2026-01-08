@@ -32,7 +32,7 @@ from pytest_operator.plugin import OpsTest
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
-METRICS_AGENTS = ["grafana-agent:1/stable", "opentelemetry-collector:2/edge"]
+METRICS_AGENT = "opentelemetry-collector:2/stable"
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -110,16 +110,6 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
-    )
-    parser.addoption(
-        "--metrics-agent-charm",
-        dest="metrics_agent_charm",
-        type=str,
-        default="",  # empty string means all
-        help=(
-            "Run test_cos module only with this metrics agent charm, "
-            "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
-        ),
     )
 
 
@@ -324,17 +314,11 @@ async def api_client(
     v1.delete_namespace(name=namespace)
 
 
-@pytest_asyncio.fixture(scope="module", params=METRICS_AGENTS)
-async def metrics_agent(kubernetes_cluster: Model, request):
+@pytest_asyncio.fixture(scope="module")
+async def metrics_agent(kubernetes_cluster: Model):
     """Deploy Metrics Agent Charm."""
     apps = ["k8s", "k8s-worker"]
-    option = request.config.option.metrics_agent_charm
-    if option and option not in request.param:
-        pytest.skip(
-            f"Skipping metrics agent charm {request.param} due to --metrics-agent-charm={option}"
-        )
-
-    metrics_agent, metrics_agent_channel = request.param.split(":")
+    metrics_agent, metrics_agent_channel = METRICS_AGENT.split(":")
     k8s, worker = (kubernetes_cluster.applications.get(a) for a in apps)
     if not k8s:
         pytest.fail("k8s application not found in the model")
