@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright 2025 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 """Deploy a Kubernetes cluster using the Juju Terraform provider and a manifest as input.
 
