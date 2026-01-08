@@ -32,7 +32,7 @@ from pytest_operator.plugin import OpsTest
 log = logging.getLogger(__name__)
 TEST_DATA = Path(__file__).parent / "data"
 DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
-METRICS_AGENTS = ["grafana-agent:1/stable", "opentelemetry-collector:2/edge"]
+METRICS_AGENTS = ["opentelemetry-collector:2/stable"]
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -118,7 +118,7 @@ def pytest_addoption(parser: pytest.Parser):
         default="",  # empty string means all
         help=(
             "Run test_cos module only with this metrics agent charm, "
-            "skipping all others (e.g., grafana-agent:1/stable or opentelemetry-collector:1/edge)."
+            "skipping all others (e.g., opentelemetry-collector:2/stable)."
         ),
     )
 
