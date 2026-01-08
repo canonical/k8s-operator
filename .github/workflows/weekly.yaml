@@ -47,7 +47,7 @@ jobs:
         tox -e deploy-terraform -- --model ${{env.TF_VAR_model}} --manifest-yaml ${{ github.workspace }}/tests/integration/terraform/default-manifest.yaml
     - name: Run CNCF conformance test
       run: |
-        tox -e conformance
+        tox -e conformance -- DOCKER_REGISTRY_USERNAME=${{ secrets.DOCKER_REGISTRY_USERNAME }} DOCKER_REGISTRY_PASSWORD=${{ secrets.DOCKER_REGISTRY_PASSWORD }}
     - name: Upload CNCF conformance report artifact
       if: failure()
       uses: actions/upload-artifact@v6
