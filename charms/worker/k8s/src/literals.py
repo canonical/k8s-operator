@@ -183,10 +183,10 @@ DEPENDENCIES = {
     },
     # NOTE: Update the dependencies for the k8s-service before releasing.
     "k8s_service": {
-        "dependencies": {"k8s-worker": "^1.33, < 1.35"},
+        "dependencies": {"k8s-worker": "^1.34, < 1.36"},
         "name": "k8s",
-        "upgrade_supported": "^1.33, < 1.35",
-        "version": "1.34.0",
+        "upgrade_supported": "^1.34, < 1.36",
+        "version": "1.35.0",
     },
 }
 
