@@ -1,13 +1,13 @@
-# Copyright 2026 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 amd64:
-  - name: k8s
-    install-type: store
-    classic: true
-    revision: 4695
+- classic: true
+  install-type: store
+  name: k8s
+  revision: 4708
 arm64:
-  - name: k8s
-    install-type: store
-    classic: true
-    revision: 4698
+- classic: true
+  install-type: store
+  name: k8s
+  revision: 4698
