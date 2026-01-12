@@ -27,7 +27,7 @@ jobs:
       TF_VAR_model: my-canonical-k8s
     steps:
     - name: Setup Astral UV
-      uses: astral-sh/setup-uv@v7.1.6
+      uses: astral-sh/setup-uv@v7.2.0
     - name: Install tox with UV
       run: uv tool install tox --with tox-uv
     - name: Setup operator environment
