@@ -47,7 +47,7 @@ jobs:
         echo CHARM_FILE=${CHARM_FILE} >> $GITHUB_ENV # update GitHub ENV vars
         juju download ${{ inputs.charm-name }} --channel ${{ inputs.charm-channel }} --base ${{ inputs.charm-base }} --arch ${{ inputs.charm-arch }} - > ${{ env.CHARM_FILE }}
     - name: Upload charm artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.charm-name }}-charm
         path: ${{ env.CHARM_FILE }}
