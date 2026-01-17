@@ -22,7 +22,7 @@ RISK = r if (r := os.getenv("RISK")) else "beta"
 ROOT = Path(__file__).parent / ".." / ".."
 INSTALLATION = ROOT / "charms/worker/k8s/templates/snap_installation.yaml"
 LICENSE = Path(__file__).read_text().splitlines(keepends=True)[1:4]
-LICENSE[1] = LICENSE[1].format(year=dt.now().year)
+LICENSE[0] = LICENSE[0].format(year=dt.now().year)
 
 
 def _multiline_log(logger, message, *args, **kwargs):
