@@ -84,39 +84,56 @@ jobs:
       run: |
         AMD64_REVISION=${{ steps.update-amd64-revision.outputs.revision }}
         ARM64_REVISION=${{ steps.update-arm64-revision.outputs.revision }}
-        REVISIONS=()
-        if [[ -n $AMD64_REVISION ]]; then
-            REVISIONS+=("amd64-${AMD64_REVISION}")
-        fi
-        if [[ -n $ARM64_REVISION ]]; then
-            REVISIONS+=("arm64-${ARM64_REVISION}")
-        fi
-        if [[ ${#REVISIONS[@]} -eq 0 ]]; then
+        AMD64_COMMIT=${{ steps.update-amd64-revision.outputs.commit_sha }}
+        ARM64_COMMIT=${{ steps.update-arm64-revision.outputs.commit_sha }}
+
+        # Only proceed if both architectures have new revisions
+        if [[ -z $AMD64_REVISION || -z $ARM64_REVISION ]]; then
+          echo "Not both architectures have new revisions (amd64=${AMD64_REVISION:-none}, arm64=${ARM64_REVISION:-none})"
           echo 'revisions=[]' >> ${GITHUB_OUTPUT}
-        else
-          echo "revisions=$(printf '%s\n' "${REVISIONS[@]}" | jq -R . | jq -s -c .)" >> ${GITHUB_OUTPUT}
+          exit 0
         fi
+
+        # Only proceed if both commit digests match
+        if [[ $AMD64_COMMIT != $ARM64_COMMIT ]]; then
+          echo "Commit digests do not match (amd64=${AMD64_COMMIT}, arm64=${ARM64_COMMIT})"
+          echo 'revisions=[]' >> ${GITHUB_OUTPUT}
+          exit 0
+        fi
+
+        REVISIONS=("amd64-${AMD64_REVISION}" "arm64-${ARM64_REVISION}")
+        echo "revisions=$(printf '%s\n' "${REVISIONS[@]}" | jq -R . | jq -s -c .)" >> ${GITHUB_OUTPUT}
 
     - name: Report Pull Request
       if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
       run: |
         echo "Would have created pull-request"
-        echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
-        echo 'Commits for each architecture:'
-        echo "  * amd64: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
-        echo "  * arm64: ${{ steps.update-arm64-revision.outputs.commit_sha }}"
+        echo "Title: chore(release-${{ env.TRACK }}): update k8s snap revisions"
+        echo "Revisions: amd64=${{ steps.update-amd64-revision.outputs.revision }}, arm64=${{ steps.update-arm64-revision.outputs.revision }}"
+        echo "Source commit: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v8
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
-        commit-message: '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
-        title: "[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}"
+        commit-message: 'chore(release-${{ env.TRACK }}): update k8s snap revisions'
+        title: "chore(release-${{ env.TRACK }}): update k8s snap revisions"
         body: |-
-          Updates K8s revisions for ${{ env.TRACK }}
-          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), ' & ') }}
-          * amd64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
-          * arm64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-arm64-revision.outputs.commit_sha }}
+          ## Overview
+
+          Updates the K8s snap revisions for the `${{ env.TRACK }}` track.
+
+          ## Revisions
+
+          | Architecture | Revision |
+          |--------------|----------|
+          | amd64 | ${{ steps.update-amd64-revision.outputs.revision }} |
+          | arm64 | ${{ steps.update-arm64-revision.outputs.revision }} |
+
+          ## Source Commits
+
+          Both architectures are built from the same commit:
+          - https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
         labels: |
           automerge
         branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '-') }}
