@@ -84,18 +84,25 @@ jobs:
       run: |
         AMD64_REVISION=${{ steps.update-amd64-revision.outputs.revision }}
         ARM64_REVISION=${{ steps.update-arm64-revision.outputs.revision }}
-        REVISIONS=()
-        if [[ -n $AMD64_REVISION ]]; then
-            REVISIONS+=("amd64-${AMD64_REVISION}")
-        fi
-        if [[ -n $ARM64_REVISION ]]; then
-            REVISIONS+=("arm64-${ARM64_REVISION}")
-        fi
-        if [[ ${#REVISIONS[@]} -eq 0 ]]; then
+        AMD64_COMMIT=${{ steps.update-amd64-revision.outputs.commit_sha }}
+        ARM64_COMMIT=${{ steps.update-arm64-revision.outputs.commit_sha }}
+
+        # Only proceed if both architectures have new revisions
+        if [[ -z $AMD64_REVISION || -z $ARM64_REVISION ]]; then
+          echo "Not both architectures have new revisions (amd64=${AMD64_REVISION:-none}, arm64=${ARM64_REVISION:-none})"
           echo 'revisions=[]' >> ${GITHUB_OUTPUT}
-        else
-          echo "revisions=$(printf '%s\n' "${REVISIONS[@]}" | jq -R . | jq -s -c .)" >> ${GITHUB_OUTPUT}
+          exit 0
         fi
+
+        # Only proceed if both commit digests match
+        if [[ $AMD64_COMMIT != $ARM64_COMMIT ]]; then
+          echo "Commit digests do not match (amd64=${AMD64_COMMIT}, arm64=${ARM64_COMMIT})"
+          echo 'revisions=[]' >> ${GITHUB_OUTPUT}
+          exit 0
+        fi
+
+        REVISIONS=("amd64-${AMD64_REVISION}" "arm64-${ARM64_REVISION}")
+        echo "revisions=$(printf '%s\n' "${REVISIONS[@]}" | jq -R . | jq -s -c .)" >> ${GITHUB_OUTPUT}
 
     - name: Report Pull Request
       if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
