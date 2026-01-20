@@ -108,22 +108,32 @@ jobs:
       if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
       run: |
         echo "Would have created pull-request"
-        echo '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
-        echo 'Commits for each architecture:'
-        echo "  * amd64: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
-        echo "  * arm64: ${{ steps.update-arm64-revision.outputs.commit_sha }}"
+        echo "Title: chore(release-${{ env.TRACK }}): update k8s snap revisions"
+        echo "Revisions: amd64=${{ steps.update-amd64-revision.outputs.revision }}, arm64=${{ steps.update-arm64-revision.outputs.revision }}"
+        echo "Source commit: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v8
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
-        commit-message: '[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}'
-        title: "[Release ${{ env.TRACK }}] Update K8s revisions ${{steps.assemble-revisions.outputs.revisions}}"
+        commit-message: 'chore(release-${{ env.TRACK }}): update k8s snap revisions'
+        title: "chore(release-${{ env.TRACK }}): update k8s snap revisions"
         body: |-
-          Updates K8s revisions for ${{ env.TRACK }}
-          * ${{ join(fromJson(steps.assemble-revisions.outputs.revisions), ' & ') }}
-          * amd64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
-          * arm64 revision commit: https://github.com/canonical/k8s-snap/commit/${{ steps.update-arm64-revision.outputs.commit_sha }}
+          ## Overview
+
+          Updates the K8s snap revisions for the `${{ env.TRACK }}` track.
+
+          ## Revisions
+
+          | Architecture | Revision |
+          |--------------|----------|
+          | amd64 | ${{ steps.update-amd64-revision.outputs.revision }} |
+          | arm64 | ${{ steps.update-arm64-revision.outputs.revision }} |
+
+          ## Source Commits
+
+          Both architectures are built from the same commit:
+          - https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
         labels: |
           automerge
         branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '-') }}
