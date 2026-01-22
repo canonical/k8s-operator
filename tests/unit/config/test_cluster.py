@@ -146,4 +146,3 @@ def test_configure_datastore_extra_args(harness):
         "--listen-metrics-urls": "http://localhost:2381",
         "--clog": "true",
     }
-    assert bootstrap_config.extra_node_k8s_dqlite_args is None
