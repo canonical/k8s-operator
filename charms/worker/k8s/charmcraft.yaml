@@ -70,6 +70,9 @@ config:
                         datastore managed by the k8s snap.
         * managed-etcd: The charm will bootstrap with a managed-etcd datastore.
         * dqlite:       The charm will bootstrap with a k8s-dqlite datastore.
+                        [Warning] `k8s-dqlite` is deprecated and will be removed
+                        from Canonical Kubernetes in 1.36 without a migration path.
+                        New deployments should refrain from using this option.
         * etcd:         The charm will bootstrap with an external etcd datastore.
                         The charm will block until the etcd charm is integrated.
     bootstrap-node-taints:
