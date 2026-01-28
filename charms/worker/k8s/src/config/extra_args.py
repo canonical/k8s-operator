@@ -40,9 +40,7 @@ def _configure_datastore_args(dest, src, datastore: Optional[str]):
         return
 
     datastore_args = _parse(src["datastore-extra-args"])
-    if datastore == literals.DATASTORE_TYPE_K8S_DQLITE:
-        dest.extra_node_k8s_dqlite_args = datastore_args
-    elif datastore == literals.DATASTORE_TYPE_ETCD:
+    if datastore == literals.DATASTORE_TYPE_ETCD:
         # NOTE: Enable the metrics URL on localhost.
         datastore_args[literals.ETCD_LISTEN_METRICS_URLS_ARG] = literals.ETCD_DEFAULT_METRICS_URL
         dest.extra_node_etcd_args = datastore_args
@@ -64,7 +62,6 @@ def craft(
         - extra_node_kube_proxy_args: arguments for kube-proxy.
         - extra_node_kubelet_args: arguments for kubelet.
         - extra_node_etcd_args: arguments for etcd.
-        - extra_node_k8s_dqlite_args: arguments for k8s-dqlite
 
     Args:
         src (ops.ConfigData): the charm instance to get the configuration from.

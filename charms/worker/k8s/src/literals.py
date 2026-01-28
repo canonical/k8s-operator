@@ -9,7 +9,6 @@ import config.option as option
 
 # Snap
 SNAP_NAME = "k8s"
-SNAP_DATASTORE_TYPE_K8S_DQLITE = "k8s-dqlite"
 SNAP_DATASTORE_TYPE_ETCD = "etcd"
 SNAP_DATASTORE_TYPE_EXTERNAL = "external"
 
@@ -20,7 +19,6 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 SNAP_COMMON = "/var/snap/k8s/common"
 SERVICE_ARGS = Path(SNAP_COMMON) / "args"
 CONTAINERD_ARGS_PATH = SERVICE_ARGS / "containerd"
-K8S_DQLITE_ARGS_PATH = SERVICE_ARGS / "k8s-dqlite"
 K8SD_ARGS_PATH = SERVICE_ARGS / "k8sd"
 KUBE_APISERVER_ARGS_PATH = SERVICE_ARGS / "kube-apiserver"
 KUBE_CONTROLLER_MANAGER_ARGS_PATH = SERVICE_ARGS / "kube-controller-manager"
@@ -37,7 +35,6 @@ KUBE_PROXY_SYSD_PATH = SERVICE_ARGS / "kube-proxy.args.d"
 KUBE_SCHEDULER_SYSD_PATH = SERVICE_ARGS / "kube-scheduler.args.d"
 KUBELET_SYSD_PATH = SERVICE_ARGS / "kubelet.args.d"
 ETCD_SYSD_PATH = SERVICE_ARGS / "etcd.args.d"
-K8S_DQLITE_SYSD_PATH = SERVICE_ARGS / "k8s-dqlite.args.d"
 CONTAINERD_SERVICE_NAME = "snap.k8s.containerd.service"
 CONTAINERD_HTTP_PROXY = Path(f"/etc/systemd/system/{CONTAINERD_SERVICE_NAME}.d/http-proxy.conf")
 ETC_KUBERNETES = Path("/etc/kubernetes")
@@ -47,10 +44,9 @@ KUBECONFIG = Path.home() / ".kube/config"
 KUBECTL_PATH = Path("/snap/k8s/current/bin/kubectl")
 K8SD_SNAP_SOCKET = f"{SNAP_COMMON}/var/lib/k8sd/state/control.socket"
 K8SD_PORT = 6400
-DATASTORE_TYPE_K8S_DQLITE = "dqlite"
 DATASTORE_TYPE_ETCD = "managed-etcd"
 DATASTORE_TYPE_EXTERNAL = "etcd"
-SUPPORTED_DATASTORES = [DATASTORE_TYPE_ETCD, DATASTORE_TYPE_K8S_DQLITE, DATASTORE_TYPE_EXTERNAL]
+SUPPORTED_DATASTORES = [DATASTORE_TYPE_ETCD, DATASTORE_TYPE_EXTERNAL]
 EXTERNAL_LOAD_BALANCER_REQUEST_NAME = "api-server-external"
 EXTERNAL_LOAD_BALANCER_RESPONSE_NAME = EXTERNAL_LOAD_BALANCER_REQUEST_NAME
 EXTERNAL_LOAD_BALANCER_PORT = 443
@@ -60,7 +56,6 @@ DATASTORE_NAME_MAPPING = {
     None: None,
     DATASTORE_TYPE_EXTERNAL: SNAP_DATASTORE_TYPE_EXTERNAL,
     DATASTORE_TYPE_ETCD: SNAP_DATASTORE_TYPE_ETCD,
-    DATASTORE_TYPE_K8S_DQLITE: SNAP_DATASTORE_TYPE_K8S_DQLITE,
 }
 
 # Control-Plane Options
@@ -151,12 +146,10 @@ K8S_COMMON_SERVICES = [
     "k8sd",
 ]
 
-K8S_DQLITE_SERVICE = "k8s-dqlite"
 MANAGED_ETCD_SERVICE = "etcd"
 
 K8S_CONTROL_PLANE_SERVICES = [
     "kube-apiserver",
-    K8S_DQLITE_SERVICE,
     MANAGED_ETCD_SERVICE,
     "kube-controller-manager",
     "kube-scheduler",

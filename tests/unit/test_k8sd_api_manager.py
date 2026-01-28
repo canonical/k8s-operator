@@ -97,9 +97,9 @@ class TestBootstrapConfigTyping(unittest.TestCase):
 
     def test_json_representation_coerced_from_str(self):
         """Test a field that should be an int, is parsed from a str."""
-        config = BootstrapConfig(**{"k8s-dqlite-port": "1"})
-        assert config.k8s_dqlite_port == 1
-        assert config.model_dump_json(exclude_none=True, by_alias=True) == '{"k8s-dqlite-port":1}'
+        config = BootstrapConfig(**{"secure-port": "1"})
+        assert config.secure_port == 1
+        assert config.model_dump_json(exclude_none=True, by_alias=True) == '{"secure-port":1}'
 
 
 class TestUnixSocketHTTPConnection(unittest.TestCase):

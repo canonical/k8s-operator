@@ -358,7 +358,6 @@ class BootstrapConfig(BaseModel):
         service_cidr (str): The IP address range for the cluster services.
         disable_rbac (bool): Flag to disable role-based access control
         secure_port (int): The secure port used for Kubernetes.
-        k8s_dqlite_port (int): The port used by Dqlite.
         datastore_type (str): The type of datastore used by the cluster.
         datastore_servers (List[str]): The servers used by the datastore.
         datastore_ca_cert (str): The CA certificate for the datastore.
@@ -413,8 +412,6 @@ class BootstrapConfig(BaseModel):
             args .
         extra_node_containerd_args (Dict[str, Optional[str]]): key-value
             service args .
-        extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): key-value
-            service args
         extra_node_etcd_args (Dict[str, Optional[str]]): key-value
             service args
         extra_node_containerd_config (Dict[str, Any]): key-value config args
@@ -427,7 +424,6 @@ class BootstrapConfig(BaseModel):
     service_cidr: Optional[str] = Field(default=None, alias="service-cidr")
     disable_rbac: Optional[bool] = Field(default=None, alias="disable-rbac")
     secure_port: Optional[int] = Field(default=None, alias="secure-port")
-    k8s_dqlite_port: Optional[int] = Field(default=None, alias="k8s-dqlite-port")
     datastore_type: Optional[str] = Field(default=None, alias="datastore-type")
     datastore_servers: Optional[List[str]] = Field(default=None, alias="datastore-servers")
     datastore_ca_cert: Optional[str] = Field(default=None, alias="datastore-ca-crt")
@@ -509,9 +505,6 @@ class BootstrapConfig(BaseModel):
     )
     extra_node_containerd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-containerd-args"
-    )
-    extra_node_k8s_dqlite_args: Optional[Mapping[str, Optional[str]]] = Field(
-        default=None, alias="extra-node-k8s-dqlite-args"
     )
     extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
@@ -614,7 +607,6 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
         extra_node_kube_apiserver_args (Dict[str, Optional[str]]): API server args .
         extra_node_kube_controller_manager_args (Dict[str, Optional[str]]): Controller manager args
         extra_node_kube_scheduler_args (Dict[str, Optional[str]]): Scheduler args
-        extra_node_k8s_dqlite_args (Dict[str, Optional[str]]): Dqlite args
         extra_node_etcd_args (Dict[str, Optional[str]]): ETCD args
         extra_node_containerd_config (Dict[str, Any]): Containerd config
     """
@@ -655,9 +647,6 @@ class ControlPlaneNodeJoinConfig(NodeJoinConfig):
     )
     extra_node_kube_scheduler_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-kube-scheduler-args"
-    )
-    extra_node_k8s_dqlite_args: Optional[Mapping[str, Optional[str]]] = Field(
-        default=None, alias="extra-node-k8s-dqlite-args"
     )
     extra_node_etcd_args: Optional[Mapping[str, Optional[str]]] = Field(
         default=None, alias="extra-node-etcd-args"
@@ -716,7 +705,7 @@ class DatastoreStatus(BaseModel):
     """information regarding the active datastore.
 
     Attributes:
-        datastore_type (str): external or k8s-dqlite datastore
+        datastore_type (str): external or etcd
         servers: (List(str)): list of server addresses of the external datastore cluster.
     """
 
