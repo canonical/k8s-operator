@@ -1189,7 +1189,7 @@ class K8sdAPIManager:
         """Retrieve the cluster configuration.
 
         Worker nodes are not allowed to call this endpoint:
-        https://github.com/canonical/k8s-snap/blob/0a5edd2/src/k8s/pkg/k8sd/api/endpoints.go#L121-L126
+        https://github.com/canonical/k8sd/blob/24d02f59776f619fd12aec9e3ada1d6827ce1ca6/pkg/k8sd/api/endpoints.go#L121-L126
 
         Returns:
             GetClusterConfigResponse: The cluster configuration.
@@ -1326,7 +1326,7 @@ class K8sdAPIManager:
         plan_resp = self._send_request(plan_endpoint, "POST", RefreshCertificatesPlanResponse, {})
 
         # NOTE(Hue): Default certificate expiration is set to 20 years:
-        # https://github.com/canonical/k8s-snap/blob/32e35128394c0880bcc4ce87447f4247cc315ba5/src/k8s/pkg/k8sd/app/hooks_bootstrap.go#L331-L338
+        # https://github.com/canonical/k8sd/blob/24d02f59776f619fd12aec9e3ada1d6827ce1ca6/pkg/k8sd/app/hooks_bootstrap.go#L349-L356
         if expiration_seconds is None:
             now = datetime.now()
             twenty_years_later = datetime(
