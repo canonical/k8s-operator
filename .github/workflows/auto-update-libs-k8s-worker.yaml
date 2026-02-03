@@ -3,6 +3,13 @@ name: Auto-update K8s charm libraries
 on:
   schedule:
     - cron: "0 1 * * *"
+  pull_request:
+    paths:
+      - .github/workflows/auto-update-libs-k8s-worker.yaml
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   charmcraft-channel:
@@ -13,6 +20,7 @@ jobs:
     - uses: actions/checkout@v6
     - id: charmcraft
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
+    - uses: canonical/setup-lxd@main
   auto-update-libs:
     needs: [charmcraft-channel]
     uses: canonical/operator-workflows/.github/workflows/auto_update_charm_libs.yaml@main
