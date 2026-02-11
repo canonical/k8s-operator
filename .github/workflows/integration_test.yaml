@@ -66,9 +66,13 @@ jobs:
             tester-arch: ARM64
             tester-size: large
             modules: ${{ needs.select-tests.outputs.arm64 }}
+        juju-agent-version:
+          - 3.6.13
+          - 3.6.14
     with:
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
+      bootstrap-options: --agent-version=${{ matrix.juju-agent-version }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
