@@ -67,6 +67,7 @@ jobs:
             tester-size: xlarge
             modules: ${{ needs.select-tests.outputs.arm64 }}
     with:
+      bootstrap-options: "--agent-version=3.6.13"
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
