@@ -79,6 +79,8 @@ jobs:
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
       load-test-enabled: false
+      pre-run-script: >-
+        ${{ matrix.arch.id == 'arm64' && '.github/scripts/setup-lxd-arm64.sh' || '' }}
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
