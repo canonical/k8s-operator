@@ -6,15 +6,17 @@ kind: ClusterRole
 metadata:
   name: system:cos
 rules:
+# NOTE: Required for Kubelet metrics
 - apiGroups: [""]
   resources:
   - "nodes/metrics"
-  - "pods/metrics"
-  - "services/metrics"
-  - "services"
+  verbs: ["get"]
+# NOTE: Required for kube-state-metrics via API server proxy
+- apiGroups: [""]
+  resources:
   - "services/proxy"
-  - "nodes/proxy"
-  verbs: ["get", "list", "watch"]
+  verbs: ["get"]
+# NOTE: Required for API server /metrics endpoints
 - nonResourceURLs: ["/metrics"]
   verbs: ["get"]
 ---
