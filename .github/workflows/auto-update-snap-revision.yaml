@@ -21,7 +21,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - id: release-branches
       run: |-
-        DATA='${STEPS_LIST_BRANCHES_OUTPUTS_DATA}'
+        DATA="${STEPS_LIST_BRANCHES_OUTPUTS_DATA}"
         NAMES=$(jq -r '.[] | .name' <<< $DATA)
         RELEASES=()
         for BRANCH in ${NAMES}; do
