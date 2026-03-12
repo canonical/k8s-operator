@@ -32,6 +32,8 @@ jobs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Read charmcraft version file
         id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
@@ -44,6 +46,8 @@ jobs:
         id: channel
         env:
           BRANCH: ${{ github.base_ref || github.ref }}
+          GITHUB_EVENT_INPUTS_ORIGIN_RISK: ${{github.event.inputs.origin-risk}}
+          GITHUB_EVENT_INPUTS_DESTINATION_RISK: ${{github.event.inputs.destination-risk}}
         run: |
           BRANCH=${BRANCH#refs/heads/}  # strip off refs/heads/ if it exists
           if [[ "${BRANCH}" == "main" ]]; then
@@ -54,7 +58,7 @@ jobs:
             echo "::error Failed to determine track from branch ${BRANCH}"
             exit 1
           fi
-          echo "Promote from $track/${{github.event.inputs.origin-risk}} to $track/${{github.event.inputs.destination-risk}}"
+          echo "Promote from $track/${GITHUB_EVENT_INPUTS_ORIGIN_RISK} to $track/${GITHUB_EVENT_INPUTS_DESTINATION_RISK}"
   select-charms:
     runs-on: ubuntu-latest
     outputs:
@@ -81,6 +85,8 @@ jobs:
         charm: ${{ fromJson(needs.select-charms.outputs.charms) }}
     steps:
     - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
     - uses: canonical/charming-actions/promote-charm@2.7.0
       with:
         credentials: ${{ secrets.CHARMHUB_TOKEN }}

@@ -37,6 +37,8 @@ jobs:
         juju-channel: 3/stable
     - name: Checking out repo
       uses: actions/checkout@v6
+      with:
+        persist-credentials: false
     - name: Setup cluster with terraform
       timeout-minutes: 15
       run: |
