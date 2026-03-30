@@ -39,7 +39,7 @@ variable "csi_integration" {
 }
 
 module "k8s" {
-  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=main"
+  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=release-1.35"
   model         = {
     name = var.model
     cloud = var.cloud
