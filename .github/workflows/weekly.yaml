@@ -50,7 +50,7 @@ jobs:
         tox -e conformance -- DOCKER_REGISTRY_USERNAME=${{ secrets.DOCKER_REGISTRY_USERNAME }} DOCKER_REGISTRY_PASSWORD=${{ secrets.DOCKER_REGISTRY_PASSWORD }}
     - name: Upload CNCF conformance report artifact
       if: failure()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: sonobuoy-e2e-${{ env.test_name }}
         path: tests/conformance/sonobuoy_e2e.tar.gz
