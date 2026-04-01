@@ -21,7 +21,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - id: release-branches
       run: |-
-        DATA='${{ steps.list-branches.outputs.data }}'
+        DATA="${STEPS_LIST_BRANCHES_OUTPUTS_DATA}"
         NAMES=$(jq -r '.[] | .name' <<< $DATA)
         RELEASES=()
         for BRANCH in ${NAMES}; do
@@ -30,6 +30,8 @@ jobs:
             fi
         done
         echo data=$(printf '%s\n' "${RELEASES[@]}" | jq -R . | jq -s .) >> ${GITHUB_OUTPUT}
+      env:
+        STEPS_LIST_BRANCHES_OUTPUTS_DATA: ${{ steps.list-branches.outputs.data }}
 
   update-branches:
     runs-on: ubuntu-latest
@@ -40,14 +42,17 @@ jobs:
     steps:
     - name: Prepare Track
       run: |-
-        BRANCH="${{matrix.branch}}"
+        BRANCH="${MATRIX_BRANCH}"
         echo "TRACK=${BRANCH:8}" | tee -a "$GITHUB_ENV"
+      env:
+        MATRIX_BRANCH: ${{matrix.branch}}
 
     - name: Checkout ${{ matrix.branch }}
       uses: actions/checkout@v6
       with:
         ref: ${{ matrix.branch }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
+        persist-credentials: false
 
     - name: Fetch update-snap-revision.py into a separate path
       uses: actions/checkout@v6
@@ -57,6 +62,7 @@ jobs:
         sparse-checkout: |
           .github/workflows/update-snap-revision.py
         sparse-checkout-cone-mode: false
+        persist-credentials: false
 
     - name: Place update-snap-revision.py into working directory
       run: |
@@ -82,10 +88,10 @@ jobs:
     - name: Assemble Revisions
       id: assemble-revisions
       run: |
-        AMD64_REVISION=${{ steps.update-amd64-revision.outputs.revision }}
-        ARM64_REVISION=${{ steps.update-arm64-revision.outputs.revision }}
-        AMD64_COMMIT=${{ steps.update-amd64-revision.outputs.commit_sha }}
-        ARM64_COMMIT=${{ steps.update-arm64-revision.outputs.commit_sha }}
+        AMD64_REVISION=${STEPS_UPDATE_AMD64_REVISION_OUTPUTS_REVISION}
+        ARM64_REVISION=${STEPS_UPDATE_ARM64_REVISION_OUTPUTS_REVISION}
+        AMD64_COMMIT=${STEPS_UPDATE_AMD64_REVISION_OUTPUTS_COMMIT_SHA}
+        ARM64_COMMIT=${STEPS_UPDATE_ARM64_REVISION_OUTPUTS_COMMIT_SHA}
 
         # Only proceed if both architectures have new revisions
         if [[ -z $AMD64_REVISION || -z $ARM64_REVISION ]]; then
@@ -103,14 +109,23 @@ jobs:
 
         REVISIONS=("amd64-${AMD64_REVISION}" "arm64-${ARM64_REVISION}")
         echo "revisions=$(printf '%s\n' "${REVISIONS[@]}" | jq -R . | jq -s -c .)" >> ${GITHUB_OUTPUT}
+      env:
+        STEPS_UPDATE_AMD64_REVISION_OUTPUTS_REVISION: ${{ steps.update-amd64-revision.outputs.revision }}
+        STEPS_UPDATE_ARM64_REVISION_OUTPUTS_REVISION: ${{ steps.update-arm64-revision.outputs.revision }}
+        STEPS_UPDATE_AMD64_REVISION_OUTPUTS_COMMIT_SHA: ${{ steps.update-amd64-revision.outputs.commit_sha }}
+        STEPS_UPDATE_ARM64_REVISION_OUTPUTS_COMMIT_SHA: ${{ steps.update-arm64-revision.outputs.commit_sha }}
 
     - name: Report Pull Request
       if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
       run: |
         echo "Would have created pull-request"
-        echo "Title: chore(release-${{ env.TRACK }}): update k8s snap revisions"
-        echo "Revisions: amd64=${{ steps.update-amd64-revision.outputs.revision }}, arm64=${{ steps.update-arm64-revision.outputs.revision }}"
-        echo "Source commit: ${{ steps.update-amd64-revision.outputs.commit_sha }}"
+        echo "Title: chore(release-${TRACK}): update k8s snap revisions"
+        echo "Revisions: amd64=${STEPS_UPDATE_AMD64_REVISION_OUTPUTS_REVISION}, arm64=${STEPS_UPDATE_ARM64_REVISION_OUTPUTS_REVISION}"
+        echo "Source commit: ${STEPS_UPDATE_AMD64_REVISION_OUTPUTS_COMMIT_SHA}"
+      env:
+        STEPS_UPDATE_AMD64_REVISION_OUTPUTS_REVISION: ${{ steps.update-amd64-revision.outputs.revision }}
+        STEPS_UPDATE_ARM64_REVISION_OUTPUTS_REVISION: ${{ steps.update-arm64-revision.outputs.revision }}
+        STEPS_UPDATE_AMD64_REVISION_OUTPUTS_COMMIT_SHA: ${{ steps.update-amd64-revision.outputs.commit_sha }}
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@v8
