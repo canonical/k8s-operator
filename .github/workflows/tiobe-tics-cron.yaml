@@ -24,6 +24,7 @@ jobs:
         with:
           ref: ${{matrix.branch}}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Dependencies
         run: |

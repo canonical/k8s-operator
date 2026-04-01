@@ -36,6 +36,8 @@ jobs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Read charmcraft version file
         id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
