@@ -20,7 +20,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout the Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{matrix.branch}}
           fetch-depth: 0
@@ -49,7 +49,7 @@ jobs:
           mv "$GENERATED_COVERAGE_XML" cover/coverage.xml
 
       - name: Run TICS
-        uses: tiobe/tics-github-action@v3
+        uses: tiobe/tics-github-action@a53037a6bb9f71b6a97cdeb0ac41632266804b9e # v3
         with:
           mode: qserver
           project: ${{ github.event.repository.name }}
