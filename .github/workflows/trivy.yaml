@@ -56,7 +56,7 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           echo "head_sha=$SHA" >> "$GITHUB_ENV"
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@d4b3ca9fa7f69d38bfcd667bdc45bc373d16277e # v4
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
         with:
           sarif_file: "output.sarif"
           sha: ${{ env.head_sha }}
