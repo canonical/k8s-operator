@@ -49,7 +49,7 @@ jobs:
           echo "arm64=${arm64}" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@27f280ed34b54bd9f65451dc966bfde701e84b62 # main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@c415a47cdc45a7c03f105863c03717939412480f # main
     needs: [charmcraft-channel, select-tests]
     permissions:
       contents: read
