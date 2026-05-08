@@ -11,7 +11,7 @@ jobs:
       branches: ${{ steps.branches.outputs.branches }}
     steps:
       - name: Checking out repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -36,7 +36,7 @@ jobs:
       security-events: write
     steps:
       - name: Checking out repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ matrix.branch }}
           fetch-depth: 0
@@ -56,7 +56,7 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           echo "head_sha=$SHA" >> "$GITHUB_ENV"
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@d4b3ca9fa7f69d38bfcd667bdc45bc373d16277e # v4
         with:
           sarif_file: "output.sarif"
           sha: ${{ env.head_sha }}

@@ -13,7 +13,7 @@ jobs:
     outputs:
       branches: ${{ steps.release-branches.outputs.data }}
     steps:
-    - uses: octokit/request-action@v2.x
+    - uses: octokit/request-action@02f5e7c637a73a3b12ed81015fa7fb5f11cc5d7d # v2.x
       id: list-branches
       with:
         route: GET /repos/${{ github.repository }}/branches
@@ -48,14 +48,14 @@ jobs:
         MATRIX_BRANCH: ${{matrix.branch}}
 
     - name: Checkout ${{ matrix.branch }}
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         ref: ${{ matrix.branch }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
         persist-credentials: false
 
     - name: Fetch update-snap-revision.py into a separate path
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         repository: ${{ github.repository }}
         path: update-scripts
@@ -70,7 +70,7 @@ jobs:
         cp update-scripts/.github/workflows/update-snap-revision.py .github/workflows/update-snap-revision.py
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
       with:
         python-version: '3.14'
 
@@ -128,7 +128,7 @@ jobs:
         STEPS_UPDATE_AMD64_REVISION_OUTPUTS_COMMIT_SHA: ${{ steps.update-amd64-revision.outputs.commit_sha }}
 
     - name: Create pull request
-      uses: peter-evans/create-pull-request@v8
+      uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
       if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
         commit-message: 'chore(release-${{ env.TRACK }}): update k8s snap revisions'
