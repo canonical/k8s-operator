@@ -39,6 +39,7 @@ import config.resource
 import containerd
 import k8s.node
 import ops
+import utils
 import yaml
 from charmed_etcd import CharmedEtcdRequires
 from charms.contextual_status import ReconcilerError, on_error
@@ -162,6 +163,7 @@ class K8sCharm(ops.CharmBase):
         Args:
             args: Arguments passed to the CharmBase parent constructor.
         """
+        utils.setup_root_logger()
         super().__init__(*args)
         factory = UnixSocketConnectionFactory(unix_socket=K8SD_SNAP_SOCKET, timeout=320)
         self.snap_installation_resource = config.resource.CharmResource(self, SNAP_RESOURCE_NAME)
