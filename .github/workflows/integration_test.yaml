@@ -10,29 +10,70 @@ jobs:
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-    - uses: actions/checkout@v4
-    - id: charmcraft
-      run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - id: charmcraft
+        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
+
+  select-tests:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      amd64: ${{ steps.select.outputs.amd64 }}
+      arm64: ${{ steps.select.outputs.arm64 }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - name: Setup Astral UV
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.11"
+          python-version: "3.12"
+      - name: Setup Python
+        run: uv python install
+      - name: Install tox with UV
+        run: uv tool install tox --with tox-uv
+      - name: Select tests
+        id: select
+        run: |
+          list_modules() {
+            ARCH=$1
+            MODULES=$(tox -e integration -- --collect-only -q --arch "$ARCH" 2>/dev/null \
+              | grep -E '<Module test_.*\.py>' \
+              | sed -E 's/.*<Module (test_[^.]*)\.py>.*/\1/' \
+              | sort -u)
+            jq -c -R -s 'split("\n")[:-1]' <<< "${MODULES}"
+          }
+          amd64=$(list_modules amd64)
+          arm64=$(list_modules arm64)
+          echo "amd64=${amd64}" >> "$GITHUB_OUTPUT"
+          echo "arm64=${arm64}" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@main
-    needs: [charmcraft-channel]
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@72ba44455ad0ba7ec1c51027d5360357d1925733 # main
+    needs: [charmcraft-channel, select-tests]
+    permissions:
+      contents: read
+      actions: write
     secrets: inherit
     strategy:
       matrix:
         arch:
-        # built on azure, test on self-hosted
-        - id: amd64
-          builder-label: ubuntu-22.04
-          tester-arch: AMD64
-          tester-size: xlarge
-          modules: '["test_cos", "test_k8s", "test_etcd", "test_dqlite", "test_ceph", "test_upgrade"]'
-        # built and test on on self-hosted
-        - id: arm64
-          builder-label: ARM64
-          tester-arch: ARM64
-          tester-size: large
-          modules: '["test_k8s", "test_etcd", "test_dqlite"]'
+          # built on azure, test on self-hosted
+          - id: amd64
+            builder-label: ubuntu-22.04
+            tester-arch: AMD64
+            tester-size: xlarge
+            modules: ${{ needs.select-tests.outputs.amd64 }}
+          # built on GitHub-hosted, test on self-hosted
+          - id: arm64
+            builder-label: ubuntu-24.04-arm
+            tester-arch: ARM64
+            tester-size: large
+            modules: ${{ needs.select-tests.outputs.arm64 }}
     with:
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}
@@ -41,7 +82,6 @@ jobs:
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
-      load-test-enabled: false
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
@@ -51,4 +91,4 @@ jobs:
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
-      zap-enabled: false
+      with-uv: true
