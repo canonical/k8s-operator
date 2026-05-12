@@ -31,6 +31,8 @@ jobs:
         with:
           version: "0.11.11"
           python-version: "3.12"
+      - name: Setup Python
+        run: uv python install
       - name: Install tox with UV
         run: uv tool install tox --with tox-uv
       - name: Select tests
