@@ -27,9 +27,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Astral UV
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.11.11"
           python-version: "3.12"
+      - name: Setup Python
+        run: uv python install
       - name: Install tox with UV
         run: uv tool install tox --with tox-uv
       - name: Select tests
@@ -49,7 +52,7 @@ jobs:
           echo "arm64=${arm64}" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@27f280ed34b54bd9f65451dc966bfde701e84b62 # main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@72ba44455ad0ba7ec1c51027d5360357d1925733 # main
     needs: [charmcraft-channel, select-tests]
     permissions:
       contents: read
@@ -64,9 +67,9 @@ jobs:
             tester-arch: AMD64
             tester-size: xlarge
             modules: ${{ needs.select-tests.outputs.amd64 }}
-          # built and test on on self-hosted
+          # built on GitHub-hosted, test on self-hosted
           - id: arm64
-            builder-label: ARM64
+            builder-label: ubuntu-24.04-arm
             tester-arch: ARM64
             tester-size: large
             modules: ${{ needs.select-tests.outputs.arm64 }}
@@ -78,7 +81,6 @@ jobs:
         ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
-      load-test-enabled: false
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
@@ -89,4 +91,3 @@ jobs:
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
       with-uv: true
-      zap-enabled: false

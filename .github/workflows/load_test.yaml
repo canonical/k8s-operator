@@ -17,12 +17,10 @@ jobs:
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   load-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@27f280ed34b54bd9f65451dc966bfde701e84b62 # main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@72ba44455ad0ba7ec1c51027d5360357d1925733 # main
     needs: [charmcraft-channel]
     secrets: inherit
     with:
       provider: lxd
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       juju-channel: 3/stable
-      load-test-enabled: true
-      load-test-run-args: "-e LOAD_TEST_HOST=localhost"
