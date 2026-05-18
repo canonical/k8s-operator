@@ -3,6 +3,11 @@ name: Integration tests
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - release-*
+  workflow_dispatch:
 
 jobs:
   charmcraft-channel:
