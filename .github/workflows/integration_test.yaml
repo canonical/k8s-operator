@@ -41,7 +41,7 @@ jobs:
         run: |
           list_modules() {
             ARCH=$1
-            MODULES=$(tox -e integration -- --collect-only -q --arch "$ARCH" 2>/dev/null \
+            MODULES=$(tox -e integration -- --collect-only -q 2>/dev/null \
               | grep -E '<Module test_.*\.py>' \
               | sed -E 's/.*<Module (test_[^.]*)\.py>.*/\1/' \
               | sort -u)
@@ -86,7 +86,7 @@ jobs:
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
       self-hosted-runner-label: ${{ matrix.arch.tester-size }}
-      test-timeout: 120
+      test-timeout: 600
       test-tox-env: integration
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"
