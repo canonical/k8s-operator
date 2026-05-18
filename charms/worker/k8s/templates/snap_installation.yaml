@@ -4,10 +4,8 @@
 amd64:
 - install-type: store
   name: k8s
-  # should be 5279. changed to the value below for testing
-  revision: 5044
+  revision: 5279
 arm64:
 - install-type: store
   name: k8s
-  # should be 5280. changed to the value below for testing
-  revision: 5047
+  revision: 5280
