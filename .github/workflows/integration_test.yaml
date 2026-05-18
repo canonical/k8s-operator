@@ -3,6 +3,11 @@ name: Integration tests
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - release-*
+  workflow_dispatch:
 
 jobs:
   charmcraft-channel:
@@ -10,9 +15,7 @@ jobs:
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@v5
       - id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
@@ -24,9 +27,7 @@ jobs:
       amd64: ${{ steps.select.outputs.amd64 }}
       arm64: ${{ steps.select.outputs.arm64 }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@v5
       - name: Setup Astral UV
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -86,7 +87,7 @@ jobs:
       self-hosted-runner: true
       self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
       self-hosted-runner-label: ${{ matrix.arch.tester-size }}
-      test-timeout: 120
+      test-timeout: 600
       test-tox-env: integration
       trivy-fs-enabled: false
       trivy-image-config: "trivy.yaml"

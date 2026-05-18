@@ -31,7 +31,7 @@ jobs:
     outputs:
       channel: ${{ steps.charmcraft.outputs.channel }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Read charmcraft version file
         id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
@@ -80,7 +80,7 @@ jobs:
       matrix:
         charm: ${{ fromJson(needs.select-charms.outputs.charms) }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: canonical/charming-actions/promote-charm@2.7.0
       with:
         credentials: ${{ secrets.CHARMHUB_TOKEN }}
