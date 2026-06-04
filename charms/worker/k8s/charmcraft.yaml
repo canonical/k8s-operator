@@ -472,7 +472,6 @@ provides:
     optional: true
   k8s-cluster:
     interface: k8s-cluster
-    optional: true
   kube-control:
     interface: kube-control
     optional: true
