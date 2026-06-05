@@ -5,9 +5,9 @@ amd64:
 - classic: true
   install-type: store
   name: k8s
-  revision: 5268
+  revision: 5325
 arm64:
 - classic: true
   install-type: store
   name: k8s
-  revision: 5272
+  revision: 5328
