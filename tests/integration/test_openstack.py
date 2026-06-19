@@ -3,13 +3,13 @@
 
 """Openstack specific Integration tests."""
 
-import asyncio
 from typing import Dict
 
-import juju.model
+import jubilant
 import pytest
 import storage
 import yaml
+from helpers import fast_forward
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
 from literals import ONE_MIN
@@ -25,7 +25,7 @@ pytestmark = [
 ]
 
 
-async def test_cloud_provider(api_client: ApiClient):
+def test_cloud_provider(api_client: ApiClient):
     """Verify the cloud controller is running."""
     v1 = AppsV1Api(api_client)
     ds_list: V1DaemonSetList = v1.list_namespaced_daemon_set(namespace="kube-system")
@@ -37,7 +37,7 @@ async def test_cloud_provider(api_client: ApiClient):
     assert ds.status.number_ready == ds.status.desired_number_scheduled, "Controller not ready"
 
 
-async def test_provider_ids(api_client: ApiClient):
+def test_provider_ids(api_client: ApiClient):
     """Verify the cloud controller has assigned provider ids."""
     v1 = CoreV1Api(api_client)
     node_list: V1NodeList = v1.list_node()
@@ -47,28 +47,26 @@ async def test_provider_ids(api_client: ApiClient):
         assert node.spec.provider_id.startswith(f"{CLOUD_TYPE}://")
 
 
-async def test_cinder_pv(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
+def test_cinder_pv(kubernetes_cluster: jubilant.Juju, api_client: ApiClient):
     """Test that a cinder storage class is available and validate pv attachments."""
     definition = storage.StorageProviderTestDefinition(
         "cinder", STORAGE_CLASS_NAME, "cinder.csi.openstack.org", kubernetes_cluster
     )
-    await storage.exec_storage_class(definition, api_client)
+    storage.exec_storage_class(definition, api_client)
 
 
-async def test_k8s_api_load_balancer(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
+def test_k8s_api_load_balancer(kubernetes_cluster: jubilant.Juju, api_client: ApiClient):
     """Test k8s api load balancer.
 
     This test checks that the Kubernetes API server is accessible via a load balancer managed
     by the OpenStack through the openstack-integrator.
     """
-    k8s = kubernetes_cluster.applications["k8s"]
+    k8s_units = kubernetes_cluster.status().get_units("k8s")
+    leader = next(iter(k8s_units))
 
     # Get the server endpoint
-    action = await k8s.units[0].run_action("get-kubeconfig")
-    result = await action.wait()
-    completed = result.status == "completed" or result.results["return-code"] == 0
-    assert completed, "Failed to get kubeconfig"
-    kubeconfig_raw = result.results["kubeconfig"]
+    task = kubernetes_cluster.run(leader, "get-kubeconfig")
+    kubeconfig_raw = task.results["kubeconfig"]
     kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
 
@@ -77,9 +75,8 @@ async def test_k8s_api_load_balancer(kubernetes_cluster: juju.model.Model, api_c
     server_endpoint = server_endpoint.strip("[")
     server_endpoint = server_endpoint.strip("]")
 
-    for unit in k8s.units:
-        addr = await unit.get_public_address()
-        assert addr != server_endpoint, "External lb not configured"
+    for unit in k8s_units.values():
+        assert unit.public_address != server_endpoint, "External lb not configured"
 
     api_client.configuration.host = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
     v1 = CoreV1Api(api_client)
@@ -88,31 +85,30 @@ async def test_k8s_api_load_balancer(kubernetes_cluster: juju.model.Model, api_c
     assert node_list.items, "No nodes found"
 
 
-async def test_extra_sans(ops_test, kubernetes_cluster: juju.model.Model, timeout: int):
+def test_extra_sans(kubernetes_cluster: jubilant.Juju, timeout: int):
     """Test extra sans config."""
-    k8s = kubernetes_cluster.applications["k8s"]
-
     extra_san = "test.example.com"
     sans_config = {"kube-apiserver-extra-sans": extra_san}
-    async with ops_test.fast_forward(ONE_MIN):
-        await asyncio.gather(k8s.set_config(sans_config))
-        await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
+    with fast_forward(kubernetes_cluster, ONE_MIN):
+        kubernetes_cluster.config("k8s", sans_config)
+        kubernetes_cluster.wait(jubilant.all_active, timeout=timeout * 60)
+
+    leader = next(iter(kubernetes_cluster.status().get_units("k8s")))
 
     # Get the server endpoint
-    action = await k8s.units[0].run_action("get-kubeconfig")
-    result = await action.wait()
-    completed = result.status == "completed" or result.results["return-code"] == 0
-    assert completed, "Failed to get kubeconfig"
-    kubeconfig_raw = result.results["kubeconfig"]
-    kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
+    task = kubernetes_cluster.run(leader, "get-kubeconfig")
+    kubeconfig_yaml = yaml.safe_load(task.results["kubeconfig"])
 
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
     server_endpoint = server_endpoint.removeprefix("https://")
 
-    result = await k8s.units[0].run(
+    # The openssl pipeline may exit non-zero; we only care about its stdout.
+    cmd = (
         f"echo | openssl s_client -connect {server_endpoint} -servername {extra_san} | "
         f"openssl x509 -noout -text"
     )
-    result = await result.wait()
-    out = result.results["stdout"]
+    try:
+        out = kubernetes_cluster.exec(cmd, unit=leader).stdout
+    except jubilant.TaskError as e:
+        out = e.task.stdout
     assert extra_san in out, f"Extra SAN {extra_san} not found in certificate"

@@ -5,10 +5,9 @@
 
 """Integration tests."""
 
-import asyncio
 import logging
 
-import juju.model
+import jubilant
 import pytest
 from grafana import Grafana
 from prometheus import Prometheus
@@ -25,17 +24,17 @@ pytestmark = [
 
 @pytest.mark.cos
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_grafana(
+def test_grafana(
     traefik_url: str,
     grafana_password: str,
     expected_dashboard_titles: set,
-    cos_model: juju.model.Model,
+    cos_model: jubilant.Juju,
     timeout: int,
 ):
     """Test integration with Grafana."""
-    grafana = Grafana(model_name=cos_model.name, base=traefik_url, password=grafana_password)
-    await asyncio.wait_for(grafana.is_ready(), timeout=timeout * 60)
-    dashboards = await grafana.dashboards_all()
+    grafana = Grafana(model_name=cos_model.model, base=traefik_url, password=grafana_password)
+    assert grafana.is_ready()
+    dashboards = grafana.dashboards_all()
     actual_dashboard_titles = set()
 
     for dashboard in dashboards:
@@ -47,10 +46,10 @@ async def test_grafana(
 @pytest.mark.cos
 @pytest.mark.usefixtures("related_prometheus")
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(60))
-async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout: int):
+def test_prometheus(traefik_url: str, cos_model: jubilant.Juju, timeout: int):
     """Test integration with Prometheus."""
-    prometheus = Prometheus(model_name=cos_model.name, base=traefik_url)
-    await asyncio.wait_for(prometheus.is_ready(), timeout=timeout * 60)
+    prometheus = Prometheus(model_name=cos_model.model, base=traefik_url)
+    assert prometheus.is_ready()
 
     queries = [
         'up{job="etcd"} > 0',
@@ -63,6 +62,6 @@ async def test_prometheus(traefik_url: str, cos_model: juju.model.Model, timeout
         'up{job="kube-proxy"} > 0',
         'up{job="kube-state-metrics"} > 0',
     ]
-    results = await asyncio.gather(*[prometheus.get_metrics(query) for query in queries])
+    results = [prometheus.get_metrics(query) for query in queries]
     failed = [query for query, result in zip(queries, results) if not result]
     assert not failed, f"Failed queries: {failed}"

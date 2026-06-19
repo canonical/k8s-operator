@@ -5,15 +5,12 @@
 
 """Integration tests."""
 
-import asyncio
 import logging
 from pathlib import Path
 
-import juju.model
-import juju.unit
+import jubilant
 import pytest
-import pytest_asyncio
-from helpers import get_leader, get_rsc, ready_nodes, wait_pod_phase
+from helpers import fast_forward, get_leader, get_rsc, ready_nodes, wait_pod_phase
 from literals import ONE_MIN
 
 log = logging.getLogger(__name__)
@@ -28,104 +25,95 @@ pinned_revision = (
 )
 
 
-@pytest_asyncio.fixture
-async def preserve_charm_config(ops_test, kubernetes_cluster: juju.model.Model, timeout: int):
+@pytest.fixture
+def preserve_charm_config(kubernetes_cluster: jubilant.Juju, timeout: int):
     """Preserve the charm config changes from a test."""
     apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    pre = await asyncio.gather(k8s.get_config(), worker.get_config())
+    pre = {app: kubernetes_cluster.config(app) for app in apps}
     yield pre
-    post = await asyncio.gather(k8s.get_config(), worker.get_config())
 
-    for app_before, app_after in zip(pre, post):
-        for key in app_after.keys():
+    with fast_forward(kubernetes_cluster, ONE_MIN):
+        for app, before in pre.items():
+            current = kubernetes_cluster.config(app)
             # Reset any new config keys added by the test to their default
-            app_before[key] = str(
-                app_after[key]["default"] if key not in app_before else app_before[key]["value"]
-            )
-
-    async with ops_test.fast_forward(ONE_MIN):
-        await asyncio.gather(k8s.set_config(pre[0]), worker.set_config(pre[1]))
-        await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-
-
-async def test_nodes_ready(kubernetes_cluster: juju.model.Model):
-    """Deploy the charm and wait for active/idle status."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
-
-
-async def test_kube_system_pods(kubernetes_cluster: juju.model.Model):
-    """Test that the kube-system pods are running."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    await wait_pod_phase(leader, None, "Running", namespace="kube-system")
-
-
-async def test_verbose_config(kubernetes_cluster: juju.model.Model):
-    """Test verbose config."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    all_units = k8s.units + worker.units
-
-    unit_events = await asyncio.gather(*(u.run("ps axf | grep kube") for u in all_units))
-    unit_runs = await asyncio.gather(*(u.wait() for u in unit_events))
-    for idx, unit_run in enumerate(unit_runs):
-        rc, stdout, stderr = (
-            unit_run.results["return-code"],
-            unit_run.results.get("stdout") or "",
-            unit_run.results.get("stderr") or "",
+            to_reset = [key for key in current if key not in before]
+            if to_reset:
+                kubernetes_cluster.config(app, reset=to_reset)
+            if before:
+                kubernetes_cluster.config(app, before)
+        kubernetes_cluster.wait(
+            lambda status: jubilant.all_active(status, *apps), timeout=timeout * 60
         )
-        assert rc == 0, f"Failed to run 'ps axf' on {all_units[idx].name}: {stderr}"
+
+
+def test_nodes_ready(kubernetes_cluster: jubilant.Juju):
+    """Deploy the charm and wait for active/idle status."""
+    status = kubernetes_cluster.status()
+    expected_nodes = len(status.get_units("k8s")) + len(status.get_units("k8s-worker"))
+    k8s_unit = next(iter(status.get_units("k8s")))
+    ready_nodes(kubernetes_cluster, k8s_unit, expected_nodes)
+
+
+def test_kube_system_pods(kubernetes_cluster: jubilant.Juju):
+    """Test that the kube-system pods are running."""
+    leader = get_leader(kubernetes_cluster, "k8s")
+    wait_pod_phase(kubernetes_cluster, leader, None, "Running", namespace="kube-system")
+
+
+def test_verbose_config(kubernetes_cluster: jubilant.Juju):
+    """Test verbose config."""
+    status = kubernetes_cluster.status()
+    all_units = list(status.get_units("k8s")) + list(status.get_units("k8s-worker"))
+
+    for unit in all_units:
+        task = kubernetes_cluster.exec("ps axf | grep kube", unit=unit)
+        stdout = task.stdout or ""
         assert all("--v=3" for line in stdout.splitlines() if " /snap/k8s" in line)
 
 
 @pytest.mark.usefixtures("preserve_charm_config")
-async def test_nodes_labelled(
-    request, ops_test, kubernetes_cluster: juju.model.Model, timeout: int
-):
+def test_nodes_labelled(request, kubernetes_cluster: jubilant.Juju, timeout: int):
     """Test the charms label the nodes appropriately."""
     testname: str = request.node.name
     apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
 
     # Set a VALID node-label on both k8s and worker
     label_config = {"node-labels": f"{testname}="}
-    async with ops_test.fast_forward(ONE_MIN):
-        await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
-        await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
+    with fast_forward(kubernetes_cluster, ONE_MIN):
+        for app in apps:
+            kubernetes_cluster.config(app, label_config)
+        kubernetes_cluster.wait(
+            lambda status: jubilant.all_active(status, *apps), timeout=timeout * 60
+        )
 
-    nodes = await get_rsc(k8s.units[0], "nodes")
+    status = kubernetes_cluster.status()
+    k8s_unit = next(iter(status.get_units("k8s")))
+    total_units = len(status.get_units("k8s")) + len(status.get_units("k8s-worker"))
+    nodes = get_rsc(kubernetes_cluster, k8s_unit, "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
-    assert len(k8s.units + worker.units) == len(labelled), (
-        "Not all nodes labelled with custom-label"
-    )
-    assert len(k8s.units + worker.units) == len(juju_nodes), (
-        "Not all nodes labelled as juju-charms"
-    )
+    assert total_units == len(labelled), "Not all nodes labelled with custom-label"
+    assert total_units == len(juju_nodes), "Not all nodes labelled as juju-charms"
 
     # Set an INVALID node-label on both k8s and worker
     label_config = {"node-labels": f"{testname}=invalid="}
-    leader_idx = await get_leader(k8s)
-    await asyncio.gather(k8s.set_config(label_config), worker.set_config(label_config))
-    await kubernetes_cluster.wait_for_idle(apps=apps, timeout=timeout * 60)
-    leader: juju.unit.Unit = k8s.units[leader_idx]
-    assert leader.workload_status == "blocked", "Leader not blocked"
-    assert "node-labels" in leader.workload_status_message, "Leader had unexpected warning"
+    leader = get_leader(kubernetes_cluster, "k8s")
+    for app in apps:
+        kubernetes_cluster.config(app, label_config)
+    kubernetes_cluster.wait(jubilant.all_agents_idle, timeout=timeout * 60)
+    leader_status = kubernetes_cluster.status().get_units("k8s")[leader].workload_status
+    assert leader_status.current == "blocked", "Leader not blocked"
+    assert "node-labels" in leader_status.message, "Leader had unexpected warning"
 
     # Test resetting all label config
-    async with ops_test.fast_forward(ONE_MIN):
-        await asyncio.gather(
-            k8s.reset_config(list(label_config)), worker.reset_config(list(label_config))
+    with fast_forward(kubernetes_cluster, ONE_MIN):
+        for app in apps:
+            kubernetes_cluster.config(app, reset=list(label_config))
+        kubernetes_cluster.wait(
+            lambda status: jubilant.all_active(status, *apps), timeout=timeout * 60
         )
-        await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    nodes = await get_rsc(k8s.units[0], "nodes")
+    nodes = get_rsc(kubernetes_cluster, k8s_unit, "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
-    juju_nodes = [n for n in nodes if "juju-charm" in n["metadata"]["labels"]]
     assert 0 == len(labelled), "Not all nodes labelled without custom-label"
 
 
@@ -138,77 +126,93 @@ async def test_nodes_labelled(
         ("bootstrap-datastore", "etcd"),
     ],
 )
-async def test_prevent_bootstrap_config_changes(
-    kubernetes_cluster: juju.model.Model, timeout: int, config_key: str, config_value: str
+def test_prevent_bootstrap_config_changes(
+    kubernetes_cluster: jubilant.Juju, timeout: int, config_key: str, config_value: str
 ):
     """Test that the bootstrap config cannot be changed."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
-    await k8s.set_config({config_key: config_value})
-    await kubernetes_cluster.wait_for_idle(apps=apps[:1], status="blocked", timeout=timeout * 60)
+    status = kubernetes_cluster.status()
+    expected_nodes = len(status.get_units("k8s")) + len(status.get_units("k8s-worker"))
+    k8s_unit = next(iter(status.get_units("k8s")))
+    ready_nodes(kubernetes_cluster, k8s_unit, expected_nodes)
+    kubernetes_cluster.config("k8s", {config_key: config_value})
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_blocked(status, "k8s"), timeout=timeout * 60
+    )
 
 
-async def test_remove_worker(kubernetes_cluster: juju.model.Model, timeout: int):
+def test_remove_worker(kubernetes_cluster: jubilant.Juju, timeout: int):
     """Deploy the charm and wait for active/idle status."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
+    status = kubernetes_cluster.status()
+    k8s_units = list(status.get_units("k8s"))
+    worker_units = list(status.get_units("k8s-worker"))
+    expected_nodes = len(k8s_units) + len(worker_units)
+    k8s_unit = k8s_units[0]
+    ready_nodes(kubernetes_cluster, k8s_unit, expected_nodes)
 
     # Remove a worker
-    log.info("Remove unit %s", worker.units[0].name)
-    await worker.units[0].destroy()
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    await ready_nodes(k8s.units[0], expected_nodes - 1)
-    await worker.add_unit()
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    await ready_nodes(k8s.units[0], expected_nodes)
+    log.info("Remove unit %s", worker_units[0])
+    kubernetes_cluster.remove_unit(worker_units[0])
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_active(status, "k8s", "k8s-worker"), timeout=timeout * 60
+    )
+    ready_nodes(kubernetes_cluster, k8s_unit, expected_nodes - 1)
+    kubernetes_cluster.add_unit("k8s-worker")
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_active(status, "k8s", "k8s-worker"), timeout=timeout * 60
+    )
+    ready_nodes(kubernetes_cluster, k8s_unit, expected_nodes)
 
 
-async def test_remove_non_leader_control_plane(kubernetes_cluster: juju.model.Model, timeout: int):
+def test_remove_non_leader_control_plane(kubernetes_cluster: jubilant.Juju, timeout: int):
     """Deploy the charm and wait for active/idle status."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    follower = k8s.units[(leader_idx + 1) % len(k8s.units)]
-    await ready_nodes(leader, expected_nodes)
+    status = kubernetes_cluster.status()
+    k8s_units = list(status.get_units("k8s"))
+    expected_nodes = len(k8s_units) + len(status.get_units("k8s-worker"))
+    leader = get_leader(kubernetes_cluster, "k8s")
+    leader_idx = k8s_units.index(leader)
+    follower = k8s_units[(leader_idx + 1) % len(k8s_units)]
+    ready_nodes(kubernetes_cluster, leader, expected_nodes)
 
     # Remove a control-plane
-    log.info("Remove unit %s", follower.name)
-    await follower.destroy()
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    await ready_nodes(leader, expected_nodes - 1)
-    await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    await ready_nodes(leader, expected_nodes)
+    log.info("Remove unit %s", follower)
+    kubernetes_cluster.remove_unit(follower)
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_active(status, "k8s", "k8s-worker"), timeout=timeout * 60
+    )
+    ready_nodes(kubernetes_cluster, leader, expected_nodes - 1)
+    kubernetes_cluster.add_unit("k8s")
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_active(status, "k8s", "k8s-worker"), timeout=timeout * 60
+    )
+    ready_nodes(kubernetes_cluster, leader, expected_nodes)
 
 
-async def test_remove_leader_control_plane(kubernetes_cluster: juju.model.Model, timeout: int):
+def test_remove_leader_control_plane(kubernetes_cluster: jubilant.Juju, timeout: int):
     """Deploy the charm and wait for active/idle status."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications[a] for a in apps)
-    expected_nodes = len(k8s.units) + len(worker.units)
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    follower = k8s.units[(leader_idx + 1) % len(k8s.units)]
-    await ready_nodes(follower, expected_nodes)
+    status = kubernetes_cluster.status()
+    k8s_units = list(status.get_units("k8s"))
+    expected_nodes = len(k8s_units) + len(status.get_units("k8s-worker"))
+    leader = get_leader(kubernetes_cluster, "k8s")
+    leader_idx = k8s_units.index(leader)
+    follower = k8s_units[(leader_idx + 1) % len(k8s_units)]
+    ready_nodes(kubernetes_cluster, follower, expected_nodes)
 
     # Remove a control-plane
-    log.info("Remove unit %s", leader.name)
-    await leader.destroy()
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    await ready_nodes(follower, expected_nodes - 1)
-    await k8s.add_unit()
-    await kubernetes_cluster.wait_for_idle(apps=apps, status="active", timeout=timeout * 60)
-    await ready_nodes(follower, expected_nodes)
+    log.info("Remove unit %s", leader)
+    kubernetes_cluster.remove_unit(leader)
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_active(status, "k8s", "k8s-worker"), timeout=timeout * 60
+    )
+    ready_nodes(kubernetes_cluster, follower, expected_nodes - 1)
+    kubernetes_cluster.add_unit("k8s")
+    kubernetes_cluster.wait(
+        lambda status: jubilant.all_active(status, "k8s", "k8s-worker"), timeout=timeout * 60
+    )
+    ready_nodes(kubernetes_cluster, follower, expected_nodes)
 
 
 @pytest.mark.skipif(pinned_revision, reason="only run on latest/edge channel")
-async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, request):
+def test_override_snap_resource(kubernetes_cluster: jubilant.Juju, request):
     """Override the snap resource on a Kubernetes cluster application and revert it after the test.
 
     This function overrides the snap resource of the "k8s" application in the given
@@ -216,23 +220,20 @@ async def test_override_snap_resource(kubernetes_cluster: juju.model.Model, requ
     and then reverts the snap resource back to its original state after the test.
 
     Args:
-        kubernetes_cluster (model.Model): The Kubernetes cluster model.
+        kubernetes_cluster (jubilant.Juju): The Kubernetes cluster juju instance.
         request: The pytest request object containing test configuration options.
     """
-    k8s = kubernetes_cluster.applications["k8s"]
-    assert k8s, "k8s application not found"
+    assert "k8s" in kubernetes_cluster.status().apps, "k8s application not found"
     # Override snap resource
     revert = Path(request.config.option.snap_installation_resource)
     override = Path(__file__).parent / "data" / "override-latest-edge.tar.gz"
 
     try:
-        with override.open("rb") as obj:
-            k8s.attach_resource("snap-installation", override, obj)
-            await kubernetes_cluster.wait_for_idle(status="active", idle_period=30)
+        kubernetes_cluster.cli("attach-resource", "k8s", f"snap-installation={override.resolve()}")
+        kubernetes_cluster.wait(jubilant.all_active)
 
-        for _unit in k8s.units:
-            assert "Override" in _unit.workload_status_message
+        for unit in kubernetes_cluster.status().get_units("k8s").values():
+            assert "Override" in unit.workload_status.message
     finally:
-        with revert.open("rb") as obj:
-            k8s.attach_resource("snap-installation", revert, obj)
-            await kubernetes_cluster.wait_for_idle(status="active")
+        kubernetes_cluster.cli("attach-resource", "k8s", f"snap-installation={revert.resolve()}")
+        kubernetes_cluster.wait(jubilant.all_active)

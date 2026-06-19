@@ -3,6 +3,7 @@
 
 """Generic test methods for testing kubernetes storage."""
 
+import contextlib
 import dataclasses
 import logging
 from pathlib import Path
@@ -10,8 +11,8 @@ from string import Template
 from typing import List
 
 import helpers
+import jubilant
 import yaml
-from juju import model, unit
 from kubernetes.client import ApiClient
 from kubernetes.utils import create_from_dict, create_from_yaml
 
@@ -31,26 +32,26 @@ class StorageProviderTestDefinition:
         name:               Name of the test definition.
         storage_class_name: The name of the storage class.
         provisioner:        The storage class provisioner.
-        cluster:            The k8s cluster model.
+        cluster:            The k8s cluster juju instance.
     """
 
     name: str
     storage_class_name: str
     provisioner: str
-    cluster: model.Model
+    cluster: jubilant.Juju
 
 
-async def exec_storage_class(definition: StorageProviderTestDefinition, api_client: ApiClient):
+def exec_storage_class(definition: StorageProviderTestDefinition, api_client: ApiClient):
     """Test that a storage class is available and validate pv attachments.
 
     Args:
         definition: The storage provider test definition.
         api_client: The k8s api client.
     """
-    k8s: unit.Unit = definition.cluster.applications["k8s"].units[0]
-    event = await k8s.run("k8s kubectl get sc -o=jsonpath='{.items[*].provisioner}'")
-    result = await event.wait()
-    stdout = result.results["stdout"]
+    juju = definition.cluster
+    k8s_unit = next(iter(juju.status().get_units("k8s")))
+    task = juju.exec("k8s kubectl get sc -o=jsonpath='{.items[*].provisioner}'", unit=k8s_unit)
+    stdout = task.stdout
     assert definition.provisioner in stdout, f"No {definition.name} provisioner found in: {stdout}"
     created: List = []
     sc_name = definition.storage_class_name
@@ -70,21 +71,21 @@ async def exec_storage_class(definition: StorageProviderTestDefinition, api_clie
 
         # Wait for the pod to exit successfully.
         log.info("Waiting for PV writer pod: sc=%s", sc_name)
-        await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
+        helpers.wait_pod_phase(juju, k8s_unit, "pv-writer-test", "Succeeded")
 
         # Create a pod that reads the PV data and writes it to the log.
         log.info("Creating PV reader pod: sc=%s", sc_name)
         created.extend(*create_from_yaml(api_client, str(PV_READER_POD)))
-        await helpers.wait_pod_phase(k8s, "pv-reader-test", "Succeeded")
+        helpers.wait_pod_phase(juju, k8s_unit, "pv-reader-test", "Succeeded")
 
         # Check the logged PV data.
         log.info("Checking logs from reader pod: sc=%s", sc_name)
-        logs = await helpers.get_pod_logs(k8s, "pv-reader-test")
+        logs = helpers.get_pod_logs(juju, k8s_unit, "pv-reader-test")
         assert "PV test data" in logs, f"PV data not found in logs: {logs}"
     finally:
         # Cleanup
         for resource in reversed(created):
             kind = resource.kind
             name = resource.metadata.name
-            event = await k8s.run(f"k8s kubectl delete {kind} {name}")
-            result = await event.wait()
+            with contextlib.suppress(jubilant.TaskError):
+                juju.exec(f"k8s kubectl delete {kind} {name}", unit=k8s_unit)

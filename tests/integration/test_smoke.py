@@ -5,15 +5,12 @@
 
 """Integration tests."""
 
-import asyncio
 import logging
 from pathlib import Path
 
-import juju.model
-import juju.unit
+import jubilant
 import pytest
-import pytest_asyncio
-from helpers import get_leader, ready_nodes, wait_pod_phase
+from helpers import fast_forward, get_leader, ready_nodes, wait_pod_phase
 from literals import ONE_MIN
 
 log = logging.getLogger(__name__)
@@ -28,39 +25,35 @@ pinned_revision = (
 )
 
 
-@pytest_asyncio.fixture
-async def preserve_charm_config(ops_test, kubernetes_cluster: juju.model.Model, timeout: int):
+@pytest.fixture
+def preserve_charm_config(kubernetes_cluster: jubilant.Juju, timeout: int):
     """Preserve the charm config changes from a test."""
-    apps = (kubernetes_cluster.applications[a] for a in LOCAL_APPS)
-    pre = await asyncio.gather(*[app.get_config() for app in apps])
+    pre = {app: kubernetes_cluster.config(app) for app in LOCAL_APPS}
     yield pre
-    post = await asyncio.gather(*[app.get_config() for app in apps])
 
-    for app_before, app_after in zip(pre, post):
-        for key in app_after.keys():
+    with fast_forward(kubernetes_cluster, ONE_MIN):
+        for app, before in pre.items():
+            current = kubernetes_cluster.config(app)
             # Reset any new config keys added by the test to their default
-            app_before[key] = str(
-                app_after[key]["default"] if key not in app_before else app_before[key]["value"]
-            )
-
-    async with ops_test.fast_forward(ONE_MIN):
-        await asyncio.gather(*[app.set_config(pre[i]) for i, app in enumerate(apps)])
-        await kubernetes_cluster.wait_for_idle(
-            apps=LOCAL_APPS, status="active", timeout=timeout * 60
+            to_reset = [key for key in current if key not in before]
+            if to_reset:
+                kubernetes_cluster.config(app, reset=to_reset)
+            if before:
+                kubernetes_cluster.config(app, before)
+        kubernetes_cluster.wait(
+            lambda status: jubilant.all_active(status, *LOCAL_APPS), timeout=timeout * 60
         )
 
 
-async def test_nodes_ready(kubernetes_cluster: juju.model.Model):
+def test_nodes_ready(kubernetes_cluster: jubilant.Juju):
     """Deploy the charm and wait for active/idle status."""
-    apps = [kubernetes_cluster.applications[a] for a in LOCAL_APPS]
-    units = [u for a in apps for u in a.units]
-    expected_nodes = sum(len(a.units) for a in apps)
-    await ready_nodes(units[0], expected_nodes)
+    status = kubernetes_cluster.status()
+    units = [unit for app in LOCAL_APPS for unit in status.get_units(app)]
+    expected_nodes = sum(len(status.get_units(app)) for app in LOCAL_APPS)
+    ready_nodes(kubernetes_cluster, units[0], expected_nodes)
 
 
-async def test_kube_system_pods(kubernetes_cluster: juju.model.Model):
+def test_kube_system_pods(kubernetes_cluster: jubilant.Juju):
     """Test that the kube-system pods are running."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    await wait_pod_phase(leader, None, "Running", namespace="kube-system")
+    leader = get_leader(kubernetes_cluster, "k8s")
+    wait_pod_phase(kubernetes_cluster, leader, None, "Running", namespace="kube-system")

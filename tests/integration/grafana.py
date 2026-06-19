@@ -53,16 +53,16 @@ class Grafana:
             data = response.read().decode()
         return data
 
-    async def is_ready(self) -> bool:
+    def is_ready(self) -> bool:
         """Check if Grafana is ready.
 
         Returns:
             bool: True if Grafana is ready, False otherwise.
         """
-        res = await self.health()
+        res = self.health()
         return res.get("database", "") == "ok" or False
 
-    async def health(self) -> Dict:
+    def health(self) -> Dict:
         """Query the API to check Grafana's health.
 
         Returns:
@@ -74,7 +74,7 @@ class Grafana:
 
         return json.loads(data)
 
-    async def dashboards_all(self) -> List:
+    def dashboards_all(self) -> List:
         """Retrieve all dashboards.
 
         Returns:
