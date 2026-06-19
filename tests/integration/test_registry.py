@@ -6,6 +6,7 @@
 # pylint: disable=duplicate-code
 """Integration tests."""
 
+import contextlib
 import json
 import logging
 import random
@@ -14,9 +15,10 @@ from pathlib import Path
 from typing import List
 
 import helpers
+import jubilant
 import pytest
 import yaml
-from juju import model
+from helpers import fast_forward
 from kubernetes.utils import create_from_yaml
 from literals import ONE_MIN
 
@@ -35,15 +37,14 @@ TEST_SOURCE_IMAGE = f"rocks.canonical.com/cdk/{TEST_IMAGE}"
 
 
 @pytest.mark.abort_on_fail
-async def test_custom_registry(
-    ops_test, kubernetes_cluster: model.Model, api_client, timeout: int
-):
+def test_custom_registry(kubernetes_cluster: jubilant.Juju, api_client, timeout: int):
     """Test that the charm configures the correct directory and can access a custom registry."""
     # List of resources created during the test
     created: List = []
 
-    docker_registry_unit = kubernetes_cluster.applications["docker-registry"].units[0]
-    docker_registry_ip = await docker_registry_unit.get_public_address()
+    status = kubernetes_cluster.status()
+    docker_registry_unit = next(iter(status.get_units("docker-registry")))
+    docker_registry_ip = status.get_units("docker-registry")[docker_registry_unit].public_address
 
     config_string = json.dumps(
         [
@@ -57,15 +58,15 @@ async def test_custom_registry(
     custom_registry_config = {"containerd-custom-registries": config_string}
     tagged_image = f"{docker_registry_ip}:5000/{TEST_IMAGE}"
 
-    async with ops_test.fast_forward(ONE_MIN):
-        await kubernetes_cluster.applications["k8s"].set_config(custom_registry_config)
-        await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
+    with fast_forward(kubernetes_cluster, ONE_MIN):
+        kubernetes_cluster.config("k8s", custom_registry_config)
+        kubernetes_cluster.wait(jubilant.all_active, timeout=timeout * 60)
 
-    action = await docker_registry_unit.run_action(
-        "push", image=TEST_SOURCE_IMAGE, pull=True, tag=tagged_image
+    kubernetes_cluster.run(
+        docker_registry_unit,
+        "push",
+        {"image": TEST_SOURCE_IMAGE, "pull": True, "tag": tagged_image},
     )
-    result = await action.wait()
-    assert result.status == "completed", f"Action failed: {result.status}, {result.results=}"
 
     # Create a pod that uses the busybox image from the custom registry
     # Image: {docker_registry_ip}:5000/busybox:1.36
@@ -77,14 +78,14 @@ async def test_custom_registry(
     test_pod_manifest[0]["metadata"]["name"] = random_pod_name
     test_pod_manifest[0]["spec"]["containers"][0]["image"] = tagged_image
 
-    k8s_unit = kubernetes_cluster.applications["k8s"].units[0]
+    k8s_unit = next(iter(status.get_units("k8s")))
     try:
         created.extend(*create_from_yaml(api_client, yaml_objects=test_pod_manifest))
-        await helpers.wait_pod_phase(k8s_unit, random_pod_name, "Running")
+        helpers.wait_pod_phase(kubernetes_cluster, k8s_unit, random_pod_name, "Running")
     finally:
         # Cleanup
         for resource in created:
             kind = resource.kind
             name = resource.metadata.name
-            event = await k8s_unit.run(f"k8s kubectl delete {kind} {name}")
-            _ = await event.wait()
+            with contextlib.suppress(jubilant.TaskError):
+                kubernetes_cluster.exec(f"k8s kubectl delete {kind} {name}", unit=k8s_unit)

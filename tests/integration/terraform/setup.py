@@ -8,15 +8,12 @@ See https://github.com/canonical/k8s-bundles/blob/main/terraform/README.md
 """
 
 import argparse
-import asyncio
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import List, Optional
-
-import yaml
-from juju.controller import Controller
 
 
 def run_command(
@@ -97,45 +94,41 @@ def ensure_terraform(expected_version: str) -> None:
         )
 
 
-async def setup_terraform_env(args) -> None:
-    """Retrieve Juju provider authentication details using the Juju Python library."""
-    async with Controller() as controller:
-        await controller.connect_current()
-        controller_name = controller.controller_name
-        controller_info = (await controller.info()).results[0]
-        user = controller.get_current_username()
-        cloud = await controller.get_cloud()
+def setup_terraform_env(args) -> None:
+    """Retrieve Juju provider authentication details using the Juju CLI."""
+    out = run_command(
+        ["juju", "show-controller", "--show-password", "--format", "json"],
+        capture_output=True,
+    )
+    data = json.loads(out or "{}")
+    controller_name, info = next(iter(data.items()))
+    details = info.get("details", {})
+    account = info.get("account", {})
 
-        # Read password from accounts.yaml as the Juju
-        # API does not expose the password for security reasons.
-        accounts_file = Path.home() / ".local/share/juju/accounts.yaml"
-        password = ""
-        if accounts_file.exists():
-            accounts_data = yaml.safe_load(accounts_file.read_text())
-            password = (
-                accounts_data.get("controllers", {}).get(controller_name, {}).get("password", "")
-            )
-
-        # Set environment variables
-        os.environ.update(
-            {
-                "CONTROLLER": controller_name or "",
-                "JUJU_CONTROLLER_ADDRESSES": ",".join(controller_info.addresses) or "",
-                "JUJU_USERNAME": user or "",
-                "JUJU_PASSWORD": password or "",
-                "JUJU_CA_CERT": controller_info.cacert or "",
-                "TF_VAR_cloud": cloud or "",
-                "TF_VAR_model": args.model,
-                "TF_VAR_manifest_yaml": str(args.manifest_yaml.absolute()),
-            }
-        )
+    # Set environment variables
+    os.environ.update(
+        {
+            "CONTROLLER": controller_name or "",
+            "JUJU_CONTROLLER_ADDRESSES": ",".join(details.get("api-endpoints", [])),
+            "JUJU_USERNAME": account.get("user", "") or "",
+            "JUJU_PASSWORD": account.get("password", "") or "",
+            "JUJU_CA_CERT": details.get("ca-cert", "") or "",
+            "TF_VAR_cloud": details.get("cloud", "") or "",
+            "TF_VAR_model": args.model,
+            "TF_VAR_manifest_yaml": str(args.manifest_yaml.absolute()),
+        }
+    )
 
 
-async def model_exists(model: str) -> bool:
+def model_exists(model: str) -> bool:
     """Check if the model already exists in the controller."""
-    async with Controller() as controller:
-        await controller.connect_current()
-        return model in await controller.list_models()
+    out = run_command(["juju", "models", "--format", "json"], capture_output=True)
+    data = json.loads(out or "{}")
+    names = set()
+    for m in data.get("models", []):
+        names.add(m.get("name"))
+        names.add(m.get("short-name"))
+    return model in names
 
 
 def tf_run(path: Path, args: List[str]) -> None:
@@ -148,7 +141,7 @@ def tf_run(path: Path, args: List[str]) -> None:
         os.chdir(current)
 
 
-async def main() -> None:
+def main() -> None:
     """Set up entry point for Terraform and Juju."""
     script_dir = Path(__file__).resolve().parent
 
@@ -174,14 +167,14 @@ async def main() -> None:
     ensure_terraform(args.terraform_version)
 
     # Set up Juju auth details
-    await setup_terraform_env(args)
+    setup_terraform_env(args)
 
     # Run Terraform commands
     print("Initializing Terraform...")
     tf_run(args.terraform_module_path, ["init", "--upgrade"])
 
     # Import Existing Model if it exists
-    if await model_exists(args.model):
+    if model_exists(args.model):
         print("Import existing model...")
         tf_run(
             args.terraform_module_path,
@@ -200,4 +193,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

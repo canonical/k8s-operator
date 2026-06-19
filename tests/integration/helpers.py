@@ -1,28 +1,25 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""Additions to tools missing from juju library."""
+"""Additions to tools missing from the jubilant library."""
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 
-import asyncio
+import contextlib
+import functools
 import ipaddress
 import json
 import logging
+import subprocess
 from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import chain
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
-import juju.model
-import juju.unit
-import juju.utils
+import jubilant
 import yaml
-from async_lru import alru_cache
-from juju.url import URL
-from pytest_operator.plugin import OpsTest
 from tenacity import (
-    AsyncRetrying,
+    Retrying,
     before_sleep_log,
     retry,
     stop_after_attempt,
@@ -35,23 +32,84 @@ CHARMCRAFT_DIRS = {
     "k8s-worker": Path("charms/worker"),
 }
 
+# Mapping of Ubuntu series codename to version. Replaces juju.utils.get_series_version,
+# which (in juju<=3.6) does not know about "resolute" (Ubuntu 26.04).
+_SERIES_TO_VERSION = {
+    "focal": "20.04",
+    "jammy": "22.04",
+    "noble": "24.04",
+    "oracular": "24.10",
+    "plucky": "25.04",
+    "questing": "25.10",
+    "resolute": "26.04",
+}
 
-async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) -> List[str]:
+
+def series_to_version(series: str) -> str:
+    """Return the Ubuntu version for a series codename (e.g. ``jammy`` -> ``22.04``).
+
+    Args:
+        series: Ubuntu series codename.
+
+    Returns:
+        The matching Ubuntu version string.
+
+    Raises:
+        ValueError: if the series is unknown.
+    """
+    try:
+        return _SERIES_TO_VERSION[series]
+    except KeyError as err:
+        raise ValueError(f"Unknown series: {series}") from err
+
+
+@contextlib.contextmanager
+def fast_forward(juju: jubilant.Juju, interval: str = "1m"):
+    """Temporarily speed up the update-status hook interval for the model.
+
+    Args:
+        juju: jubilant Juju instance
+        interval: update-status-hook-interval to set while in the context
+    """
+    old = juju.model_config()["update-status-hook-interval"]
+    juju.model_config({"update-status-hook-interval": interval})
+    try:
+        yield
+    finally:
+        juju.model_config({"update-status-hook-interval": old})
+
+
+def charm_ref_name(ref: str) -> str:
+    """Extract the bare charm name from a bundle charm reference.
+
+    Handles bare names (``k8s``), charmhub refs (``ch:amd64/k8s``,
+    ``ch:amd64/jammy/k8s``), and local paths.
+
+    Args:
+        ref: A charm reference string.
+
+    Returns:
+        The charm name.
+    """
+    name = str(ref).rsplit("/", 1)[-1]
+    if ":" in name:
+        name = name.split(":")[-1]
+    return name
+
+
+def get_unit_cidrs(juju: jubilant.Juju, app_name: str, unit_num: int) -> List[str]:
     """Find unit network cidrs on a unit.
 
     Args:
-        model: juju model
+        juju: jubilant Juju instance
         app_name: string name of application
         unit_num: integer number of a juju unit
 
     Returns:
         list of network cidrs
     """
-    unit = model.applications[app_name].units[unit_num]
-    action = await unit.run("ip --json route show")
-    result = await action.wait()
-    assert result.results["return-code"] == 0, "Failed to get routes"
-    routes = json.loads(result.results["stdout"])
+    task = juju.exec("ip --json route show", unit=f"{app_name}/{unit_num}")
+    routes = json.loads(task.stdout)
     local_cidrs = set()
     for rt in routes:
         try:
@@ -63,11 +121,14 @@ async def get_unit_cidrs(model: juju.model.Model, app_name: str, unit_num: int) 
     return sorted(local_cidrs)
 
 
-async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, Any]]:
+def get_rsc(
+    juju: jubilant.Juju, unit: str, resource, namespace=None, labels=None
+) -> List[Dict[str, Any]]:
     """Get Resource list optionally filtered by namespace and labels.
 
     Args:
-        k8s: any k8s unit
+        juju: jubilant Juju instance
+        unit: name of any k8s unit (e.g. "k8s/0")
         resource: string resource type (e.g. pods, services, nodes)
         namespace: string namespace
         labels: dict of labels to use for filtering
@@ -79,14 +140,9 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
     labeled = " ".join(f"-l {k}={v}" for k, v in labels.items()) if labels else ""
     cmd = f"k8s kubectl get {resource} {labeled} {namespaced} -o json"
 
-    action = await k8s.run(cmd)
-    result = await action.wait()
-    stdout, stderr = (result.results.get(field, "").strip() for field in ["stdout", "stderr"])
-    assert result.results["return-code"] == 0, (
-        f"\nFailed to get {resource} with kubectl\n\tstdout: '{stdout}'\n\tstderr: '{stderr}'"
-    )
+    task = juju.exec(cmd, unit=unit)
     log.info("Parsing %s list...", resource)
-    resource_obj = json.loads(stdout)
+    resource_obj = json.loads(task.stdout)
     if "/" in resource:
         return [resource_obj]
     assert resource_obj["kind"] == "List", f"Should have found a list of {resource}"
@@ -94,15 +150,16 @@ async def get_rsc(k8s, resource, namespace=None, labels=None) -> List[Dict[str, 
 
 
 @retry(reraise=True, stop=stop_after_attempt(12), wait=wait_fixed(15))
-async def ready_nodes(k8s, expected_count):
+def ready_nodes(juju: jubilant.Juju, unit: str, expected_count: int):
     """Get a list of the ready nodes.
 
     Args:
-        k8s: k8s unit
+        juju: jubilant Juju instance
+        unit: k8s unit name (e.g. "k8s/0")
         expected_count: number of expected nodes
     """
     log.info("Finding all nodes...")
-    nodes = await get_rsc(k8s, "nodes")
+    nodes = get_rsc(juju, unit, "nodes")
     ready_nodes = {
         node["metadata"]["name"]: all(
             condition["status"] == "False"
@@ -118,8 +175,9 @@ async def ready_nodes(k8s, expected_count):
         assert ready, f"Node not yet ready: {node}."
 
 
-async def wait_pod_phase(
-    k8s: juju.unit.Unit,
+def wait_pod_phase(
+    juju: jubilant.Juju,
+    unit: str,
     name: Optional[str],
     *phase: str,
     namespace: str = "default",
@@ -129,7 +187,8 @@ async def wait_pod_phase(
     """Wait for the pod to reach the specified phase (e.g. Succeeded).
 
     Args:
-        k8s: k8s unit
+        juju: jubilant Juju instance
+        unit: k8s unit name (e.g. "k8s/0")
         name: the pod name or all pods if None
         phase: expected phase
         namespace: pod namespace
@@ -138,26 +197,28 @@ async def wait_pod_phase(
 
     """
     pod_resource = "pod" if name is None else f"pod/{name}"
-    async for attempt in AsyncRetrying(
+    for attempt in Retrying(
         stop=stop_after_attempt(retry_times),
         wait=wait_fixed(retry_delay_s),
         before_sleep=before_sleep_log(log, logging.WARNING),
     ):
         with attempt:
-            for pod in await get_rsc(k8s, pod_resource, namespace=namespace):
+            for pod in get_rsc(juju, unit, pod_resource, namespace=namespace):
                 _phase, _name = pod["status"]["phase"], pod["metadata"]["name"]
                 assert _phase in phase, f"Pod {_name} not yet in phase {phase}"
 
 
-async def get_pod_logs(
-    k8s: juju.unit.Unit,
+def get_pod_logs(
+    juju: jubilant.Juju,
+    unit: str,
     name: str,
     namespace: str = "default",
 ) -> str:
     """Retrieve pod logs.
 
     Args:
-        k8s: k8s unit
+        juju: jubilant Juju instance
+        unit: k8s unit name (e.g. "k8s/0")
         name: pod name
         namespace: pod namespace
 
@@ -165,53 +226,47 @@ async def get_pod_logs(
         the pod logs as string.
     """
     cmd = " ".join(["k8s kubectl logs", f"--namespace {namespace}", f"pod/{name}"])
-    action = await k8s.run(cmd)
-    result = await action.wait()
-    assert result.results["return-code"] == 0, f"Failed to retrieve pod {name} logs."
-    return result.results["stdout"]
+    task = juju.exec(cmd, unit=unit)
+    return task.stdout
 
 
-async def get_leader(app) -> int:
+def get_leader(juju: jubilant.Juju, app: str) -> str:
     """Find leader unit of an application.
 
     Args:
-        app: Juju application
+        juju: jubilant Juju instance
+        app: application name
 
     Returns:
-        int: index to leader unit
+        str: name of the leader unit (e.g. "k8s/0")
 
     Raises:
         ValueError: No leader found
     """
-    is_leader = await asyncio.gather(*(u.is_leader_from_status() for u in app.units))
-    for idx, flag in enumerate(is_leader):
-        if flag:
-            return idx
+    for name, unit in juju.status().get_units(app).items():
+        if unit.leader:
+            return name
     raise ValueError("No leader found")
 
 
-async def get_kubeconfig(ops_test, module_name: str):
+def get_kubeconfig(juju: jubilant.Juju, tmp_path: Path, module_name: str) -> Path:
     """Retrieve kubeconfig from the k8s leader.
 
     Args:
-        ops_test: pytest-operator plugin
+        juju: jubilant Juju instance
+        tmp_path: base temporary path to store the kubeconfig
         module_name: name of the test module
 
     Returns:
         path to the kubeconfig file
     """
-    kubeconfig_path = ops_test.tmp_path / module_name / "kubeconfig"
+    kubeconfig_path = tmp_path / module_name / "kubeconfig"
     if kubeconfig_path.exists() and kubeconfig_path.stat().st_size:
         return kubeconfig_path
-    k8s = ops_test.model.applications["k8s"]
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    action = await leader.run_action("get-kubeconfig")
-    result = await action.wait()
-    completed = result.status == "completed" or result.results["return-code"] == 0
-    assert completed, f"Failed to get kubeconfig {result=}"
+    leader = get_leader(juju, "k8s")
+    task = juju.run(leader, "get-kubeconfig")
     kubeconfig_path.parent.mkdir(exist_ok=True, parents=True)
-    kubeconfig_path.write_text(result.results["kubeconfig"])
+    kubeconfig_path.write_text(task.results["kubeconfig"])
     assert Path(kubeconfig_path).stat().st_size, "kubeconfig file is 0 bytes"
     return kubeconfig_path
 
@@ -233,20 +288,56 @@ class Markings:
     apps_resources: Mapping = field(default_factory=dict)
 
 
+def _narrow(potentials: Iterable[Path], prefix: str, arch: str, base: str) -> Path:
+    """Narrow a set of candidate charm files to a single match.
+
+    Args:
+        potentials: candidate charm file paths
+        prefix: charm filename prefix (e.g. "k8s_")
+        arch: cloud architecture (e.g. "amd64")
+        base: ubuntu version to match (e.g. "26.04")
+
+    Returns:
+        the single matching charm file
+
+    Raises:
+        FileNotFoundError: if zero or more than one charm file matches
+    """
+    by_arch_base = filter(lambda s: arch in str(s) and base in str(s), potentials)
+    by_name = filter(lambda s: s.name.startswith(prefix), by_arch_base)
+    exist = filter(lambda s: s.exists(), by_name)
+    if options := set(exist):
+        if len(options) > 1:
+            log.warning(
+                "Too many charm files found matching filters\n"
+                "   starting-with: '%s'\n"
+                "   with arch: '%s'\n"
+                "   with base: '%s'\n"
+                "options: %s",
+                prefix,
+                arch,
+                base,
+                ", ".join(map(str, options)),
+            )
+            raise FileNotFoundError("Too many charm files found")
+        return options.pop()
+    raise FileNotFoundError("No charm files found")
+
+
 @dataclass
 class Charm:
     """Represents source charms in this repository.
 
     Attrs:
         path:       Path to the charmcraft file
-        url:        Charm URL
+        arch:       Cloud Architecture
         metadata:   Charm's metadata
         name:       Name of the charm from the metadata
         local_path: Path to the built charm file
     """
 
     path: Path
-    url: URL
+    arch: str
     _charmfile: Optional[Path] = None
 
     @cached_property
@@ -272,28 +363,41 @@ class Charm:
             raise FileNotFoundError(f"{self.name}_*.charm not found")
         return self._charmfile
 
+    def charmhub_url(self, series: Optional[str] = None) -> str:
+        """Return the charmhub reference for this charm pinned to the architecture.
+
+        Args:
+            series: optional series to include in the reference
+
+        Returns:
+            charmhub reference, e.g. "ch:amd64/jammy/k8s" or "ch:amd64/k8s"
+        """
+        if series:
+            return f"ch:{self.arch}/{series}/{self.name}"
+        return f"ch:{self.arch}/{self.name}"
+
     @classmethod
-    def find(cls, url: Union[URL, str]) -> Optional["Charm"]:
+    def find(cls, ref: str, arch: str) -> Optional["Charm"]:
         """Find a charm managed in this repo based on its name.
 
         Args:
-            url: Charm url or charm name
+            ref: Charm reference or charm name
+            arch: Cloud architecture
 
         Returns:
             Charm object or None
         """
-        url = url if isinstance(url, URL) else URL.parse(url)
-        if charmcraft := CHARMCRAFT_DIRS.get(url.name):
-            return cls(charmcraft, url)
+        name = charm_ref_name(ref)
+        if charmcraft := CHARMCRAFT_DIRS.get(name):
+            return cls(charmcraft, arch)
         return None
 
-    async def resolve(self, ops_test: OpsTest, arch: str, base: str) -> "Charm":
-        """Build or find the charm with ops_test.
+    def resolve(self, charm_files: List[str], base: str) -> "Charm":
+        """Build or find the charm.
 
         Args:
-            ops_test:   Instance of the pytest-operator plugin
-            arch (str): Cloud architecture
-            base (str): Base release for the charm
+            charm_files: charm files passed via --charm-file
+            base (str): Base release for the charm (e.g. "26.04")
 
         Return:
             self (Charm): the resolved charm
@@ -301,31 +405,8 @@ class Charm:
         Raises:
             FileNotFoundError: the charm file wasn't found
         """
-
-        def _narrow(potentials: Iterable[Path]) -> Path:
-            by_arch_base = filter(lambda s: arch in str(s) and base in str(s), potentials)
-            by_name = filter(lambda s: s.name.startswith(prefix), by_arch_base)
-            exist = filter(lambda s: s.exists(), by_name)
-            if options := set(exist):
-                if len(options) > 1:
-                    log.warning(
-                        "Too many charm files found matching filters\n"
-                        "   starting-with: '%s'\n"
-                        "   with arch: '%s'\n"
-                        "   with base: '%s'\n"
-                        "options: %s",
-                        prefix,
-                        arch,
-                        base,
-                        ", ".join(map(str, options)),
-                    )
-                    raise FileNotFoundError("Too many charm files found")
-                return options.pop()
-            raise FileNotFoundError("No charm files found")
-
         prefix = f"{self.name}_"
         if self._charmfile is None:
-            charm_files = ops_test.request.config.option.charm_files or []
             try:
                 charm_name = prefix + "*.charm"
                 potentials = chain(
@@ -333,15 +414,15 @@ class Charm:
                     Path().glob(charm_name),  # Look in top-level path
                     self.path.glob(charm_name),  # Look in charm-level path
                 )
-                self._charmfile = _narrow(potentials)
+                self._charmfile = _narrow(potentials, prefix, self.arch, base)
                 log.info("For %s found charmfile %s", self.name, self._charmfile)
             except FileNotFoundError as err:
                 log.warning(f"For {self.name} failed locating existing {err=}, build instead")
 
         if self._charmfile is None:
             log.info("For %s build charmfiles", self.name)
-            potentials = await ops_test.build_charm(self.path, return_all=True)
-            self._charmfile = _narrow(potentials)
+            subprocess.run(["charmcraft", "pack"], cwd=self.path, check=True)
+            self._charmfile = _narrow(self.path.glob(prefix + "*.charm"), prefix, self.arch, base)
             log.info("For %s built charmfile %s", self.name, self._charmfile)
 
         if self._charmfile is None:
@@ -368,17 +449,18 @@ class Bundle:
     _content: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    async def create(cls, ops_test) -> Tuple["Bundle", Markings]:
-        """Craft a bundle for the given ops_test environment.
+    def create(cls, request, juju: jubilant.Juju) -> Tuple["Bundle", Markings]:
+        """Craft a bundle for the given test environment.
 
         Args:
-            ops_test: Instance of the pytest-operator plugin
+            request: pytest request object
+            juju: jubilant Juju instance
 
         Returns:
             Bundle object for the test
             Markings from the test
         """
-        bundle_marker = ops_test.request.node.get_closest_marker("bundle")
+        bundle_marker = request.node.get_closest_marker("bundle")
         assert bundle_marker, "No bundle marker found"
         kwargs = {**bundle_marker.kwargs}
 
@@ -388,10 +470,10 @@ class Bundle:
             log.warning("No file specified, using default test-bundle.yaml")
             path = Path(__file__).parent / "data" / "test-bundle.yaml"
 
-        arch = await cloud_arch(ops_test)
+        arch = cloud_arch(juju)
         assert arch, "Architecture must be known before customizing the bundle"
 
-        series = ops_test.request.config.option.series
+        series = request.config.option.series
 
         bundle = cls(path=path, arch=arch, series=series)
         assert not all(_ in kwargs for _ in ("apps_local", "apps_channel")), (
@@ -411,9 +493,8 @@ class Bundle:
             loaded = yaml.safe_load(self.path.read_bytes())
             self.series = self.series or loaded.get("series")
             for app in loaded["applications"].values():
-                url = URL.parse(app["charm"])
-                url.architecture = self.arch
-                app["charm"] = url
+                name = charm_ref_name(app["charm"])
+                app["charm"] = f"ch:{self.arch}/{name}"
             self._content = loaded
         return self._content
 
@@ -435,34 +516,31 @@ class Bundle:
         """
         return any(app.get("trust", False) for app in self.applications.values())
 
-    async def discover_charm_files(self, ops_test: OpsTest) -> Dict[str, Charm]:
+    def discover_charm_files(self, charm_files: List[str]) -> Dict[str, Charm]:
         """Discover charm files for the applications in the bundle.
 
         Args:
-            ops_test: Instance of the pytest-operator plugin
+            charm_files: charm files passed via --charm-file
 
         Returns:
             Mapping: application name to Charm object
         """
         app_to_charm = {}
         for app in self.applications.values():
-            if charm := Charm.find(app["charm"]):
-                await charm.resolve(
-                    ops_test,
-                    self.arch,
-                    juju.utils.get_series_version(self.series or "jammy"),
-                )
+            if charm := Charm.find(app["charm"], self.arch):
+                charm.resolve(charm_files, series_to_version(self.series or "jammy"))
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
-    async def apply_marking(self, ops_test: OpsTest, markings: Markings):
+    def apply_marking(self, request, juju: jubilant.Juju, markings: Markings):
         """Customize the bundle for the test.
 
         Args:
-            ops_test: Instance of the pytest-operator plugin
+            request: pytest request object
+            juju: jubilant Juju instance
             markings: Markings from the test
         """
-        _type, _vms = await cloud_type(ops_test)
+        _type, _vms = cloud_type(juju, request.config.getoption("--lxd-containers"))
         if _type == "lxd" and not _vms:
             log.info("Drop lxd machine constraints")
             self.drop_constraints()
@@ -470,13 +548,11 @@ class Bundle:
             log.info("Constrain lxd machines with virt-type: virtual-machine")
             self.add_constraints({"virt-type": "virtual-machine"})
 
-        charms = await self.discover_charm_files(ops_test)
+        charms = self.discover_charm_files(request.config.option.charm_files or [])
 
-        empty_resource = {
-            "snap-installation": ops_test.request.config.option.snap_installation_resource
-        }
+        empty_resource = {"snap-installation": request.config.option.snap_installation_resource}
 
-        if series := ops_test.request.config.option.series or markings.series:
+        if series := request.config.option.series or markings.series:
             self.content["series"] = self.series = series
 
         for app in markings.apps_local:
@@ -509,10 +585,10 @@ class Bundle:
         app = self.applications.get(name)
         if not app:
             return  # Skip if the application is not in the bundle
-        if not charm.local_path and not channel:
+        if not channel and charm._charmfile is None:
             raise FileNotFoundError(f"Charm={charm.name} for App={app} not found")
         if channel:
-            app["charm"] = charm.url.with_series(self.series)
+            app["charm"] = charm.charmhub_url(self.series)
             app["channel"] = channel
         else:
             app["charm"] = str(charm.local_path.resolve())
@@ -552,100 +628,89 @@ class Bundle:
         self.add_constraints({"arch": self.arch})
         target = tmp_path / "bundles" / self.path.name
         target.parent.mkdir(exist_ok=True, parents=True)
-        yaml.dump(self.content, target.open("w"))
+        yaml.safe_dump(self.content, target.open("w"))
         return target
 
-    async def is_deployed(self, model: juju.model.Model) -> bool:
+    def is_deployed(self, juju: jubilant.Juju) -> bool:
         """Check if model has apps defined by the bundle.
 
         If all apps are deployed, wait for model to be idle
 
         Args:
             self:  Bundle object
-            model: juju model
+            juju: jubilant Juju instance
 
         Returns:
             true if all apps and relations are in place and units are idle
         """
         bundle = yaml.safe_load(self.path.open())
         apps = bundle["applications"]
+        status = juju.status()
         for app, conf in apps.items():
-            if app not in model.applications:
+            if app not in status.apps:
                 log.warning(
                     "Cannot use existing model(%s): Application (%s) isn't deployed",
-                    model.name,
+                    juju.model,
                     app,
                 )
                 return False
             min_units = conf.get("num_units") or 1
-            num_units = len(model.applications[app].units)
+            num_units = len(status.get_units(app))
             if num_units < min_units:
                 log.warning(
                     "Cannot use existing model(%s): "
                     "Application(%s) has insufficient units %d < %d",
-                    model.name,
+                    juju.model,
                     app,
                     num_units,
                     min_units,
                 )
                 return False
-        await model.wait_for_idle(timeout=20 * 60, raise_on_error=False)
+        juju.wait(jubilant.all_agents_idle, timeout=20 * 60)
         return True
 
 
-@alru_cache
-async def cloud_arch(ops_test: OpsTest) -> str:
+@functools.lru_cache
+def cloud_arch(juju: jubilant.Juju) -> str:
     """Return current architecture of the selected controller.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        juju (jubilant.Juju): jubilant Juju instance
 
     Returns:
         string describing current architecture of the underlying cloud
     """
-    assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
-    controller_model = await controller.get_model("controller")
-    arch: Set[str] = {
-        machine.safe_data["hardware-characteristics"]["arch"]
-        for machine in controller_model.machines.values()
-    }
+    ctrl_prefix = ""
+    if juju.model and ":" in juju.model:
+        ctrl_prefix = juju.model.split(":", 1)[0] + ":"
+    controller_model = jubilant.Juju(model=f"{ctrl_prefix}controller")
+    arch = set()
+    for machine in controller_model.status().machines.values():
+        # machine.hardware is a string like "arch=amd64 cores=2 mem=4096M"
+        for kv in machine.hardware.split():
+            key, _, value = kv.partition("=")
+            if key == "arch":
+                arch.add(value)
     return arch.pop().strip()
 
 
-@alru_cache
-async def cloud_type(ops_test: OpsTest) -> Tuple[str, bool]:
+@functools.lru_cache
+def cloud_type(juju: jubilant.Juju, lxd_containers: bool) -> Tuple[str, bool]:
     """Return current cloud type of the selected controller.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        juju (jubilant.Juju): jubilant Juju instance
+        lxd_containers (bool): value of the --lxd-containers option
 
     Returns:
         Tuple:
             string describing current type of the underlying cloud
             bool   describing if VMs are enabled
     """
-    assert ops_test.model, "Model must be present"
-    controller = await ops_test.model.get_controller()
-    cloud = await controller.cloud()
-    _type = cloud.cloud.type_
+    cloud_name = juju.status().model.cloud
+    clouds = json.loads(juju.cli("clouds", "--all", "--format", "json", include_model=False))
+    _type = clouds[cloud_name]["type"]
     vms = True  # Assume VMs are enabled
     if _type == "lxd":
-        vms = not ops_test.request.config.getoption("--lxd-containers")
+        vms = not lxd_containers
     return _type, vms
-
-
-def url_representer(dumper: yaml.Dumper, data: URL) -> yaml.ScalarNode:
-    """Yaml representer for the Charm URL object.
-
-    Args:
-        dumper: yaml dumper
-        data: URL object
-
-    Returns:
-        yaml.ScalarNode: yaml node
-    """
-    return dumper.represent_scalar("tag:yaml.org,2002:str", str(data))
-
-
-yaml.add_representer(URL, url_representer)

@@ -10,7 +10,7 @@ import ipaddress
 import logging
 from pathlib import Path
 
-import juju.model
+import jubilant
 import pytest
 from helpers import get_leader, ready_nodes, wait_pod_phase
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
@@ -30,19 +30,18 @@ pytestmark = [
 ]
 
 
-async def test_nodes_ready(kubernetes_cluster: juju.model.Model):
+def test_nodes_ready(kubernetes_cluster: jubilant.Juju):
     """Deploy the charm and wait for active/idle status."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    expected_nodes = len(k8s.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
+    status = kubernetes_cluster.status()
+    expected_nodes = len(status.get_units("k8s"))
+    k8s_unit = next(iter(status.get_units("k8s")))
+    ready_nodes(kubernetes_cluster, k8s_unit, expected_nodes)
 
 
-async def test_kube_system_pods(kubernetes_cluster: juju.model.Model):
+def test_kube_system_pods(kubernetes_cluster: jubilant.Juju):
     """Test that the kube-system pods are running."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    await wait_pod_phase(leader, None, "Running", namespace="kube-system")
+    leader = get_leader(kubernetes_cluster, "k8s")
+    wait_pod_phase(kubernetes_cluster, leader, None, "Running", namespace="kube-system")
 
 
 def wait_for_nginx_service(api_client: ApiClient, name: str, namespace: str):
@@ -70,7 +69,7 @@ def deploy_dualstack(api_client: ApiClient):
         v1app.delete_namespaced_deployment(deploy.metadata.name, deploy.metadata.namespace)
 
 
-async def test_nginx_dualstack(deploy_dualstack, api_client: ApiClient):
+def test_nginx_dualstack(deploy_dualstack, api_client: ApiClient):
     """Test that dualstack is enabled."""
     _, services = deploy_dualstack
     assert services, "No services created from dualstack nginx yaml"
