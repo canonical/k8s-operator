@@ -216,17 +216,25 @@ class LXDSubstrate:
             name (str): Name of the network to configure.
             config (Dict[str, Any]): Configuration options for the network.
         """
+        net_config = config.get("config", {})
         try:
             network = self.client.networks.get(name)
         except NotFound:
             log.warning("Network %s does not exist, creating.", name)
-            network = self.client.networks.create(name)
+            network = self.client.networks.create(
+                name,
+                description=config.get("description"),
+                type=config.get("type", "bridge"),
+                config=net_config,
+            )
+            log.info("Network '%s' created successfully.", name)
+            return network
 
         if (val := config.get("type", "bridge")) and network.type != val:
             network.type = val
         if (val := config.get("description")) and network.description != val:
             network.description = val
-        for key, value in config["config"].items():
+        for key, value in net_config.items():
             if network.config.get(key) == value:
                 continue
             if value == "auto" and network.config.get(key) != "none":
