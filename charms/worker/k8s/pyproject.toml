@@ -48,10 +48,12 @@ lint = [
 integration = [
     "async-lru",
     "juju",
+    "jubilant>=1.8,<2",
     "pydantic",
     "pylxd",
     "pytest",
     "pytest-asyncio",
+    "pytest-jubilant>=2,<3",
     "pytest-operator",
     "pytest-sugar",
     "tenacity",
