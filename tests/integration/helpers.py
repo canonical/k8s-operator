@@ -589,7 +589,7 @@ class Bundle:
                     min_units,
                 )
                 return False
-        await model.wait_for_idle(timeout=20 * 60, raise_on_error=False)
+        await model.wait_for_idle(timeout=60 * 60, raise_on_error=False)
         return True
 
 

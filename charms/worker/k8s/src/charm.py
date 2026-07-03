@@ -392,7 +392,12 @@ class K8sCharm(ops.CharmBase):
         """
         return self.xcp.name or ""
 
-    @on_error(ops.BlockedStatus("Failed to install snaps."), snap_lib.SnapError)
+    @on_error(
+        ops.BlockedStatus("Failed to install snaps."),
+        snap_lib.SnapError,
+        snap_lib.SnapAPIError,
+        snap_lib.SnapNotFoundError,
+    )
     def _install_snaps(self):
         """Install snap packages."""
         status.add(ops.MaintenanceStatus("Ensuring snap installation"))
