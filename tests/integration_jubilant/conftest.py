@@ -280,12 +280,16 @@ def _render_bundle(
     arch = _detect_arch(juju)
 
     apps = bundle["applications"]
+    # Resolve to absolute path: juju resolves bundle-relative paths from its own
+    # temp directory, so a relative path like ./snap-installation.tar.gz breaks.
+    snap_resource_abs = str(Path(snap_resource).resolve())
+
     apps["k8s"]["charm"] = str(k8s_charm)
     apps["k8s"]["channel"] = None
-    apps["k8s"].setdefault("resources", {})["snap-installation"] = snap_resource
+    apps["k8s"].setdefault("resources", {})["snap-installation"] = snap_resource_abs
     apps["k8s-worker"]["charm"] = str(k8s_worker_charm)
     apps["k8s-worker"]["channel"] = None
-    apps["k8s-worker"].setdefault("resources", {})["snap-installation"] = snap_resource
+    apps["k8s-worker"].setdefault("resources", {})["snap-installation"] = snap_resource_abs
 
     for app in apps.values():
         if app.get("num_units", 0) < 1:

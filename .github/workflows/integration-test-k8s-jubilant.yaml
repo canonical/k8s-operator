@@ -62,13 +62,13 @@ jobs:
     strategy:
       matrix:
         arch:
-          # built on azure, test on self-hosted
+          # charm build + plan/scan on GitHub-hosted, integration tests on self-hosted
           - id: amd64
-            builder-label: ubuntu-22.04
+            builder-label: ubuntu-24.04
             tester-arch: AMD64
             tester-size: xlarge
             modules: ${{ needs.select-tests.outputs.amd64 }}
-          # built on GitHub-hosted, test on self-hosted
+          # charm build + plan/scan on GitHub-hosted ARM64, integration tests on self-hosted
           - id: arm64
             builder-label: ubuntu-24.04-arm
             tester-arch: ARM64
