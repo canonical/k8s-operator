@@ -336,7 +336,9 @@ def k8s_cluster(
         juju.wait(
             lambda s: jubilant.all_active(s, "k8s", "k8s-worker"),
             error=jubilant.any_error,
-            timeout=timeout * 60,
+            # Deploying a full k8s cluster takes at least 60 minutes;
+            # the --timeout option governs per-test waits, not this initial deploy.
+            timeout=max(60, timeout) * 60,
         )
 
     return juju
