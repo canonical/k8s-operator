@@ -4,9 +4,9 @@
 """Fixtures for Jubilant-based k8s integration tests."""
 
 import contextlib
-import json
 import logging
 import os
+import platform
 from pathlib import Path
 from typing import Iterator
 
@@ -216,41 +216,22 @@ def fast_forward(juju: jubilant.Juju, interval: str = "10s") -> Iterator[None]:
 
 # Bundle rendering helpers
 
+_MACHINE_TO_JUJU_ARCH = {"x86_64": "amd64", "aarch64": "arm64"}
 
-def _detect_arch(juju: jubilant.Juju) -> str:
-    """Return the architecture of the Juju controller's machines.
 
-    Tries model info first, falls back to show-controller, then defaults to amd64.
+def _host_arch() -> str:
+    """Return the Juju-style architecture of the current host.
 
-    Args:
-        juju: Jubilant Juju instance.
+    The LXD provider provisions machines on the same host the runner executes on,
+    so the host's native arch is the correct value for bundle machine constraints.
 
     Returns:
         Architecture string (e.g. "amd64", "arm64").
     """
-    model_info = juju.show_model()
-    for machine in model_info.machines.values():
-        hw = machine.hardware_characteristics  # type: ignore[attr-defined]
-        arch = hw.get("arch", "") if isinstance(hw, dict) else getattr(hw, "arch", "") or ""
-        if arch:
-            return arch
-    try:
-        out = juju.cli("show-controller", "--format=json", include_model=False)
-        for ctrl_data in json.loads(out).values():
-            arch = (
-                ctrl_data.get("details", {})
-                .get("hardware-characteristics", {})
-                .get("arch", "")
-            )
-            if arch:
-                return arch
-    except Exception:
-        log.warning("Could not detect arch from controller; defaulting to amd64")
-    return "amd64"
+    return _MACHINE_TO_JUJU_ARCH.get(platform.machine(), platform.machine())
 
 
 def _render_bundle(
-    juju: jubilant.Juju,
     tmp_path: Path,
     k8s_charm: Path,
     k8s_worker_charm: Path,
@@ -261,7 +242,6 @@ def _render_bundle(
     """Render test-bundle.yaml with local charm paths and write it to *tmp_path*.
 
     Args:
-        juju:             Jubilant Juju instance (used to detect cloud arch).
         tmp_path:         Temporary directory to write the rendered bundle.
         k8s_charm:        Local path to the k8s charm file.
         k8s_worker_charm: Local path to the k8s-worker charm file.
@@ -277,7 +257,7 @@ def _render_bundle(
     if series:
         bundle["series"] = series
 
-    arch = _detect_arch(juju)
+    arch = _host_arch()
 
     apps = bundle["applications"]
     # Resolve to absolute path: juju resolves bundle-relative paths from its own
@@ -342,7 +322,6 @@ def k8s_cluster(
 
     tmp_path = tmp_path_factory.mktemp("bundle")
     bundle_path = _render_bundle(
-        juju,
         tmp_path,
         k8s_charm_path,
         k8s_worker_charm_path,
