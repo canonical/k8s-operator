@@ -287,7 +287,13 @@ class LocalStorageConfig(FeatureConfig):
 
 
 class NetworkConfig(FeatureConfig):
-    """Configuration for the network settings of the cluster."""
+    """Configuration for the network settings of the cluster.
+
+    Attributes:
+        kube_proxy_enabled: Optional flag to determine kube-proxy state
+    """
+
+    kube_proxy_enabled: Optional[bool] = Field(default=None, alias="kube-proxy-enabled")
 
 
 class GatewayConfig(FeatureConfig):
