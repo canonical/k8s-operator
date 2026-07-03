@@ -24,6 +24,19 @@ _CHARMCRAFT_DIRS = {
     "k8s-worker": Path("charms/worker"),
 }
 
+# Map Ubuntu series names to their version strings for charm filename matching.
+_SERIES_VERSION = {
+    "focal": "20.04",
+    "jammy": "22.04",
+    "noble": "24.04",
+}
+
+# Default series read from the bundle so we can narrow multi-base charm files
+# without requiring --series to be explicitly passed.
+_BUNDLE_DEFAULT_SERIES: str = yaml.safe_load(
+    (TEST_DATA / "test-bundle.yaml").read_bytes()
+).get("series", "jammy")
+
 
 # CLI options
 
@@ -75,11 +88,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 # Charm-path helpers
 
 
-def _find_charm(name: str, env_var: str, charm_files: list[str]) -> Path:
+def _find_charm(name: str, env_var: str, charm_files: list[str], series: str | None) -> Path:
     """Return the path to a packed charm.
 
     Resolution order:
-    1. ``--charm-file`` values passed by operator-workflows CI (filtered by name prefix).
+    1. ``--charm-file`` values passed by operator-workflows CI (filtered by name prefix,
+       then narrowed by series when multiple bases are present).
     2. ``env_var`` environment variable.
     3. Glob for ``<name>_*.charm`` in the project root and the charm's own directory.
 
@@ -87,22 +101,31 @@ def _find_charm(name: str, env_var: str, charm_files: list[str]) -> Path:
         name:        Charm name (e.g. "k8s" or "k8s-worker").
         env_var:     Environment variable that may hold the path.
         charm_files: List of ``--charm-file`` values from pytest options.
+        series:      Ubuntu series name used to narrow multi-base charm files
+                     (e.g. "jammy", "noble"). Falls back to the bundle default.
 
     Returns:
         Resolved path to the .charm file.
 
     Raises:
-        AssertionError: if no file is found or the result is ambiguous.
+        AssertionError: if no file is found or the result is still ambiguous.
     """
     prefix = f"{name}_"
 
     # 1. --charm-file args (passed by operator-workflows)
     matching = [Path(f).resolve() for f in charm_files if Path(f).name.startswith(prefix)]
+    if len(matching) > 1:
+        # Multiple bases built (e.g. ubuntu@22.04 and ubuntu@24.04); narrow by series.
+        effective_series = series or _BUNDLE_DEFAULT_SERIES
+        version = _SERIES_VERSION.get(effective_series, effective_series)
+        narrowed = [p for p in matching if version in p.name]
+        if narrowed:
+            matching = narrowed
     if len(matching) == 1:
         assert matching[0].is_file(), f"--charm-file {matching[0]} is not a file"
         return matching[0]
     if len(matching) > 1:
-        raise AssertionError(f"Multiple --charm-file values match '{name}': {matching}")
+        raise AssertionError(f"Multiple --charm-file values still match '{name}': {matching}")
 
     # 2. Environment variable
     if path_str := os.environ.get(env_var):
@@ -134,7 +157,9 @@ def k8s_charm_path(request: pytest.FixtureRequest) -> Path:
     Args:
         request: Pytest fixture request.
     """
-    return _find_charm("k8s", "K8S_CHARM_PATH", request.config.option.charm_files)
+    return _find_charm(
+        "k8s", "K8S_CHARM_PATH", request.config.option.charm_files, request.config.option.series
+    )
 
 
 @pytest.fixture(scope="session")
@@ -146,7 +171,12 @@ def k8s_worker_charm_path(request: pytest.FixtureRequest) -> Path:
     Args:
         request: Pytest fixture request.
     """
-    return _find_charm("k8s-worker", "K8S_WORKER_CHARM_PATH", request.config.option.charm_files)
+    return _find_charm(
+        "k8s-worker",
+        "K8S_WORKER_CHARM_PATH",
+        request.config.option.charm_files,
+        request.config.option.series,
+    )
 
 
 # Timeout fixture
