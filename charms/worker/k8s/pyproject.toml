@@ -47,7 +47,6 @@ lint = [
 ]
 integration = [
     "async-lru",
-    "juju",
     "jubilant>=1.8,<2",
     "pydantic",
     "pylxd",
@@ -58,6 +57,7 @@ integration = [
     "pytest-sugar",
     "tenacity",
     "requests <2.34",  # https://github.com/canonical/pylxd/issues/579
+    "juju-resolute>=3.6.1.3",
 ]
 conformance = ["yq"]
 
@@ -161,3 +161,6 @@ markers = [
 
 [tool.pyright]
 extraPaths = ["src", "lib"]
+
+[tool.uv]
+override-dependencies = ["juju ; sys_platform == 'never'"]

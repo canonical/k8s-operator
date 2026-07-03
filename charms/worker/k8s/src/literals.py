@@ -84,6 +84,15 @@ LOCAL_STORAGE_LOCAL_PATH = option.StrOption("local-storage-local-path")
 LOCAL_STORAGE_RECLAIM_POLICY = option.StrOption("local-storage-reclaim-policy")
 NETWORK_ENABLED = option.BoolOption("network-enabled")
 METRICS_SERVER_ENABLED = option.BoolOption("metrics-server-enabled")
+KUBE_PROXY_ENABLED = option.StrOption("kube-proxy-enabled")
+KUBE_PROXY_ENABLED_TRUE = "true"
+KUBE_PROXY_ENABLED_FALSE = "false"
+KUBE_PROXY_ENABLED_AUTO = "auto"
+KUBE_PROXY_ENABLED_VALID_VALUES = [
+    KUBE_PROXY_ENABLED_TRUE,
+    KUBE_PROXY_ENABLED_FALSE,
+    KUBE_PROXY_ENABLED_AUTO,
+]
 
 # Worker and Control Plane Options
 BOOTSTRAP_NODE_TAINTS = option.StrOption("bootstrap-node-taints")

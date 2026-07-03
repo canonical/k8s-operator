@@ -24,12 +24,22 @@ def test_configure_network_options(harness):
     harness.disable_hooks()
 
     harness.update_config({"network-enabled": False})
+    harness.update_config({"kube-proxy-enabled": "true"})
     ufcg = assemble_cluster_config(harness.charm, None)
     assert not ufcg.network.enabled, "Network should be disabled"
+    assert ufcg.network.kube_proxy_enabled, "kube-proxy-enabled sholud be True"
 
     harness.update_config({"network-enabled": True})
+    harness.update_config({"kube-proxy-enabled": "false"})
     ufcg = assemble_cluster_config(harness.charm, None)
     assert ufcg.network.enabled, "Network should be enabled"
+    assert not ufcg.network.kube_proxy_enabled, "kube-proxy-enabled sholud be False"
+
+    harness.update_config({"network-enabled": True})
+    harness.update_config({"kube-proxy-enabled": "auto"})
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.network.enabled, "Network should be enabled"
+    assert ufcg.network.kube_proxy_enabled is None, "kube-proxy-enabled should not be set"
 
 
 def test_configure_ingress_options(harness):

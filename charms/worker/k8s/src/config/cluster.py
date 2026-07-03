@@ -5,6 +5,7 @@
 
 """Cluster configuration options."""
 
+import logging
 from typing import Optional
 
 import literals
@@ -19,6 +20,8 @@ from k8sd_api_manager import (
     NetworkConfig,
     UserFacingClusterConfig,
 )
+
+log = logging.getLogger(__name__)
 
 
 def assemble_cluster_config(
@@ -79,6 +82,24 @@ def _assemble_network(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
     if not (network := assembled.network):
         network = assembled.network = NetworkConfig()
     network.enabled = literals.NETWORK_ENABLED.get(charm)
+
+    kube_proxy_enabled = literals.KUBE_PROXY_ENABLED.get(charm).lower()
+    if kube_proxy_enabled not in literals.KUBE_PROXY_ENABLED_VALID_VALUES:
+        log.error(f"invalid value for kube-proxy-enabled config option: {kube_proxy_enabled}")
+
+    if kube_proxy_enabled == literals.KUBE_PROXY_ENABLED_TRUE:
+        network.kube_proxy_enabled = True
+        log.info("kube_proxy_enabled option is set to True in user-facing cluster config")
+    elif kube_proxy_enabled == literals.KUBE_PROXY_ENABLED_FALSE:
+        network.kube_proxy_enabled = False
+        log.info("kube_proxy_enabled option is set to False in user-facing cluster config")
+    elif kube_proxy_enabled == literals.KUBE_PROXY_ENABLED_AUTO:
+        # we do not set network.kube_proxy_enabled when the config option is "auto"
+        # so that the cluster decides automatically.
+        log.info(
+            "kube_proxy_enabled option is set to auto."
+            "Will not set it in user-facing cluster config"
+        )
 
 
 def _assemble_ingress(charm: ops.CharmBase, assembled: UserFacingClusterConfig):

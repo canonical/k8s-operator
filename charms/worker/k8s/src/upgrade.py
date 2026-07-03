@@ -3,6 +3,11 @@
 
 """A module for upgrading the k8s and k8s-worker charms."""
 
+# NOTE: K8sDependenciesModel below uses the pydantic.v1 compat layer, which relies
+# on eager __annotations__. PEP 649 defers those on Python 3.14+ (26.04 base),
+# breaking field detection; stringized annotations restore the eager population.
+from __future__ import annotations
+
 import logging
 from typing import List, Optional, Union
 
