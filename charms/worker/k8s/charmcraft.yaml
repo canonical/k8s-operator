@@ -402,6 +402,19 @@ config:
         Space-separated list of namespaces to check for unready pods. This
         is used to determine the status of the cluster and its components.
         If not set, no namespaces will be checked.
+    kube-proxy-enabled:
+      type: string
+      default: "auto"
+      description: |
+        Determines if kube-proxy is going to be running on the nodes.
+        The admins can disable kube-proxy in case of a replacement like Cilium.
+
+        Allowed values are "auto", "false", and "true".
+
+        * auto:     The cluster automatically decides whether or not kube-proxy should be enabled.
+        * false:    Disable kube-proxy in the cluster nodes.
+        * true:     Enable kube-proxy in the cluster nodes.
+
 
 resources:
   snap-installation:

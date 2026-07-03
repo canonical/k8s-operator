@@ -1076,7 +1076,7 @@ class K8sCharm(ops.CharmBase):
             busy_wait -= 1
         return reported_down == 3
 
-    @status.on_error(ops.BlockedStatus("Cannot apply node-labels"), LabelMaker.NodeLabelError)
+    @status.on_error(ops.WaitingStatus("Applying node labels"), LabelMaker.NodeLabelError)
     def _apply_node_labels(self):
         """Apply labels to the node."""
         status.add(ops.MaintenanceStatus("Ensuring Kubernetes Node Labels"))
