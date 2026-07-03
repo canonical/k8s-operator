@@ -393,6 +393,18 @@ class K8sCharm(ops.CharmBase):
         return self.xcp.name or ""
 
     @on_error(
+        ops.WaitingStatus("Ensuring /sbin -> /usr/sbin symlink."),
+        subprocess.CalledProcessError,
+    )
+    def _ensure_sbin_symlink(self):
+        """Ensure /sbin is a symlink to /usr/sbin."""
+        status.add(ops.MaintenanceStatus("Ensuring /sbin -> /usr/sbin symlink"))
+        if os.path.islink("/sbin") and os.path.realpath("/sbin") == "/usr/sbin":
+            return
+        subprocess.run(["/usr/bin/sudo", "/usr/bin/rm", "-rf", "/sbin"], check=True)
+        subprocess.run(["/usr/bin/sudo", "/usr/bin/ln", "-s", "/usr/sbin", "/sbin"], check=True)
+
+    @on_error(
         ops.BlockedStatus("Failed to install snaps."),
         snap_lib.SnapError,
         snap_lib.SnapAPIError,
@@ -989,6 +1001,7 @@ class K8sCharm(ops.CharmBase):
 
         self.upgrade.handler(event)
         self._apply_proxy_environment()
+        self._ensure_sbin_symlink()
         self._install_snaps()
         self._apply_snap_requirements()
         self._check_k8sd_ready()
