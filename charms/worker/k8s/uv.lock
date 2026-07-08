@@ -6,6 +6,9 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[manifest]
+overrides = [{ name = "juju", marker = "sys_platform == 'never'" }]
+
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -776,6 +779,30 @@ wheels = [
 ]
 
 [[package]]
+name = "juju-resolute"
+version = "3.6.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backports-datetime-fromisoformat" },
+    { name = "backports-strenum", marker = "python_full_version < '3.11'" },
+    { name = "hvac" },
+    { name = "kubernetes" },
+    { name = "macaroonbakery" },
+    { name = "packaging" },
+    { name = "paramiko" },
+    { name = "pyasn1" },
+    { name = "pyyaml" },
+    { name = "toposort" },
+    { name = "typing-extensions" },
+    { name = "typing-inspect" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/79/3e8a50a235f3912bb46fce0a4a0b77bd0ddb360c27ed44a27449071ed5f3/juju_resolute-3.6.1.3.tar.gz", hash = "sha256:8e2a26f2fee4276accd33a6c6977867146872083191c0264000223c05f633e47", size = 306235, upload-time = "2026-06-25T08:27:29.913Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/60/aa806a596a2d81cdf200fb5d2d5d556603a5ca9b96f956b2460b501c26f2/juju_resolute-3.6.1.3-py3-none-any.whl", hash = "sha256:88e46ce5453be0e16b26b787afd688cf3b3e3c187bc5e574bb11193378ac3dc0", size = 288043, upload-time = "2026-06-25T08:27:26.421Z" },
+]
+
+[[package]]
 name = "k8s"
 version = "0.0.0"
 source = { virtual = "." }
@@ -809,7 +836,7 @@ docs = [
 ]
 integration = [
     { name = "async-lru" },
-    { name = "juju" },
+    { name = "juju-resolute" },
     { name = "pydantic" },
     { name = "pylxd" },
     { name = "pytest" },
@@ -866,7 +893,7 @@ requires-dist = [
 docs = [{ name = "vale" }]
 integration = [
     { name = "async-lru" },
-    { name = "juju" },
+    { name = "juju-resolute", specifier = ">=3.6.1.3" },
     { name = "pydantic" },
     { name = "pylxd" },
     { name = "pytest" },
@@ -1592,7 +1619,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ipdb" },
     { name = "jinja2" },
-    { name = "juju" },
+    { name = "juju", marker = "sys_platform == 'never'" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pyyaml" },

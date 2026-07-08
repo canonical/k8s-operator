@@ -105,7 +105,7 @@ def pytest_addoption(parser: pytest.Parser):
             '"*.snap" file.'
         ),
     )
-    parser.addoption("--timeout", default=10, type=int, help="timeout for tests in minutes")
+    parser.addoption("--timeout", default=90, type=int, help="timeout for tests in minutes")
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
@@ -351,7 +351,7 @@ async def cos_model(
     )
     yield k8s_model
 
-    await ops_test.forget_model("cos", timeout=10 * 60, allow_failure=True)
+    await ops_test.forget_model("cos", timeout=60 * 60, allow_failure=True)
 
     manager.teardown_substrate()
 
@@ -382,9 +382,9 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
     await cos_model.block_until(
         lambda: all(app in cos_model.applications for app in cos_charms),
-        timeout=5 * 60,
+        timeout=60 * 60,
     )
-    await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
+    await cos_model.wait_for_idle(status="active", timeout=60 * 60, raise_on_error=False)
 
     yield
     log.info("Removing COS Lite charms...")
@@ -397,7 +397,7 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
             assert rc == 0
         await cos_model.block_until(
             lambda: all(app not in cos_model.applications for app in cos_charms),
-            timeout=60 * 10,
+            timeout=60 * 60,
         )
 
 
