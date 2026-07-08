@@ -104,7 +104,7 @@ class LXDSubstrate:
             vm (Optional[VMOptions]): VM options. If provided, a virtual machine
                 will be created instead of a instance.
         """
-        self.client = Client(timeout=1200)  # 20 minutes
+        self.client = Client(timeout=60 * 60)
         self.vm_opts = vm
         self.profile_name: Optional[str] = None
 

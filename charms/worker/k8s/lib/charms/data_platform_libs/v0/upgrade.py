@@ -260,6 +260,11 @@ class ZooKeeperCharm(CharmBase):
 ```
 """
 
+# NOTE: pydantic.v1 (used below) relies on eager __annotations__, which PEP 649
+# defers on Python 3.14+ (26.04 base), breaking field detection. Stringized
+# annotations restore eager population. Re-apply if this lib is re-fetched.
+from __future__ import annotations
+
 import json
 import logging
 from abc import ABC, abstractmethod

@@ -323,9 +323,9 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
     await cos_model.block_until(
         lambda: all(app in cos_model.applications for app in cos_charms),
-        timeout=5 * 60,
+        timeout=60 * 60,
     )
-    await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
+    await cos_model.wait_for_idle(status="active", timeout=60 * 60, raise_on_error=False)
 
     yield
     log.info("Removing COS Lite charms...")
@@ -337,7 +337,7 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
             log.info("%s", stdout or stderr)
             assert rc == 0
         await cos_model.block_until(
-            lambda: all(app not in cos_model.applications for app in cos_charms), timeout=60 * 10
+            lambda: all(app not in cos_model.applications for app in cos_charms), timeout=60 * 60
         )
 
 

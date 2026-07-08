@@ -101,3 +101,10 @@ skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
 
 [tool.pyright]
 extraPaths = ["./charms/worker/k8s/lib", "./charms/worker/k8s/src"]
+
+# pytest-operator declares a hard dependency on upstream `juju`, which collides
+# with `juju-resolute` (both ship the top-level `juju` package). Drop the `juju`
+# requirement via an always-false marker so juju-resolute is the sole provider.
+# tox-uv installs test_requirements.txt with `uv pip install`, which honors this.
+[tool.uv]
+override-dependencies = ["juju ; sys_platform == 'never'"]

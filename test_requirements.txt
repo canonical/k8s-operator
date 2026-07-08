@@ -1,5 +1,5 @@
 async-lru
-juju
+juju-resolute>=3.6.1.3
 pydantic<2
 pylxd
 pytest

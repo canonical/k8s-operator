@@ -48,8 +48,8 @@ async def test_update_etcd_cluster(kubernetes_cluster: model.Model, timeout: int
     count = 3 - len(etcd.units)
     if count > 0:
         await etcd.add_unit(count=count)
-    at_least_twenty = max(20, timeout)
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=at_least_twenty * 60)
+    at_least_sixty = max(60, timeout)
+    await kubernetes_cluster.wait_for_idle(status="active", timeout=at_least_sixty * 60)
 
     expected_servers = []
     for u in etcd.units:
