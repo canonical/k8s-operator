@@ -94,7 +94,7 @@ jobs:
       with-uv: true
 
   integration-tests-resolute:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@011250c1cbc944fd99b1a16ebb995f55483a57b3 # main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@a54f02c1ddbaf9744b42d25a5c05e2c9839cd41d # main
     needs: [charmcraft-channel]
     permissions:
       contents: read
@@ -135,3 +135,5 @@ jobs:
       python-version: 3.14
       # operator-workflows appends "noble" to the request labels by default. we need to change it to resolute
       self-hosted-runner-image: resolute
+      # setup-lxd defaults to latest/candidate which caused a lot of failures during build with 26.04.
+      build-lxd-channel: 5.21/stable
