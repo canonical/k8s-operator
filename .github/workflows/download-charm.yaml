@@ -13,7 +13,7 @@ on:
       charm-base:
         type: string
         description: The charm base to download
-        default: ubuntu@20.04
+        default: ubuntu@22.04
       charm-channel:
         type: string
         description: The charm channel to download
