@@ -48,7 +48,7 @@ jobs:
           echo "arm64=${arm64}" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@72ba44455ad0ba7ec1c51027d5360357d1925733 # main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@011250c1cbc944fd99b1a16ebb995f55483a57b3 # main
     needs: [charmcraft-channel, select-tests]
     permissions:
       contents: read
@@ -87,3 +87,46 @@ jobs:
       trivy-image-config: "trivy.yaml"
       tmate-debug: true
       with-uv: true
+
+  integration-tests-resolute:
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@011250c1cbc944fd99b1a16ebb995f55483a57b3 # main
+    needs: [charmcraft-channel]
+    permissions:
+      contents: read
+      actions: write
+    secrets: inherit
+    strategy:
+      matrix:
+        arch:
+          - id: amd64
+            builder-label: ubuntu-26.04
+            tester-arch: AMD64
+            tester-size: xlarge
+            modules: '["test_k8s", "test_smoke"]'
+          - id: arm64
+            builder-label: ubuntu-26.04-arm
+            tester-arch: ARM64
+            tester-size: xlarge
+            modules: '["test_k8s", "test_smoke"]'
+    with:
+      identifier: ${{ matrix.arch.id }}
+      builder-runner-label: ${{ matrix.arch.builder-label }}
+      charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
+      extra-arguments: >-
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=resolute' || ' --series=resolute' }}
+      modules: ${{ matrix.arch.modules }}
+      juju-channel: 3/stable
+      provider: lxd
+      self-hosted-runner: true
+      self-hosted-runner-arch: ${{ matrix.arch.tester-arch }}
+      self-hosted-runner-label: ${{ matrix.arch.tester-size }}
+      test-timeout: 900
+      test-tox-env: integration
+      trivy-fs-enabled: false
+      trivy-image-config: "trivy.yaml"
+      tmate-debug: true
+      with-uv: true
+      # this is a workaround since "resolute" is not supported in operator-workflows and hence 3.14 that comes with it
+      python-version: 3.14
+      # operator-workflows appends "noble" to the request labels by default. we need to change it to resolute
+      self-hosted-runner-image: resolute
