@@ -130,13 +130,16 @@ peers:
 provides:
   cos-agent:
     interface: cos_agent
+    optional: true
 
 requires:
   aws:
     interface: aws-integration
     limit: 1
+    optional: true
   azure:
     interface: azure-integration
+    optional: true
   cluster:
     # interface to connect with the k8s charm to provide
     # authentication token via a secret in order to cluster
@@ -147,11 +150,14 @@ requires:
   cos-tokens:
     interface: cos-k8s-tokens
     limit: 1
+    optional: true
   containerd:
     # Interface provided by the control-plane charm to
     # share containerd configuration.
     interface: containerd
     limit: 1
+    optional: true
   gcp:
     interface: gcp-integration
     limit: 1
+    optional: true
