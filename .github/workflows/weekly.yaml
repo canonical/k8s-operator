@@ -19,10 +19,7 @@ jobs:
     name: CNCF conformance test
     strategy:
       fail-fast: false
-      matrix:
-        os: ["noble", "jammy"]
-        arch: ["amd64"]
-    runs-on: ['self-hosted', 'linux', '${{ matrix.arch }}', '${{ matrix.os }}', 'xlarge']
+    runs-on: ['self-hosted', 'linux', 'amd64', 'noble', 'xlarge']
     env:
       TF_VAR_model: my-canonical-k8s
     steps:

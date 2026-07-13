@@ -450,7 +450,7 @@ class Bundle:
                 await charm.resolve(
                     ops_test,
                     self.arch,
-                    juju.utils.get_series_version(self.series or "jammy"),
+                    juju.utils.get_series_version(self.series or "noble"),
                 )
                 app_to_charm[charm.name] = charm
         return app_to_charm

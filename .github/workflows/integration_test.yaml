@@ -63,7 +63,7 @@ jobs:
         arch:
           # built on azure, test on self-hosted
           - id: amd64
-            builder-label: ubuntu-22.04
+            builder-label: ubuntu-24.04
             tester-arch: AMD64
             tester-size: xlarge
             modules: ${{ needs.select-tests.outputs.amd64 }}
@@ -78,7 +78,7 @@ jobs:
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
-        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=noble' || '' }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers' || '' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
       provider: lxd

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   TICS:
-    runs-on: [self-hosted, linux, amd64, tiobe, jammy]
+    runs-on: [self-hosted, linux, amd64, tiobe, noble]
     permissions:
       contents: read
     steps:
