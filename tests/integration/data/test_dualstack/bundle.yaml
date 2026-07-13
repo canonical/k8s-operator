@@ -4,7 +4,7 @@
 name: ipv6-only-integration-test
 description: |-
   Used to deploy ipv6-only within an integration test model
-series: jammy
+series: noble
 applications:
   k8s:
     charm: k8s

@@ -4,7 +4,7 @@
 name: dualstack-integration-test
 description: |-
   Used to deploy dualstack within an integration test model
-series: jammy
+series: noble
 applications:
   k8s:
     charm: k8s

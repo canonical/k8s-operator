@@ -5,7 +5,7 @@
 name: integration-test-ceph
 description: |-
   Used to deploy or refresh within an integration test model
-series: jammy
+series: noble
 applications:
   k8s:
     charm: k8s

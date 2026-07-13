@@ -45,7 +45,7 @@ def pytest_addoption(parser: pytest.Parser):
     --charm-file
         Can be used multiple times, specifies which local charm files are available.
         Expected filename format: {charmName}_{base}-{arch}.charm
-        Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm
+        Example: k8s-worker_ubuntu-24.04-amd64_ubuntu-24.04-amd64.charm
         Some tests use subordinate charms (e.g. Ceph) that expect the charm
         base to match.
     --lxd-containers
@@ -83,7 +83,7 @@ def pytest_addoption(parser: pytest.Parser):
         help=(
             "Can be used multiple times, specifies which local charm files are available. "
             r"Expected filename format: {charmName}_{base}-{arch}.charm. "
-            "Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm. "
+            "Example: k8s-worker_ubuntu-24.04-amd64_ubuntu-24.04-amd64.charm. "
             "Some tests use subordinate charms (e.g. Ceph) that expect the charm "
             "base to match."
         ),
