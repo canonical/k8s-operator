@@ -104,12 +104,12 @@ jobs:
       matrix:
         arch:
           - id: amd64
-            builder-label: ubuntu-26.04
+            builder-label: ubuntu-24.04
             tester-arch: AMD64
             tester-size: xlarge
             modules: '["test_k8s", "test_smoke"]'
           - id: arm64
-            builder-label: ubuntu-26.04-arm
+            builder-label: ubuntu-24.04-arm
             tester-arch: ARM64
             tester-size: xlarge
             modules: '["test_k8s", "test_smoke"]'
