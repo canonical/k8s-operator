@@ -46,6 +46,7 @@ def assemble_cluster_config(
     _assemble_ingress(charm, assembled)
     _assemble_metrics_server(charm, assembled)
     _assemble_load_balancer(charm, assembled)
+    _assemble_annotations(charm, assembled)
     assembled.cloud_provider = cloud_provider
     return assembled
 
@@ -127,3 +128,33 @@ def _assemble_load_balancer(charm: ops.CharmBase, assembled: UserFacingClusterCo
     load_balancer.bgp_peer_address = literals.LOAD_BALANCER_BGP_PEER_ADDRESS.get(charm)
     load_balancer.bgp_peer_asn = literals.LOAD_BALANCER_BGP_PEER_ASN.get(charm)
     load_balancer.bgp_peer_port = literals.LOAD_BALANCER_BGP_PEER_PORT.get(charm)
+
+
+def _assemble_annotations(charm: ops.CharmBase, assembled: UserFacingClusterConfig):
+    """Populate annotations from the cluster-annotations charm config.
+
+    Annotations are only overwritten when the charm config is non-empty.
+    When the config is unset the current cluster annotations are left intact so
+    that out-of-band annotation changes (e.g. made directly via the k8s CLI)
+    are not silently discarded on the next reconcile cycle.
+    """
+    raw = charm.config.get("cluster-annotations", "")
+    if not raw:
+        return
+
+    import yaml  # local import — yaml is a standard library dep of ops
+
+    try:
+        parsed = yaml.safe_load(str(raw))
+    except yaml.YAMLError:
+        log.warning("cluster-annotations is not valid YAML — skipping annotation assembly")
+        return
+
+    if not isinstance(parsed, dict):
+        log.warning(
+            "cluster-annotations must be a YAML mapping — got %s, skipping",
+            type(parsed).__name__,
+        )
+        return
+
+    assembled.annotations = {str(k): str(v) for k, v in parsed.items()}

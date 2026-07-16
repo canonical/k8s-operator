@@ -610,13 +610,23 @@ class K8sCharm(ops.CharmBase):
     def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate cluster-annotations from charm configuration.
 
-        The values are expected to be a space-separated string of key-value pairs.
+        Accepts a YAML-formatted string where each key maps to a string value.
+        Multi-line values (e.g. YAML block literals) are supported, making it
+        possible to pass annotations such as k8sd/v1alpha1/metallb/bgp-peers.
+
+        Example (set via ``juju config k8s cluster-annotations=@bgp.yaml``):
+
+            k8sd/v1alpha1/metallb/bgp-peers: |
+              - peerAddress: 10.0.0.1
+                peerASN: 65001
+                myASN: 65000
+            k8sd/v1alpha1/metallb/advertise-all-pools: "true"
 
         Returns:
             dict: The parsed annotations if valid, otherwise None.
 
         Raises:
-            ReconcilerError: If any annotation is invalid.
+            ReconcilerError: If the value is not a valid YAML mapping of strings.
         """
         raw_annotations = self.config.get("cluster-annotations")
         if not raw_annotations:
@@ -624,18 +634,29 @@ class K8sCharm(ops.CharmBase):
 
         raw_annotations = str(raw_annotations)
 
-        annotations = {}
         try:
-            for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
-                if not key or not value:
-                    raise ReconcilerError("Invalid Annotation")
-                annotations[key] = value
-        except ReconcilerError:
-            log.exception("Invalid annotations: %s", raw_annotations)
+            parsed = yaml.safe_load(raw_annotations)
+        except yaml.YAMLError:
+            log.exception("Invalid annotations (YAML parse error): %s", raw_annotations)
             status.add(ops.BlockedStatus("Invalid Annotations"))
-            raise
+            raise ReconcilerError("Invalid Annotations: YAML parse error")
 
-        return annotations
+        if not isinstance(parsed, dict):
+            msg = f"cluster-annotations must be a YAML mapping, got {type(parsed).__name__}"
+            log.error(msg)
+            status.add(ops.BlockedStatus("Invalid Annotations"))
+            raise ReconcilerError(msg)
+
+        annotations: dict = {}
+        for key, value in parsed.items():
+            if not isinstance(key, str):
+                msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
+                log.error(msg)
+                status.add(ops.BlockedStatus("Invalid Annotations"))
+                raise ReconcilerError(msg)
+            annotations[str(key)] = str(value) if not isinstance(value, str) else value
+
+        return annotations or None
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.

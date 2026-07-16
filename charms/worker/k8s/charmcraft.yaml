@@ -48,15 +48,27 @@ config:
       type: string
       default: ""
       description: |
-        Space-separated list of (key/value) pairs) that can be
-        used to add arbitrary metadata configuration to the Canonical
-        Kubernetes cluster. For more information, see the upstream Canonical
-        Kubernetes documentation about annotations:
+        YAML mapping of key/value pairs that can be used to add arbitrary
+        metadata configuration to the Canonical Kubernetes cluster.
+        For more information, see the upstream Canonical Kubernetes documentation
+        about annotations:
 
         https://documentation.ubuntu.com/canonical-kubernetes/latest/src/snap/reference/annotations/
 
-        Example:
-          e.g.: key1=value1 key2=value2
+        The value must be a YAML-formatted mapping.  Multi-line string values
+        (YAML block literals) are supported, which makes it possible to pass
+        structured annotations such as the alpha multi-peer BGP config:
+
+          k8sd/v1alpha1/metallb/bgp-peers: |
+            - peerAddress: 10.0.0.1
+              peerASN: 65001
+              myASN: 65000
+              nodeSelector:
+                topology.kubernetes.io/zone: zone-a
+          k8sd/v1alpha1/metallb/advertise-all-pools: "true"
+
+        When this config is non-empty it overrides any annotations currently
+        set on the cluster.  Leave it empty to preserve existing annotations.
     bootstrap-datastore:
       type: string
       default: ""
