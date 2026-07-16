@@ -67,6 +67,23 @@ config:
                 topology.kubernetes.io/zone: zone-a
           k8sd/v1alpha1/metallb/advertise-all-pools: "true"
 
+        Example (manual test) to configure BGP peers via charm config:
+
+          juju config k8s \
+            load-balancer-enabled=true \
+            load-balancer-bgp-mode=true \
+            load-balancer-bgp-local-asn=65000 \
+            cluster-annotations="$(cat <<'EOF'
+          k8sd/v1alpha1/metallb/bgp-peers: |
+            - peerAddress: 192.0.2.1
+              peerASN: 65001
+              myASN: 65000
+              nodeSelector:
+                topology.kubernetes.io/zone: zone-a
+          k8sd/v1alpha1/metallb/advertise-all-pools: "true"
+          EOF
+          )"
+
         When this config is non-empty it overrides any annotations currently
         set on the cluster.  Leave it empty to preserve existing annotations.
     bootstrap-datastore:
