@@ -610,9 +610,13 @@ class K8sCharm(ops.CharmBase):
     def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate cluster-annotations from charm configuration.
 
-        Accepts a YAML-formatted string where each key maps to a string value.
-        Multi-line values (e.g. YAML block literals) are supported, making it
-        possible to pass annotations such as k8sd/v1alpha1/metallb/bgp-peers.
+        Accepts either:
+        - a YAML-formatted mapping where each key maps to a string value
+        - a legacy space-separated list of key=value pairs
+
+        YAML is preferred because it supports multi-line values (e.g. YAML
+        block literals), making it possible to pass annotations such as
+        k8sd/v1alpha1/metallb/bgp-peers.
 
         Example (set via ``juju config k8s cluster-annotations=@bgp.yaml``):
 
@@ -626,7 +630,8 @@ class K8sCharm(ops.CharmBase):
             dict: The parsed annotations if valid, otherwise None.
 
         Raises:
-            ReconcilerError: If the value is not a valid YAML mapping of strings.
+            ReconcilerError: If the value is neither a valid YAML mapping nor
+                valid legacy key=value pairs.
         """
         raw_annotations = self.config.get("cluster-annotations")
         if not raw_annotations:
@@ -634,27 +639,45 @@ class K8sCharm(ops.CharmBase):
 
         raw_annotations = str(raw_annotations)
 
+        # Preferred format: YAML mapping.
         try:
             parsed = yaml.safe_load(raw_annotations)
         except yaml.YAMLError:
-            log.exception("Invalid annotations (YAML parse error): %s", raw_annotations)
-            status.add(ops.BlockedStatus("Invalid Annotations"))
-            raise ReconcilerError("Invalid Annotations: YAML parse error")
+            parsed = None
+        else:
+            if isinstance(parsed, dict):
+                annotations: dict = {}
+                for key, value in parsed.items():
+                    if not isinstance(key, str):
+                        msg = (
+                            f"cluster-annotations key must be a string, got {type(key).__name__}"
+                        )
+                        log.error(msg)
+                        status.add(ops.BlockedStatus("Invalid Annotations"))
+                        raise ReconcilerError(msg)
+                    annotations[str(key)] = str(value) if not isinstance(value, str) else value
+                return annotations or None
 
-        if not isinstance(parsed, dict):
-            msg = f"cluster-annotations must be a YAML mapping, got {type(parsed).__name__}"
-            log.error(msg)
+        # Backward compatibility: legacy key=value key2=value2 format.
+        annotations = {}
+        try:
+            for token in raw_annotations.split():
+                key, value = token.split("=", 1)
+                if not key or not value:
+                    raise ValueError("empty key/value")
+                annotations[key] = value
+        except ValueError:
+            msg = "cluster-annotations must be a YAML mapping or key=value pairs"
+            log.error("%s: %s", msg, raw_annotations)
             status.add(ops.BlockedStatus("Invalid Annotations"))
             raise ReconcilerError(msg)
 
-        annotations: dict = {}
-        for key, value in parsed.items():
+        for key, value in annotations.items():
             if not isinstance(key, str):
                 msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
                 log.error(msg)
                 status.add(ops.BlockedStatus("Invalid Annotations"))
                 raise ReconcilerError(msg)
-            annotations[str(key)] = str(value) if not isinstance(value, str) else value
 
         return annotations or None
 

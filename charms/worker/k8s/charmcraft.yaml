@@ -55,7 +55,7 @@ config:
 
         https://documentation.ubuntu.com/canonical-kubernetes/latest/src/snap/reference/annotations/
 
-        The value must be a YAML-formatted mapping.  Multi-line string values
+        The preferred value format is a YAML mapping. Multi-line string values
         (YAML block literals) are supported, which makes it possible to pass
         structured annotations such as the alpha multi-peer BGP config:
 
@@ -66,6 +66,11 @@ config:
               nodeSelector:
                 topology.kubernetes.io/zone: zone-a
           k8sd/v1alpha1/metallb/advertise-all-pools: "true"
+
+        Backward compatibility: legacy space-separated key=value pairs are
+        still accepted for simple annotations:
+
+          key1=value1 key2=value2
 
         Example (manual test) to configure BGP peers via charm config:
 

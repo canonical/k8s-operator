@@ -144,17 +144,30 @@ def _assemble_annotations(charm: ops.CharmBase, assembled: UserFacingClusterConf
 
     import yaml  # local import — yaml is a standard library dep of ops
 
-    try:
-        parsed = yaml.safe_load(str(raw))
-    except yaml.YAMLError:
-        log.warning("cluster-annotations is not valid YAML — skipping annotation assembly")
-        return
+    raw = str(raw)
 
-    if not isinstance(parsed, dict):
+    # Preferred format: YAML mapping. Supports multiline block literals for BGP peers.
+    try:
+        parsed = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        parsed = None
+    else:
+        if isinstance(parsed, dict):
+            assembled.annotations = {str(k): str(v) for k, v in parsed.items()}
+            return
+
+    # Backward compatibility: legacy space-separated key=value pairs.
+    annotations: dict[str, str] = {}
+    try:
+        for token in raw.split():
+            key, value = token.split("=", 1)
+            if not key or not value:
+                raise ValueError("empty key/value")
+            annotations[key] = value
+    except ValueError:
         log.warning(
-            "cluster-annotations must be a YAML mapping — got %s, skipping",
-            type(parsed).__name__,
+            "cluster-annotations must be a YAML mapping or space-separated key=value pairs"
         )
         return
 
-    assembled.annotations = {str(k): str(v) for k, v in parsed.items()}
+    assembled.annotations = annotations

@@ -184,6 +184,22 @@ def test_assemble_annotations_simple(harness):
     }, f"Unexpected annotations: {ufcg.annotations}"
 
 
+def test_assemble_annotations_legacy_space_separated(harness):
+    """Legacy space-separated key=value format remains supported."""
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config(
+        {"cluster-annotations": "k8sd/v1alpha1/metallb/advertise-all-pools=true key2=value2"}
+    )
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.annotations == {
+        "k8sd/v1alpha1/metallb/advertise-all-pools": "true",
+        "key2": "value2",
+    }, f"Unexpected annotations: {ufcg.annotations}"
+
+
 def test_assemble_annotations_multiline_bgp_peers(harness):
     """Multi-line YAML block literal for bgp-peers is preserved as a string."""
     if harness.charm.is_worker:
@@ -230,4 +246,23 @@ def test_assemble_annotations_not_overwritten_when_empty(harness):
     ufcg = assemble_cluster_config(harness.charm, None, current=existing)
     assert ufcg.annotations == {"some-key": "some-value"}, (
         "Existing annotations should be preserved when cluster-annotations config is empty"
+    )
+
+
+def test_assemble_annotations_invalid_legacy_not_overwritten(harness):
+    """Invalid legacy format does not overwrite existing annotations."""
+    from k8sd_api_manager import UserFacingClusterConfig
+
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config({"cluster-annotations": "key1=value1 broken-token"})
+
+    existing = UserFacingClusterConfig()
+    existing.annotations = {"some-key": "some-value"}
+
+    ufcg = assemble_cluster_config(harness.charm, None, current=existing)
+    assert ufcg.annotations == {"some-key": "some-value"}, (
+        "Existing annotations should be preserved when cluster-annotations is invalid"
     )
