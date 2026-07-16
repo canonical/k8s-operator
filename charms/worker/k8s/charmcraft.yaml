@@ -48,49 +48,12 @@ config:
       type: string
       default: ""
       description: |
-        YAML mapping of key/value pairs that can be used to add arbitrary
-        metadata configuration to the Canonical Kubernetes cluster.
-        For more information, see the upstream Canonical Kubernetes documentation
-        about annotations:
+        Cluster annotations for Canonical Kubernetes.
+        Preferred format: YAML mapping (supports multi-line values).
+        Legacy format: space-separated key=value pairs.
 
+        See:
         https://documentation.ubuntu.com/canonical-kubernetes/latest/src/snap/reference/annotations/
-
-        The preferred value format is a YAML mapping. Multi-line string values
-        (YAML block literals) are supported, which makes it possible to pass
-        structured annotations such as the alpha multi-peer BGP config:
-
-          k8sd/v1alpha1/metallb/bgp-peers: |
-            - peerAddress: 10.0.0.1
-              peerASN: 65001
-              myASN: 65000
-              nodeSelector:
-                topology.kubernetes.io/zone: zone-a
-          k8sd/v1alpha1/metallb/advertise-all-pools: "true"
-
-        Backward compatibility: legacy space-separated key=value pairs are
-        still accepted for simple annotations:
-
-          key1=value1 key2=value2
-
-        Example (manual test) to configure BGP peers via charm config:
-
-          juju config k8s \
-            load-balancer-enabled=true \
-            load-balancer-bgp-mode=true \
-            load-balancer-bgp-local-asn=65000 \
-            cluster-annotations="$(cat <<'EOF'
-          k8sd/v1alpha1/metallb/bgp-peers: |
-            - peerAddress: 192.0.2.1
-              peerASN: 65001
-              myASN: 65000
-              nodeSelector:
-                topology.kubernetes.io/zone: zone-a
-          k8sd/v1alpha1/metallb/advertise-all-pools: "true"
-          EOF
-          )"
-
-        When this config is non-empty it overrides any annotations currently
-        set on the cluster.  Leave it empty to preserve existing annotations.
     bootstrap-datastore:
       type: string
       default: ""
