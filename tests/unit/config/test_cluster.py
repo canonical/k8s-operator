@@ -179,9 +179,9 @@ def test_assemble_annotations_simple(harness):
         {"cluster-annotations": "k8sd/v1alpha1/metallb/advertise-all-pools: 'true'"}
     )
     ufcg = assemble_cluster_config(harness.charm, None)
-    assert ufcg.annotations == {
-        "k8sd/v1alpha1/metallb/advertise-all-pools": "true"
-    }, f"Unexpected annotations: {ufcg.annotations}"
+    assert ufcg.annotations == {"k8sd/v1alpha1/metallb/advertise-all-pools": "true"}, (
+        f"Unexpected annotations: {ufcg.annotations}"
+    )
 
 
 def test_assemble_annotations_legacy_space_separated(harness):

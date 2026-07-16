@@ -649,9 +649,7 @@ class K8sCharm(ops.CharmBase):
                 annotations: dict = {}
                 for key, value in parsed.items():
                     if not isinstance(key, str):
-                        msg = (
-                            f"cluster-annotations key must be a string, got {type(key).__name__}"
-                        )
+                        msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
                         log.error(msg)
                         status.add(ops.BlockedStatus("Invalid Annotations"))
                         raise ReconcilerError(msg)
