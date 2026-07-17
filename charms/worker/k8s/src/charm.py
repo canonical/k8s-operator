@@ -26,7 +26,7 @@ from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, FrozenSet, List, Optional, Tuple, Union
+from typing import Dict, FrozenSet, List, NoReturn, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import charmlibs.snap as snap_lib
@@ -607,6 +607,37 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation(COS_TOKENS_RELATION):
             self.collector.request(relation)
 
+    def _raise_invalid_annotations(self, msg: str, raw_annotations: str) -> NoReturn:
+        log.error("%s: %s", msg, raw_annotations)
+        status.add(ops.BlockedStatus("Invalid Annotations"))
+        raise ReconcilerError(msg)
+
+    def _parse_yaml_annotations(self, raw_annotations: str) -> Optional[dict]:
+        try:
+            parsed = yaml.safe_load(raw_annotations)
+        except yaml.YAMLError:
+            return None
+
+        if not isinstance(parsed, dict):
+            return None
+
+        annotations = {}
+        for key, value in parsed.items():
+            if not isinstance(key, str):
+                msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
+                self._raise_invalid_annotations(msg, raw_annotations)
+            annotations[str(key)] = str(value) if not isinstance(value, str) else value
+        return annotations or None
+
+    def _parse_legacy_annotations(self, raw_annotations: str) -> Optional[dict]:
+        annotations = {}
+        for token in raw_annotations.split():
+            key, value = token.split("=", 1)
+            if not key or not value:
+                raise ValueError("empty key/value")
+            annotations[key] = value
+        return annotations or None
+
     def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate cluster-annotations from charm configuration.
 
@@ -639,45 +670,14 @@ class K8sCharm(ops.CharmBase):
 
         raw_annotations = str(raw_annotations)
 
-        # Preferred format: YAML mapping.
-        try:
-            parsed = yaml.safe_load(raw_annotations)
-        except yaml.YAMLError:
-            parsed = None
-        else:
-            if isinstance(parsed, dict):
-                annotations: dict = {}
-                for key, value in parsed.items():
-                    if not isinstance(key, str):
-                        msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
-                        log.error(msg)
-                        status.add(ops.BlockedStatus("Invalid Annotations"))
-                        raise ReconcilerError(msg)
-                    annotations[str(key)] = str(value) if not isinstance(value, str) else value
-                return annotations or None
+        if annotations := self._parse_yaml_annotations(raw_annotations):
+            return annotations
 
-        # Backward compatibility: legacy key=value key2=value2 format.
-        annotations = {}
         try:
-            for token in raw_annotations.split():
-                key, value = token.split("=", 1)
-                if not key or not value:
-                    raise ValueError("empty key/value")
-                annotations[key] = value
+            return self._parse_legacy_annotations(raw_annotations)
         except ValueError:
             msg = "cluster-annotations must be a YAML mapping or key=value pairs"
-            log.error("%s: %s", msg, raw_annotations)
-            status.add(ops.BlockedStatus("Invalid Annotations"))
-            raise ReconcilerError(msg)
-
-        for key, value in annotations.items():
-            if not isinstance(key, str):
-                msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
-                log.error(msg)
-                status.add(ops.BlockedStatus("Invalid Annotations"))
-                raise ReconcilerError(msg)
-
-        return annotations or None
+            self._raise_invalid_annotations(msg, raw_annotations)
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.
