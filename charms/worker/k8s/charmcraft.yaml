@@ -48,15 +48,12 @@ config:
       type: string
       default: ""
       description: |
-        Space-separated list of (key/value) pairs) that can be
-        used to add arbitrary metadata configuration to the Canonical
-        Kubernetes cluster. For more information, see the upstream Canonical
-        Kubernetes documentation about annotations:
+        Cluster annotations for Canonical Kubernetes.
+        Preferred format: YAML mapping (supports multi-line values).
+        Legacy format: space-separated key=value pairs.
 
+        See:
         https://documentation.ubuntu.com/canonical-kubernetes/latest/src/snap/reference/annotations/
-
-        Example:
-          e.g.: key1=value1 key2=value2
     bootstrap-datastore:
       type: string
       default: ""

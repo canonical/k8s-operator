@@ -26,7 +26,7 @@ from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Dict, FrozenSet, List, Optional, Tuple, Union
+from typing import Dict, FrozenSet, List, NoReturn, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import charmlibs.snap as snap_lib
@@ -607,16 +607,62 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation(COS_TOKENS_RELATION):
             self.collector.request(relation)
 
+    def _raise_invalid_annotations(self, msg: str, raw_annotations: str) -> NoReturn:
+        log.error("%s: %s", msg, raw_annotations)
+        status.add(ops.BlockedStatus("Invalid Annotations"))
+        raise ReconcilerError(msg)
+
+    def _parse_yaml_annotations(self, raw_annotations: str) -> Optional[dict]:
+        try:
+            parsed = yaml.safe_load(raw_annotations)
+        except yaml.YAMLError:
+            return None
+
+        if not isinstance(parsed, dict):
+            return None
+
+        annotations = {}
+        for key, value in parsed.items():
+            if not isinstance(key, str):
+                msg = f"cluster-annotations key must be a string, got {type(key).__name__}"
+                self._raise_invalid_annotations(msg, raw_annotations)
+            annotations[str(key)] = str(value) if not isinstance(value, str) else value
+        return annotations or None
+
+    def _parse_legacy_annotations(self, raw_annotations: str) -> Optional[dict]:
+        annotations = {}
+        for token in raw_annotations.split():
+            key, value = token.split("=", 1)
+            if not key or not value:
+                raise ValueError("empty key/value")
+            annotations[key] = value
+        return annotations or None
+
     def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate cluster-annotations from charm configuration.
 
-        The values are expected to be a space-separated string of key-value pairs.
+        Accepts either:
+        - a YAML-formatted mapping where each key maps to a string value
+        - a legacy space-separated list of key=value pairs
+
+        YAML is preferred because it supports multi-line values (e.g. YAML
+        block literals), making it possible to pass annotations such as
+        k8sd/v1alpha1/metallb/bgp-peers.
+
+        Example (set via ``juju config k8s cluster-annotations=@bgp.yaml``):
+
+            k8sd/v1alpha1/metallb/bgp-peers: |
+              - peerAddress: 10.0.0.1
+                peerASN: 65001
+                myASN: 65000
+            k8sd/v1alpha1/metallb/advertise-all-pools: "true"
 
         Returns:
             dict: The parsed annotations if valid, otherwise None.
 
         Raises:
-            ReconcilerError: If any annotation is invalid.
+            ReconcilerError: If the value is neither a valid YAML mapping nor
+                valid legacy key=value pairs.
         """
         raw_annotations = self.config.get("cluster-annotations")
         if not raw_annotations:
@@ -624,18 +670,14 @@ class K8sCharm(ops.CharmBase):
 
         raw_annotations = str(raw_annotations)
 
-        annotations = {}
-        try:
-            for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
-                if not key or not value:
-                    raise ReconcilerError("Invalid Annotation")
-                annotations[key] = value
-        except ReconcilerError:
-            log.exception("Invalid annotations: %s", raw_annotations)
-            status.add(ops.BlockedStatus("Invalid Annotations"))
-            raise
+        if annotations := self._parse_yaml_annotations(raw_annotations):
+            return annotations
 
-        return annotations
+        try:
+            return self._parse_legacy_annotations(raw_annotations)
+        except ValueError:
+            msg = "cluster-annotations must be a YAML mapping or key=value pairs"
+            self._raise_invalid_annotations(msg, raw_annotations)
 
     def _configure_datastore(self, config: Union[BootstrapConfig, UpdateClusterConfigRequest]):
         """Configure the datastore for the Kubernetes cluster.

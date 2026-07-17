@@ -156,3 +156,113 @@ def test_configure_datastore_extra_args(harness):
         "--listen-metrics-urls": "http://localhost:2381",
         "--clog": "true",
     }
+
+
+def test_assemble_annotations_empty(harness):
+    """Annotations stay None when cluster-annotations is empty."""
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config({"cluster-annotations": ""})
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.annotations is None, "Expected no annotations when config is empty"
+
+
+def test_assemble_annotations_simple(harness):
+    """Simple flat key/value YAML mapping is parsed into annotations."""
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config(
+        {"cluster-annotations": "k8sd/v1alpha1/metallb/advertise-all-pools: 'true'"}
+    )
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.annotations == {"k8sd/v1alpha1/metallb/advertise-all-pools": "true"}, (
+        f"Unexpected annotations: {ufcg.annotations}"
+    )
+
+
+def test_assemble_annotations_legacy_space_separated(harness):
+    """Legacy space-separated key=value format remains supported."""
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config(
+        {"cluster-annotations": "k8sd/v1alpha1/metallb/advertise-all-pools=true key2=value2"}
+    )
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.annotations == {
+        "k8sd/v1alpha1/metallb/advertise-all-pools": "true",
+        "key2": "value2",
+    }, f"Unexpected annotations: {ufcg.annotations}"
+
+
+def test_assemble_annotations_multiline_bgp_peers(harness):
+    """Multi-line YAML block literal for bgp-peers is preserved as a string."""
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    bgp_peers_yaml = (
+        "- peerAddress: 192.0.2.1\n"
+        "  peerASN: 65001\n"
+        "  myASN: 65000\n"
+        "  nodeSelector:\n"
+        "    topology.kubernetes.io/zone: zone-a\n"
+    )
+    annotation_config = (
+        "k8sd/v1alpha1/metallb/bgp-peers: |\n"
+        + "".join(f"  {line}\n" for line in bgp_peers_yaml.splitlines())
+        + 'k8sd/v1alpha1/metallb/advertise-all-pools: "true"\n'
+    )
+    harness.update_config({"cluster-annotations": annotation_config})
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.annotations is not None, "Expected annotations to be set"
+    assert "k8sd/v1alpha1/metallb/bgp-peers" in ufcg.annotations
+    assert "k8sd/v1alpha1/metallb/advertise-all-pools" in ufcg.annotations
+    assert ufcg.annotations["k8sd/v1alpha1/metallb/advertise-all-pools"] == "true"
+    # The bgp-peers value should contain the peer list as a YAML string
+    peers_val = ufcg.annotations["k8sd/v1alpha1/metallb/bgp-peers"]
+    assert "peerAddress: 192.0.2.1" in peers_val
+    assert "peerASN: 65001" in peers_val
+
+
+def test_assemble_annotations_not_overwritten_when_empty(harness):
+    """When cluster-annotations is empty, existing annotations from current config are kept."""
+    from k8sd_api_manager import UserFacingClusterConfig
+
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config({"cluster-annotations": ""})
+
+    existing = UserFacingClusterConfig()
+    existing.annotations = {"some-key": "some-value"}
+
+    ufcg = assemble_cluster_config(harness.charm, None, current=existing)
+    assert ufcg.annotations == {"some-key": "some-value"}, (
+        "Existing annotations should be preserved when cluster-annotations config is empty"
+    )
+
+
+def test_assemble_annotations_invalid_legacy_not_overwritten(harness):
+    """Invalid legacy format does not overwrite existing annotations."""
+    from k8sd_api_manager import UserFacingClusterConfig
+
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+    harness.update_config({"cluster-annotations": "key1=value1 broken-token"})
+
+    existing = UserFacingClusterConfig()
+    existing.annotations = {"some-key": "some-value"}
+
+    ufcg = assemble_cluster_config(harness.charm, None, current=existing)
+    assert ufcg.annotations == {"some-key": "some-value"}, (
+        "Existing annotations should be preserved when cluster-annotations is invalid"
+    )
