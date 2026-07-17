@@ -70,6 +70,7 @@ pytestmark = [
         file="test-bundle-dqlite.yaml",
         apps_channel={CONTROL_PLANE_APP: CHARM_UPGRADE_FROM, "k8s-worker": CHARM_UPGRADE_FROM},
     ),
+    pytest.mark.architecture("amd64"),
 ]
 
 
