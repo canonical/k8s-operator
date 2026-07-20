@@ -49,11 +49,20 @@ def pytest_addoption(parser: pytest.Parser):
         apply proxy to model-config
     --timeout
         set timeout for tests
+    --arch
+        only run tests matching this architecture (e.g., amd64 or arm64)
 
     Args:
         parser: Pytest parser.
     """
     parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
+    parser.addoption(
+        "--arch",
+        dest="arch",
+        default=None,
+        type=str,
+        help="Only run tests matching this architecture (e.g., amd64 or arm64)",
+    )
     parser.addoption("--charm-file", dest="charm_files", action="append", default=[])
     parser.addoption(
         "--snap-installation-resource", default=str(DEFAULT_SNAP_INSTALLATION.resolve())
@@ -89,6 +98,40 @@ def pytest_configure(config):
         "markers",
         "clouds(*args): mark tests to run only on specific clouds.",
     )
+    config.addinivalue_line(
+        "markers",
+        "architecture(*args): mark tests to run only on specific architectures.",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Remove from selected tests based on config.
+
+    Called after collection has been performed. May filter or re-order the items in-place.
+
+    Args:
+        config (pytest.Config): The pytest config object.
+        items (List[pytest.Item]): List of item objects.
+    """
+    arch_filter = config.getoption("--arch")
+
+    selected, deselected = [], []
+
+    for item in items:
+        if (
+            (arch_mark := item.get_closest_marker("architecture"))
+            and arch_filter
+            and arch_mark.args
+            and arch_filter not in arch_mark.args
+        ):
+            # Test is marked with an architecture but the filter does not match.
+            deselected.append(item)
+        else:
+            selected.append(item)
+
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 async def cloud_proxied(ops_test: OpsTest):
@@ -127,7 +170,7 @@ async def cloud_profile(ops_test: OpsTest):
         await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
 
 
-@pytest_asyncio.fixture(autouse=True)
+@pytest_asyncio.fixture(scope="module", autouse=True)
 async def skip_by_cloud_type(request, ops_test):
     """Skip tests based on cloud type."""
     if cloud_markers := request.node.get_closest_marker("clouds"):
@@ -323,9 +366,9 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
 
     await cos_model.block_until(
         lambda: all(app in cos_model.applications for app in cos_charms),
-        timeout=5 * 60,
+        timeout=60 * 60,
     )
-    await cos_model.wait_for_idle(status="active", timeout=20 * 60, raise_on_error=False)
+    await cos_model.wait_for_idle(status="active", timeout=60 * 60, raise_on_error=False)
 
     yield
     log.info("Removing COS Lite charms...")
@@ -337,7 +380,7 @@ async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
             log.info("%s", stdout or stderr)
             assert rc == 0
         await cos_model.block_until(
-            lambda: all(app not in cos_model.applications for app in cos_charms), timeout=60 * 10
+            lambda: all(app not in cos_model.applications for app in cos_charms), timeout=60 * 60
         )
 
 

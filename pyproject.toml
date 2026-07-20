@@ -67,6 +67,12 @@ ignored-classes = "ProfileManager,InstanceManager,NetworkManager"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
+markers = [
+    "architecture(*args): mark tests to run only on specific architectures.",
+    "bundle(file='', series='', apps_local=[], apps_channel={}, apps_resources={}): specify a YAML bundle file for a test.",
+    "clouds(*args): mark tests to run only on specific clouds.",
+    "cos: mark COS integration tests."
+]
 
 # Linting tools configuration
 [tool.ruff]
@@ -101,3 +107,10 @@ skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
 
 [tool.pyright]
 extraPaths = ["./charms/worker/k8s/lib", "./charms/worker/k8s/src"]
+
+# pytest-operator declares a hard dependency on upstream `juju`, which collides
+# with `juju-resolute` (both ship the top-level `juju` package). Drop the `juju`
+# requirement via an always-false marker so juju-resolute is the sole provider.
+# tox-uv installs test_requirements.txt with `uv pip install`, which honors this.
+[tool.uv]
+override-dependencies = ["juju ; sys_platform == 'never'"]

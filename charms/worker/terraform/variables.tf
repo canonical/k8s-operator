@@ -10,11 +10,11 @@ variable "app_name" {
 variable "base" {
   description = "Ubuntu bases to deploy the charm onto"
   type        = string
-  default     = "ubuntu@24.04"
+  default     = "ubuntu@26.04"
 
   validation {
-    condition     = contains(["ubuntu@20.04", "ubuntu@22.04", "ubuntu@24.04"], var.base)
-    error_message = "Base must be one of ubuntu@20.04, ubuntu@22.04, ubuntu@24.04"
+    condition     = contains(["ubuntu@22.04", "ubuntu@24.04", "ubuntu@26.04"], var.base)
+    error_message = "Base must be one of ubuntu@22.04, ubuntu@24.04, ubuntu@26.04"
   }
 }
 

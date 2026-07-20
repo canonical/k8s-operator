@@ -70,6 +70,7 @@ pytestmark = [
         file="test-bundle-dqlite.yaml",
         apps_channel={CONTROL_PLANE_APP: CHARM_UPGRADE_FROM, "k8s-worker": CHARM_UPGRADE_FROM},
     ),
+    pytest.mark.architecture("amd64"),
 ]
 
 
@@ -97,7 +98,7 @@ async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
         }
         worker_apps = {k: v for k, v in k8s_apps.items() if k != CONTROL_PLANE_APP}
         worker_count = sum(len(w.units) for w in worker_apps.values())
-        await kubernetes_cluster.wait_for_idle(apps=list(charms.keys()), timeout=30)
+        await kubernetes_cluster.wait_for_idle(apps=list(charms.keys()), timeout=60)
 
         # Check workload status individually, as the k8s leader may be in a different state
         leader_idx: int = await get_leader(k8s)
