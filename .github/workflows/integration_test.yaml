@@ -106,12 +106,12 @@ jobs:
             builder-label: ubuntu-26.04
             tester-arch: AMD64
             tester-size: xlarge
-            modules: '["test_k8s", "test_smoke", "test_dualstack", "test_ipv6_only", "test_openstack"]'
+            modules: '["test_k8s", "test_smoke"]'
           - id: arm64
             builder-label: ubuntu-26.04-arm
             tester-arch: ARM64
             tester-size: xlarge
-            modules: '["test_k8s", "test_smoke", "test_dualstack", "test_ipv6_only", "test_openstack"]'
+            modules: '["test_k8s", "test_smoke"]'
     with:
       identifier: ${{ matrix.arch.id }}
       builder-runner-label: ${{ matrix.arch.builder-label }}

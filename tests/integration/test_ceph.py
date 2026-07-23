@@ -8,50 +8,53 @@
 
 import re
 
+import jubilant
 import pytest
-import pytest_asyncio
 import storage
-from juju import model
+from helpers import fast_forward, wait_active
 from kubernetes.client import ApiClient, CoreV1Api, StorageV1Api
 from kubernetes.client import models as k8s_models
 from literals import ONE_MIN
-from pytest_operator.plugin import OpsTest
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
+APPS = ["k8s"]
 pytestmark = [
-    pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=["k8s"]),
+    pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=APPS),
     pytest.mark.architecture("amd64"),
 ]
 CEPH_CSI_MISSING_NS = re.compile(r"Missing namespace '(\S+)'")
 
 
-@pytest_asyncio.fixture(scope="module")
-async def ready_csi_apps(
-    ops_test: OpsTest, kubernetes_cluster: model.Model, api_client: ApiClient, timeout: int
-) -> None:
-    """Wait for the CSI apps to be ready."""
+@pytest.fixture(scope="module")
+def ready_csi_apps(k8s_cluster: jubilant.Juju, api_client: ApiClient, timeout: int) -> None:
+    """Wait for the CSI apps to be ready.
+
+    Args:
+        k8s_cluster: Jubilant Juju instance with the cluster deployed.
+        api_client: The Kubernetes API client.
+        timeout: Timeout in minutes.
+    """
     v1 = CoreV1Api(api_client)
-    csi_apps = [
-        app for app in kubernetes_cluster.applications.values() if app.charm_name == "ceph-csi"
-    ]
+    status = k8s_cluster.status()
+    csi_apps = [name for name, app in status.apps.items() if app.charm_name == "ceph-csi"]
+
     for app in csi_apps:
-        for unit in app.units:
-            if m := CEPH_CSI_MISSING_NS.match(unit.workload_status_message):
-                namespace = m.group(1)
+        # ceph-csi is subordinate, so its units live under the principal's units.
+        for unit in status.get_units(app).values():
+            if match := CEPH_CSI_MISSING_NS.match(unit.workload_status.message):
+                namespace = match.group(1)
                 v1.create_namespace(
                     body=k8s_models.V1Namespace(metadata=k8s_models.V1ObjectMeta(name=namespace))
                 )
                 break
 
-    async with ops_test.fast_forward(ONE_MIN):
-        await kubernetes_cluster.wait_for_idle(
-            apps=[app.name for app in csi_apps], status="active", timeout=timeout * 60
-        )
+    with fast_forward(k8s_cluster, ONE_MIN):
+        wait_active(k8s_cluster, *csi_apps, timeout=timeout * 60)
 
 
 @pytest.mark.usefixtures("ready_csi_apps")
-async def test_ceph_sc(kubernetes_cluster: model.Model, api_client: ApiClient):
+def test_ceph_sc(k8s_cluster: jubilant.Juju, api_client: ApiClient):
     """Test that a ceph storage class is available and validate pv attachments."""
     v1 = StorageV1Api(api_client)
     classes = v1.list_storage_class()
@@ -59,6 +62,6 @@ async def test_ceph_sc(kubernetes_cluster: model.Model, api_client: ApiClient):
     assert len(ceph_classes) > 0, "No ceph storage classes found"
     for sc in ceph_classes:
         definition = storage.StorageProviderTestDefinition(
-            "ceph", sc.metadata.name, sc.provisioner, kubernetes_cluster
+            "ceph", sc.metadata.name, sc.provisioner, k8s_cluster
         )
-        await storage.exec_storage_class(definition, api_client)
+        storage.exec_storage_class(definition, api_client)

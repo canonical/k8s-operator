@@ -5,29 +5,23 @@
 
 """Upgrade Integration tests."""
 
-import datetime
 import logging
 import os
+import shutil
 import subprocess
-from typing import Iterable, Optional, Tuple
+from typing import Dict, Iterable, Tuple
 
-import juju.application
-import juju.model
-import juju.unit
+import jubilant
 import pytest
 import yaml
-from helpers import CHARMCRAFT_DIRS, Bundle, get_leader, wait_pod_phase
-from pytest_operator.plugin import OpsTest
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_not_exception_type,
-    stop_after_delay,
-    wait_fixed,
-)
+from bundle import Bundle, Charm
+from cloud import cloud_arch
+from helpers import get_leader, wait_pod_phase
+from literals import CHARMCRAFT_DIRS
 
 CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.32/beta")
 CONTROL_PLANE_APP = "k8s"
+UPGRADE_TIMEOUT = 30 * 60
 log = logging.getLogger(__name__)
 
 
@@ -42,21 +36,20 @@ def charm_channel_missing(charms: Iterable[str], channel: str) -> Tuple[bool, st
         True if the charm channel or any lower risk exists, False otherwise
         Returns a string with the reason if True
     """
+    if not shutil.which("juju"):
+        # This runs at import time. The CI job that only collects tests (to build the
+        # per-module matrix) has no juju CLI, and letting FileNotFoundError escape there
+        # turns into a collection error that silently drops this module from the matrix.
+        log.warning("juju CLI not found; skipping the upgrade-channel availability check")
+        return False, ""
+
     risk_levels = ["edge", "beta", "candidate", "stable"]
     track, riskiest, *_ = channel.split("/")
     riskiest_level = risk_levels.index(riskiest)
     for app in charms:
         for lookup in risk_levels[riskiest_level:]:
-            out = subprocess.check_output(
-                [
-                    "juju",
-                    "info",
-                    app,
-                    "--channel",
-                    f"{track}/{lookup}",
-                    "--format",
-                    "yaml",
-                ]
+            out = subprocess.check_output(  # noqa: S603
+                ["juju", "info", app, "--channel", f"{track}/{lookup}", "--format", "yaml"]
             )
             track_map = yaml.safe_load(out).get("channels", {}).get(track, {})
             if lookup in track_map:
@@ -84,80 +77,64 @@ pytestmark = [
 ]
 
 
-async def test_upgrade(kubernetes_cluster: juju.model.Model, ops_test: OpsTest):
-    """Upgrade the model with the provided charms.
+def _upgrade_complete(charms: Iterable[str]):
+    """Build a jubilant wait predicate that reports whether the upgrade has finished.
+
+    While workers are still upgrading, the control-plane leader is expected to sit in
+    "waiting" with a specific message; everything else must be active.
 
     Args:
-        kubernetes_cluster: The kubernetes model
-        ops_test: The test harness
-        request: The request object
+        charms: The applications being refreshed.
+
+    Returns:
+        A callable suitable for ``jubilant.Juju.wait``'s *ready* argument.
     """
+    charms = list(charms)
 
-    @retry(
-        wait=wait_fixed(5),
-        stop=stop_after_delay(datetime.timedelta(minutes=30)),
-        before_sleep=before_sleep_log(log, logging.WARNING),
-        retry=retry_if_not_exception_type(juju.model.JujuUnitError),
-    )
-    async def _wait_for_upgrade_complete() -> None:
-        """Wait for the model to become idle."""
-        k8s_apps = {
-            k: v
-            for k, v in kubernetes_cluster.applications.items()
-            if k.startswith(CONTROL_PLANE_APP)
-        }
-        worker_apps = {k: v for k, v in k8s_apps.items() if k != CONTROL_PLANE_APP}
-        worker_count = sum(len(w.units) for w in worker_apps.values())
-        await kubernetes_cluster.wait_for_idle(apps=list(charms.keys()), timeout=60)
-
-        # Check workload status individually, as the k8s leader may be in a different state
-        leader_idx: int = await get_leader(k8s)
-        for name, app in k8s_apps.items():
-            for idx, unit in enumerate(app.units):
-                err = f"{unit.name} has not completed upgrade: {unit.workload_status_message}"
-                status, message = unit.workload_status, unit.workload_status_message
-                if status == "error":
-                    raise juju.model.JujuUnitError(message)
-                if name == CONTROL_PLANE_APP and idx == leader_idx and worker_count > 0:
-                    assert status in ["waiting", "active"], err
-                    assert message in [
+    def ready(status: jubilant.Status) -> bool:
+        k8s_apps = {k: v for k, v in status.apps.items() if k.startswith(CONTROL_PLANE_APP)}
+        worker_count = sum(
+            len(status.get_units(name)) for name in k8s_apps if name != CONTROL_PLANE_APP
+        )
+        for name in k8s_apps:
+            for unit_name, unit in status.get_units(name).items():
+                current = unit.workload_status.current
+                message = unit.workload_status.message
+                if name == CONTROL_PLANE_APP and unit.leader and worker_count > 0:
+                    if current not in ("waiting", "active"):
+                        return False
+                    if message not in (
                         f"Waiting for {worker_count} Workers to upgrade",
                         "Ready",
-                    ], err
-                else:
-                    assert status == "active", err
+                    ):
+                        return False
+                elif current != "active":
+                    return False
+        return jubilant.all_agents_idle(status, *charms)
 
-    async def _refresh(model: juju.model.Model, app_name: str):
-        """Refresh the application.
+    return ready
 
-        Args:
-            model: The model to refresh the application in
-            app_name: Name of the application to refresh
-        """
-        app: Optional[juju.application.Application] = model.applications[app_name]
-        assert app is not None, f"Application {app_name} not found"
 
+def test_upgrade(k8s_cluster: jubilant.Juju, request: pytest.FixtureRequest):
+    """Upgrade the model with the provided charms."""
+    local_resource: str = request.config.option.snap_installation_resource
+    bundle, _ = Bundle.create(request, cloud_arch(k8s_cluster.show_model().controller_name))
+    charms: Dict[str, Charm] = bundle.discover_charm_files(request.config.option.charm_files)
+    ready = _upgrade_complete(charms)
+
+    k8s_leader = get_leader(k8s_cluster, CONTROL_PLANE_APP)
+    wait_pod_phase(k8s_cluster, k8s_leader, None, "Running", namespace="kube-system")
+
+    for app_name, charm in charms.items():
         log.info("Refreshing %s", app_name)
-        leader_idx: int = await get_leader(app)
-        leader: juju.unit.Unit = app.units[leader_idx]
-        action = await leader.run_action("pre-upgrade-check")
-        resources = {"snap-installation": local_resource}
-        await action.wait()
-        with_fault = f"Pre-upgrade of '{app_name}' failed with {yaml.safe_dump(action.results)}"
-        assert action.status == "completed", with_fault
-        assert action.results["return-code"] == 0, with_fault
-        await app.refresh(path=charms[app_name].local_path, resources=resources)
-        await _wait_for_upgrade_complete()
-
-    k8s = kubernetes_cluster.applications["k8s"]
-    k8s_leader_idx: int = await get_leader(k8s)
-    k8s_leader: juju.unit.Unit = k8s.units[k8s_leader_idx]
-
-    await wait_pod_phase(k8s_leader, None, "Running", namespace="kube-system")
-
-    local_resource: str = ops_test.request.config.option.snap_installation_resource
-    bundle, _ = await Bundle.create(ops_test)
-    charms = await bundle.discover_charm_files(ops_test)
-    for app in charms:
-        await _refresh(kubernetes_cluster, app)
-        await wait_pod_phase(k8s_leader, None, "Running", namespace="kube-system")
+        # juju.run raises TaskError if pre-upgrade-check fails.
+        k8s_cluster.run(get_leader(k8s_cluster, app_name), "pre-upgrade-check", wait=300)
+        k8s_cluster.refresh(
+            app_name,
+            path=charm.local_path,
+            resources={"snap-installation": local_resource},
+        )
+        k8s_cluster.wait(
+            ready, error=jubilant.any_error, timeout=UPGRADE_TIMEOUT, delay=5, successes=3
+        )
+        wait_pod_phase(k8s_cluster, k8s_leader, None, "Running", namespace="kube-system")
