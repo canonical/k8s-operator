@@ -19,14 +19,15 @@ applications:
 
 # The constraints on the ceph-mon and ceph-osd units are set to ensure
 # that they have enough resources to run properly as virtual-machines on
-# LXD when run in a CI environment on GH. 4G of disk is the minimum
-# required for the OS to operate. These match the constraints set in
-# the nightly tests where there are multiple ceph clusters
+# LXD when run in a CI environment on GH. 8G of disk is required: the base
+# image plus the ~400M the ceph packages install no longer fits in 4G, which
+# fails the ceph-mon install hook with "No space left on device". These match
+# the constraints set in the nightly tests where there are multiple ceph clusters
 # see tests/integration/terraform/ceph-manifest.yaml
   ceph-mon:
     charm: ceph-mon
     channel: &ceph-channel squid/stable
-    constraints: cores=2 mem=2G root-disk=4G
+    constraints: cores=4 mem=4G root-disk=8G
     num_units: 1
     options:
       monitor-count: 1
@@ -34,7 +35,7 @@ applications:
   ceph-osd:
     charm: ceph-osd
     channel: *ceph-channel
-    constraints: cores=2 mem=4G root-disk=8G
+    constraints: cores=4 mem=8G root-disk=16G
     num_units: 2
     storage:
       osd-devices: 1G,1
