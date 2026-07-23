@@ -19,7 +19,10 @@ from cloud import cloud_arch
 from helpers import get_leader, wait_pod_phase
 from literals import CHARMCRAFT_DIRS
 
-CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.32/beta")
+# NOTE: Must satisfy the k8s_service "upgrade_supported" range in
+# charms/worker/k8s/src/literals.py -- the charm refuses to upgrade from outside it,
+# leaving the control-plane leader blocked. Bump this whenever that range moves.
+CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.33/beta")
 CONTROL_PLANE_APP = "k8s"
 UPGRADE_TIMEOUT = 30 * 60
 log = logging.getLogger(__name__)
