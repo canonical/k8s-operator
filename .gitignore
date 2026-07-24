@@ -12,6 +12,8 @@ __pycache__/
 .style-guide/
 *.egg-info/
 */*.rock
+juju-crashdump-*.tar.xz
+juju-crashdump-*.xz
 
 **/terraform.tfstate
 **/terraform.tfstate.backup
