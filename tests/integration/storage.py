@@ -3,21 +3,31 @@
 
 """Generic test methods for testing kubernetes storage."""
 
+import contextlib
 import dataclasses
-from pathlib import Path
+import logging
 from typing import Generator, List
 
-from juju import model, unit
+import helpers
+import jubilant
 from kubernetes.client import ApiClient
 from kubernetes.utils import create_from_yaml
+from literals import TEST_DATA
 
-from . import helpers
+log = logging.getLogger(__name__)
+STORAGE_PATH = TEST_DATA / "test_storage_provider"
 
 
-def _get_data_file_path(name) -> str:
-    """Retrieve the full path of the specified test data file."""
-    path = Path(__file__).parent / "data" / "test_storage_provider" / name
-    return str(path)
+def _get_data_file_path(name: str) -> str:
+    """Retrieve the full path of the specified test data file.
+
+    Args:
+        name: The manifest file name.
+
+    Returns:
+        The absolute path to the manifest file.
+    """
+    return str(STORAGE_PATH / name)
 
 
 @dataclasses.dataclass
@@ -27,7 +37,7 @@ class StorageProviderManifests:
     Attributes:
         pvc:           PVC manifest file name.
         pv_writer_pod: PV writer pod manifest file name.
-        pv_reader_pod: PV reader pod
+        pv_reader_pod: PV reader pod manifest file name.
     """
 
     pvc: str
@@ -44,7 +54,7 @@ class StorageProviderManifests:
             yield getattr(self, field.name)
 
     def __reversed__(self) -> Generator[str, None, None]:
-        """Return the number of manifests.
+        """Iterate over the manifest names in reverse.
 
         Yields:
             str: The manifest file name.
@@ -61,28 +71,29 @@ class StorageProviderTestDefinition:
         name:               Name of the test definition.
         storage_class_name: The name of the storage class.
         provisioner:        The storage class provisioner.
-        cluster:            The k8s cluster model.
+        juju:               Jubilant Juju instance for the cluster's model.
         manifests:          The storage provider manifests.
     """
 
     name: str
     storage_class_name: str
     provisioner: str
-    cluster: model.Model
+    juju: jubilant.Juju
     manifests: StorageProviderManifests
 
 
-async def exec_storage_class(definition: StorageProviderTestDefinition, api_client: ApiClient):
+def exec_storage_class(definition: StorageProviderTestDefinition, api_client: ApiClient) -> None:
     """Test that a storage class is available and validate pv attachments.
 
     Args:
         definition: The storage provider test definition.
         api_client: The k8s api client.
     """
-    k8s: unit.Unit = definition.cluster.applications["k8s"].units[0]
-    event = await k8s.run("k8s kubectl get sc -o=jsonpath='{.items[*].provisioner}'")
-    result = await event.wait()
-    stdout = result.results["stdout"]
+    juju = definition.juju
+    unit = helpers.get_leader(juju, "k8s")
+    stdout = juju.exec(
+        "k8s kubectl get sc -o=jsonpath='{.items[*].provisioner}'", unit=unit
+    ).stdout
     manifests = definition.manifests
     assert definition.provisioner in stdout, f"No {definition.name} provisioner found in: {stdout}"
     created: List = []
@@ -95,20 +106,21 @@ async def exec_storage_class(definition: StorageProviderTestDefinition, api_clie
         created.extend(*create_from_yaml(api_client, _get_data_file_path(manifests.pv_writer_pod)))
 
         # Wait for the pod to exit successfully.
-        await helpers.wait_pod_phase(k8s, "pv-writer-test", "Succeeded")
+        helpers.wait_pod_phase(juju, unit, "pv-writer-test", "Succeeded")
 
         # Create a pod that reads the PV data and writes it to the log.
         created.extend(*create_from_yaml(api_client, _get_data_file_path(manifests.pv_reader_pod)))
 
-        await helpers.wait_pod_phase(k8s, "pv-reader-test", "Succeeded")
+        helpers.wait_pod_phase(juju, unit, "pv-reader-test", "Succeeded")
 
         # Check the logged PV data.
-        logs = await helpers.get_pod_logs(k8s, "pv-reader-test")
+        logs = helpers.get_pod_logs(juju, unit, "pv-reader-test")
         assert "PVC test data" in logs
     finally:
-        # Cleanup
+        # Cleanup. A delete of an already-gone resource exits non-zero, which juju.exec
+        # would raise; suppress that so cleanup of the remaining resources still runs.
         for resource in reversed(created):
             kind = resource.kind
             name = resource.metadata.name
-            event = await k8s.run(f"k8s kubectl delete {kind} {name}")
-            result = await event.wait()
+            with contextlib.suppress(jubilant.TaskError):
+                juju.exec(f"k8s kubectl delete {kind} {name}", unit=unit)

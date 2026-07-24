@@ -3,37 +3,30 @@
 
 """Openstack specific Integration tests."""
 
-import asyncio
 from typing import Dict
 
-import juju.model
+import jubilant
 import pytest
+import storage
 import yaml
+from helpers import fast_forward, get_leader, unit_names, wait_active
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.client.models import V1DaemonSet, V1DaemonSetList, V1NodeList
-
-from . import storage
-from .literals import ONE_MIN
+from literals import ONE_MIN
 
 CLOUD_TYPE = "openstack"
 CONTROLLER_NAME = "openstack-cloud-controller-manager"
 STORAGE_CLASS_NAME = "csi-cinder-default"
 
+APPS = ["k8s"]
 pytestmark = [
-    pytest.mark.bundle(file="test-bundle-openstack.yaml", apps_local=["k8s"]),
+    pytest.mark.bundle(file="test-bundle-openstack.yaml", apps_local=APPS),
     pytest.mark.clouds(CLOUD_TYPE),
     pytest.mark.architecture("amd64"),
 ]
 
 
-def removeprefix(text: str, prefix: str) -> str:
-    """Remove prefix from a string if it exists."""
-    if text.startswith(prefix):
-        return text[len(prefix) :]
-    return text
-
-
-async def test_cloud_provider(api_client: ApiClient):
+def test_cloud_provider(api_client: ApiClient):
     """Verify the cloud controller is running."""
     v1 = AppsV1Api(api_client)
     ds_list: V1DaemonSetList = v1.list_namespaced_daemon_set(namespace="kube-system")
@@ -45,7 +38,7 @@ async def test_cloud_provider(api_client: ApiClient):
     assert ds.status.number_ready == ds.status.desired_number_scheduled, "Controller not ready"
 
 
-async def test_provider_ids(api_client: ApiClient):
+def test_provider_ids(api_client: ApiClient):
     """Verify the cloud controller has assigned provider ids."""
     v1 = CoreV1Api(api_client)
     node_list: V1NodeList = v1.list_node()
@@ -55,42 +48,34 @@ async def test_provider_ids(api_client: ApiClient):
         assert node.spec.provider_id.startswith(f"{CLOUD_TYPE}://")
 
 
-async def test_cinder_pv(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
+def test_cinder_pv(k8s_cluster: jubilant.Juju, api_client: ApiClient):
     """Test that a cinder storage class is available and validate pv attachments."""
     manifests = storage.StorageProviderManifests(
         "cinder-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"
     )
     definition = storage.StorageProviderTestDefinition(
-        "cinder", STORAGE_CLASS_NAME, "cinder.csi.openstack.org", kubernetes_cluster, manifests
+        "cinder", STORAGE_CLASS_NAME, "cinder.csi.openstack.org", k8s_cluster, manifests
     )
-    await storage.exec_storage_class(definition, api_client)
+    storage.exec_storage_class(definition, api_client)
 
 
-async def test_api_load_balancer(kubernetes_cluster: juju.model.Model, api_client: ApiClient):
+def test_api_load_balancer(k8s_cluster: jubilant.Juju, api_client: ApiClient):
     """Test k8s api load balancer.
 
     This test checks that the Kubernetes API server is accessible via a load balancer managed
     by the OpenStack through the openstack-integrator.
     """
-    k8s = kubernetes_cluster.applications["k8s"]
-
-    # Get the server endpoint
-    action = await k8s.units[0].run_action("get-kubeconfig")
-    result = await action.wait()
-    completed = result.status == "completed" or result.results["return-code"] == 0
-    assert completed, "Failed to get kubeconfig"
-    kubeconfig_raw = result.results["kubeconfig"]
-    kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
+    unit = unit_names(k8s_cluster, "k8s")[0]
+    kubeconfig_yaml = yaml.safe_load(k8s_cluster.run(unit, "get-kubeconfig").results["kubeconfig"])
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
 
-    server_endpoint = removeprefix(server_endpoint, "https://")
+    server_endpoint = server_endpoint.removeprefix("https://")
     server_endpoint = server_endpoint[: server_endpoint.rfind(":")]
     server_endpoint = server_endpoint.strip("[")
     server_endpoint = server_endpoint.strip("]")
 
-    for unit in k8s.units:
-        addr = await unit.get_public_address()
-        assert addr != server_endpoint, "External lb not configured"
+    for unit_status in k8s_cluster.status().get_units("k8s").values():
+        assert unit_status.public_address != server_endpoint, "External lb not configured"
 
     api_client.configuration.host = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
     v1 = CoreV1Api(api_client)
@@ -99,31 +84,22 @@ async def test_api_load_balancer(kubernetes_cluster: juju.model.Model, api_clien
     assert node_list.items, "No nodes found"
 
 
-async def test_extra_sans(ops_test, kubernetes_cluster: juju.model.Model, timeout: int):
+def test_extra_sans(k8s_cluster: jubilant.Juju, timeout: int):
     """Test extra sans config."""
-    k8s = kubernetes_cluster.applications["k8s"]
-
     extra_san = "test.example.com"
-    sans_config = {"kube-apiserver-extra-sans": extra_san}
-    async with ops_test.fast_forward(ONE_MIN):
-        await asyncio.gather(k8s.set_config(sans_config))
-        await kubernetes_cluster.wait_for_idle(status="active", timeout=timeout * 60)
+    with fast_forward(k8s_cluster, ONE_MIN):
+        k8s_cluster.config("k8s", {"kube-apiserver-extra-sans": extra_san})
+        wait_active(k8s_cluster, timeout=timeout * 60)
 
-    # Get the server endpoint
-    action = await k8s.units[0].run_action("get-kubeconfig")
-    result = await action.wait()
-    completed = result.status == "completed" or result.results["return-code"] == 0
-    assert completed, "Failed to get kubeconfig"
-    kubeconfig_raw = result.results["kubeconfig"]
-    kubeconfig_yaml = yaml.safe_load(kubeconfig_raw)
-
+    unit = get_leader(k8s_cluster, "k8s")
+    kubeconfig_yaml = yaml.safe_load(k8s_cluster.run(unit, "get-kubeconfig").results["kubeconfig"])
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
-    server_endpoint = removeprefix(server_endpoint, "https://")
+    server_endpoint = server_endpoint.removeprefix("https://")
 
-    result = await k8s.units[0].run(
+    # openssl s_client can exit non-zero even when it printed the certificate.
+    out = k8s_cluster.exec(
         f"echo | openssl s_client -connect {server_endpoint} -servername {extra_san} | "
-        f"openssl x509 -noout -text"
-    )
-    result = await result.wait()
-    out = result.results["stdout"]
+        f"openssl x509 -noout -text || true",
+        unit=unit,
+    ).stdout
     assert extra_san in out, f"Extra SAN {extra_san} not found in certificate"
