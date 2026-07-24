@@ -8,19 +8,19 @@
 import datetime
 import ipaddress
 import logging
-from pathlib import Path
 
-import juju.model
+import jubilant
 import pytest
 from helpers import get_leader, ready_nodes, wait_pod_phase
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.utils import create_from_yaml
+from literals import TEST_DATA
 
 log = logging.getLogger(__name__)
 
-
+APPS = ["k8s"]
 pytestmark = [
-    pytest.mark.bundle(file="test_dualstack/bundle.yaml", apps_local=["k8s"]),
+    pytest.mark.bundle(file="test_dualstack/bundle.yaml", apps_local=APPS),
     pytest.mark.clouds(
         "lxd",
         profiles=["test_dualstack/dualstack.profile"],
@@ -30,23 +30,29 @@ pytestmark = [
 ]
 
 
-async def test_nodes_ready(kubernetes_cluster: juju.model.Model):
+def test_nodes_ready(k8s_cluster: jubilant.Juju):
     """Deploy the charm and wait for active/idle status."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    expected_nodes = len(k8s.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
+    expected_nodes = len(k8s_cluster.status().get_units("k8s"))
+    ready_nodes(k8s_cluster, get_leader(k8s_cluster, "k8s"), expected_nodes)
 
 
-async def test_kube_system_pods(kubernetes_cluster: juju.model.Model):
+def test_kube_system_pods(k8s_cluster: jubilant.Juju):
     """Test that the kube-system pods are running."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    await wait_pod_phase(leader, None, "Running", namespace="kube-system")
+    leader = get_leader(k8s_cluster, "k8s")
+    wait_pod_phase(k8s_cluster, leader, None, "Running", namespace="kube-system")
 
 
 def wait_for_nginx_service(api_client: ApiClient, name: str, namespace: str):
-    """Wait for the nginx service to be ready."""
+    """Wait for the nginx service to be ready.
+
+    Args:
+        api_client: The Kubernetes API client.
+        name: Service name.
+        namespace: Service namespace.
+
+    Returns:
+        The service once it has cluster IPs.
+    """
     v1 = CoreV1Api(api_client)
     now = datetime.datetime.now()
     timeout_15s = now + datetime.timedelta(seconds=15)
@@ -59,9 +65,16 @@ def wait_for_nginx_service(api_client: ApiClient, name: str, namespace: str):
 
 @pytest.fixture()
 def deploy_dualstack(api_client: ApiClient):
-    """Create services from the dualstack nginx yaml."""
-    nginx_dualstack = Path("tests/integration/data/test_dualstack/nginx-dualstack.yaml")
-    deployment, services = create_from_yaml(api_client, nginx_dualstack)
+    """Create services from the dualstack nginx yaml.
+
+    Args:
+        api_client: The Kubernetes API client.
+
+    Yields:
+        Tuple of created deployments and services.
+    """
+    nginx_dualstack = TEST_DATA / "test_dualstack" / "nginx-dualstack.yaml"
+    deployment, services = create_from_yaml(api_client, str(nginx_dualstack))
     yield deployment, services
     v1svc, v1app = CoreV1Api(api_client), AppsV1Api(api_client)
     for svc in services:
@@ -70,7 +83,7 @@ def deploy_dualstack(api_client: ApiClient):
         v1app.delete_namespaced_deployment(deploy.metadata.name, deploy.metadata.namespace)
 
 
-async def test_nginx_dualstack(deploy_dualstack, api_client: ApiClient):
+def test_nginx_dualstack(deploy_dualstack, api_client: ApiClient):
     """Test that dualstack is enabled."""
     _, services = deploy_dualstack
     assert services, "No services created from dualstack nginx yaml"
