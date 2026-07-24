@@ -6,27 +6,26 @@
 # pylint: disable=duplicate-code
 """Integration tests."""
 
+import jubilant
 import pytest
-from juju import model
+import storage
 from kubernetes.client import ApiClient
-
-from . import storage
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
+APPS = ["k8s"]
 pytestmark = [
-    pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=["k8s"]),
+    pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=APPS),
     pytest.mark.architecture("amd64"),
 ]
 
 
-@pytest.mark.abort_on_fail
-async def test_ceph_sc(kubernetes_cluster: model.Model, api_client: ApiClient):
+def test_ceph_sc(k8s_cluster: jubilant.Juju, api_client: ApiClient):
     """Test that a ceph storage class is available and validate pv attachments."""
     manifests = storage.StorageProviderManifests(
         "ceph-xfs-pvc.yaml", "pv-writer-pod.yaml", "pv-reader-pod.yaml"
     )
     definition = storage.StorageProviderTestDefinition(
-        "ceph", "ceph-xfs", "rbd.csi.ceph.com", kubernetes_cluster, manifests
+        "ceph", "ceph-xfs", "rbd.csi.ceph.com", k8s_cluster, manifests
     )
-    await storage.exec_storage_class(definition, api_client)
+    storage.exec_storage_class(definition, api_client)
