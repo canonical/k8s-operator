@@ -14,7 +14,7 @@ spec:
       claimName: test-pvc
   containers:
   - name: pv-reader
-    image: rocks.canonical.com/cdk/busybox:1.36
+    image: ghcr.io/canonical/cdk/busybox:1.36
     command: ["/bin/sh", "-c", "cat /pv/test_file"]
     volumeMounts:
     - name: test-pv

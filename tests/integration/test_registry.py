@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 TEST_DATA_PATH = Path(__file__).parent / "data" / "test_registries" / "pod.yaml"
 TEST_IMAGE = "busybox:1.36"
-TEST_SOURCE_IMAGE = f"rocks.canonical.com/cdk/{TEST_IMAGE}"
+TEST_SOURCE_IMAGE = f"ghcr.io/canonical/cdk/{TEST_IMAGE}"
 
 
 @pytest.mark.abort_on_fail
