@@ -6,7 +6,7 @@
 """Cluster configuration options."""
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import literals
 import ops
@@ -20,6 +20,9 @@ from k8sd_api_manager import (
     NetworkConfig,
     UserFacingClusterConfig,
 )
+
+if TYPE_CHECKING:  # pragma: no cover
+    from charm import K8sCharm
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +49,7 @@ def assemble_cluster_config(
     _assemble_ingress(charm, assembled)
     _assemble_metrics_server(charm, assembled)
     _assemble_load_balancer(charm, assembled)
+    _assemble_annotations(charm, assembled)
     assembled.cloud_provider = cloud_provider
     return assembled
 
@@ -127,3 +131,16 @@ def _assemble_load_balancer(charm: ops.CharmBase, assembled: UserFacingClusterCo
     load_balancer.bgp_peer_address = literals.LOAD_BALANCER_BGP_PEER_ADDRESS.get(charm)
     load_balancer.bgp_peer_asn = literals.LOAD_BALANCER_BGP_PEER_ASN.get(charm)
     load_balancer.bgp_peer_port = literals.LOAD_BALANCER_BGP_PEER_PORT.get(charm)
+
+
+def _assemble_annotations(charm: "K8sCharm", assembled: UserFacingClusterConfig):
+    """Populate cluster annotations from the cluster-annotations charm config.
+
+    Annotations are only overwritten when the cluster-annotations charm config
+    is non-empty. When it is unset, existing cluster annotations (e.g. those
+    set out-of-band via the k8s CLI) are left untouched.
+    """
+    annotations = charm._get_valid_annotations()
+    if annotations is None:
+        return
+    assembled.annotations = annotations

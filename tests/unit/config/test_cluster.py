@@ -156,3 +156,38 @@ def test_configure_datastore_extra_args(harness):
         "--listen-metrics-urls": "http://localhost:2381",
         "--clog": "true",
     }
+
+
+def test_configure_annotations(harness):
+    """Test configuring annotations via cluster-annotations charm config.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": "key1=value1 key2=value2"})
+    ufcg = assemble_cluster_config(harness.charm, None)
+    assert ufcg.annotations == {"key1": "value1", "key2": "value2"}
+
+
+def test_configure_annotations_not_overwritten_when_empty(harness):
+    """Test that existing annotations are preserved when cluster-annotations is unset.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": ""})
+    current = assemble_cluster_config(harness.charm, None)
+    current.annotations = {"out-of-band": "value"}
+
+    ufcg = assemble_cluster_config(harness.charm, None, current)
+    assert ufcg.annotations == {"out-of-band": "value"}
