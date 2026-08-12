@@ -372,7 +372,7 @@ def get_k8sd_cluster_config_annotations(juju: jubilant.Juju, unit: str) -> Dict[
         f"Failed to query k8sd cluster config on {unit}: {result.stderr}"
     )
     response = json.loads(result.stdout)
-    return response["metadata"]["config"].get("annotations", {})
+    return response["metadata"]["status"].get("annotations", {})
 
 
 def get_unit_cidrs(juju: jubilant.Juju, app: str, unit_num: int) -> List[str]:
