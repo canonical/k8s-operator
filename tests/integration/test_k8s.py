@@ -12,6 +12,7 @@ import jubilant
 import pytest
 from helpers import (
     fast_forward,
+    get_k8sd_cluster_config_annotations,
     get_leader,
     get_rsc,
     ready_nodes,
@@ -118,6 +119,29 @@ def test_nodes_labelled(request: pytest.FixtureRequest, k8s_cluster: jubilant.Ju
     nodes = get_rsc(k8s_cluster, leader, "nodes")
     labelled = [n for n in nodes if testname in n["metadata"]["labels"]]
     assert 0 == len(labelled), "Not all nodes labelled without custom-label"
+
+
+@pytest.mark.usefixtures("preserve_charm_config")
+def test_cluster_annotations(
+    request: pytest.FixtureRequest, k8s_cluster: jubilant.Juju, timeout: int
+):
+    """Test the charm's cluster-annotations config reaches k8sd."""
+    testname: str = request.node.name.replace("_", "-")
+    leader = get_leader(k8s_cluster, "k8s")
+
+    annotation_config = {"cluster-annotations": f"{testname}=true"}
+    with fast_forward(k8s_cluster, ONE_MIN):
+        k8s_cluster.config("k8s", annotation_config)
+        wait_active(k8s_cluster, "k8s", timeout=timeout * 60)
+
+    annotations = get_k8sd_cluster_config_annotations(k8s_cluster, leader)
+    assert annotations.get(testname) == "true", (
+        f"Expected annotation {testname}=true to reach k8sd, got: {annotations}"
+    )
+
+    with fast_forward(k8s_cluster, ONE_MIN):
+        k8s_cluster.config("k8s", reset=list(annotation_config))
+        wait_active(k8s_cluster, "k8s", timeout=timeout * 60)
 
 
 @pytest.mark.usefixtures("preserve_charm_config")
