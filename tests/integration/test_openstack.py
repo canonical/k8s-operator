@@ -26,6 +26,13 @@ pytestmark = [
 ]
 
 
+def removeprefix(text: str, prefix: str) -> str:
+    """Remove prefix from a string if it exists."""
+    if text.startswith(prefix):
+        return text[len(prefix) :]
+    return text
+
+
 def test_cloud_provider(api_client: ApiClient):
     """Verify the cloud controller is running."""
     v1 = AppsV1Api(api_client)
@@ -69,7 +76,7 @@ def test_api_load_balancer(k8s_cluster: jubilant.Juju, api_client: ApiClient):
     kubeconfig_yaml = yaml.safe_load(k8s_cluster.run(unit, "get-kubeconfig").results["kubeconfig"])
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
 
-    server_endpoint = server_endpoint.removeprefix("https://")
+    server_endpoint = removeprefix(server_endpoint, "https://")
     server_endpoint = server_endpoint[: server_endpoint.rfind(":")]
     server_endpoint = server_endpoint.strip("[")
     server_endpoint = server_endpoint.strip("]")
@@ -94,7 +101,7 @@ def test_extra_sans(k8s_cluster: jubilant.Juju, timeout: int):
     unit = get_leader(k8s_cluster, "k8s")
     kubeconfig_yaml = yaml.safe_load(k8s_cluster.run(unit, "get-kubeconfig").results["kubeconfig"])
     server_endpoint: str = kubeconfig_yaml["clusters"][0]["cluster"]["server"]
-    server_endpoint = server_endpoint.removeprefix("https://")
+    server_endpoint = removeprefix(server_endpoint, "https://")
 
     # openssl s_client can exit non-zero even when it printed the certificate.
     out = k8s_cluster.exec(
