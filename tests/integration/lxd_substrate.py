@@ -8,12 +8,12 @@ import logging
 import shlex
 import subprocess
 import time
-from pathlib import Path
 from platform import freedesktop_os_release as os_release
 from typing import Any, Dict, List, Optional, Union
 from urllib.request import urlopen
 
 import yaml
+from literals import TEST_DATA
 from pylxd import Client
 from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 from pylxd.models import Instance
@@ -21,7 +21,6 @@ from pylxd.models import Instance
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
-TEST_DATA = Path(__file__).parent / "data"
 K8S_PROFILE_URL = "https://raw.githubusercontent.com/canonical/k8s-snap/refs/heads/main/tests/integration/lxd-profile.yaml"
 
 
