@@ -20,15 +20,16 @@ ceph-csi:
 
 # The constraints on the ceph-mon and ceph-osd units are set to ensure
 # that they have enough resources to run properly as virtual-machines on
-# LXD when run in a CI environment on GH. 4G of disk is the minimum
-# required for the OS to operate. These match the constraints set in
-# the pr run tests where there is a single ceph clusters
+# LXD when run in a CI environment on GH. 8G of disk is required: the base
+# image plus the ~400M the ceph packages install no longer fits in 4G, which
+# fails the ceph-mon install hook with "No space left on device". These match
+# the constraints set in the pr run tests where there is a single ceph cluster
 # see tests/integration/data/test-bundle-ceph.yaml
 ceph-mon:
   cluster-name: main
   csi_integration: ceph
   channel: &ceph-channel squid/stable
-  constraints: &mon-constraints arch=amd64 cores=2 mem=2048M root-disk=4096M
+  constraints: &mon-constraints arch=amd64 cores=4 mem=4096M root-disk=8192M
   units: 1
   config:
     monitor-count: 1
@@ -37,7 +38,7 @@ ceph-osd:
   cluster-name: main
   csi_integration: ceph
   channel: *ceph-channel
-  constraints: &osd-constraints arch=amd64 cores=2 mem=4096M root-disk=8192M virt-type=virtual-machine
+  constraints: &osd-constraints arch=amd64 cores=4 mem=4096M root-disk=16384M virt-type=virtual-machine
   units: 2
   storage:
     osd-devices: 1G,1

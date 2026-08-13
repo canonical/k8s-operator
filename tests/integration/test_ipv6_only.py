@@ -3,24 +3,24 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Dualstack tests."""
+"""IPv6-only tests."""
 
 import datetime
 import ipaddress
 import logging
-from pathlib import Path
 
-import juju.model
+import jubilant
 import pytest
 from helpers import get_leader, ready_nodes, wait_pod_phase
 from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
 from kubernetes.utils import create_from_yaml
+from literals import TEST_DATA
 
 log = logging.getLogger(__name__)
 
-
+APPS = ["k8s"]
 pytestmark = [
-    pytest.mark.bundle(file="test_ipv6only/bundle.yaml", apps_local=["k8s"]),
+    pytest.mark.bundle(file="test_ipv6only/bundle.yaml", apps_local=APPS),
     pytest.mark.clouds(
         "lxd",
         profiles=["test_ipv6only/ipv6.profile"],
@@ -30,23 +30,29 @@ pytestmark = [
 ]
 
 
-async def test_nodes_ready(kubernetes_cluster: juju.model.Model):
+def test_nodes_ready(k8s_cluster: jubilant.Juju):
     """Deploy the charm and wait for active/idle status."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    expected_nodes = len(k8s.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
+    expected_nodes = len(k8s_cluster.status().get_units("k8s"))
+    ready_nodes(k8s_cluster, get_leader(k8s_cluster, "k8s"), expected_nodes)
 
 
-async def test_kube_system_pods(kubernetes_cluster: juju.model.Model):
+def test_kube_system_pods(k8s_cluster: jubilant.Juju):
     """Test that the kube-system pods are running."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    leader_idx = await get_leader(k8s)
-    leader = k8s.units[leader_idx]
-    await wait_pod_phase(leader, None, "Running", namespace="kube-system")
+    leader = get_leader(k8s_cluster, "k8s")
+    wait_pod_phase(k8s_cluster, leader, None, "Running", namespace="kube-system")
 
 
 def wait_for_nginx_service(api_client: ApiClient, name: str, namespace: str):
-    """Wait for the nginx service to be ready."""
+    """Wait for the nginx service to be ready.
+
+    Args:
+        api_client: The Kubernetes API client.
+        name: Service name.
+        namespace: Service namespace.
+
+    Returns:
+        The service once it has cluster IPs.
+    """
     v1 = CoreV1Api(api_client)
     now = datetime.datetime.now()
     timeout_15s = now + datetime.timedelta(seconds=15)
@@ -59,9 +65,16 @@ def wait_for_nginx_service(api_client: ApiClient, name: str, namespace: str):
 
 @pytest.fixture()
 def deploy_ipv6_only(api_client: ApiClient):
-    """Create services from the ipv6-only nginx yaml."""
-    nginx_ipv6_only = Path("tests/integration/data/test_ipv6only/nginx-ipv6-only.yaml")
-    deployment, services = create_from_yaml(api_client, nginx_ipv6_only)
+    """Create services from the ipv6-only nginx yaml.
+
+    Args:
+        api_client: The Kubernetes API client.
+
+    Yields:
+        Tuple of created deployments and services.
+    """
+    nginx_ipv6_only = TEST_DATA / "test_ipv6only" / "nginx-ipv6-only.yaml"
+    deployment, services = create_from_yaml(api_client, str(nginx_ipv6_only))
     yield deployment, services
     v1svc, v1app = CoreV1Api(api_client), AppsV1Api(api_client)
     for svc in services:
@@ -70,7 +83,7 @@ def deploy_ipv6_only(api_client: ApiClient):
         v1app.delete_namespaced_deployment(deploy.metadata.name, deploy.metadata.namespace)
 
 
-async def test_nginx_ipv6_only(deploy_ipv6_only, api_client: ApiClient):
+def test_nginx_ipv6_only(deploy_ipv6_only, api_client: ApiClient):
     """Test that ipv6-only is enabled."""
     _, services = deploy_ipv6_only
     assert services, "No services created from ipv6-only nginx yaml"

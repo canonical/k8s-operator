@@ -7,57 +7,74 @@
 
 import json
 
+import jubilant
 import pytest
-from helpers import ready_nodes
-from juju import model, unit
+from helpers import get_leader, ready_nodes, unit_names, unit_port, wait_active
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with etcd, for all the test within this module.
-pytestmark = [pytest.mark.bundle(file="test-bundle-etcd.yaml", apps_local=["k8s", "k8s-worker"])]
+APPS = ["k8s", "k8s-worker"]
+pytestmark = [pytest.mark.bundle(file="test-bundle-etcd.yaml", apps_local=APPS)]
 
 
-@pytest.mark.abort_on_fail
-async def test_nodes_ready(kubernetes_cluster: model.Model):
+def _etcd_servers(status: jubilant.Status) -> set:
+    """Return the expected etcd client URLs for every etcd unit.
+
+    Args:
+        status: A Juju status object.
+
+    Returns:
+        Set of ``https://<address>:<port>`` strings.
+    """
+    return {
+        f"https://{unit.public_address}:{unit_port(status, 'etcd', name)}"
+        for name, unit in status.get_units("etcd").items()
+    }
+
+
+def _k8s_status(k8s_cluster: jubilant.Juju) -> dict:
+    """Return the parsed output of ``k8s status`` on the first k8s unit.
+
+    Args:
+        k8s_cluster: Jubilant Juju instance with the cluster deployed.
+
+    Returns:
+        The parsed ``k8s status`` output.
+    """
+    unit = unit_names(k8s_cluster, "k8s")[0]
+    return json.loads(k8s_cluster.exec("k8s status --output-format json", unit=unit).stdout)
+
+
+def test_nodes_ready(k8s_cluster: jubilant.Juju):
     """Deploy the charm and wait for active/idle status."""
-    k8s = kubernetes_cluster.applications["k8s"]
-    worker = kubernetes_cluster.applications["k8s-worker"]
-    expected_nodes = len(k8s.units) + len(worker.units)
-    await ready_nodes(k8s.units[0], expected_nodes)
+    status = k8s_cluster.status()
+    expected_nodes = sum(len(status.get_units(app)) for app in APPS)
+    ready_nodes(k8s_cluster, get_leader(k8s_cluster, "k8s"), expected_nodes)
 
 
-@pytest.mark.abort_on_fail
-async def test_etcd_datastore(kubernetes_cluster: model.Model):
+def test_etcd_datastore(k8s_cluster: jubilant.Juju):
     """Test that etcd is the backend datastore."""
-    k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
-    etcd: unit.Unit = kubernetes_cluster.applications["etcd"].units[0]
-    etcd_port = etcd.safe_data["ports"][0]["number"]
-    event = await k8s.run("k8s status --output-format json")
-    result = await event.wait()
-    status = json.loads(result.results["stdout"])
-    assert status["ready"], "Cluster isn't ready"
-    assert status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
-    assert f"https://{etcd.public_address}:{etcd_port}" in status["datastore"]["servers"]
+    status = k8s_cluster.status()
+    etcd_unit = unit_names(k8s_cluster, "etcd")[0]
+    address = status.get_units("etcd")[etcd_unit].public_address
+    expected = f"https://{address}:{unit_port(status, 'etcd', etcd_unit)}"
+
+    k8s_status = _k8s_status(k8s_cluster)
+    assert k8s_status["ready"], "Cluster isn't ready"
+    assert k8s_status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
+    assert expected in k8s_status["datastore"]["servers"]
 
 
-@pytest.mark.abort_on_fail
-async def test_update_etcd_cluster(kubernetes_cluster: model.Model, timeout: int):
+def test_update_etcd_cluster(k8s_cluster: jubilant.Juju, timeout: int):
     """Test that adding etcd clusters are propagated to the k8s cluster."""
-    k8s: unit.Unit = kubernetes_cluster.applications["k8s"].units[0]
-    etcd = kubernetes_cluster.applications["etcd"]
-    count = 3 - len(etcd.units)
+    count = 3 - len(k8s_cluster.status().get_units("etcd"))
     if count > 0:
-        await etcd.add_unit(count=count)
-    at_least_sixty = max(60, timeout)
-    await kubernetes_cluster.wait_for_idle(status="active", timeout=at_least_sixty * 60)
+        k8s_cluster.add_unit("etcd", num_units=count)
+    wait_active(k8s_cluster, timeout=max(60, timeout) * 60)
 
-    expected_servers = []
-    for u in etcd.units:
-        etcd_port = u.safe_data["ports"][0]["number"]
-        expected_servers.append(f"https://{u.public_address}:{etcd_port}")
+    expected_servers = _etcd_servers(k8s_cluster.status())
 
-    event = await k8s.run("k8s status --output-format json")
-    result = await event.wait()
-    status = json.loads(result.results["stdout"])
-    assert status["ready"], "Cluster isn't ready"
-    assert status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
-    assert set(status["datastore"]["servers"]) == set(expected_servers)
+    k8s_status = _k8s_status(k8s_cluster)
+    assert k8s_status["ready"], "Cluster isn't ready"
+    assert k8s_status["datastore"]["type"] == "external", "Not bootstrapped against etcd"
+    assert set(k8s_status["datastore"]["servers"]) == expected_servers

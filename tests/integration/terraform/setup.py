@@ -8,15 +8,14 @@ See https://github.com/canonical/k8s-bundles/blob/main/terraform/README.md
 """
 
 import argparse
-import asyncio
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
-from juju.controller import Controller
 
 
 def run_command(
@@ -97,45 +96,76 @@ def ensure_terraform(expected_version: str) -> None:
         )
 
 
-async def setup_terraform_env(args) -> None:
-    """Retrieve Juju provider authentication details using the Juju Python library."""
-    async with Controller() as controller:
-        await controller.connect_current()
-        controller_name = controller.controller_name
-        controller_info = (await controller.info()).results[0]
-        user = controller.get_current_username()
-        cloud = await controller.get_cloud()
+def juju_json(*args: str) -> Any:
+    """Run a Juju CLI command with JSON output and return the parsed result.
 
-        # Read password from accounts.yaml as the Juju
-        # API does not expose the password for security reasons.
-        accounts_file = Path.home() / ".local/share/juju/accounts.yaml"
-        password = ""
-        if accounts_file.exists():
-            accounts_data = yaml.safe_load(accounts_file.read_text())
-            password = (
-                accounts_data.get("controllers", {}).get(controller_name, {}).get("password", "")
-            )
+    Args:
+        args: Command-line arguments, excluding the `juju` binary and `--format`.
 
-        # Set environment variables
-        os.environ.update(
-            {
-                "CONTROLLER": controller_name or "",
-                "JUJU_CONTROLLER_ADDRESSES": ",".join(controller_info.addresses) or "",
-                "JUJU_USERNAME": user or "",
-                "JUJU_PASSWORD": password or "",
-                "JUJU_CA_CERT": controller_info.cacert or "",
-                "TF_VAR_cloud": cloud or "",
-                "TF_VAR_model": args.model,
-                "TF_VAR_manifest_yaml": str(args.manifest_yaml.absolute()),
-            }
+    Returns:
+        The parsed JSON output.
+    """
+    output = run_command(["juju", *args, "--format", "json"], capture_output=True)
+    return json.loads(output or "{}")
+
+
+def show_controller() -> tuple:
+    """Return the current controller's name and its `juju show-controller` details.
+
+    Returns:
+        Tuple of controller name and the controller details mapping.
+    """
+    result: Dict[str, Any] = juju_json("show-controller")
+    name = next(iter(result))
+    return name, result[name]
+
+
+def setup_terraform_env(args) -> None:
+    """Retrieve Juju provider authentication details from the Juju CLI.
+
+    Args:
+        args: Parsed command-line arguments.
+    """
+    controller_name, controller = show_controller()
+    details = controller.get("details", {})
+
+    # Read password from accounts.yaml as neither the Juju API nor the CLI expose
+    # it, for security reasons.
+    accounts_file = Path.home() / ".local/share/juju/accounts.yaml"
+    password = ""
+    if accounts_file.exists():
+        accounts_data = yaml.safe_load(accounts_file.read_text())
+        password = (
+            accounts_data.get("controllers", {}).get(controller_name, {}).get("password", "")
         )
 
+    os.environ.update(
+        {
+            "CONTROLLER": controller_name,
+            "JUJU_CONTROLLER_ADDRESSES": ",".join(details.get("api-endpoints") or []),
+            "JUJU_USERNAME": controller.get("account", {}).get("user", ""),
+            "JUJU_PASSWORD": password or "",
+            "JUJU_CA_CERT": details.get("ca-cert") or "",
+            "TF_VAR_cloud": details.get("cloud") or "",
+            "TF_VAR_model": args.model,
+            "TF_VAR_manifest_yaml": str(args.manifest_yaml.absolute()),
+        }
+    )
 
-async def model_exists(model: str) -> bool:
-    """Check if the model already exists in the controller."""
-    async with Controller() as controller:
-        await controller.connect_current()
-        return model in await controller.list_models()
+
+def model_exists(model: str) -> bool:
+    """Check if the model already exists in the controller.
+
+    Args:
+        model: Short model name, without the owner prefix.
+
+    Returns:
+        True if the model exists.
+    """
+    models = juju_json("models").get("models") or []
+    # `juju models` reports both "admin/foo" (name) and "foo" (short-name); the
+    # libjuju list_models() this replaces returned the short form.
+    return model in {entry.get("short-name") for entry in models}
 
 
 def tf_run(path: Path, args: List[str]) -> None:
@@ -148,7 +178,7 @@ def tf_run(path: Path, args: List[str]) -> None:
         os.chdir(current)
 
 
-async def main() -> None:
+def main() -> None:
     """Set up entry point for Terraform and Juju."""
     script_dir = Path(__file__).resolve().parent
 
@@ -174,14 +204,14 @@ async def main() -> None:
     ensure_terraform(args.terraform_version)
 
     # Set up Juju auth details
-    await setup_terraform_env(args)
+    setup_terraform_env(args)
 
     # Run Terraform commands
     print("Initializing Terraform...")
     tf_run(args.terraform_module_path, ["init", "--upgrade"])
 
     # Import Existing Model if it exists
-    if await model_exists(args.model):
+    if model_exists(args.model):
         print("Import existing model...")
         tf_run(
             args.terraform_module_path,
@@ -200,4 +230,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
