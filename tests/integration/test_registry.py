@@ -50,11 +50,13 @@ def test_custom_registry(k8s_cluster: jubilant.Juju, api_client, timeout: int):
         k8s_cluster.config("k8s", {"containerd-custom-registries": config_string})
         helpers.wait_active(k8s_cluster, timeout=timeout * 60)
 
-    # juju.run raises TaskError if the action fails.
+    # juju.run raises TaskError if the action fails. Pulling and pushing the image can
+    # outlast juju's 60s default, so wait for the full test timeout instead.
     k8s_cluster.run(
         registry_unit,
         "push",
         {"image": TEST_SOURCE_IMAGE, "pull": True, "tag": tagged_image},
+        wait=timeout * 60,
     )
 
     # Create a pod that uses the busybox image from the custom registry.
