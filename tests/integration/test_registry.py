@@ -55,6 +55,7 @@ def test_custom_registry(k8s_cluster: jubilant.Juju, api_client, timeout: int):
         registry_unit,
         "push",
         {"image": TEST_SOURCE_IMAGE, "pull": True, "tag": tagged_image},
+        wait=timeout * 60,
     )
 
     # Create a pod that uses the busybox image from the custom registry.
