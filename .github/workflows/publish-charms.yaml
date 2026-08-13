@@ -43,6 +43,11 @@ jobs:
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
   publish-to-edge:
     needs: [configure-channel, charmcraft-channel]
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-charm-${{ github.ref }}-${{ matrix.charm.tagPrefix }}-${{ matrix.arch }}
+      cancel-in-progress: false
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@27f280ed34b54bd9f65451dc966bfde701e84b62 # main
     strategy:
       matrix:
