@@ -1,9 +1,9 @@
-async-lru
-juju-resolute>=3.6.1.3
+jubilant>=1.8,<2
+kubernetes
+PyYAML
 pydantic<2
 pylxd
 pytest
-pytest-asyncio
-pytest-operator
+pytest-jubilant>=2,<3
 tenacity
 requests < 2.32  # https://github.com/canonical/pylxd/issues/579
