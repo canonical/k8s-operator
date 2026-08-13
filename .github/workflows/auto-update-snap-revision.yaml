@@ -7,35 +7,30 @@ on:
     paths:
       - .github/workflows/auto-update-snap-revision.yaml
 
+permissions:
+  contents: read
+
 jobs:
   stable-branches:
     runs-on: ubuntu-latest
     outputs:
-      branches: ${{ steps.release-branches.outputs.data }}
+      branches: ${{ steps.release-branches.outputs.branches }}
     steps:
-    - uses: octokit/request-action@02f5e7c637a73a3b12ed81015fa7fb5f11cc5d7d # v2.x
-      id: list-branches
-      with:
-        route: GET /repos/${{ github.repository }}/branches
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - id: release-branches
+      name: List release branches
       run: |-
-        DATA="${STEPS_LIST_BRANCHES_OUTPUTS_DATA}"
-        NAMES=$(jq -r '.[] | .name' <<< $DATA)
-        RELEASES=()
-        for BRANCH in ${NAMES}; do
-            if [[ "${BRANCH}" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
-                RELEASES+=($BRANCH)
-            fi
-        done
-        echo data=$(printf '%s\n' "${RELEASES[@]}" | jq -R . | jq -s .) >> ${GITHUB_OUTPUT}
+        set -o pipefail
+        BRANCHES=$(git ls-remote --heads "https://github.com/${GITHUB_REPOSITORY}.git" 'refs/heads/release-*' |
+          cut -f2 |
+          jq -R -s -c 'split("\n") | map(select(test("^refs/heads/release-[0-9]+\\.[0-9]+$")) | sub("^refs/heads/"; "")) | sort')
+        echo "branches=${BRANCHES}" >> "${GITHUB_OUTPUT}"
       env:
-        STEPS_LIST_BRANCHES_OUTPUTS_DATA: ${{ steps.list-branches.outputs.data }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
 
   update-branches:
     runs-on: ubuntu-latest
     needs: [stable-branches]
+    if: needs.stable-branches.outputs.branches != '[]'
     strategy:
       matrix:
         branch: ${{ fromJSON(needs.stable-branches.outputs.branches) }}
@@ -51,7 +46,6 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         ref: ${{ matrix.branch }}
-        token: ${{ secrets.REPO_ACCESS_TOKEN }}
         persist-credentials: false
 
     - name: Fetch update-snap-revision.py into a separate path
