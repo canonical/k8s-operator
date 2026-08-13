@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 TEST_DATA_PATH = TEST_DATA / "test_registries" / "pod.yaml"
 TEST_IMAGE = "busybox:1.36"
-TEST_SOURCE_IMAGE = f"rocks.canonical.com/cdk/{TEST_IMAGE}"
+TEST_SOURCE_IMAGE = f"ghcr.io/canonical/cdk/{TEST_IMAGE}"
 
 
 def test_custom_registry(k8s_cluster: jubilant.Juju, api_client, timeout: int):
