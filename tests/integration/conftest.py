@@ -1,64 +1,53 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Fixtures for charm tests."""
+"""Fixtures for the Jubilant-based integration tests."""
 
-import contextlib
 import json
 import logging
 import random
 import shlex
+import shutil
 import string
+import subprocess
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import Dict, Iterator, List
 
-import juju.controller
-import juju.utils
+import jubilant
 import kubernetes.client.models as k8s_models
 import pytest
-import pytest_asyncio
 import yaml
-from cos_substrate import COSSubstrate, LXDSubstrate, VMOptions
-from helpers import Bundle, cloud_type, get_kubeconfig, get_unit_cidrs
-from juju.model import Model
-from juju.tag import untag
-from juju.url import URL
+from bundle import Bundle
+from cloud import cloud_arch, cloud_profile, cloud_proxied, cloud_type
+from helpers import fast_forward, get_kubeconfig, render_dir, wait_active
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
-from literals import ONE_MIN
-from pytest_operator.plugin import OpsTest
+from literals import DEFAULT_SNAP_INSTALLATION, ONE_MIN
 
 log = logging.getLogger(__name__)
-TEST_DATA = Path(__file__).parent / "data"
-DEFAULT_SNAP_INSTALLATION = TEST_DATA / "default-snap-installation.tar.gz"
+
+
+def _addoption_if_absent(parser: pytest.Parser, *args, **kwargs) -> None:
+    """Register a CLI option unless another plugin already registered it.
+
+    Registering an option a second time is a hard error, so options whose names are
+    commonly owned by third-party plugins go through here. For example, pytest-timeout
+    owns ``--timeout``, so installing it anywhere in the dependency tree would otherwise
+    break collection outright.
+
+    Args:
+        parser: Pytest parser.
+        args: Option strings.
+        kwargs: Option keyword arguments.
+    """
+    try:
+        parser.addoption(*args, **kwargs)
+    except ValueError:
+        log.debug("Option %s already registered by another plugin", args)
 
 
 def pytest_addoption(parser: pytest.Parser):
     """Parse additional pytest options.
-
-    --apply-proxy
-        Apply proxy to model-config.
-    --arch
-        Only run tests matching this architecture (e.g., amd64 or arm64).
-    --charm-file
-        Can be used multiple times, specifies which local charm files are available.
-        Expected filename format: {charmName}_{base}-{arch}.charm
-        Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm
-        Some tests use subordinate charms (e.g. Ceph) that expect the charm
-        base to match.
-    --lxd-containers
-        If cloud is LXD, use containers instead of LXD VMs.
-        Note that some charms may not work in LXD containers (e.g. Ceph).
-    --series
-        Ubuntu series to deploy, overrides any markings.
-    --snap-installation-resource
-        Path to the snap installation resource.
-        The tarball must contain either a "snap_installation.yaml" OR a
-        "*.snap" file.
-    --timeout
-        Set timeout for tests
-    --upgrade-from
-        Instruct tests to start with a specific channel, and upgrade to these charms.
 
     Args:
         parser: Pytest parser.
@@ -81,7 +70,7 @@ def pytest_addoption(parser: pytest.Parser):
         help=(
             "Can be used multiple times, specifies which local charm files are available. "
             r"Expected filename format: {charmName}_{base}-{arch}.charm. "
-            "Example: k8s-worker_ubuntu-22.04-amd64_ubuntu-24.04-amd64.charm. "
+            "Example: k8s-worker_ubuntu-24.04-amd64_ubuntu-24.04-amd64.charm. "
             "Some tests use subordinate charms (e.g. Ceph) that expect the charm "
             "base to match."
         ),
@@ -105,25 +94,88 @@ def pytest_addoption(parser: pytest.Parser):
             '"*.snap" file.'
         ),
     )
-    parser.addoption("--timeout", default=90, type=int, help="timeout for tests in minutes")
+    _addoption_if_absent(
+        parser, "--timeout", default=90, type=int, help="timeout for tests in minutes"
+    )
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
+    parser.addoption(
+        "--metrics-agent-charm",
+        dest="metrics_agent_charm",
+        type=str,
+        default="",  # empty string means all
+        help=(
+            "Run test_cos module only with this metrics agent charm, "
+            "skipping all others (e.g., opentelemetry-collector:2/stable)."
+        ),
+    )
+
+    # Option names that a third-party plugin may already own; see _addoption_if_absent.
+    _addoption_if_absent(
+        parser,
+        "--model",
+        action="store",
+        default=None,
+        help="Juju model to use; if not provided, a temporary model is created per module",
+    )
+    _addoption_if_absent(
+        parser,
+        "--no-deploy",
+        action="store_true",
+        default=False,
+        help="Together with --model, skip deploying and reuse what is in the model",
+    )
+    _addoption_if_absent(
+        parser,
+        "--model-config",
+        action="store",
+        default=None,
+        help="Path to a YAML file applied to the model on creation",
+    )
+    _addoption_if_absent(
+        parser,
+        "--keep-models",
+        action="store_true",
+        default=False,
+        help="Keep the models created by the tests (maps to --no-juju-teardown)",
+    )
+    _addoption_if_absent(
+        parser,
+        "--crash-dump-args",
+        action="store",
+        default="",
+        help="Extra arguments passed to juju-crashdump when a test fails",
+    )
 
 
-def pytest_collection_modifyitems(config, items):
-    """Remove from selected tests based on config.
-
-    Called after collection has been performed. May filter or re-order the items in-place.
+def pytest_configure(config: pytest.Config):
+    """Validate option combinations and honour the --keep-models compatibility flag.
 
     Args:
-        config (pytest.Config): The pytest config object.
-        items (List[pytest.Item]): List of item objects.
+        config: The pytest config object.
+    """
+    if config.getoption("--no-deploy") and config.getoption("--model") is None:
+        raise pytest.UsageError("must specify --model when using --no-deploy")
+    if config.getoption("--keep-models"):
+        # operator-workflows always passes --keep-models. pytest-jubilant spells the same
+        # intent --no-juju-teardown.
+        config.option.no_juju_teardown = True
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item]):
+    """Deselect tests whose architecture marker doesn't match --arch.
+
+    This runs during collection with no access to a Juju controller, so it must not talk
+    to Juju.
+
+    Args:
+        config: The pytest config object.
+        items: Collected items, filtered in place.
     """
     arch_filter = config.getoption("--arch")
 
     selected, deselected = [], []
-
     for item in items:
         if (
             (arch_mark := item.get_closest_marker("architecture"))
@@ -131,7 +183,6 @@ def pytest_collection_modifyitems(config, items):
             and arch_mark.args
             and arch_filter not in arch_mark.args
         ):
-            # Test is marked with an architecture but the filter does not match.
             deselected.append(item)
         else:
             selected.append(item)
@@ -141,153 +192,188 @@ def pytest_collection_modifyitems(config, items):
         items[:] = selected
 
 
-async def cloud_proxied(ops_test: OpsTest):
-    """Set up a cloud proxy settings if necessary.
-
-    If ghcr.io is reachable through a proxy apply expected proxy config to juju model.
-
-    Args:
-        ops_test (OpsTest): ops_test plugin
-    """
-    assert ops_test.model, "Model must be present"
-    controller: juju.controller.Controller = await ops_test.model.get_controller()
-    controller_model = await controller.get_model("controller")
-    proxy_config_file = TEST_DATA / "static-proxy-config.yaml"
-    proxy_configs = yaml.safe_load(proxy_config_file.read_text())
-    local_no_proxy = await get_unit_cidrs(controller_model, "controller", 0)
-    no_proxy = {*proxy_configs["juju-no-proxy"], *local_no_proxy}
-    proxy_configs["juju-no-proxy"] = ",".join(sorted(no_proxy))
-    await ops_test.model.set_config(proxy_configs)
-
-
-async def cloud_profile(ops_test: OpsTest):
-    """Apply Cloud Specific Settings to the model.
+@pytest.fixture(scope="module")
+def timeout(request: pytest.FixtureRequest) -> int:
+    """Return the --timeout value, in minutes.
 
     Args:
-        ops_test (OpsTest): ops_test plugin
+        request: Pytest fixture request.
+
+    Returns:
+        Timeout in minutes.
     """
-    _type, _vms = await cloud_type(ops_test)
-    if _type == "lxd" and not _vms and ops_test.model:
-        # lxd-profile to the model if the juju cloud is lxd.
-        lxd = LXDSubstrate()
-        profile_name = f"juju-{ops_test.model.name}-{ops_test.model.uuid[:6]}"
-        lxd.remove_profile(profile_name)
-        lxd.apply_profile([], profile_name)
-    elif _type in ("ec2", "openstack") and ops_test.model:
-        await ops_test.model.set_config({"container-networking-method": "local", "fan-config": ""})
+    return request.config.option.timeout
 
 
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def skip_by_cloud_type(request, ops_test):
-    """Skip tests based on cloud type."""
+@pytest.fixture(scope="module")
+def juju(request: pytest.FixtureRequest, juju_factory) -> jubilant.Juju:
+    """Module-scoped Juju instance, honouring --model.
+
+    Shadows pytest-jubilant's ``juju`` fixture. When --model is given the model is neither
+    created nor destroyed by the tests; this supports the nightly workflow, which deploys a
+    cluster with terraform and then runs the tests against it.
+
+    Args:
+        request: Pytest fixture request.
+        juju_factory: pytest-jubilant's temporary-model factory.
+
+    Returns:
+        A Jubilant Juju instance bound to the module's model.
+    """
+    if model := request.config.getoption("--model"):
+        if request.config.getoption("--juju-dump-logs"):
+            log.warning(
+                "--model bypasses pytest-jubilant's model registry, so --juju-dump-logs "
+                "will not write a debug-log for model %s",
+                model,
+            )
+        return jubilant.Juju(model=model)
+    instance = juju_factory.get_juju("")
+    if request.config.getoption("--juju-switch"):
+        assert instance.model
+        instance.cli("switch", instance.model, include_model=False)
+    return instance
+
+
+@pytest.fixture(scope="module", autouse=True)
+def skip_by_cloud_type(request: pytest.FixtureRequest, juju: jubilant.Juju):
+    """Skip a module whose ``clouds`` marker doesn't include the current cloud.
+
+    Args:
+        request: Pytest fixture request.
+        juju: Jubilant Juju instance.
+    """
     if cloud_markers := request.node.get_closest_marker("clouds"):
-        _type, _ = await cloud_type(ops_test)
-        if _type not in cloud_markers.args:
-            pytest.skip(f"cloud={_type} not among {cloud_markers.args}")
+        provider, _ = cloud_type(juju.model, request.config.option.lxd_containers)
+        if provider not in cloud_markers.args:
+            pytest.skip(f"cloud={provider} not among {cloud_markers.args}")
 
 
-@contextlib.asynccontextmanager
-async def deploy_model(
-    ops_test: OpsTest,
-    model_name: str,
-    bundle: Bundle,
-):
-    """Add a juju model, deploy apps into it, wait for them to be active.
+@pytest.fixture(scope="module")
+def k8s_cluster(
+    request: pytest.FixtureRequest,
+    juju: jubilant.Juju,
+    timeout: int,
+    crash_dump: None,  # noqa: ARG001 -- ordering only: teardown must run after the tests
+) -> Iterator[jubilant.Juju]:
+    """Deploy the bundle named by the module's ``bundle`` marker and wait for it to settle.
 
     Args:
-        ops_test:          Instance of the pytest-operator plugin
-        model_name:        name of the model in which to deploy
-        bundle:            Bundle object to deploy or redeploy into the model
+        request: Pytest fixture request.
+        juju: Jubilant Juju instance owning the module's model.
+        timeout: Timeout in minutes.
+        crash_dump: Fixture that dumps diagnostics if the module had failures.
 
     Yields:
-        model object
+        The same Juju instance, once the cluster is up.
     """
-    config: Optional[dict] = {}
-    at_least_60 = max(60, ops_test.request.config.option.timeout)
-    if ops_test.request.config.option.model_config:
-        config = ops_test.read_model_config(ops_test.request.config.option.model_config)
-    credential_name = ops_test.cloud_name
-    if model_name not in ops_test.models:
-        await ops_test.track_model(
-            model_name,
-            model_name=model_name,
-            credential_name=credential_name,
-            config=config,
-        )
-    with ops_test.model_context(model_name) as the_model:
-        await cloud_profile(ops_test)
-        async with ops_test.fast_forward(ONE_MIN):
-            bundle_yaml = bundle.render(ops_test.tmp_path)
-            await the_model.deploy(bundle_yaml, trust=bundle.needs_trust)
-            await the_model.wait_for_idle(
-                apps=list(bundle.applications),
-                status="active",
-                timeout=at_least_60 * 60,
-            )
-        try:
-            yield the_model
-        except GeneratorExit:
-            log.fatal("Failed to determine model: model_name=%s", model_name)
+    option = request.config.option
+    at_least_60 = max(60, timeout)
+    juju.wait_timeout = at_least_60 * 60
 
+    provider, vms = cloud_type(juju.model, option.lxd_containers)
+    bundle, markings = Bundle.create(request, cloud_arch(juju.show_model().controller_name))
 
-@pytest_asyncio.fixture(scope="module")
-async def kubernetes_cluster(
-    request: pytest.FixtureRequest, ops_test: OpsTest
-) -> AsyncGenerator[Model, None]:
-    """Deploy kubernetes charms according to the bundle_marker."""
-    model = "main"
-    bundle, markings = await Bundle.create(ops_test)
+    if bundle.is_deployed(juju, timeout=at_least_60 * 60):
+        log.info("Using existing model %s.", juju.model)
+        yield juju
+        return
 
-    with ops_test.model_context(model) as the_model:
-        if await bundle.is_deployed(the_model):
-            log.info("Using existing model=%s.", the_model.uuid)
-            yield the_model
-            return
-
-    if request.config.option.no_deploy:
+    if request.config.getoption("--no-deploy"):
         pytest.skip("Skipping because of --no-deploy")
 
     log.info("Deploying new cluster using %s bundle.", bundle.path)
-    if request.config.option.apply_proxy:
-        await cloud_proxied(ops_test)
+    if option.apply_proxy:
+        cloud_proxied(juju)
 
-    await bundle.apply_marking(ops_test, markings)
-    async with deploy_model(ops_test, model, bundle) as the_model:
-        yield the_model
+    if model_config := request.config.getoption("--model-config"):
+        juju.model_config(yaml.safe_load(Path(model_config).read_text()))
+
+    bundle.apply_marking(
+        markings,
+        provider=provider,
+        vms=vms,
+        charm_files=option.charm_files,
+        snap_resource=option.snap_installation_resource,
+        series=option.series,
+    )
+    cloud_profile(juju, provider, request.node.get_closest_marker("clouds"))
+
+    # Render into a directory the juju CLI can read: when juju is a snap it cannot open
+    # /tmp, and the bundle references local charm and resource paths that juju resolves
+    # itself. One subdirectory per module so parallel modules can't collide.
+    bundle_path = bundle.render(render_dir() / request.module.__name__)
+    with fast_forward(juju, ONE_MIN):
+        juju.deploy(bundle_path, trust=bundle.needs_trust)
+        wait_active(juju, *bundle.applications, timeout=at_least_60 * 60)
+
+    yield juju
 
 
-def valid_namespace_name(s: str) -> str:
-    """Create a valid kubernetes namespace name.
+@pytest.fixture(scope="module")
+def crash_dump(request: pytest.FixtureRequest, juju: jubilant.Juju) -> Iterator[None]:
+    """Run juju-crashdump against the module's model if any test in it failed.
+
+    Must be torn down before the model is destroyed, which is why it is requested from
+    ``k8s_cluster``
+    (pytest tears fixtures down in reverse order of setup, and ``juju`` is set up first).
 
     Args:
-        s: The string to sanitize.
+        request: Pytest fixture request.
+        juju: Jubilant Juju instance owning the module's model.
+
+    Yields:
+        None.
+    """
+    failed_before = request.session.testsfailed
+    yield
+    if request.session.testsfailed == failed_before:
+        return
+    if not shutil.which("juju-crashdump"):
+        log.info("juju-crashdump command was not found.")
+        return
+    args = shlex.split(request.config.getoption("--crash-dump-args") or "")
+    cmd = ["juju-crashdump", "-s", f"-m={juju.model}", "-a=debug-layer", "-a=config", *args]
+    log.info("Running %s", shlex.join(cmd))
+    result = subprocess.run(cmd, check=False)  # noqa: S603
+    log.info("juju-crashdump finished [%s]", result.returncode)
+
+
+def valid_namespace_name(name: str) -> str:
+    """Sanitize a string into a valid Kubernetes namespace name.
+
+    Args:
+        name: The string to sanitize.
 
     Returns:
         A valid namespace name.
     """
     valid_chars = set(string.ascii_lowercase + string.digits + "-")
-    sanitized = "".join("-" if char not in valid_chars else char for char in s)
-    sanitized = sanitized.strip("-")
-    return sanitized[-63:]
+    sanitized = "".join("-" if char not in valid_chars else char for char in name)
+    return sanitized.strip("-")[-63:]
 
 
-@pytest_asyncio.fixture(scope="module")
-async def api_client(
-    kubernetes_cluster,
-    ops_test: OpsTest,
-    request,  # pylint: disable=unused-argument
-):
-    """Create a k8s API client and namespace for the test.
+@pytest.fixture(scope="module")
+def api_client(
+    k8s_cluster: jubilant.Juju,
+    request: pytest.FixtureRequest,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[ApiClient]:
+    """Create a Kubernetes API client and a namespace for the test module.
 
     Args:
-        kubernetes_cluster: The k8s model.
-        ops_test: The pytest-operator plugin.
-        request: The pytest request object.
+        k8s_cluster: Jubilant Juju instance with the cluster deployed.
+        request: Pytest fixture request.
+        tmp_path_factory: Pytest temporary path factory.
+
+    Yields:
+        A Kubernetes ApiClient.
     """
     module_name = request.module.__name__
     rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
     namespace = valid_namespace_name(f"{module_name}-{rand_str}")
-    kubeconfig_path = await get_kubeconfig(ops_test, module_name)
+    kubeconfig_path = get_kubeconfig(k8s_cluster, tmp_path_factory.mktemp(module_name))
+
     config = type.__call__(Configuration)
     k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
     client = ApiClient(configuration=config)
@@ -300,191 +386,61 @@ async def api_client(
     v1.delete_namespace(name=namespace)
 
 
-@pytest_asyncio.fixture(name="_grafana_agent", scope="module")
-async def grafana_agent(kubernetes_cluster: Model):
-    """Deploy Grafana Agent."""
-    apps = ["k8s", "k8s-worker"]
-    k8s, worker = (kubernetes_cluster.applications.get(a) for a in apps)
-    if not k8s:
-        pytest.fail("k8s application not found in the model")
-    data = k8s.units[0].machine.safe_data
-    arch = data["hardware-characteristics"]["arch"]
-    series = juju.utils.get_version_series(data["base"].split("@")[1])
-    url = URL("ch", name="grafana-agent", series=series, architecture=arch)
+def user_config(juju: jubilant.Juju, app: str) -> Dict[str, str]:
+    """Return the config keys of an application that were explicitly set by a user.
 
-    await kubernetes_cluster.deploy(url, channel="1/stable", series=series)
-    await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s:cos-agent")
-    if worker:
-        await kubernetes_cluster.integrate("grafana-agent:cos-agent", "k8s-worker:cos-agent")
-        await kubernetes_cluster.integrate("k8s:cos-worker-tokens", "k8s-worker:cos-tokens")
+    ``jubilant.Juju.config()`` drops the ``source`` field, so it cannot distinguish a
+    user-set value from a charm default. Go to the CLI for that.
 
-    yield
+    Args:
+        juju: Jubilant Juju instance.
+        app: Application name.
 
-    await kubernetes_cluster.remove_application("grafana-agent")
-    if worker:
-        await kubernetes_cluster.applications["k8s"].destroy_relation(
-            "cos-worker-tokens", "k8s-worker:cos-tokens", block_until_done=True
-        )
+    Returns:
+        Mapping of user-set config key to its value, as a string.
+    """
+    raw = json.loads(juju.cli("config", "--format", "json", app))
+    return {
+        key: str(value["value"])
+        for key, value in raw["settings"].items()
+        if value.get("source") == "user" and "value" in value
+    }
 
 
-@pytest_asyncio.fixture(scope="module")
-async def cos_model(
-    ops_test: OpsTest,
-    kubernetes_cluster,
-    _grafana_agent,  # pylint: disable=W0613
+@pytest.fixture
+def preserve_charm_config(
+    request: pytest.FixtureRequest, k8s_cluster: jubilant.Juju, timeout: int
 ):
-    """Create a COS substrate and a K8s model."""
-    _type, _vms = await cloud_type(ops_test)
-    assert _type == "lxd", "COS tests only supported on LXD clouds"
+    """Snapshot the user-set charm config of the module's apps and restore it afterwards.
 
-    manager = COSSubstrate(VMOptions() if _vms else None)
+    The module must define an ``APPS`` list naming the applications to preserve.
 
-    config = manager.create_substrate()
-    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    kubeconfig_path.write_bytes(config)
-    config = type.__call__(Configuration)
-    k8s_config.load_config(client_configuration=config, config_file=str(kubeconfig_path))
+    Args:
+        request: Pytest fixture request.
+        k8s_cluster: Jubilant Juju instance with the cluster deployed.
+        timeout: Timeout in minutes.
 
-    k8s_cloud = await ops_test.add_k8s(kubeconfig=config, skip_storage=False)
-    k8s_model = await ops_test.track_model(
-        "cos", cloud_name=k8s_cloud, keep=ops_test.ModelKeep.NEVER
-    )
-    yield k8s_model
+    Yields:
+        Mapping of application name to its user-set config before the test.
+    """
+    apps: List[str] = list(getattr(request.module, "APPS", ["k8s"]))
+    pre = {app: user_config(k8s_cluster, app) for app in apps}
+    yield pre
 
-    await ops_test.forget_model("cos", timeout=60 * 60, allow_failure=True)
+    changed = False
+    for app in apps:
+        post = user_config(k8s_cluster, app)
+        to_reset = sorted(set(post) - set(pre[app]))
+        to_set = {k: v for k, v in pre[app].items() if post.get(k) != v}
+        if to_reset:
+            log.info("Resetting %s config keys %s", app, to_reset)
+            k8s_cluster.config(app, reset=to_reset)
+            changed = True
+        if to_set:
+            log.info("Restoring %s config keys %s", app, sorted(to_set))
+            k8s_cluster.config(app, to_set)
+            changed = True
 
-    manager.teardown_substrate()
-
-
-@pytest_asyncio.fixture(name="_cos_lite_installed", scope="module")
-async def cos_lite_installed(ops_test: OpsTest, cos_model: Model):
-    """Install COS Lite bundle."""
-    log.info("Deploying COS bundle ...")
-    cos_charms = [
-        "alertmanager",
-        "catalogue",
-        "grafana",
-        "loki",
-        "prometheus",
-        "traefik",
-    ]
-    bundles = (
-        ops_test.Bundle("cos-lite", "edge"),
-        "tests/integration/data/cos-offers-overlay.yaml",
-    )
-
-    bundle, *overlays = await ops_test.async_render_bundles(*bundles)
-    cmd = f"juju deploy -m {cos_model.name} {bundle} --trust " + " ".join(
-        f"--overlay={f}" for f in overlays
-    )
-    rc, stdout, stderr = await ops_test.run(*shlex.split(cmd))
-    assert rc == 0, f"COS Lite failed to deploy: {(stderr or stdout).strip()}"
-
-    await cos_model.block_until(
-        lambda: all(app in cos_model.applications for app in cos_charms),
-        timeout=60 * 60,
-    )
-    await cos_model.wait_for_idle(status="active", timeout=60 * 60, raise_on_error=False)
-
-    yield
-    log.info("Removing COS Lite charms...")
-    with ops_test.model_context("cos"):
-        for charm in cos_charms:
-            log.info("Removing %s...", charm)
-            cmd = f"remove-application {charm} --destroy-storage --force --no-prompt"
-            rc, stdout, stderr = await ops_test.juju(*shlex.split(cmd))
-            log.info("%s", stdout or stderr)
-            assert rc == 0
-        await cos_model.block_until(
-            lambda: all(app not in cos_model.applications for app in cos_charms),
-            timeout=60 * 60,
-        )
-
-
-@pytest_asyncio.fixture(scope="module")
-async def traefik_url(cos_model: Model, _cos_lite_installed):
-    """Fixture to fetch Traefik url."""
-    action = await cos_model.applications["traefik"].units[0].run_action("show-proxied-endpoints")
-    action = await action.wait()
-    p_e = json.loads(action.results["proxied-endpoints"])
-
-    yield p_e["traefik"]["url"]
-
-
-@pytest_asyncio.fixture(scope="module")
-async def expected_dashboard_titles():
-    """Fixture to get expected Grafana dashboard titles."""
-    grafana_dir = Path("charms/worker/k8s/src/grafana_dashboards")
-    grafana_files = [p for p in grafana_dir.iterdir() if p.is_file() and p.name.endswith(".json")]
-    titles = []
-    for path in grafana_files:
-        dashboard = json.loads(path.read_text())
-        titles.append(dashboard["title"])
-    return set(titles)
-
-
-@pytest_asyncio.fixture(name="_related_grafana", scope="module")
-async def related_grafana(ops_test: OpsTest, cos_model: Model, _cos_lite_installed):
-    """Fixture to integrate with Grafana."""
-    model_owner = untag("user-", cos_model.info.owner_tag)
-    cos_model_name = cos_model.name
-
-    with ops_test.model_context("main") as model:
-        log.info("Integrating with Grafana")
-        await model.integrate(
-            "grafana-agent",
-            f"{model_owner}/{cos_model_name}.grafana-dashboards",
-        )
-        with ops_test.model_context("cos") as k8s_model:
-            await k8s_model.wait_for_idle(status="active")
-        await model.wait_for_idle(status="active")
-
-    yield
-
-    with ops_test.model_context("main") as model:
-        log.info("Removing Grafana SAAS ...")
-        await model.remove_saas("grafana-dashboards")
-    with ops_test.model_context("cos") as model:
-        log.info("Removing Grafana Offer...")
-        await model.remove_offer(f"{model.name}.grafana-dashboards", force=True)
-
-
-@pytest_asyncio.fixture(scope="module")
-async def grafana_password(cos_model, _related_grafana):
-    """Fixture to get Grafana password."""
-    action = await cos_model.applications["grafana"].units[0].run_action("get-admin-password")
-    action = await action.wait()
-    yield action.results["admin-password"]
-
-
-@pytest_asyncio.fixture(scope="module")
-async def related_prometheus(ops_test: OpsTest, cos_model, _cos_lite_installed):
-    """Fixture to integrate with Prometheus."""
-    model_owner = untag("user-", cos_model.info.owner_tag)
-    cos_model_name = cos_model.name
-
-    with ops_test.model_context("main") as model:
-        log.info("Integrating with Prometheus")
-        await model.integrate(
-            "grafana-agent",
-            f"{model_owner}/{cos_model_name}.prometheus-receive-remote-write",
-        )
-        await model.wait_for_idle(status="active")
-        with ops_test.model_context("cos") as model:
-            await model.wait_for_idle(status="active")
-
-    yield
-
-    with ops_test.model_context("main") as model:
-        log.info("Removing Prometheus Remote Write SAAS ...")
-        await model.remove_saas("prometheus-receive-remote-write")
-
-    with ops_test.model_context("cos") as model:
-        log.info("Removing Prometheus Offer...")
-        await model.remove_offer(f"{model.name}.prometheus-receive-remote-write", force=True)
-
-
-@pytest.fixture(scope="module")
-def timeout(request):
-    """Fixture to set the timeout for certain tests."""
-    return request.config.option.timeout
+    if changed:
+        with fast_forward(k8s_cluster, ONE_MIN):
+            wait_active(k8s_cluster, *apps, timeout=timeout * 60)

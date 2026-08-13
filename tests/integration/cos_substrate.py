@@ -20,7 +20,6 @@ from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
-TEST_DATA = Path(__file__).parent / "data"
 K8S_PROFILE_URL = "https://raw.githubusercontent.com/canonical/k8s-snap/refs/heads/main/tests/integration/lxd-profile.yaml"
 
 
@@ -143,7 +142,7 @@ class COSSubstrate(LXDSubstrate):
         commands = [
             "snap install k8s --classic",
             "k8s bootstrap",
-            "k8s status --wait-ready",
+            "k8s status --wait-ready --timeout 60m",
             f"k8s set load-balancer.cidrs='{cidrs}'",
             "k8s enable load-balancer",
         ]
