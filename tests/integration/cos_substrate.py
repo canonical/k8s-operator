@@ -20,7 +20,6 @@ from pylxd.exceptions import ClientConnectionFailed, LXDAPIException, NotFound
 log = logging.getLogger(__name__)
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 LXDExceptions = (NotFound, LXDAPIException, ClientConnectionFailed)
-TEST_DATA = Path(__file__).parent / "data"
 K8S_PROFILE_URL = "https://raw.githubusercontent.com/canonical/k8s-snap/refs/heads/main/tests/integration/lxd-profile.yaml"
 
 

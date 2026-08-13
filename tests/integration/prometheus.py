@@ -44,16 +44,16 @@ class Prometheus:
         assert response.code == 200, f"Failed to get endpoint {url}: {data}"
         return data
 
-    async def is_ready(self) -> bool:
+    def is_ready(self) -> bool:
         """Check if Prometheus is ready.
 
         Returns:
             bool: True if Prometheus is ready, False otherwise.
         """
-        res = await self.health()
+        res = self.health()
         return "Prometheus Server is Ready." in res
 
-    async def health(self) -> str:
+    def health(self) -> str:
         """Check Prometheus readiness using the MGMT API.
 
         Returns:
@@ -67,7 +67,7 @@ class Prometheus:
 
         return data
 
-    async def get_metrics(self, query: str) -> List:
+    def get_metrics(self, query: str) -> List:
         """Query Prometheus for metrics.
 
         Args:
