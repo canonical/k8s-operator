@@ -15,7 +15,6 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Tuple
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -36,13 +35,6 @@ RULE_FILES = [
 ]
 ALERT_RULES_DIR = Path("src/prometheus_alert_rules")
 PATCHES_DIR = Path("scripts/rules-patches")
-
-# NOTE: (mateoflorido): This record is duplicated across the rules. As of
-# 2025-09-01 (v0.16.0), Prometheus does not support duplicated records. Patch
-# 006 merges the duplicates into one recording rule.
-DROP_RECORDS: List[Tuple[str, str]] = [
-    # ("kube-apiserver-availability.rules", "code_verb:apiserver_request_total:increase1h")
-]
 
 
 def str_presenter(dumper, data):
@@ -94,13 +86,6 @@ def process_rule_file(contents, destination_file: Path, source_url: str):
     """
     alert_rules = yaml.safe_load(contents)["spec"]
     filename = os.path.basename(sys.argv[0])
-
-    for group in alert_rules["groups"]:
-        group["rules"] = [
-            rule
-            for rule in group["rules"]
-            if (group["name"], rule.get("record")) not in DROP_RECORDS
-        ]
 
     data = [
         "# Copyright 2026 Canonical Ltd.",
