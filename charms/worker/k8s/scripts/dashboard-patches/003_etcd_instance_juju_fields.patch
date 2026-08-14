@@ -1,5 +1,5 @@
 diff --git a/charms/worker/k8s/src/grafana_dashboards/etcd.json b/charms/worker/k8s/src/grafana_dashboards/etcd.json
-index 0cbd993..f33063d 100644
+index 0cbd993..f679162 100644
 --- a/charms/worker/k8s/src/grafana_dashboards/etcd.json
 +++ b/charms/worker/k8s/src/grafana_dashboards/etcd.json
 @@ -3717,7 +3717,7 @@
@@ -20,10 +20,3 @@ index 0cbd993..f33063d 100644
                      "refId": "StandardVariableQuery"
                  },
                  "refresh": 1,
-@@ -3849,4 +3849,4 @@
-     "uid": "etcd_cluster",
-     "version": 3,
-     "weekStart": ""
--}
-\ No newline at end of file
-+}

@@ -548,7 +548,7 @@
                 "hide": 0,
                 "label": "cluster",
                 "name": "cluster",
-                "query": "label_values(up{job=\"kube-controller-manager\"}, cluster)",
+                "query": "label_values(up{job=\"kube-controller-manager\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
                 "refresh": 2,
                 "sort": 1,
                 "type": "query"
