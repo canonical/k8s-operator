@@ -55,8 +55,15 @@ config:
 
         https://documentation.ubuntu.com/canonical-kubernetes/latest/src/snap/reference/annotations/
 
+        Annotations are merged with the existing cluster annotations: setting
+        a key adds or updates its value, while annotations set out-of-band
+        (e.g. via the k8s CLI) are left untouched. To remove an annotation
+        from the cluster, set its value to "-".
+
         Example:
           e.g.: key1=value1 key2=value2
+        Remove an annotation:
+          e.g.: key1=-
     bootstrap-datastore:
       type: string
       default: ""

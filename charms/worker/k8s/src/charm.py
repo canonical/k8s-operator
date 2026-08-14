@@ -497,7 +497,9 @@ class K8sCharm(ops.CharmBase):
         bootstrap_config = BootstrapConfig.model_construct()
         self._configure_datastore(bootstrap_config)
         bootstrap_config.cluster_config = assemble_cluster_config(
-            self, "external" if self.xcp.has_xcp else None
+            self,
+            "external" if self.xcp.has_xcp else None,
+            annotations=self._get_valid_annotations(),
         )
         bootstrap_config.service_cidr = self.bootstrap.config.service_cidr
         bootstrap_config.pod_cidr = self.bootstrap.config.pod_cidr
@@ -610,7 +612,9 @@ class K8sCharm(ops.CharmBase):
     def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate cluster-annotations from charm configuration.
 
-        The values are expected to be a space-separated string of key-value pairs.
+        The values are expected to be a space-separated string of key-value
+        pairs. A value of "-" (e.g. "key=-") removes the annotation from the
+        cluster.
 
         Returns:
             dict: The parsed annotations if valid, otherwise None.
@@ -626,7 +630,8 @@ class K8sCharm(ops.CharmBase):
 
         annotations = {}
         try:
-            for key, value in [pair.split("=", 1) for pair in raw_annotations.split()]:
+            for pair in raw_annotations.split():
+                key, _, value = pair.partition("=")
                 if not key or not value:
                     raise ReconcilerError("Invalid Annotation")
                 annotations[key] = value
@@ -775,7 +780,10 @@ class K8sCharm(ops.CharmBase):
         config_changed = update_request.datastore != current_config.metadata.datastore
 
         update_request.config = assemble_cluster_config(
-            self, "external" if self.xcp.has_xcp else None, current_config.metadata.status
+            self,
+            "external" if self.xcp.has_xcp else None,
+            current_config.metadata.status,
+            annotations=self._get_valid_annotations(),
         )
         config_changed |= update_request.config != current_config.metadata.status
 
