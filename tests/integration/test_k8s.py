@@ -139,8 +139,21 @@ def test_cluster_annotations(
         f"Expected annotation {testname}=true to reach k8sd, got: {annotations}"
     )
 
+    # Remove the annotation via the key=- deletion marker. Resetting the charm
+    # config to its default (empty) value alone would leave the annotation
+    # stored in the cluster config.
+    removal_config = {"cluster-annotations": f"{testname}=-"}
     with fast_forward(k8s_cluster, ONE_MIN):
-        k8s_cluster.config("k8s", reset=list(annotation_config))
+        k8s_cluster.config("k8s", removal_config)
+        wait_active(k8s_cluster, "k8s", timeout=timeout * 60)
+
+    annotations = get_k8sd_cluster_config_annotations(k8s_cluster, leader)
+    assert testname not in annotations, (
+        f"Expected annotation {testname} to be removed from k8sd, got: {annotations}"
+    )
+
+    with fast_forward(k8s_cluster, ONE_MIN):
+        k8s_cluster.config("k8s", reset=list(removal_config))
         wait_active(k8s_cluster, "k8s", timeout=timeout * 60)
 
 
