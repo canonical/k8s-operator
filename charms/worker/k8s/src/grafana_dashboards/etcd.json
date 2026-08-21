@@ -3717,7 +3717,7 @@
                     "type": "prometheus",
                     "uid": "${prometheusds}"
                 },
-                "definition": "label_values({job=\"$job\"}, instance)",
+                "definition": "label_values({job=\"$job\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, instance)",
                 "hide": 0,
                 "includeAll": true,
                 "label": "Instance",
@@ -3725,7 +3725,7 @@
                 "name": "instance",
                 "options": [],
                 "query": {
-                    "query": "label_values({job=\"$job\"}, instance)",
+                    "query": "label_values({job=\"$job\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, instance)",
                     "refId": "StandardVariableQuery"
                 },
                 "refresh": 1,

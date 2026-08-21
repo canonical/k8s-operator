@@ -112,7 +112,7 @@
                         "type": "prometheus",
                         "uid": "${prometheusds}"
                     },
-                    "expr": "sum(kubelet_running_containers{cluster=\"$cluster\", job=\"kubelet\", metrics_path=\"/metrics\", instance=~\"$instance\"})",
+                    "expr": "sum(kubelet_running_containers{cluster=\"$cluster\", job=\"kubelet\", metrics_path=\"/metrics\", container_state=\"running\", instance=~\"$instance\"})",
                     "instant": true
                 }
             ],
@@ -1198,7 +1198,7 @@
                 "hide": 0,
                 "label": "cluster",
                 "name": "cluster",
-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics\"}, cluster)",
+                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
                 "refresh": 2,
                 "sort": 1,
                 "type": "query"

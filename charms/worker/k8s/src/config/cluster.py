@@ -6,7 +6,7 @@
 """Cluster configuration options."""
 
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 import literals
 import ops
@@ -28,8 +28,15 @@ def assemble_cluster_config(
     charm: ops.CharmBase,
     cloud_provider: Optional[str],
     current: Optional[UserFacingClusterConfig] = None,
+    annotations: Optional[Dict[str, str]] = None,
 ) -> UserFacingClusterConfig:
     """Retrieve the cluster config from charm configuration and charm relations.
+
+    Args:
+        charm: The charm instance to read configuration from.
+        cloud_provider: The cloud provider to set on the cluster config.
+        current: The current cluster config, used as the base to assemble on.
+        annotations: Parsed cluster-annotations charm config, or None if unset.
 
     Returns:
         UserFacingClusterConfig: The expected cluster configuration.
@@ -46,6 +53,7 @@ def assemble_cluster_config(
     _assemble_ingress(charm, assembled)
     _assemble_metrics_server(charm, assembled)
     _assemble_load_balancer(charm, assembled)
+    _assemble_annotations(annotations, assembled)
     assembled.cloud_provider = cloud_provider
     return assembled
 
@@ -127,3 +135,40 @@ def _assemble_load_balancer(charm: ops.CharmBase, assembled: UserFacingClusterCo
     load_balancer.bgp_peer_address = literals.LOAD_BALANCER_BGP_PEER_ADDRESS.get(charm)
     load_balancer.bgp_peer_asn = literals.LOAD_BALANCER_BGP_PEER_ASN.get(charm)
     load_balancer.bgp_peer_port = literals.LOAD_BALANCER_BGP_PEER_PORT.get(charm)
+
+
+def _assemble_annotations(
+    annotations: Optional[Dict[str, str]], assembled: UserFacingClusterConfig
+):
+    """Merge cluster annotations from the cluster-annotations charm config.
+
+    Mirrors k8sd's merge semantics: the charm-managed annotations are patched
+    onto the existing cluster annotations, so annotations set out-of-band (e.g.
+    via the k8s CLI) are preserved and repeated reconciliations converge instead
+    of reporting perpetual config changes. A value of "-" removes the
+    annotation from the cluster; the deletion marker is forwarded to k8sd only
+    while the key is still present in the stored configuration.
+
+    Args:
+        annotations: Parsed cluster-annotations charm config, or None if unset.
+        assembled: The cluster config being assembled, pre-populated with the
+            current cluster config when updating an existing cluster.
+    """
+    if annotations is None:
+        return
+
+    existing = dict(assembled.annotations or {})
+    merged = dict(existing)
+    for key, value in annotations.items():
+        if value == "-":
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    # Forward deletion markers for keys still present in the stored config so
+    # that k8sd removes them; markers for absent keys are dropped to keep
+    # repeated reconciliations idempotent.
+    for key, value in annotations.items():
+        if value == "-" and key in existing:
+            merged[key] = value
+    if merged:
+        assembled.annotations = merged

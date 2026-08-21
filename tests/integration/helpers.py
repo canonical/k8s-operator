@@ -351,6 +351,30 @@ def get_kubeconfig(juju: jubilant.Juju, dest_dir: Path) -> Path:
     return kubeconfig_path
 
 
+def get_k8sd_cluster_config_annotations(juju: jubilant.Juju, unit: str) -> Dict[str, str]:
+    """Fetch the annotations k8sd has stored for the cluster config.
+
+    The `k8s get` CLI deliberately redacts annotations from its output, so
+    this queries the k8sd control socket directly (the same local, root-only
+    unix socket the CLI itself uses) to observe the raw, unredacted config.
+
+    Args:
+        juju: Jubilant Juju instance.
+        unit: k8s unit name to query, e.g. ``k8s/0``.
+
+    Returns:
+        dict of annotations currently stored in k8sd's cluster config
+    """
+    socket = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
+    cmd = f"curl -s --unix-socket {socket} http://localhost/1.0/k8sd/cluster/config"
+    result = juju.exec(cmd, unit=unit)
+    assert result.return_code == 0, (
+        f"Failed to query k8sd cluster config on {unit}: {result.stderr}"
+    )
+    response = json.loads(result.stdout)
+    return response["metadata"]["status"].get("annotations", {})
+
+
 def get_unit_cidrs(juju: jubilant.Juju, app: str, unit_num: int) -> List[str]:
     """Find the network CIDRs reachable from a unit.
 

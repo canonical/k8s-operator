@@ -8,6 +8,8 @@
 
 from unittest import mock
 
+import charms.contextual_status
+import ops
 import pytest
 from config.cluster import assemble_cluster_config
 
@@ -156,3 +158,150 @@ def test_configure_datastore_extra_args(harness):
         "--listen-metrics-urls": "http://localhost:2381",
         "--clog": "true",
     }
+
+
+def test_configure_annotations(harness):
+    """Test configuring annotations via cluster-annotations charm config.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": "key1=value1 key2=value2"})
+    ufcg = assemble_cluster_config(
+        harness.charm, None, annotations=harness.charm._get_valid_annotations()
+    )
+    assert ufcg.annotations == {"key1": "value1", "key2": "value2"}
+
+
+def test_configure_annotations_not_overwritten_when_empty(harness):
+    """Test that existing annotations are preserved when cluster-annotations is unset.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": ""})
+    current = assemble_cluster_config(
+        harness.charm, None, annotations=harness.charm._get_valid_annotations()
+    )
+    current.annotations = {"out-of-band": "value"}
+
+    ufcg = assemble_cluster_config(
+        harness.charm, None, current, annotations=harness.charm._get_valid_annotations()
+    )
+    assert ufcg.annotations == {"out-of-band": "value"}
+
+
+def test_configure_annotations_merged_with_out_of_band(harness):
+    """Test that charm-managed annotations merge with out-of-band annotations.
+
+    k8sd merges new annotations with the existing ones, so the charm must
+    assemble the merged view: comparing only the configured annotations against
+    the full stored map would make every reconciliation appear changed.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": "key1=value1"})
+    current = assemble_cluster_config(harness.charm, None)
+    current.annotations = {"out-of-band": "value"}
+
+    ufcg = assemble_cluster_config(
+        harness.charm, None, current, annotations=harness.charm._get_valid_annotations()
+    )
+    assert ufcg.annotations == {"out-of-band": "value", "key1": "value1"}
+
+
+def test_configure_annotations_idempotent(harness):
+    """Test repeated reconciliations with out-of-band and charm-managed annotations.
+
+    Once k8sd has stored the merged annotations, further reconciliations must
+    not detect a config change.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": "key1=value1"})
+    annotations = harness.charm._get_valid_annotations()
+
+    current = assemble_cluster_config(harness.charm, None, annotations=annotations)
+    # Simulate an annotation set out-of-band (e.g. via the k8s CLI), merged by k8sd.
+    current.annotations["out-of-band"] = "value"
+
+    reconciled = assemble_cluster_config(harness.charm, None, current, annotations=annotations)
+    assert reconciled.annotations == {"key1": "value1", "out-of-band": "value"}
+
+    # k8sd stores the merged annotations; subsequent reconciles detect no change.
+    assert (
+        assemble_cluster_config(harness.charm, None, reconciled, annotations=annotations)
+        == reconciled
+    )
+
+
+def test_configure_annotations_removal(harness):
+    """Test that a "-" value removes an annotation and converges.
+
+    Args:
+        harness: the harness under test
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": "key1=-"})
+    annotations = harness.charm._get_valid_annotations()
+
+    current = assemble_cluster_config(harness.charm, None)
+    current.annotations = {"key1": "value1", "out-of-band": "value"}
+
+    reconciled = assemble_cluster_config(harness.charm, None, current, annotations=annotations)
+    # The deletion marker is forwarded while the key is still stored so that
+    # k8sd removes it.
+    assert reconciled.annotations == {"out-of-band": "value", "key1": "-"}
+    assert reconciled != current
+
+    # k8sd applies the deletion; subsequent reconciles detect no change.
+    current.annotations = {"out-of-band": "value"}
+    assert (
+        assemble_cluster_config(harness.charm, None, current, annotations=annotations) == current
+    )
+
+
+@pytest.mark.parametrize("invalid", ["malformed", "key1=", "=value1"])
+def test_configure_annotations_malformed(harness, invalid):
+    """Test that malformed cluster-annotations raise and block the charm.
+
+    Args:
+        harness: the harness under test
+        invalid: the invalid cluster-annotations value
+    """
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+
+    harness.disable_hooks()
+
+    harness.update_config({"cluster-annotations": invalid})
+    with charms.contextual_status.context(harness.model.unit):
+        with pytest.raises(charms.contextual_status.ReconcilerError):
+            harness.charm._get_valid_annotations()
+    assert harness.model.unit.status == ops.BlockedStatus("Invalid Annotations")
