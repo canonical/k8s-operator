@@ -11,10 +11,10 @@ consistent release experience. Any external or shared repositories are forked
 into the `charmed-kubernetes` github organization and have the following branches:
 
 * `main`: The primary development branch. Merges are made against this branch as they are approved.
-* `release_1.xx`: The release branch. New major releases are branched from `main`.
-* `release_1.xx`. Bug fix releases have specific commits committed to `release_1.xx` from a `bugfix_1.xx_<bugid>` branch via a pull-request.
+* `release-1.xx`: The release branch. New major releases are branched from `main`.
+* `release-1.xx`. Bug fix releases have specific commits committed to `release-1.xx` from a `bugfix_1.xx_<bugid>` branch via a pull-request.
 
-Tags are used to mark releases on the `release_1.xx` branch.
+Tags are used to mark releases on the `release-1.xx` branch.
 
 ### Feature freeze
 
@@ -27,7 +27,7 @@ Solutions QA a solid base to test from.
 
 ### Conflict resolution
 
-At the time of the feature freeze, new `release_1.xx` branches are created to match
+At the time of the feature freeze, new `release-1.xx` branches are created to match
 the default repo branch per the documentation below. During the feature freeze and
 Solutions QA period, fixes which need to be applied to address CI or QA failures
 (and only those specific fixes) are merged to the respective release branches.
@@ -36,26 +36,35 @@ Solutions QA period, fixes which need to be applied to address CI or QA failures
 
 ### Prepare next stable release
 
-It may feel early, but part of releasing the next stable version requires
-preparing for the release that will follow. This requires opening tracks and
-building relevant snaps and charms that will be used in the new `edge` channel.
+It's required to open tracks and building relevant snaps and 
+charms that will be used in the new `edge` channel.
 
-Bundle/charm track requests are made by posting to the `charmhub requests` forum
-asking for new tracks to be opened for `k8s` and `k8s-worker` charms. For example:
+Create the track by following the documentation below:
+* <https://discourse.charmhub.io/t/self-service-creation-of-tracks-now-available-to-charm-developers/10910>
 
-* <https://discourse.charmhub.io/t/request-new-1-30-track-for-all-charmed-k8s-charms-and-bundles/13394>
+An example request would be:
 
-ensuring to tag the request with `k8s`, `k8s-worker`, and `canonical-kubernetes`
+```bash
+curl https://api.charmhub.io/v1/charm/k8s/tracks -X POST -H'Content-type: application/json' -H "$CHARMHUB_MACAROON_HEADER" -d '[{"name": "1.36"}]'
+```
+
+Ensure the track is created by querying the charm:
+
+```bash
+curl https://api.charmhub.io/v1/charm/k8s -H'Content-type: application/json' -H "$CHARMHUB_MACAROON_HEADER" | jq
+```
+
+**NOTE**: Make sure tracks are created for both `k8s` and `k8s-worker` charms.
 
 ## Preparing the release
 
 ### Create release branches for this repo
 
 * **URL**: <https://github.com/canonical/k8s-operator/branches>
-* **New Branch**: release_1.XX
+* **New Branch**: release-1.XX
 * **source**:  main
 
-We need to create a `release_1.xx` branch from `main`.
+We need to create a `release-1.xx` branch from `main`.
 This will be our snapshot from which we test, fix, and subsequently
 promote to the new release.
 
@@ -90,6 +99,14 @@ amd64:
 
 The [auto-update-snap-revision] job is also responsible for auto-updating the snap
 revision in the [snap_installation.yaml] file. This job is triggered on a schedule.
+
+### Update the `literals.py` file
+
+Look at the changes made to `charms/worker/k8s/src/literals.py` in the example commit below.
+Make sure to adjust the changes according to the release you're making. This commit was
+in preparation of the `1.35` release.
+
+* <https://github.com/canonical/k8s-operator/pull/830/changes>
 
 ### Build charms from the release branches
 
@@ -154,7 +171,7 @@ them resolved prior to stable release.
 
 **Job**: <https://github.com/canonical/k8s-operator/actions/workflows/promote_charm.yaml>
 
-Run the workflow from a branch, select `release_1.xx`,
+Run the workflow from a branch, select `release-1.xx`,
 
 * Choose `Charm` - `all`
 * Choose `Origin Channel`- `candidate`
