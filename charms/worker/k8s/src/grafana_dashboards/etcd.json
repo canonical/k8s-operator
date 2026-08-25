@@ -2201,7 +2201,7 @@
                         "uid": "${prometheusds}"
                     },
                     "exemplar": true,
-                    "expr": "rate(etcd_disk_wal_fsync_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[1m])",
+                    "expr": "rate(etcd_disk_wal_fsync_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[2m])",
                     "format": "time_series",
                     "interval": "",
                     "intervalFactor": 2,
@@ -2215,7 +2215,7 @@
                         "uid": "${prometheusds}"
                     },
                     "exemplar": true,
-                    "expr": "rate(etcd_disk_backend_commit_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[1m])",
+                    "expr": "rate(etcd_disk_backend_commit_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[2m])",
                     "format": "time_series",
                     "interval": "",
                     "intervalFactor": 2,
@@ -2658,7 +2658,7 @@
                         "uid": "${prometheusds}"
                     },
                     "exemplar": true,
-                    "expr": "rate(etcd_disk_backend_defrag_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[1m])",
+                    "expr": "rate(etcd_disk_backend_defrag_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[2m])",
                     "format": "time_series",
                     "interval": "",
                     "intervalFactor": 1,
@@ -2759,7 +2759,7 @@
                         "uid": "${prometheusds}"
                     },
                     "exemplar": true,
-                    "expr": "sum(rate(etcd_debugging_snap_save_total_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[1m]))",
+                    "expr": "sum(rate(etcd_debugging_snap_save_total_duration_seconds_sum{instance=~\"$instance\",job=~\"$job\"}[2m]))",
                     "format": "time_series",
                     "interval": "",
                     "intervalFactor": 2,
@@ -3650,7 +3650,7 @@
                         "uid": "${prometheusds}"
                     },
                     "exemplar": true,
-                    "expr": "sum(rate(etcd_network_client_grpc_received_bytes_total{instance=~\"$instance\",job=~\"$job\"}[1m]))",
+                    "expr": "sum(rate(etcd_network_client_grpc_received_bytes_total{instance=~\"$instance\",job=~\"$job\"}[2m]))",
                     "format": "time_series",
                     "interval": "",
                     "intervalFactor": 2,
@@ -3664,7 +3664,7 @@
                         "uid": "${prometheusds}"
                     },
                     "exemplar": true,
-                    "expr": "sum(rate(etcd_network_client_grpc_sent_bytes_total{instance=~\"$instance\",job=~\"$job\"}[1m]))",
+                    "expr": "sum(rate(etcd_network_client_grpc_sent_bytes_total{instance=~\"$instance\",job=~\"$job\"}[2m]))",
                     "format": "time_series",
                     "interval": "",
                     "intervalFactor": 2,
