@@ -48,7 +48,7 @@ jobs:
     concurrency:
       group: publish-charm-${{ github.ref }}-${{ matrix.charm.tagPrefix }}-${{ matrix.arch }}
       cancel-in-progress: false
-    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@27f280ed34b54bd9f65451dc966bfde701e84b62 # main
+    uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@94c3a0c54ca84d82351c419a77f3f61d56b478e8 # main
     strategy:
       matrix:
         charm:
