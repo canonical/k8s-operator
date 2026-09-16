@@ -82,3 +82,17 @@ def test_configure_revokes_other_creds_when_one_secret_is_missing(cp_harness):
     kube_control.configure(cp_harness.charm)
 
     cp_harness.charm.api_manager.revoke_auth_token.assert_called_once_with("still-valid-token")
+
+
+def test_purge_preserves_active_cred_with_missing_secret(cp_harness):
+    """Credentials for active units must not be removed during stale cleanup."""
+    relation_id = cp_harness.add_relation("kube-control", "cinder-csi")
+    cp_harness.add_relation_unit(relation_id, "cinder-csi/0")
+    _seed_stale_cred(cp_harness, relation_id, "secret:nonexistent000")
+
+    kube_control._purge_stale_kube_control_creds(cp_harness.charm)
+
+    creds = json.loads(
+        cp_harness.get_relation_data(relation_id, cp_harness.charm.unit.name)["creds"]
+    )
+    assert "cinder-csi/0" in creds

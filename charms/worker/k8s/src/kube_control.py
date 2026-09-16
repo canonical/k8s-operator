@@ -48,8 +48,11 @@ def _purge_stale_kube_control_creds(charm: K8sCharmProtocol):
     """
     for relation in charm.kube_control.relations:
         creds = json.loads(relation.data[charm.unit].get("creds", "{}"))
+        active_units = {unit.name for unit in relation.units}
         changed = False
         for user, cred in list(creds.items()):
+            if cred.get("scope") in active_units:
+                continue
             secret_id = cred.get("secret-id")
             if not secret_id:
                 continue
