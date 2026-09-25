@@ -763,6 +763,7 @@ class K8sCharm(ops.CharmBase):
         ReconcilerError,
         InvalidResponseError,
         K8sdConnectionError,
+        ops.SecretNotFoundError,
     )
     def _ensure_cluster_config(self):
         """Ensure that the cluster configuration is up-to-date.
