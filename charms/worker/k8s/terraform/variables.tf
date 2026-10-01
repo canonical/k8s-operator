@@ -64,12 +64,9 @@ variable "expose" {
   default     = null
 
   validation {
-    condition = (
-      # If expose is null, it's valid
-      var.expose == null ||
-      # If expose is a map, it can only contain specific keys
-      length(setsubtract(keys(var.expose), ["cidrs", "endpoints", "spaces"])) == 0
-    )
+    # try() keeps an unset expose valid: Terraform does not short-circuit "||",
+    # so keys(var.expose) would fail on the null default.
+    condition     = length(setsubtract(try(keys(var.expose), []), ["cidrs", "endpoints", "spaces"])) == 0
     error_message = "If provided, expose must only contain the keys: cidrs, endpoints, spaces."
   }
 }
