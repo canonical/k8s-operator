@@ -39,12 +39,7 @@ variable "csi_integration" {
 }
 
 module "k8s" {
-  # This is ignored because we want to test the latest version of the module in main,
-  # and we don't want to have to update this reference every time we make a change to
-  # the module.
-
-  # tflint-ignore: terraform_module_pinned_source
-  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=main"
+  source        = "git::https://github.com/canonical/k8s-bundles//terraform?ref=release-1.36"
   model         = {
     name = var.model
     cloud = var.cloud
