@@ -11,7 +11,8 @@
 bundle: kubernetes
 name: cos-lite-minimal
 description: |-
-  Prometheus, Grafana and Traefik, with the two offers the k8s integration test consumes.
+  Prometheus, Grafana and Traefik. The offers the k8s integration test consumes are added
+  by cos-offers-overlay.yaml, since Juju only accepts offers in an overlay.
 applications:
   traefik:
     charm: traefik-k8s
@@ -25,20 +26,12 @@ applications:
     base: ubuntu@26.04
     scale: 1
     trust: true
-    offers:
-      prometheus-receive-remote-write:
-        endpoints:
-          - receive-remote-write
   grafana:
     charm: grafana-k8s
     channel: 12.4/stable
     base: ubuntu@26.04
     scale: 1
     trust: true
-    offers:
-      grafana-dashboards:
-        endpoints:
-          - grafana-dashboard
 relations:
   - [prometheus:ingress, traefik:ingress-per-unit]
   - [grafana:ingress, traefik:ingress]

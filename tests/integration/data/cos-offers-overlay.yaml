@@ -1,0 +1,15 @@
+# Copyright 2026 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Juju only accepts `offers` in an overlay, not in the bundle itself.
+applications:
+  grafana:
+    offers:
+      grafana-dashboards:
+        endpoints:
+          - grafana-dashboard
+  prometheus:
+    offers:
+      prometheus-receive-remote-write:
+        endpoints:
+          - receive-remote-write

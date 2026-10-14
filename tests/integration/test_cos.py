@@ -188,7 +188,11 @@ def cos_stack(cos_model: jubilant.Juju, timeout: int) -> None:
         timeout: Timeout in minutes.
     """
     log.info("Deploying COS bundle ...")
-    cos_model.deploy(stage(TEST_DATA / "cos-bundle.yaml", __name__), trust=True)
+    cos_model.deploy(
+        stage(TEST_DATA / "cos-bundle.yaml", __name__),
+        overlays=[stage(TEST_DATA / "cos-offers-overlay.yaml", __name__)],
+        trust=True,
+    )
     # COS charms error transiently while settling; aborting on the first one made this
     # wait flaky, so let them recover and only fail if they never do.
     wait_active(cos_model, *COS_APPS, timeout=timeout * 60, raise_on_error=False)
