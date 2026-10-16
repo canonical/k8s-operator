@@ -13,3 +13,10 @@ applications:
     expose: true
     options:
       bootstrap-datastore: managed-etcd
+  # Hosts the COS stack. Pinned to a published channel (not the local build) so a
+  # regression in the charm under test cannot take the observability stack down with it.
+  cos-host:
+    charm: k8s
+    channel: 1.35/stable
+    num_units: 1
+    constraints: cores=4 mem=8G root-disk=40G

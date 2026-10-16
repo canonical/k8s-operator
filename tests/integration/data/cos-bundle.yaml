@@ -1,0 +1,38 @@
+# Copyright 2026 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# The smallest COS Lite 3.0 stack that can receive what the k8s charm's cos-agent
+# integration sends and serve it back: metrics land in Prometheus, dashboards in Grafana,
+# and Traefik gives both a URL that is reachable from outside the COS cluster.
+#
+# Channels follow the COS Lite 3.0 component tracks:
+# https://documentation.ubuntu.com/observability/track-3.0/reference/cos-components/
+# Bump them together when moving to a new COS track.
+bundle: kubernetes
+name: cos-lite-minimal
+description: |-
+  Prometheus, Grafana and Traefik. The offers the k8s integration test consumes are added
+  by cos-offers-overlay.yaml, since Juju only accepts offers in an overlay.
+applications:
+  traefik:
+    charm: traefik-k8s
+    channel: latest/stable
+    base: ubuntu@26.04
+    scale: 1
+    trust: true
+  prometheus:
+    charm: prometheus-k8s
+    channel: 3.11/stable
+    base: ubuntu@26.04
+    scale: 1
+    trust: true
+  grafana:
+    charm: grafana-k8s
+    channel: 12.4/stable
+    base: ubuntu@26.04
+    scale: 1
+    trust: true
+relations:
+  - [prometheus:ingress, traefik:ingress-per-unit]
+  - [grafana:ingress, traefik:ingress]
+  - [grafana:grafana-source, prometheus:grafana-source]
