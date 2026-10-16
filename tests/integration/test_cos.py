@@ -334,9 +334,31 @@ def test_grafana(
     _poll(check)
 
 
+def _kube_proxy_expected(juju: jubilant.Juju) -> bool:
+    """Report whether kube-proxy is meant to run on the cluster under test.
+
+    Newer Canonical K8s releases replace kube-proxy with Cilium on new clusters, and the
+    k8s charm leaves that choice to the cluster (``kube-proxy-enabled=auto``). k8sd enables
+    the kube-proxy snap service when it is wanted and disables it otherwise, so snapd's
+    startup state says what to expect. Unlike the current state it doesn't mask a
+    kube-proxy that crashed.
+
+    Args:
+        juju: Jubilant Juju instance with the cluster deployed.
+
+    Returns:
+        True if the kube-proxy service is enabled on the first k8s unit.
+    """
+    task = juju.exec("snap", "services", "k8s.kube-proxy", unit="k8s/0")
+    # Columns: Service, Startup, Current, Notes.
+    rows = [line.split() for line in task.stdout.splitlines() if line.startswith("k8s.kube-proxy")]
+    assert rows, f"No kube-proxy service reported by snapd: {task.stdout!r}"
+    return rows[0][1] == "enabled"
+
+
 @pytest.mark.cos
 @pytest.mark.usefixtures("cos_integrated")
-def test_prometheus(traefik_url: str, cos_model: jubilant.Juju):
+def test_prometheus(k8s_cluster: jubilant.Juju, traefik_url: str, cos_model: jubilant.Juju):
     """Test that the cluster's metrics reach Prometheus."""
     prometheus = Prometheus(model_name=cos_model.show_model().short_name, base=traefik_url)
     queries = [
@@ -348,9 +370,12 @@ def test_prometheus(traefik_url: str, cos_model: jubilant.Juju):
         'up{job="apiserver"} > 0',
         'up{job="kube-controller-manager"} > 0',
         'up{job="kube-scheduler"} > 0',
-        'up{job="kube-proxy"} > 0',
         'up{job="kube-state-metrics"} > 0',
     ]
+    if _kube_proxy_expected(k8s_cluster):
+        queries.append('up{job="kube-proxy"} > 0')
+    else:
+        log.info("kube-proxy is disabled on the cluster under test; not expecting its metrics")
 
     def check() -> None:
         assert prometheus.is_ready(), "Prometheus is not ready"
