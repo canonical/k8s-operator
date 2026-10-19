@@ -187,7 +187,11 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._stored.set_default(is_dying=False, cluster_name=str())
+        self._stored.set_default(
+            is_dying=False,
+            cleanup_complete=False,
+            cluster_name=str(),
+        )
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -991,9 +995,11 @@ class K8sCharm(ops.CharmBase):
         """
         if self.lead_control_plane:
             self._revoke_cluster_tokens(event)
-        self.update_status.run()
-        if self._last_gasp():
-            snap_management(self, remove=True)
+        if not self._stored.cleanup_complete:
+            self.update_status.run()
+            if self._last_gasp():
+                snap_management(self, remove=True)
+                self._stored.cleanup_complete = True
 
         relation = self.model.get_relation(CLUSTER_RELATION)
         local_cluster = self.get_cluster_name()
@@ -1093,8 +1099,8 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
         while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
-            readiness = k8s.node.ready(self.kubeconfig, self.get_node_name())
-            if readiness == k8s.node.Status.READY or self.api_manager.is_cluster_bootstrapped():
+            state = k8s.node.present(self.kubeconfig, self.get_node_name())
+            if state == k8s.node.Presence.AVAILABLE or self.api_manager.is_cluster_bootstrapped():
                 log.info("Node is still reportedly clustered")
                 reported_down = 0
             else:
