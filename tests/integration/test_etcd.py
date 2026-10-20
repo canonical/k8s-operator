@@ -13,8 +13,12 @@ from helpers import get_leader, ready_nodes, unit_names, unit_port, wait_active
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with etcd, for all the test within this module.
+# The reactive etcd and easyrsa charms rely on leader-get/leader-set, removed in Juju 4.
 APPS = ["k8s", "k8s-worker"]
-pytestmark = [pytest.mark.bundle(file="test-bundle-etcd.yaml", apps_local=APPS)]
+pytestmark = [
+    pytest.mark.bundle(file="test-bundle-etcd.yaml", apps_local=APPS),
+    pytest.mark.juju_major(3),
+]
 
 
 def _etcd_servers(status: jubilant.Status) -> set:

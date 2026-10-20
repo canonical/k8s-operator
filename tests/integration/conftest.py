@@ -18,7 +18,7 @@ import kubernetes.client.models as k8s_models
 import pytest
 import yaml
 from bundle import Bundle
-from cloud import cloud_arch, cloud_profile, cloud_proxied, cloud_type
+from cloud import cloud_arch, cloud_profile, cloud_proxied, cloud_type, juju_major
 from helpers import fast_forward, get_kubeconfig, render_dir, wait_active
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
@@ -241,6 +241,20 @@ def skip_by_cloud_type(request: pytest.FixtureRequest, juju: jubilant.Juju):
         provider, _ = cloud_type(juju.model, request.config.option.lxd_containers)
         if provider not in cloud_markers.args:
             pytest.skip(f"cloud={provider} not among {cloud_markers.args}")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def skip_by_juju_major(request: pytest.FixtureRequest, juju: jubilant.Juju):
+    """Skip a module whose ``juju_major`` marker doesn't include the model's Juju major.
+
+    Args:
+        request: Pytest fixture request.
+        juju: Jubilant Juju instance.
+    """
+    if marker := request.node.get_closest_marker("juju_major"):
+        major = juju_major(juju.model)
+        if major not in marker.args:
+            pytest.skip(f"juju={major} not among {marker.args}")
 
 
 @pytest.fixture(scope="module")

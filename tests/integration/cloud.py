@@ -59,6 +59,20 @@ def cloud_arch(controller: Optional[str]) -> str:
     return arches.pop()
 
 
+@functools.lru_cache(maxsize=None)
+def juju_major(model: Optional[str]) -> int:
+    """Return the major version of the Juju agents running the model.
+
+    Args:
+        model: Model name; None means the currently selected model. Also the cache key.
+
+    Returns:
+        Major version, for example ``3`` or ``4``.
+    """
+    version = jubilant.Juju(model=model).status().model.version
+    return int(version.split(".", 1)[0])
+
+
 def model_owner(juju: jubilant.Juju) -> str:
     """Return the owner of the model.
 
@@ -104,7 +118,11 @@ def cloud_profile(
         lxd.remove_profile(profile_name)
         lxd.apply_profile(lxd_profiles, profile_name)
     elif provider in ("ec2", "openstack"):
-        juju.model_config({"container-networking-method": "local", "fan-config": ""})
+        model_config = {"container-networking-method": "local"}
+        if juju_major(juju.model) < 4:
+            # Fan networking, and its `fan-config` key, were removed in Juju 4.
+            model_config["fan-config"] = ""
+        juju.model_config(model_config)
 
 
 def cloud_proxied(juju: jubilant.Juju) -> None:
