@@ -25,13 +25,5 @@ CHARMCRAFT_DIRS = {
     "k8s-worker": REPO_ROOT / "charms/worker",
 }
 
-# Ubuntu series <-> version. Replaces juju.utils.get_series_version/get_version_series,
-# which came from python-libjuju.
-SERIES_VERSION = {
-    "jammy": "22.04",
-    "noble": "24.04",
-    "resolute": "26.04",
-}
-VERSION_SERIES = {version: series for series, version in SERIES_VERSION.items()}
-
-DEFAULT_SERIES = "noble"
+# Ubuntu base the test bundles deploy onto unless --base or a marking overrides it.
+DEFAULT_BASE = "ubuntu@24.04"

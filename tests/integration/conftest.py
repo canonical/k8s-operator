@@ -84,7 +84,11 @@ def pytest_addoption(parser: pytest.Parser):
             "Note that some charms may not work in LXD containers (e.g. Ceph)."
         ),
     )
-    parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
+    parser.addoption(
+        "--base",
+        default=None,
+        help="Ubuntu base to deploy (e.g. ubuntu@26.04), overrides any markings",
+    )
     parser.addoption(
         "--snap-installation-resource",
         default=str(DEFAULT_SNAP_INSTALLATION.resolve()),
@@ -285,7 +289,7 @@ def k8s_cluster(
         vms=vms,
         charm_files=option.charm_files,
         snap_resource=option.snap_installation_resource,
-        series=option.series,
+        base=option.base,
     )
     cloud_profile(juju, provider, request.node.get_closest_marker("clouds"))
 
