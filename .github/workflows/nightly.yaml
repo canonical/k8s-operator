@@ -13,13 +13,21 @@ permissions:
 jobs:
   integration-tests-terraform:
     strategy:
+      fail-fast: false
       matrix:
+        juju-channel: ["3/stable", "4/stable"]
         test:
         - name: test_k8s
           manifest-yaml: default-manifest.yaml
         - name: test_ceph
           manifest-yaml: ceph-manifest.yaml
-    name: integration-tests-terraform-${{ matrix.test.name }}
+        exclude:
+        # Juju 4 coverage is limited to the basic cluster deployment.
+        - juju-channel: "4/stable"
+          test:
+            name: test_ceph
+            manifest-yaml: ceph-manifest.yaml
+    name: integration-tests-terraform-${{ matrix.test.name }}-juju-${{ matrix.juju-channel }}
     runs-on: self-hosted-linux-amd64-jammy-xlarge
     env:
       TF_VAR_model: my-canonical-k8s
@@ -34,7 +42,7 @@ jobs:
       with:
         provider: lxd
         channel: latest/stable
-        juju-channel: 3/stable
+        juju-channel: ${{ matrix.juju-channel }}
     - name: Checking out repo
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
