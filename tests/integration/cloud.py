@@ -4,6 +4,8 @@
 
 import functools
 import logging
+import os
+from pathlib import Path
 from typing import Optional, Tuple
 
 import jubilant
@@ -71,6 +73,37 @@ def juju_major(model: Optional[str]) -> int:
     """
     version = jubilant.Juju(model=model).status().model.version
     return int(version.split(".", 1)[0])
+
+
+def authorize_ssh_keys(juju: jubilant.Juju) -> None:
+    """Add the client's public SSH keys to the model on Juju 4.
+
+    Juju 3 adds them to every new model; Juju 4 no longer does, which leaves
+    juju-crashdump unable to collect machine logs over SSH.
+
+    Args:
+        juju: Jubilant Juju instance.
+    """
+    if juju_major(juju.model) < 4:
+        return
+    juju_data = Path(os.environ.get("JUJU_DATA") or Path.home() / ".local/share/juju")
+    paths = [juju_data / "ssh/juju_id_rsa.pub", *sorted((Path.home() / ".ssh").glob("id_*.pub"))]
+    # Juju 4.0.15+ rejects an argument that holds more than one key.
+    keys = [
+        line.strip()
+        for path in paths
+        if path.is_file()
+        for line in path.read_text().splitlines()
+        if line.strip()
+    ]
+    if not keys:
+        log.warning("No public SSH keys found to add to model %s", juju.model)
+        return
+    try:
+        juju.cli("add-ssh-key", *keys)
+    except jubilant.CLIError as exc:
+        # Only crash dumps depend on these keys, so don't fail the deployment.
+        log.warning("Could not add SSH keys to model %s: %s", juju.model, exc.stderr)
 
 
 def model_owner(juju: jubilant.Juju) -> str:

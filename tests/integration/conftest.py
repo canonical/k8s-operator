@@ -18,7 +18,14 @@ import kubernetes.client.models as k8s_models
 import pytest
 import yaml
 from bundle import Bundle
-from cloud import cloud_arch, cloud_profile, cloud_proxied, cloud_type, juju_major
+from cloud import (
+    authorize_ssh_keys,
+    cloud_arch,
+    cloud_profile,
+    cloud_proxied,
+    cloud_type,
+    juju_major,
+)
 from helpers import fast_forward, get_kubeconfig, render_dir, wait_active
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
@@ -306,6 +313,7 @@ def k8s_cluster(
         base=option.base,
     )
     cloud_profile(juju, provider, request.node.get_closest_marker("clouds"))
+    authorize_ssh_keys(juju)
 
     # Render into a directory the juju CLI can read: when juju is a snap it cannot open
     # /tmp, and the bundle references local charm and resource paths that juju resolves
