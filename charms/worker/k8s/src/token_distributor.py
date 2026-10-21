@@ -212,7 +212,9 @@ class TokenManager:
 
         relation.data[charm.unit].pop(secret_key, None)
         relation.data[charm.app][secret_key] = secret.id
-        secret.grant(relation, unit=unit)
+        if relation.app != charm.app:
+            # Peer units can read app secrets already; Juju 4 rejects peer grants.
+            secret.grant(relation, unit=unit)
 
     def revoke(self, relation: ops.Relation, charm: ops.CharmBase, unit: ops.Unit) -> None:
         """Revoke a secret offered to a unit on this relation.
