@@ -136,6 +136,8 @@ jobs:
       self-hosted-runner-image: resolute
 
   # Juju 3.6 LTS remains the primary target; this lane only smoke-tests Juju 4.
+  # Juju 4.1 reports peer departures after unit removal (juju/juju 490c1214e1);
+  # 4.0 does not, which breaks control-plane unit removal.
   integration-tests-juju4:
     uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@011250c1cbc944fd99b1a16ebb995f55483a57b3 # main
     needs: [charmcraft-channel]
@@ -148,7 +150,7 @@ jobs:
       builder-runner-label: ubuntu-24.04
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       modules: '["test_k8s", "test_smoke"]'
-      juju-channel: 4/stable
+      juju-channel: 4.1/edge
       provider: lxd
       self-hosted-runner: true
       self-hosted-runner-arch: AMD64
