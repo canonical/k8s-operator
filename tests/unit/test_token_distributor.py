@@ -88,14 +88,16 @@ def test_token_content(revision, token):
         token_distributor.CosTokenManager,
     ],
 )
-def test_token_manager_grant(manager_klass, request, caplog):
-    """Test token manager can share into correct relation databag."""
+@pytest.mark.parametrize("peer", [True, False], ids=["peer", "remote"])
+def test_token_manager_grant(manager_klass, peer, request, caplog):
+    """Test token manager shares into the databag, granting only to remote apps."""
     api_manager_mock = mock.MagicMock(spec=token_distributor.K8sdAPIManager)
     manager = manager_klass(api_manager_mock())
     charm = mock.MagicMock(spec=ops.CharmBase)()
     unit = mock.MagicMock(spec=ops.Unit)()
     secret = mock.MagicMock(spec=ops.Secret)()
     relation = mock.MagicMock()
+    relation.app = charm.app if peer else mock.MagicMock(spec=ops.Application)()
     relation.name = request.node.name
     relation.data = defaultdict(dict)
     secret_key = token_distributor.CLUSTER_SECRET_ID.format(unit.name)
@@ -106,6 +108,10 @@ def test_token_manager_grant(manager_klass, request, caplog):
     manager.grant(relation, charm, unit, secret)
     assert relation.data[charm.app][secret_key] == secret.id
     assert secret_key not in relation.data[charm.unit]
+    if peer:
+        secret.grant.assert_not_called()
+    else:
+        secret.grant.assert_called_once_with(relation, unit=unit)
 
     title = manager_klass.strategy.name.title()
     assert f"Grant {title} token for '{secret_key}' on {relation.name}" in caplog.text

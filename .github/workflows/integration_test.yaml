@@ -117,7 +117,7 @@ jobs:
       builder-runner-label: ${{ matrix.arch.builder-label }}
       charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
       extra-arguments: >-
-        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --series=resolute' || ' --series=resolute' }}
+        ${{ matrix.arch.id == 'arm64' && ' --lxd-containers --base=ubuntu@26.04' || ' --base=ubuntu@26.04' }}
       modules: ${{ matrix.arch.modules }}
       juju-channel: 3/stable
       provider: lxd
@@ -134,3 +134,30 @@ jobs:
       python-version: 3.14
       # operator-workflows appends "noble" to the request labels by default. we need to change it to resolute
       self-hosted-runner-image: resolute
+
+  # Juju 3.6 LTS remains the primary target; this lane only smoke-tests Juju 4.
+  # Juju 4.1 reports peer departures after unit removal (juju/juju 490c1214e1);
+  # 4.0 does not, which breaks control-plane unit removal.
+  integration-tests-juju4:
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@011250c1cbc944fd99b1a16ebb995f55483a57b3 # main
+    needs: [charmcraft-channel]
+    permissions:
+      contents: read
+      actions: write
+    secrets: inherit
+    with:
+      identifier: juju4-amd64
+      builder-runner-label: ubuntu-24.04
+      charmcraft-channel: ${{ needs.charmcraft-channel.outputs.channel }}
+      modules: '["test_k8s", "test_smoke"]'
+      juju-channel: 4.1/edge
+      provider: lxd
+      self-hosted-runner: true
+      self-hosted-runner-arch: AMD64
+      self-hosted-runner-label: xlarge
+      test-timeout: 600
+      test-tox-env: integration
+      trivy-fs-enabled: false
+      trivy-image-config: "trivy.yaml"
+      tmate-debug: true
+      with-uv: true
