@@ -38,18 +38,17 @@ def present(kubeconfig: Path, node: str) -> Presence:
         node (str): name of node
 
     Returns:
-        Presence: Available, Unavailable, or Unknown
+        Presence: Available, Unavailable only after a successful absent-node query,
+            or Unresponsive when the API result cannot be established.
     """
-    cmd = ["get", "nodes", node, "-o=jsonpath={.metadata.name}"]
+    cmd = ["get", "nodes", node, "--ignore-not-found", "-o=jsonpath={.metadata.name}"]
     try:
-        name = kubectl(*cmd, kubeconfig=kubeconfig)
-    except subprocess.CalledProcessError as e:
-        if e.returncode == 1 and "not found" in e.output:
-            return Presence.UNAVAILABLE
+        name = kubectl(*cmd, kubeconfig=kubeconfig).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return Presence.UNRESPONSIVE
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return Presence.UNRESPONSIVE
-    return Presence.UNAVAILABLE if name != node else Presence.AVAILABLE
+    if not name:
+        return Presence.UNAVAILABLE
+    return Presence.AVAILABLE if name == node else Presence.UNRESPONSIVE
 
 
 def ready(kubeconfig: Path, node: str) -> Status:
