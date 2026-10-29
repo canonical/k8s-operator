@@ -3,6 +3,7 @@
 
 """Relation kube-control module."""
 
+import json
 import logging
 from base64 import b64decode
 
@@ -33,6 +34,36 @@ def _share_labels_and_taints(charm: K8sCharmProtocol):
 
     charm.kube_control.set_labels(labels.split())
     charm.kube_control.set_taints(taints.split())
+
+
+def _purge_stale_kube_control_creds(charm: K8sCharmProtocol):
+    """Drop kube-control creds whose secret is already gone from Juju.
+
+    charm.kube_control.closed_auth_creds() aborts before it can persist its own
+    cleanup once model.get_secret() raises, so we redo that cleanup here directly
+    against the relation databag.
+
+    Args:
+        charm (K8sCharmProtocol): The charm instance.
+    """
+    for relation in charm.kube_control.relations:
+        creds = json.loads(relation.data[charm.unit].get("creds", "{}"))
+        active_units = {unit.name for unit in relation.units}
+        changed = False
+        for user, cred in list(creds.items()):
+            if cred.get("scope") in active_units:
+                continue
+            secret_id = cred.get("secret-id")
+            if not secret_id:
+                continue
+            try:
+                charm.model.get_secret(id=secret_id)
+            except ops.SecretNotFoundError:
+                log.warning("Purging stale kube-control creds for '%s': secret gone", user)
+                creds.pop(user)
+                changed = True
+        if changed:
+            relation.data[charm.unit]["creds"] = json.dumps(creds)
 
 
 def configure(charm: K8sCharmProtocol):
@@ -85,6 +116,24 @@ def configure(charm: K8sCharmProtocol):
             proxy_token=str(),
         )
 
-    for user, cred in charm.kube_control.closed_auth_creds():
-        log.info("Revoke auth-token for '%s'", user)
-        charm.api_manager.revoke_auth_token(cred.load_client_token(charm.model, user))
+    # A missing secret aborts closed_auth_creds() before it persists its own
+    # cleanup, so one retry after purging is enough to process the rest.
+    revoked_users = set()
+    for _ in range(2):
+        try:
+            for user, cred in charm.kube_control.closed_auth_creds():
+                if user in revoked_users:
+                    continue
+                log.info("Revoke auth-token for '%s'", user)
+                try:
+                    token = cred.load_client_token(charm.model, user)
+                except ops.SecretNotFoundError:
+                    log.warning("Secret for '%s' is already gone; skipping revoke", user)
+                    continue
+                charm.api_manager.revoke_auth_token(token)
+                revoked_users.add(user)
+        except ops.SecretNotFoundError:
+            log.warning("Secret already removed while revoking kube-control creds; retrying")
+            _purge_stale_kube_control_creds(charm)
+            continue
+        break
