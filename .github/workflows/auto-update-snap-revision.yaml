@@ -6,6 +6,13 @@ on:
   pull_request:
     paths:
       - .github/workflows/auto-update-snap-revision.yaml
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Release branch to update (e.g. release-1.34). Leave empty for all."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -13,6 +20,7 @@ permissions:
 jobs:
   stable-branches:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     outputs:
       branches: ${{ steps.release-branches.outputs.branches }}
     steps:
@@ -20,17 +28,27 @@ jobs:
       name: List release branches
       run: |-
         set -o pipefail
+        if [[ -n ${INPUT_BRANCH} && ! ${INPUT_BRANCH} =~ ^release-[0-9]+\.[0-9]+$ ]]; then
+          echo "Invalid branch input" >&2
+          exit 1
+        fi
         BRANCHES=$(git ls-remote --heads "https://github.com/${GITHUB_REPOSITORY}.git" 'refs/heads/release-*' |
           cut -f2 |
           jq -R -s -c 'split("\n") | map(select(test("^refs/heads/release-[0-9]+\\.[0-9]+$")) | sub("^refs/heads/"; "")) | sort')
+        if [[ -n ${INPUT_BRANCH} ]]; then
+          BRANCHES=$(jq -c --arg b "${INPUT_BRANCH}" 'map(select(. == $b))' <<< "${BRANCHES}")
+        fi
         echo "branches=${BRANCHES}" >> "${GITHUB_OUTPUT}"
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
+        INPUT_BRANCH: ${{ inputs.branch }}
 
   update-branches:
     runs-on: ubuntu-latest
     needs: [stable-branches]
     if: needs.stable-branches.outputs.branches != '[]'
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.branch }}
     strategy:
       matrix:
         branch: ${{ fromJSON(needs.stable-branches.outputs.branches) }}
@@ -52,6 +70,7 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         repository: ${{ github.repository }}
+        ref: ${{ github.event.repository.default_branch }}
         path: update-scripts
         sparse-checkout: |
           .github/workflows/update-snap-revision.py
@@ -110,7 +129,7 @@ jobs:
         STEPS_UPDATE_ARM64_REVISION_OUTPUTS_COMMIT_SHA: ${{ steps.update-arm64-revision.outputs.commit_sha }}
 
     - name: Report Pull Request
-      if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
+      if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' && steps.assemble-revisions.outputs.revisions != '[]' }}
       run: |
         echo "Would have created pull-request"
         echo "Title: chore(release-${TRACK}): update k8s snap revisions"
@@ -123,7 +142,7 @@ jobs:
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
-      if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
+      if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (steps.assemble-revisions.outputs.revisions != '[]') }}
       with:
         commit-message: 'chore(release-${{ env.TRACK }}): update k8s snap revisions'
         title: "chore(release-${{ env.TRACK }}): update k8s snap revisions"
@@ -143,6 +162,8 @@ jobs:
 
           Both architectures are built from the same commit:
           - https://github.com/canonical/k8s-snap/commit/${{ steps.update-amd64-revision.outputs.commit_sha }}
+
+          Triggered by: ${{ github.event_name }} (${{ github.actor }})
         labels: |
           automerge
         branch: revision-update-job/${{ env.TRACK }}/${{ join(fromJson(steps.assemble-revisions.outputs.revisions), '-') }}
