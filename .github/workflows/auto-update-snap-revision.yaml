@@ -20,10 +20,15 @@ permissions:
 jobs:
   stable-branches:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     outputs:
       branches: ${{ steps.release-branches.outputs.branches }}
     steps:
+    - name: Reject dispatch from non-default branch
+      if: github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+      run: |
+        echo "Dispatch is only allowed from the default branch" >&2
+        exit 1
+
     - id: release-branches
       name: List release branches
       run: |-
@@ -37,6 +42,10 @@ jobs:
           jq -R -s -c 'split("\n") | map(select(test("^refs/heads/release-[0-9]+\\.[0-9]+$")) | sub("^refs/heads/"; "")) | sort')
         if [[ -n ${INPUT_BRANCH} ]]; then
           BRANCHES=$(jq -c --arg b "${INPUT_BRANCH}" 'map(select(. == $b))' <<< "${BRANCHES}")
+          if [[ ${BRANCHES} == '[]' ]]; then
+            echo "Release branch ${INPUT_BRANCH} not found" >&2
+            exit 1
+          fi
         fi
         echo "branches=${BRANCHES}" >> "${GITHUB_OUTPUT}"
       env:
@@ -47,6 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [stable-branches]
     if: needs.stable-branches.outputs.branches != '[]'
+    # The PAT lives in this environment, restricted to the default branch in repo settings.
+    environment: ${{ github.event_name != 'pull_request' && 'snap-revision-pr' || '' }}
     concurrency:
       group: ${{ github.workflow }}-${{ matrix.branch }}
     strategy:
@@ -70,7 +81,6 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         repository: ${{ github.repository }}
-        ref: ${{ github.event.repository.default_branch }}
         path: update-scripts
         sparse-checkout: |
           .github/workflows/update-snap-revision.py
