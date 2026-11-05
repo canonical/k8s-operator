@@ -43,6 +43,7 @@ jobs:
     needs: [configure-channel, charmcraft-channel]
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@main
     strategy:
+      fail-fast: false
       matrix:
         charm:
         - { path: ./charms/worker/k8s/, tagPrefix: k8s }
