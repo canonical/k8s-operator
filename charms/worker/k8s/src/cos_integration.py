@@ -3,17 +3,21 @@
 
 """COS Integration module."""
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+import charmlibs.snap as snap_lib
 import ops
-from literals import DATASTORE_TYPE_ETCD
+from charms.grafana_agent.v0.cos_agent import CosAgentProviderUnitData
+from literals import COS_RELATION, DATASTORE_TYPE_ETCD, SNAP_NAME
 from ops.charm import CharmBase
 
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
+KUBE_PROXY_SERVICE = "kube-proxy"
 
 
 @dataclass
@@ -95,12 +99,65 @@ class COSIntegration(ops.Object):
             "relabel_configs": config.relabel_configs,
         }
 
+    def kube_proxy_enabled(self) -> bool:
+        """Report whether k8sd wants kube-proxy running on this node.
+
+        k8sd enables the kube-proxy snap service (``snap start --enable``) when the cluster
+        wants it and disables it (``snap stop --disable``) when it doesn't, for example
+        when Cilium replaces it. The service is installed disabled, so snapd reports it as
+        enabled exactly when kube-proxy is expected, whether or not it is currently up.
+        A crashed kube-proxy therefore stays enabled and keeps being scraped.
+
+        Returns:
+            bool: False if the service is known to be disabled; True otherwise, including
+                when the state cannot be determined, so that a job is never dropped by
+                mistake.
+        """
+        try:
+            services = snap_lib.SnapCache()[SNAP_NAME].services
+        except (snap_lib.Error, OSError):
+            log.exception("Could not determine whether kube-proxy is enabled.")
+            return True
+        if (service := services.get(KUBE_PROXY_SERVICE)) is None:
+            log.warning("The %s snap has no %s service.", SNAP_NAME, KUBE_PROXY_SERVICE)
+            return True
+        return service["enabled"]
+
+    def kube_proxy_job_stale(self) -> bool:
+        """Report whether the published kube-proxy scrape job disagrees with this node.
+
+        k8sd can turn kube-proxy on or off after the scrape jobs were published, and
+        nothing tells the charm when it does. The jobs already published on the cos-agent
+        relation record what was true at the time, so compare them with the node now
+        rather than republishing on a schedule.
+
+        Returns:
+            bool: True if jobs were published and whether they include kube-proxy differs
+                from whether kube-proxy is enabled now. False if nothing was published
+                yet, in which case the regular refresh events will publish.
+        """
+        enabled = self.kube_proxy_enabled()
+        for relation in self.charm.model.relations[COS_RELATION]:
+            raw = relation.data[self.charm.unit].get(CosAgentProviderUnitData.KEY)
+            jobs = json.loads(raw).get("metrics_scrape_jobs") if raw else None
+            if not jobs:
+                continue
+            published = any(
+                relabel.get("replacement") == "kube-proxy"
+                for job in jobs
+                for relabel in job.get("relabel_configs", [])
+            )
+            if published != enabled:
+                return True
+        return False
+
     def get_metrics_endpoints(
         self,
         node_name: str,
         token: str,
         control_plane: bool = False,
         datastore: Optional[str] = None,
+        kube_proxy: bool = True,
     ) -> List[Dict]:
         """Retrieve Prometheus scrape job configurations for Kubernetes components.
 
@@ -110,6 +167,8 @@ class COSIntegration(ops.Object):
             control_plane (bool, optional): If True, include control plane components.
                 Defaults to False.
             datastore (Optional[str]): The datastore used in the cluster.
+            kube_proxy (bool, optional): If False, don't scrape kube-proxy, because it
+                isn't running on this node. Defaults to True.
 
         Returns:
             List[Dict]: A list of Prometheus scrape job configurations.
@@ -225,7 +284,7 @@ class COSIntegration(ops.Object):
             ],
         )
 
-        jobs = shared_jobs + kubelet_jobs
+        jobs = (shared_jobs if kube_proxy else []) + kubelet_jobs
         if control_plane:
             jobs.extend(control_plane_jobs + kube_state_metrics)
             if datastore == DATASTORE_TYPE_ETCD:

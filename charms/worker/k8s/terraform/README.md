@@ -20,7 +20,7 @@ The module offers the following configurable inputs:
 | `config`| map(string) | Map of the charm configuration options | False | {} |
 | `constraints` | string | Juju constraints to apply for this application | False | arch=amd64 |
 | `endpoint_bindings`| set(object) | Configure endpoint bindings for interfaces and spaces | False | null |
-| `model`| string | Name of the model that the charm is deployed on | True | null |
+| `model_uuid`| string | UUID of the model that the charm is deployed on | True | null |
 | `machines`| set(string) | Placement info for the application's units | False | null |
 | `resources`| map(string) | Map of the charm resources | False | {} |
 | `revision`| number | Revision number of the charm name | False | null |
@@ -43,7 +43,7 @@ This module is intended to be used as part of a higher-level module. When defini
 
 ### Define a `juju_model` resource
 
-Define a `juju_model` resource and pass to the `model_name` input a reference to the `juju_model` resource's name. For example:
+Define a `juju_model` resource and pass to the `model_uuid` input a reference to the `juju_model` resource's UUID. For example:
 
 ```
 resource "juju_model" "testing" {
@@ -51,20 +51,21 @@ resource "juju_model" "testing" {
 }
 module "k8s" {
   source = "<path-to-this-directory>"
-  model = juju_model.testing.name
+  model_uuid = juju_model.testing.uuid
 }
 ```
 
 ### Define a `data` source
 
-Define a `data` source and pass a reference to the `model_name` input to the `data.juju_model` resource's name. Terraform will look for a `juju_model` resource with a matching model name and only apply resources if the names match.
+Define a `data` source and pass a reference to the `model_uuid` input to the `data.juju_model` resource's UUID. Terraform will look for a `juju_model` resource with a matching model name and only apply resources if the names match.
 
 ```
 data "juju_model" "testing" {
-  name = var.model_name
+  name  = var.model_name
+  owner = var.model_owner
 }
 module "k8s" {
   source = "<path-to-this-directory>"
-  model = data.juju_model.testing.name
+  model_uuid = data.juju_model.testing.uuid
 }
 ```

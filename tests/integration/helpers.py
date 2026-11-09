@@ -331,12 +331,13 @@ def get_pod_logs(juju: jubilant.Juju, unit: str, name: str, namespace: str = "de
     return juju.exec(f"k8s kubectl logs --namespace {namespace} pod/{name}", unit=unit).stdout
 
 
-def get_kubeconfig(juju: jubilant.Juju, dest_dir: Path) -> Path:
-    """Retrieve a kubeconfig from the k8s leader and write it to *dest_dir*.
+def get_kubeconfig(juju: jubilant.Juju, dest_dir: Path, app: str = "k8s") -> Path:
+    """Retrieve a kubeconfig from an application's leader and write it to *dest_dir*.
 
     Args:
         juju: Jubilant Juju instance.
         dest_dir: Directory in which to write the kubeconfig.
+        app: Name of the k8s application to ask for the kubeconfig.
 
     Returns:
         Path to the kubeconfig file.
@@ -344,7 +345,7 @@ def get_kubeconfig(juju: jubilant.Juju, dest_dir: Path) -> Path:
     kubeconfig_path = dest_dir / "kubeconfig"
     if kubeconfig_path.exists() and kubeconfig_path.stat().st_size:
         return kubeconfig_path
-    task = juju.run(get_leader(juju, "k8s"), "get-kubeconfig")
+    task = juju.run(get_leader(juju, app), "get-kubeconfig")
     kubeconfig_path.parent.mkdir(exist_ok=True, parents=True)
     kubeconfig_path.write_text(task.results["kubeconfig"])
     assert kubeconfig_path.stat().st_size, "kubeconfig file is 0 bytes"

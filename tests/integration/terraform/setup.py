@@ -153,19 +153,22 @@ def setup_terraform_env(args) -> None:
     )
 
 
-def model_exists(model: str) -> bool:
-    """Check if the model already exists in the controller.
+def model_uuid(model: str) -> Optional[str]:
+    """Return the UUID of the model if it exists in the controller.
 
     Args:
         model: Short model name, without the owner prefix.
 
     Returns:
-        True if the model exists.
+        The model UUID, or None if the model doesn't exist.
     """
     models = juju_json("models").get("models") or []
     # `juju models` reports both "admin/foo" (name) and "foo" (short-name); the
     # libjuju list_models() this replaces returned the short form.
-    return model in {entry.get("short-name") for entry in models}
+    return next(
+        (entry.get("model-uuid") for entry in models if entry.get("short-name") == model),
+        None,
+    )
 
 
 def tf_run(path: Path, args: List[str]) -> None:
@@ -210,12 +213,13 @@ def main() -> None:
     print("Initializing Terraform...")
     tf_run(args.terraform_module_path, ["init", "--upgrade"])
 
-    # Import Existing Model if it exists
-    if model_exists(args.model):
+    # Import Existing Model if it exists; juju provider v1+ imports models by UUID
+    uuid = model_uuid(args.model)
+    if uuid:
         print("Import existing model...")
         tf_run(
             args.terraform_module_path,
-            ["import", "module.k8s.juju_model.this", args.model],
+            ["import", "module.k8s.juju_model.this", uuid],
         )
 
     print(f"Applying Terraform with manifest: {args.manifest_yaml} and model: {args.model}...")

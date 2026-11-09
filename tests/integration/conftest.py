@@ -100,16 +100,6 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--upgrade-from", dest="upgrade_from", default=None, help="Charms channel to upgrade from"
     )
-    parser.addoption(
-        "--metrics-agent-charm",
-        dest="metrics_agent_charm",
-        type=str,
-        default="",  # empty string means all
-        help=(
-            "Run test_cos module only with this metrics agent charm, "
-            "skipping all others (e.g., opentelemetry-collector:2/stable)."
-        ),
-    )
 
     # Option names that a third-party plugin may already own; see _addoption_if_absent.
     _addoption_if_absent(

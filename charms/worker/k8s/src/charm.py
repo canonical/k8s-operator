@@ -609,6 +609,11 @@ class K8sCharm(ops.CharmBase):
         if relation := self.model.get_relation(COS_TOKENS_RELATION):
             self.collector.request(relation)
 
+        # k8sd can switch kube-proxy on or off after the jobs were published.
+        if self.cos.kube_proxy_job_stale():
+            log.info("Published kube-proxy scrape job is out of date, refreshing")
+            self.cos.trigger_jobs_refresh()
+
     def _get_valid_annotations(self) -> Optional[dict]:
         """Fetch and validate cluster-annotations from charm configuration.
 
@@ -811,6 +816,7 @@ class K8sCharm(ops.CharmBase):
                     token,
                     self.is_control_plane,
                     self.bootstrap.config.datastore,
+                    kube_proxy=self.cos.kube_proxy_enabled(),
                 )
         except ReconcilerError:
             log.exception("Failed to get COS token.")
