@@ -50,6 +50,7 @@ jobs:
       cancel-in-progress: false
     uses: canonical/operator-workflows/.github/workflows/publish_charm.yaml@27f280ed34b54bd9f65451dc966bfde701e84b62 # main
     strategy:
+      fail-fast: false
       matrix:
         charm:
         - { path: ./charms/worker/k8s/, tagPrefix: k8s }
