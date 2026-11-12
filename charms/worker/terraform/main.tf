@@ -2,8 +2,8 @@
 # See LICENSE file for licensing details.
 
 resource "juju_application" "k8s_worker" {
-  name  = var.app_name
-  model = var.model
+  name       = var.app_name
+  model_uuid = var.model_uuid
 
   charm {
     name     = "k8s-worker"

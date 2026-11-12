@@ -1,27 +1,15 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+# Juju only accepts `offers` in an overlay, not in the bundle itself.
 applications:
-  alertmanager:
-    offers:
-      alertmanager-karma-dashboard:
-        endpoints:
-          - karma-dashboard
   grafana:
     offers:
       grafana-dashboards:
         endpoints:
           - grafana-dashboard
-  loki:
-    offers:
-      loki-logging:
-        endpoints:
-        - logging
   prometheus:
     offers:
-      prometheus-scrape:
-        endpoints:
-        - metrics-endpoint
       prometheus-receive-remote-write:
         endpoints:
-        - receive-remote-write
+          - receive-remote-write
