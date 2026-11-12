@@ -18,7 +18,14 @@ import kubernetes.client.models as k8s_models
 import pytest
 import yaml
 from bundle import Bundle
-from cloud import cloud_arch, cloud_profile, cloud_proxied, cloud_type
+from cloud import (
+    authorize_ssh_keys,
+    cloud_arch,
+    cloud_profile,
+    cloud_proxied,
+    cloud_type,
+    juju_major,
+)
 from helpers import fast_forward, get_kubeconfig, render_dir, wait_active
 from kubernetes import config as k8s_config
 from kubernetes.client import ApiClient, Configuration, CoreV1Api
@@ -84,7 +91,11 @@ def pytest_addoption(parser: pytest.Parser):
             "Note that some charms may not work in LXD containers (e.g. Ceph)."
         ),
     )
-    parser.addoption("--series", default=None, help="Series to deploy, overrides any markings")
+    parser.addoption(
+        "--base",
+        default=None,
+        help="Ubuntu base to deploy (e.g. ubuntu@26.04), overrides any markings",
+    )
     parser.addoption(
         "--snap-installation-resource",
         default=str(DEFAULT_SNAP_INSTALLATION.resolve()),
@@ -239,6 +250,20 @@ def skip_by_cloud_type(request: pytest.FixtureRequest, juju: jubilant.Juju):
             pytest.skip(f"cloud={provider} not among {cloud_markers.args}")
 
 
+@pytest.fixture(scope="module", autouse=True)
+def skip_by_juju_major(request: pytest.FixtureRequest, juju: jubilant.Juju):
+    """Skip a module whose ``juju_major`` marker doesn't include the model's Juju major.
+
+    Args:
+        request: Pytest fixture request.
+        juju: Jubilant Juju instance.
+    """
+    if marker := request.node.get_closest_marker("juju_major"):
+        major = juju_major(juju.model)
+        if major not in marker.args:
+            pytest.skip(f"juju={major} not among {marker.args}")
+
+
 @pytest.fixture(scope="module")
 def k8s_cluster(
     request: pytest.FixtureRequest,
@@ -285,9 +310,10 @@ def k8s_cluster(
         vms=vms,
         charm_files=option.charm_files,
         snap_resource=option.snap_installation_resource,
-        series=option.series,
+        base=option.base,
     )
     cloud_profile(juju, provider, request.node.get_closest_marker("clouds"))
+    authorize_ssh_keys(juju)
 
     # Render into a directory the juju CLI can read: when juju is a snap it cannot open
     # /tmp, and the bundle references local charm and resource paths that juju resolves

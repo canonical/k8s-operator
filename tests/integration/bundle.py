@@ -14,7 +14,7 @@ import jubilant
 import pytest
 import yaml
 from helpers import stage, wait_idle
-from literals import CHARMCRAFT_DIRS, DEFAULT_SERIES, SERIES_VERSION, TEST_DATA
+from literals import CHARMCRAFT_DIRS, DEFAULT_BASE, TEST_DATA
 
 log = logging.getLogger(__name__)
 
@@ -24,13 +24,13 @@ class Markings:
     """Test markings for the bundle.
 
     Attrs:
-        series: Series for machines in the bundle.
+        base: Ubuntu base for machines in the bundle, for example ``ubuntu@24.04``.
         apps_local: Application names that must be replaced by locally built charms.
         apps_channel: Mapping of application name to charm channel.
         apps_resources: Mapping of application name to resources.
     """
 
-    series: Optional[str] = None
+    base: Optional[str] = None
     apps_local: List[str] = field(default_factory=list)
     apps_channel: Mapping = field(default_factory=dict)
     apps_resources: Mapping = field(default_factory=dict)
@@ -167,7 +167,7 @@ class Bundle:
     Attrs:
         path: Path to the bundle file.
         arch: Cloud architecture.
-        series: Series for machines in the bundle.
+        base: Ubuntu base for machines in the bundle, for example ``ubuntu@24.04``.
         stage_dir: Subdirectory of the render directory to stage local files into.
         content: Parsed bundle content.
         applications: Mapping of applications in the bundle.
@@ -176,7 +176,7 @@ class Bundle:
 
     path: Path
     arch: str
-    series: Optional[str] = None
+    base: Optional[str] = None
     stage_dir: str = ""
     _content: Dict[str, Any] = field(default_factory=dict)
 
@@ -209,7 +209,7 @@ class Bundle:
         bundle = cls(
             path=path,
             arch=arch,
-            series=request.config.option.series,
+            base=request.config.option.base,
             stage_dir=request.module.__name__,
         )
         return bundle, Markings(**kwargs)
@@ -223,7 +223,7 @@ class Bundle:
         """
         if not self._content:
             loaded = yaml.safe_load(self.path.read_bytes())
-            self.series = self.series or loaded.get("series")
+            self.base = self.base or loaded.get("default-base")
             self._content = loaded
         return self._content
 
@@ -256,13 +256,13 @@ class Bundle:
         """
         charm_files = list(charm_files)
         # Touch `applications` first: loading the content is what picks up the bundle's own
-        # top-level `series:` when neither --series nor a marking overrode it.
+        # top-level `default-base:` when neither --base nor a marking overrode it.
         applications = self.applications
-        base = SERIES_VERSION[self.series or DEFAULT_SERIES]
+        _, _, version = (self.base or DEFAULT_BASE).partition("@")
         app_to_charm = {}
         for app in applications.values():
             if charm := Charm.find(str(app["charm"])):
-                charm.resolve(charm_files, self.arch, base)
+                charm.resolve(charm_files, self.arch, version)
                 app_to_charm[charm.name] = charm
         return app_to_charm
 
@@ -274,7 +274,7 @@ class Bundle:
         vms: bool,
         charm_files: Iterable[str],
         snap_resource: str,
-        series: Optional[str] = None,
+        base: Optional[str] = None,
     ) -> None:
         """Customize the bundle for the test.
 
@@ -284,7 +284,7 @@ class Bundle:
             vms: Whether the cloud provisions VMs.
             charm_files: Paths passed with ``--charm-file``.
             snap_resource: Path to the snap-installation resource tarball.
-            series: Series override from ``--series``.
+            base: Ubuntu base override from ``--base``.
         """
         if provider == "lxd" and not vms:
             log.info("Drop lxd machine constraints")
@@ -293,8 +293,8 @@ class Bundle:
             log.info("Constrain lxd machines with virt-type: virtual-machine")
             self.add_constraints({"virt-type": "virtual-machine"})
 
-        if series := series or markings.series:
-            self.content["series"] = self.series = series
+        if base := base or markings.base:
+            self.content["default-base"] = self.base = base
 
         charms = self.discover_charm_files(charm_files)
         empty_resource = {"snap-installation": str(stage(Path(snap_resource), self.stage_dir))}

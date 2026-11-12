@@ -20,10 +20,12 @@ from tenacity import Retrying, before_sleep_log, stop_after_attempt, wait_fixed
 
 # This pytest mark configures the test environment to use the Canonical Kubernetes
 # bundle with ceph, for all the test within this module.
+# The ceph-mon charm relies on leader-get/leader-set, removed in Juju 4.
 APPS = ["k8s"]
 pytestmark = [
     pytest.mark.bundle(file="test-bundle-ceph.yaml", apps_local=APPS),
     pytest.mark.architecture("amd64"),
+    pytest.mark.juju_major(3),
 ]
 CEPH_CSI_MISSING_NS = re.compile(r"Missing namespace '(\S+)'")
 RBD_PLUGIN_SELECTOR = "app=csi-rbdplugin"
