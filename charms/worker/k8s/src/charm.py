@@ -1100,8 +1100,11 @@ class K8sCharm(ops.CharmBase):
         while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
             state = k8s.node.present(self.kubeconfig, self.get_node_name())
-            if state == k8s.node.Presence.AVAILABLE or self.api_manager.is_cluster_bootstrapped():
-                log.info("Node is still reportedly clustered")
+            if (
+                state != k8s.node.Presence.UNAVAILABLE
+                or self.api_manager.is_cluster_bootstrapped()
+            ):
+                log.info("Node removal not yet confirmed")
                 reported_down = 0
             else:
                 reported_down += 1
