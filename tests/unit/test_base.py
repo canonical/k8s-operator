@@ -495,9 +495,17 @@ def removing_unit(harness):
         yield harness, peer, presence, remove
 
 
-def test_completed_cleanup_is_not_repeated(removing_unit):
+@pytest.fixture
+def removing_worker(removing_unit):
+    """Restrict the dying-unit fixture to workers."""
+    if removing_unit[0].charm.is_control_plane:
+        pytest.skip("Not applicable on control planes")
+    yield removing_unit
+
+
+def test_completed_cleanup_is_not_repeated(removing_worker):
     """Later hooks skip teardown after cleanup removes the snap and its API proxy."""
-    harness, peer, presence, remove = removing_unit
+    harness, peer, presence, remove = removing_worker
     with mock.patch.object(
         harness.charm, "_last_gasp", wraps=harness.charm._last_gasp
     ) as last_gasp:
@@ -519,14 +527,14 @@ def test_completed_cleanup_is_not_repeated(removing_unit):
 @pytest.mark.parametrize("leader", [False, True])
 @pytest.mark.parametrize("event", ["stop", "remove"])
 @pytest.mark.parametrize("presence", [k8s.node.Presence.AVAILABLE, k8s.node.Presence.UNRESPONSIVE])
-def test_removal_blocks_while_still_clustered(removing_unit, leader, event, presence):
-    """A present Node or still-bootstrapped unit must not uninstall its snap."""
-    harness, _, probe, remove = removing_unit
+def test_removal_blocks_while_still_clustered(removing_worker, leader, event, presence):
+    """Present Nodes and inconclusive API responses must not uninstall the snap."""
+    harness, _, probe, remove = removing_worker
     harness.disable_hooks()
     harness.set_leader(leader)
     harness.enable_hooks()
     probe.return_value = presence
-    harness.charm.api_manager.is_cluster_bootstrapped.return_value = True
+    harness.charm.api_manager.is_cluster_bootstrapped.return_value = False
 
     getattr(harness.charm.on, event).emit()
 
@@ -534,9 +542,9 @@ def test_removal_blocks_while_still_clustered(removing_unit, leader, event, pres
     assert not harness.charm._stored.cleanup_complete
 
 
-def test_cleanup_retries_after_node_deletion_timeout(removing_unit):
+def test_cleanup_retries_after_node_deletion_timeout(removing_worker):
     """A later hook can complete cleanup after an uncluster polling timeout."""
-    harness, _, presence, remove = removing_unit
+    harness, _, presence, remove = removing_worker
     presence.return_value = k8s.node.Presence.AVAILABLE
     harness.charm.on.stop.emit()
     assert not harness.charm._stored.cleanup_complete
@@ -548,9 +556,9 @@ def test_cleanup_retries_after_node_deletion_timeout(removing_unit):
     remove.assert_called_once()
 
 
-def test_removal_waits_through_api_failure_until_node_disappears(removing_unit):
+def test_removal_waits_through_api_failure_until_node_disappears(removing_worker):
     """Transient query failures must not prevent eventual cluster removal."""
-    harness, _, presence, remove = removing_unit
+    harness, _, presence, remove = removing_worker
     states = iter(
         [
             k8s.node.Presence.AVAILABLE,
@@ -579,21 +587,14 @@ def test_removal_waits_through_api_failure_until_node_disappears(removing_unit):
 @pytest.mark.parametrize(
     "interruption", [k8s.node.Presence.AVAILABLE, k8s.node.Presence.UNRESPONSIVE]
 )
-def test_removal_requires_consecutive_completion_observations(removing_unit, interruption):
-    """A reappearing Node or a still-clustered API failure resets confirmation."""
-    harness, _, presence, remove = removing_unit
+def test_removal_requires_consecutive_completion_observations(removing_worker, interruption):
+    """Reappearance or an inconclusive query resets absence confirmation."""
+    harness, _, presence, remove = removing_worker
     states = itertools.cycle(
         [k8s.node.Presence.UNAVAILABLE, k8s.node.Presence.UNAVAILABLE, interruption]
     )
 
-    def lookup(*args):
-        state = next(states)
-        harness.charm.api_manager.is_cluster_bootstrapped.return_value = (
-            state == k8s.node.Presence.UNRESPONSIVE
-        )
-        return state
-
-    presence.side_effect = lookup
+    presence.side_effect = lambda *args: next(states)
 
     harness.charm.on.stop.emit()
 
@@ -602,9 +603,9 @@ def test_removal_requires_consecutive_completion_observations(removing_unit, int
 
 
 @pytest.mark.parametrize("error", [SnapError("snap removal failed"), ReconcilerError("pending")])
-def test_cleanup_retries_after_snap_removal_failure(removing_unit, error):
+def test_cleanup_retries_after_snap_removal_failure(removing_worker, error):
     """Snap failures leave cleanup incomplete and retryable."""
-    harness, _, presence, remove = removing_unit
+    harness, _, presence, remove = removing_worker
     remove.side_effect = [error, None]
     harness.charm.on.stop.emit()
     assert not harness.charm._stored.cleanup_complete
@@ -619,13 +620,10 @@ def test_cleanup_retries_after_snap_removal_failure(removing_unit, error):
     assert harness.charm._stored.cleanup_complete
 
 
-@pytest.mark.parametrize(
-    "presence", [k8s.node.Presence.UNAVAILABLE, k8s.node.Presence.UNRESPONSIVE]
-)
-def test_removal_waits_for_uncluster_state(removing_unit, presence):
-    """Node deletion or an inconclusive query must not bypass bootstrap state."""
-    harness, _, probe, remove = removing_unit
-    probe.return_value = presence
+def test_removal_waits_for_uncluster_state(removing_worker):
+    """Node deletion must not bypass the local bootstrap check."""
+    harness, _, probe, remove = removing_worker
+    probe.return_value = k8s.node.Presence.UNAVAILABLE
     with mock.patch.object(harness.charm.api_manager, "is_cluster_bootstrapped") as bootstrapped:
         bootstrapped.return_value = True
         harness.charm.on.stop.emit()
@@ -636,3 +634,26 @@ def test_removal_waits_for_uncluster_state(removing_unit, presence):
         harness.charm.on.stop.emit()
         assert harness.charm._stored.cleanup_complete
         remove.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("presence", "readiness", "bootstrapped", "removed"),
+    [
+        (k8s.node.Presence.UNRESPONSIVE, k8s.node.Status.UNRESPONSIVE, False, True),
+        (k8s.node.Presence.AVAILABLE, k8s.node.Status.NOT_READY, False, True),
+        (k8s.node.Presence.AVAILABLE, k8s.node.Status.READY, False, False),
+        (k8s.node.Presence.UNRESPONSIVE, k8s.node.Status.UNRESPONSIVE, True, False),
+    ],
+)
+def test_control_plane_removal_follows_node_readiness(
+    removing_unit, presence, readiness, bootstrapped, removed
+):
+    """A departed control plane cannot query its own stopped API server."""
+    harness, _, probe, remove = removing_unit
+    if harness.charm.is_worker:
+        pytest.skip("Not applicable on workers")
+    probe.return_value = presence
+    harness.charm.api_manager.is_cluster_bootstrapped.return_value = bootstrapped
+    with mock.patch("charm.k8s.node.ready", return_value=readiness):
+        harness.charm.on.stop.emit()
+    assert remove.called is removed

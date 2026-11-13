@@ -995,7 +995,7 @@ class K8sCharm(ops.CharmBase):
         """
         if self.lead_control_plane:
             self._revoke_cluster_tokens(event)
-        if self._stored.cleanup_complete is False:
+        if self.is_control_plane or self._stored.cleanup_complete is False:
             self.update_status.run()
             if self._last_gasp():
                 snap_management(self, remove=True)
@@ -1096,12 +1096,17 @@ class K8sCharm(ops.CharmBase):
                 otherwise.
         """
         busy_wait, reported_down = 30, 0
+        node = self.get_node_name()
         status.add(ops.MaintenanceStatus("Ensuring cluster removal"))
         while busy_wait and reported_down != 3:
             log.info("Waiting for this unit to uncluster")
-            state = k8s.node.present(self.kubeconfig, self.get_node_name())
-            if state == k8s.node.Presence.AVAILABLE or self.api_manager.is_cluster_bootstrapped():
-                log.info("Node is still reportedly clustered")
+            if self.is_worker:
+                gone = k8s.node.present(self.kubeconfig, node) == k8s.node.Presence.UNAVAILABLE
+            else:
+                # A departed control plane cannot query its own stopped API server.
+                gone = k8s.node.ready(self.kubeconfig, node) != k8s.node.Status.READY
+            if not gone or self.api_manager.is_cluster_bootstrapped():
+                log.info("Node removal not yet confirmed")
                 reported_down = 0
             else:
                 reported_down += 1
