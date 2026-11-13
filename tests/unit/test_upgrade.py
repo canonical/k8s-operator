@@ -8,13 +8,33 @@ import unittest.mock as mock
 
 import charms.data_platform_libs.v0.upgrade as upgrade_lib
 import ops
+from charms.data_platform_libs.v0.upgrade import verify_requirements
 from inspector import ClusterInspector
 from lightkube.models.core_v1 import Node
 from lightkube.models.meta_v1 import ObjectMeta
-from literals import (
-    UPGRADE_RELATION,
-)
+from literals import DEPENDENCIES, UPGRADE_RELATION
 from upgrade import K8sDependenciesModel, K8sUpgrade
+
+
+def test_supported_kubernetes_version_skew():
+    """Upgrades cannot skip minors; workers may trail the API server by three."""
+    service = DEPENDENCIES["k8s_service"]
+    for version, supported in (
+        ("1.35.9", False),
+        ("1.36.0", True),
+        ("1.37.1", True),
+        ("1.38.0", False),
+    ):
+        assert verify_requirements(version, service["upgrade_supported"]) is supported
+
+    worker_requirement = service["dependencies"]["k8s-worker"]
+    for version, supported in (
+        ("1.33.9", False),
+        ("1.34.0", True),
+        ("1.37.1", True),
+        ("1.38.0", False),
+    ):
+        assert verify_requirements(version, worker_requirement) is supported
 
 
 class TestK8sUpgrade(unittest.TestCase):
