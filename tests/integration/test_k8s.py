@@ -55,6 +55,21 @@ def _expected_nodes(k8s_cluster: jubilant.Juju) -> int:
     return sum(len(status.get_units(app)) for app in APPS)
 
 
+def _node_for_unit(k8s_cluster: jubilant.Juju, unit: str, node_names: set[str]) -> str:
+    """Find the unit's Kubernetes Node before its machine is removed."""
+    hostnames = (
+        k8s_cluster.exec(
+            "python3 -c 'import socket; print(socket.gethostname().lower()); "
+            "print(socket.getfqdn().lower())'",
+            unit=unit,
+        ).stdout
+        or ""
+    )
+    matches = node_names.intersection(hostnames.splitlines())
+    assert len(matches) == 1, f"Expected one Node for {unit}, found {matches}"
+    return matches.pop()
+
+
 def test_nodes_ready(k8s_cluster: jubilant.Juju):
     """Deploy the charm and wait for active/idle status."""
     ready_nodes(k8s_cluster, get_leader(k8s_cluster, "k8s"), _expected_nodes(k8s_cluster))
@@ -176,12 +191,14 @@ def test_prevent_bootstrap_config_changes(
 
 
 def test_remove_worker(k8s_cluster: jubilant.Juju, timeout: int):
-    """Deploy the charm and wait for active/idle status."""
+    """Removing a worker deletes its Kubernetes Node before adding a new one."""
     expected_nodes = _expected_nodes(k8s_cluster)
     leader = get_leader(k8s_cluster, "k8s")
     ready_nodes(k8s_cluster, leader, expected_nodes)
 
     victim = unit_names(k8s_cluster, "k8s-worker")[0]
+    original_nodes = {node["metadata"]["name"] for node in get_rsc(k8s_cluster, leader, "nodes")}
+    victim_node = _node_for_unit(k8s_cluster, victim, original_nodes)
     log.info("Remove unit %s", victim)
     k8s_cluster.remove_unit(victim)
     k8s_cluster.wait(
@@ -191,6 +208,9 @@ def test_remove_worker(k8s_cluster: jubilant.Juju, timeout: int):
     )
     wait_active(k8s_cluster, *APPS, timeout=timeout * 60)
     ready_nodes(k8s_cluster, leader, expected_nodes - 1)
+    assert {node["metadata"]["name"] for node in get_rsc(k8s_cluster, leader, "nodes")} == (
+        original_nodes - {victim_node}
+    )
 
     k8s_cluster.add_unit("k8s-worker")
     wait_active(k8s_cluster, *APPS, timeout=timeout * 60)
@@ -198,11 +218,13 @@ def test_remove_worker(k8s_cluster: jubilant.Juju, timeout: int):
 
 
 def test_remove_non_leader_control_plane(k8s_cluster: jubilant.Juju, timeout: int):
-    """Deploy the charm and wait for active/idle status."""
+    """Removing a non-leader control plane deletes its Kubernetes Node."""
     expected_nodes = _expected_nodes(k8s_cluster)
     leader = get_leader(k8s_cluster, "k8s")
     follower = next(unit for unit in unit_names(k8s_cluster, "k8s") if unit != leader)
     ready_nodes(k8s_cluster, leader, expected_nodes)
+    original_nodes = {node["metadata"]["name"] for node in get_rsc(k8s_cluster, leader, "nodes")}
+    follower_node = _node_for_unit(k8s_cluster, follower, original_nodes)
 
     log.info("Remove unit %s", follower)
     k8s_cluster.remove_unit(follower)
@@ -213,6 +235,9 @@ def test_remove_non_leader_control_plane(k8s_cluster: jubilant.Juju, timeout: in
     )
     wait_active(k8s_cluster, *APPS, timeout=timeout * 60)
     ready_nodes(k8s_cluster, leader, expected_nodes - 1)
+    assert {node["metadata"]["name"] for node in get_rsc(k8s_cluster, leader, "nodes")} == (
+        original_nodes - {follower_node}
+    )
 
     k8s_cluster.add_unit("k8s")
     wait_active(k8s_cluster, *APPS, timeout=timeout * 60)
@@ -220,12 +245,14 @@ def test_remove_non_leader_control_plane(k8s_cluster: jubilant.Juju, timeout: in
 
 
 def test_remove_leader_control_plane(k8s_cluster: jubilant.Juju, timeout: int):
-    """Deploy the charm and wait for active/idle status."""
+    """Removing a leader control plane deletes its Kubernetes Node."""
     expected_nodes = _expected_nodes(k8s_cluster)
     leader = get_leader(k8s_cluster, "k8s")
     follower = next(unit for unit in unit_names(k8s_cluster, "k8s") if unit != leader)
     ready_nodes(k8s_cluster, follower, expected_nodes)
 
+    original_nodes = {node["metadata"]["name"] for node in get_rsc(k8s_cluster, follower, "nodes")}
+    leader_node = _node_for_unit(k8s_cluster, leader, original_nodes)
     log.info("Remove unit %s", leader)
     k8s_cluster.remove_unit(leader)
     k8s_cluster.wait(
@@ -235,6 +262,9 @@ def test_remove_leader_control_plane(k8s_cluster: jubilant.Juju, timeout: int):
     )
     wait_active(k8s_cluster, *APPS, timeout=timeout * 60)
     ready_nodes(k8s_cluster, follower, expected_nodes - 1)
+    assert {node["metadata"]["name"] for node in get_rsc(k8s_cluster, follower, "nodes")} == (
+        original_nodes - {leader_node}
+    )
 
     k8s_cluster.add_unit("k8s")
     wait_active(k8s_cluster, *APPS, timeout=timeout * 60)
