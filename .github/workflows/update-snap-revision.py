@@ -9,9 +9,11 @@ import json
 import logging
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 from datetime import datetime as dt
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import yaml
 
@@ -23,11 +25,52 @@ ROOT = Path(__file__).parent / ".." / ".."
 INSTALLATION = ROOT / "charms/worker/k8s/templates/snap_installation.yaml"
 LICENSE = Path(__file__).read_text().splitlines(keepends=True)[1:4]
 LICENSE[0] = LICENSE[0].format(year=dt.now().year)
+RETRY_ATTEMPTS = 5
+RETRY_BASE_DELAY = 10
+RETRYABLE_HTTP_CODES = {408, 429, 500, 502, 503, 504}
 
 
 def _multiline_log(logger, message, *args, **kwargs):
     NEWLINE_INDENT = "\n          * "
     logger(message.replace("\n", NEWLINE_INDENT), *args, **kwargs)
+
+
+def _retry_delay(attempt: int, retry_after: Optional[str] = None) -> int:
+    if retry_after and retry_after.isdigit():
+        return int(retry_after)
+    return RETRY_BASE_DELAY * 2**attempt
+
+
+def _fetch_json(req: Request) -> dict:
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            with urlopen(req, timeout=30) as response:
+                return json.loads(response.read())
+        except HTTPError as e:
+            if e.code not in RETRYABLE_HTTP_CODES or attempt == RETRY_ATTEMPTS - 1:
+                raise
+            delay = _retry_delay(attempt, e.headers.get("Retry-After"))
+            log.warning("HTTP %s from %s, retrying in %ss", e.code, req.full_url, delay)
+        except (URLError, TimeoutError) as e:
+            if attempt == RETRY_ATTEMPTS - 1:
+                raise
+            delay = _retry_delay(attempt)
+            log.warning("%s from %s, retrying in %ss", e, req.full_url, delay)
+        time.sleep(delay)
+    raise RuntimeError("unreachable")
+
+
+def _run_with_retry(cmd: list[str], **kwargs) -> None:
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            subprocess.run(cmd, check=True, **kwargs)
+            return
+        except subprocess.CalledProcessError:
+            if attempt == RETRY_ATTEMPTS - 1:
+                raise
+            delay = _retry_delay(attempt)
+            log.warning("Command %s failed, retrying in %ss", cmd, delay)
+            time.sleep(delay)
 
 
 def find_current_revision(arch: str) -> Optional[str]:
@@ -43,15 +86,13 @@ def find_current_revision(arch: str) -> Optional[str]:
 def find_snapstore_revision(arch: str, track: str, risk: str) -> Optional[str]:
     URL = f"https://api.snapcraft.io/v2/snaps/info/k8s?architecture={arch}&fields=revision"
     HEADER = {"Snap-Device-Series": "16"}
-    req = Request(URL, headers=HEADER)
-    with urlopen(req) as response:
-        snap_resp = json.loads(response.read())
+    snap_resp = _fetch_json(Request(URL, headers=HEADER))
 
     for mapping in snap_resp["channel-map"]:
         if (channel := mapping.get("channel")) and (
             channel.get("architecture") == arch
             and (channel.get("risk") == risk if risk else True)
-            and track.startswith(channel.get("track"))
+            and channel.get("track") == track
         ):
             rev = mapping.get("revision")
             log.info(
@@ -110,7 +151,7 @@ def commit_sha(revision: int|str) -> str:
     log.info("Locating build commit for revision='%s'", revision)
     snap_file = f"k8s_{revision}.snap"
     with tempfile.TemporaryDirectory() as tmpdir:
-        subprocess.check_call(
+        _run_with_retry(
             ["snap", "download", "k8s", f"--revision={revision}", f"--target-directory={tmpdir}"]
         )
         subprocess.run(["unsquashfs", "-d", "snapdir", snap_file], cwd=tmpdir, check=True)

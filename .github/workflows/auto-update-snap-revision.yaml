@@ -3,9 +3,11 @@ name: Auto-update Snap Revisions
 on:
   schedule:
     - cron: "0 */4 * * *" # every 4 hours
+  workflow_dispatch:
   pull_request:
     paths:
       - .github/workflows/auto-update-snap-revision.yaml
+      - .github/workflows/update-snap-revision.py
 
 permissions:
   contents: read
@@ -16,6 +18,25 @@ jobs:
     outputs:
       branches: ${{ steps.release-branches.outputs.branches }}
     steps:
+    - name: Verify REPO_ACCESS_TOKEN
+      if: ${{ github.event_name != 'pull_request' }}
+      run: |-
+        STATUS=$(curl -sS -o repo.json -w '%{http_code}' \
+          -H "Authorization: Bearer ${REPO_ACCESS_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}")
+        if [[ "${STATUS}" != "200" ]]; then
+          echo "::error title=REPO_ACCESS_TOKEN rejected::GitHub API returned HTTP ${STATUS}; the token is likely expired or revoked and must be rotated"
+          exit 1
+        fi
+        if [[ "$(jq -r '.permissions.push // false' repo.json)" != "true" ]]; then
+          echo "::error title=REPO_ACCESS_TOKEN lacks push::The token cannot push to ${GITHUB_REPOSITORY}"
+          exit 1
+        fi
+      env:
+        REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+
     - id: release-branches
       name: List release branches
       run: |-
@@ -32,6 +53,7 @@ jobs:
     needs: [stable-branches]
     if: needs.stable-branches.outputs.branches != '[]'
     strategy:
+      fail-fast: false
       matrix:
         branch: ${{ fromJSON(needs.stable-branches.outputs.branches) }}
     steps:
@@ -110,7 +132,7 @@ jobs:
         STEPS_UPDATE_ARM64_REVISION_OUTPUTS_COMMIT_SHA: ${{ steps.update-arm64-revision.outputs.commit_sha }}
 
     - name: Report Pull Request
-      if: ${{ github.event_name != 'schedule' && steps.assemble-revisions.outputs.revisions != '[]' }}
+      if: ${{ github.event_name == 'pull_request' && steps.assemble-revisions.outputs.revisions != '[]' }}
       run: |
         echo "Would have created pull-request"
         echo "Title: chore(release-${TRACK}): update k8s snap revisions"
@@ -123,7 +145,7 @@ jobs:
 
     - name: Create pull request
       uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
-      if: ${{ github.event_name == 'schedule' && (steps.assemble-revisions.outputs.revisions != '[]') }}
+      if: ${{ github.event_name != 'pull_request' && steps.assemble-revisions.outputs.revisions != '[]' }}
       with:
         commit-message: 'chore(release-${{ env.TRACK }}): update k8s snap revisions'
         title: "chore(release-${{ env.TRACK }}): update k8s snap revisions"
