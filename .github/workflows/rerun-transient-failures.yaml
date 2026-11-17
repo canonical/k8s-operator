@@ -33,7 +33,7 @@ jobs:
         RUN_URL: ${{ github.event.workflow_run.html_url }}
         DRY_RUN: "false"
         TRANSIENT_PATTERNS: >-
-          store server returned status (408|429|5[0-9][0-9])|unexpected http response code \((408|429|5[0-9][0-9])\)|cannot get nonce from store|ContentLength=[0-9]+ with Body length 0|cannot deploy controller application|unable to contact snap store|TLS handshake timeout|Temporary failure in name resolution|Network is unreachable|##\[error\]Server Error$|The runner has received a shutdown signal|lost communication with the server
+          store server returned status (408|429|5[0-9][0-9])|unexpected http response code \((408|429|5[0-9][0-9])\)|cannot get nonce from store|ContentLength=[0-9]+ with Body length 0|cannot deploy controller application|unable to contact snap store|TLS handshake timeout|Client.Timeout exceeded while awaiting headers|Temporary failure in name resolution|Network is unreachable|##\[error\]Server Error$|The runner has received a shutdown signal|lost communication with the server
       run: |-
         set -euo pipefail
 
