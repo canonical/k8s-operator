@@ -6,6 +6,10 @@ This is a Terraform module facilitating the deployment of the k8s-worker charm, 
 
 This module requires a `juju` model to be available. Refer to the [usage section](#usage) below for more details.
 
+The `base` input accepts `ubuntu@20.04`, `ubuntu@22.04`, `ubuntu@24.04`, and
+`ubuntu@26.04`. The charm selected by `channel` and `revision` must also support
+the chosen base.
+
 ## API
 
 ### Inputs
