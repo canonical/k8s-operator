@@ -10,7 +10,7 @@ on:
 jobs:
   auto-merge-successful-prs:
     name: Auto-merge K8s charm PRs
-    uses: canonical/k8s-workflows/.github/workflows/auto-merge-successful-prs.yaml@6b24c265636d618fb98d5f56231c5581a1b429ab # main
+    uses: canonical/k8s-workflows/.github/workflows/auto-merge-successful-prs.yaml@03b536d75aebd6b3701178b978532b6fcbccf9c1 # main
     secrets: inherit
     with:
       approve-msg: "Approved for merge by 'auto-merge-prs' action"
