@@ -1114,15 +1114,15 @@ dependencies = [
 
 [[package]]
 name = "ops-interface-kube-control"
-version = "0.3.3"
+version = "0.3.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ops" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/16/d3/b6b3a85d6b5090d8476c757cd1e732d6875e452cffacdc0601aae0050d6c/ops_interface_kube_control-0.3.3.tar.gz", hash = "sha256:2bcf6eeeced03bec9b677d5c2f5df41d6ddb8e85405d1ad58625353b66b692e8", size = 97134, upload-time = "2025-11-22T04:27:58.296Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/18/f15a93faae540c481b26470aae0b95f8673b54d1e97429d455351a7d8195/ops_interface_kube_control-0.3.4.tar.gz", hash = "sha256:8d4350ccf86cd9c1b74eea49aac9c338fee4396f862dea6227d4dd1afff3f732", size = 97708, upload-time = "2026-11-19T02:10:17.99Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/0f/1c146f171bedc5c5e4e92290b1719213a995679a109077f8c00907d04d42/ops_interface_kube_control-0.3.3-py3-none-any.whl", hash = "sha256:02476f57a0063ff72aa14d67adbda028a9311e629732fede951293d4c115036c", size = 10524, upload-time = "2025-11-22T04:27:57.017Z" },
+    { url = "https://files.pythonhosted.org/packages/02/7c/ba8f3de7030e50d1768664034af16655e05204be85c07be9617899b1c83f/ops_interface_kube_control-0.3.4-py3-none-any.whl", hash = "sha256:ed8e801325d70f030c38515bbf24a71e2eabea131243a0e78690d9aefc326fdd", size = 10771, upload-time = "2026-11-19T02:10:16.634Z" },
 ]
 
 [[package]]
