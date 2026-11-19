@@ -462,6 +462,24 @@ class K8sCharm(ops.CharmBase):
         """
         return node_address.by_relation_preferred(self, CLUSTER_RELATION, True)
 
+    @staticmethod
+    def _host_port(ip: str, port: int) -> str:
+        """Format an IP address and port as a host:port string.
+
+        Bracket the address if it's IPv6, since a bare colon-separated
+        ``ip:port`` string is ambiguous (and rejected by k8sd) for IPv6.
+
+        Args:
+            ip (str): The IP address.
+            port (int): The port number.
+
+        Returns:
+            str: The formatted host:port string.
+        """
+        addr = ipaddress.ip_address(ip)
+        host = f"[{addr}]" if addr.version == 6 else str(addr)
+        return f"{host}:{port}"
+
     def _get_extra_sans(self):
         """Retrieve the certificate extra SANs.
 
@@ -569,7 +587,7 @@ class K8sCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Bootstrapping Cluster"))
         payload = CreateClusterRequest(
             name=self.get_node_name(),
-            address=f"{node_ips[0]}:{K8SD_PORT}",
+            address=self._host_port(node_ips[0], K8SD_PORT),
             config=self._assemble_bootstrap_config(),
         )
         self.api_manager.bootstrap_k8s_snap(payload)
@@ -952,7 +970,7 @@ class K8sCharm(ops.CharmBase):
         """
         node_ips = self._get_node_ips()
         node_name = self.get_node_name()
-        cluster_addr = f"{node_ips[0]}:{K8SD_PORT}"
+        cluster_addr = self._host_port(node_ips[0], K8SD_PORT)
         log.info("Joining %s(%s) to %s...", self.unit, node_name, cluster_name)
         request = JoinClusterRequest(name=node_name, address=cluster_addr, token=SecretStr(token))
         if self.is_control_plane:

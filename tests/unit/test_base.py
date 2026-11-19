@@ -18,7 +18,7 @@ from k8sd_api_manager import (
     BootstrapConfig,
     UpdateClusterConfigRequest,
 )
-from literals import BOOTSTRAP_CERTIFICATES, DEFAULT_CERTIFICATE_PROVIDER
+from literals import BOOTSTRAP_CERTIFICATES, DEFAULT_CERTIFICATE_PROVIDER, K8SD_PORT
 from mocks import MockELBRequest, MockELBResponse, MockEvent  # pylint: disable=import-error
 
 
@@ -396,6 +396,25 @@ def test_ensure_cert_sans(harness):
         mock_extra_sans.return_value = ["sans1", "sans2"]
         harness.charm._ensure_cert_sans()
         mock_api_manager.assert_called_once_with(["1.2.3.4", "sans1", "sans2"])
+
+
+@pytest.mark.parametrize(
+    "ip, expected",
+    [
+        ("172.16.1.1", "172.16.1.1:6400"),
+        ("fd01:16:1::1", "[fd01:16:1::1]:6400"),
+        ("::1", "[::1]:6400"),
+    ],
+)
+def test_host_port(harness, ip, expected):
+    """Test that _host_port brackets IPv6 addresses but not IPv4.
+
+    Args:
+        harness: the harness under test
+        ip: the IP address to format
+        expected: the expected host:port string
+    """
+    assert harness.charm._host_port(ip, K8SD_PORT) == expected
 
 
 def test_get_external_kubeconfig(harness):
