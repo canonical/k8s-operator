@@ -152,8 +152,9 @@ ignored-classes = "ProfileManager,InstanceManager,NetworkManager,FieldInfo"
 minversion = "6.0"
 markers = [
     "architecture(*args): mark tests to run only on specific architectures.",
-    "bundle(file='', series='', apps_local=[], apps_channel={}, apps_resources={}): specify a YAML bundle file for a test.",
+    "bundle(file='', base='', apps_local=[], apps_channel={}, apps_resources={}): specify a YAML bundle file for a test.",
     "clouds(*args): mark tests to run only on specific clouds.",
+    "juju_major(*args): mark tests to run only on specific Juju major versions.",
     "cos: mark COS integration tests."
 ]
 

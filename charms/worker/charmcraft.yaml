@@ -122,6 +122,7 @@ parts:
 actions:
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
+    additionalProperties: false
 
 peers:
   upgrade:

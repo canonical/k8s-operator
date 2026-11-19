@@ -4,7 +4,7 @@
 name: integration-test-external-certs
 description: |-
   Used to deploy or refresh within an integration test model
-series: noble
+default-base: ubuntu@24.04
 applications:
   self-signed-certificates:
     charm: self-signed-certificates

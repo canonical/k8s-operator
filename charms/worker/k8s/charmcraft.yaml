@@ -445,8 +445,10 @@ actions:
       server:
         description: Override the server endpoint with this field
         type: string
+    additionalProperties: false
   pre-upgrade-check:
     description: Run necessary pre-upgrade checks before executing a charm upgrade.
+    additionalProperties: false
 
 parts:
   charm:

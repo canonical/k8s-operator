@@ -4,6 +4,9 @@
 
 import functools
 import logging
+import os
+import subprocess
+from pathlib import Path
 from typing import Optional, Tuple
 
 import jubilant
@@ -59,6 +62,59 @@ def cloud_arch(controller: Optional[str]) -> str:
     return arches.pop()
 
 
+@functools.lru_cache(maxsize=None)
+def juju_major(model: Optional[str]) -> int:
+    """Return the major version of the Juju agents running the model.
+
+    Args:
+        model: Model name; None means the currently selected model. Also the cache key.
+
+    Returns:
+        Major version, for example ``3`` or ``4``.
+    """
+    version = jubilant.Juju(model=model).status().model.version
+    return int(version.split(".", 1)[0])
+
+
+def authorize_ssh_keys(juju: jubilant.Juju) -> None:
+    """Add the client's public SSH keys to the model on Juju 4.
+
+    Juju 3 adds them to every new model; Juju 4 no longer does, which leaves
+    juju-crashdump unable to collect machine logs over SSH. The Juju 4 client
+    also no longer creates its own key, which juju-crashdump always loads, so
+    generate it when missing.
+
+    Args:
+        juju: Jubilant Juju instance.
+    """
+    if juju_major(juju.model) < 4:
+        return
+    juju_data = Path(os.environ.get("JUJU_DATA") or Path.home() / ".local/share/juju")
+    juju_key = juju_data / "ssh/juju_id_rsa"
+    if not juju_key.is_file():
+        juju_key.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["ssh-keygen", "-q", "-t", "rsa", "-N", "", "-f", str(juju_key)], check=True
+        )
+    paths = [juju_key.with_suffix(".pub"), *sorted((Path.home() / ".ssh").glob("id_*.pub"))]
+    # Juju 4.0.15+ rejects an argument that holds more than one key.
+    keys = [
+        line.strip()
+        for path in paths
+        if path.is_file()
+        for line in path.read_text().splitlines()
+        if line.strip()
+    ]
+    if not keys:
+        log.warning("No public SSH keys found to add to model %s", juju.model)
+        return
+    try:
+        juju.cli("add-ssh-key", *keys)
+    except jubilant.CLIError as exc:
+        # Only crash dumps depend on these keys, so don't fail the deployment.
+        log.warning("Could not add SSH keys to model %s: %s", juju.model, exc.stderr)
+
+
 def model_owner(juju: jubilant.Juju) -> str:
     """Return the owner of the model.
 
@@ -104,7 +160,11 @@ def cloud_profile(
         lxd.remove_profile(profile_name)
         lxd.apply_profile(lxd_profiles, profile_name)
     elif provider in ("ec2", "openstack"):
-        juju.model_config({"container-networking-method": "local", "fan-config": ""})
+        model_config = {"container-networking-method": "local"}
+        if juju_major(juju.model) < 4:
+            # Fan networking, and its `fan-config` key, were removed in Juju 4.
+            model_config["fan-config"] = ""
+        juju.model_config(model_config)
 
 
 def cloud_proxied(juju: jubilant.Juju) -> None:
