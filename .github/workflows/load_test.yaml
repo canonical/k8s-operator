@@ -17,7 +17,7 @@ jobs:
       run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
   load-tests:
-    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@72ba44455ad0ba7ec1c51027d5360357d1925733 # main
+    uses: canonical/operator-workflows/.github/workflows/integration_test.yaml@0ad5fa95ddbd34f7fa6a70f552269a4090f35fa3 # main
     needs: [charmcraft-channel]
     secrets: inherit
     with:
