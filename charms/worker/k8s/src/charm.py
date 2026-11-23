@@ -187,7 +187,11 @@ class K8sCharm(ops.CharmBase):
             user_label_key="node-labels",
             timeout=15,
         )
-        self._stored.set_default(is_dying=False, cluster_name=str())
+        self._stored.set_default(
+            is_dying=False,
+            cleanup_complete=False,
+            cluster_name=str(),
+        )
 
         self.cos_agent = COSAgentProvider(
             self,
@@ -991,9 +995,11 @@ class K8sCharm(ops.CharmBase):
         """
         if self.lead_control_plane:
             self._revoke_cluster_tokens(event)
-        self.update_status.run()
-        if self._last_gasp():
-            snap_management(self, remove=True)
+        if self.is_control_plane or self._stored.cleanup_complete is False:
+            self.update_status.run()
+            if self._last_gasp():
+                snap_management(self, remove=True)
+                self._stored.cleanup_complete = True
 
         relation = self.model.get_relation(CLUSTER_RELATION)
         local_cluster = self.get_cluster_name()

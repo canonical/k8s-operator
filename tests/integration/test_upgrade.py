@@ -22,7 +22,7 @@ from literals import CHARMCRAFT_DIRS
 # NOTE: Must satisfy the k8s_service "upgrade_supported" range in
 # charms/worker/k8s/src/literals.py -- the charm refuses to upgrade from outside it,
 # leaving the control-plane leader blocked. Bump this whenever that range moves.
-CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.33/beta")
+CHARM_UPGRADE_FROM = os.environ.get("JUJU_DEPLOY_CHANNEL", "1.36/beta")
 CONTROL_PLANE_APP = "k8s"
 UPGRADE_TIMEOUT = 30 * 60
 log = logging.getLogger(__name__)
@@ -68,8 +68,6 @@ def charm_channel_missing(charms: Iterable[str], channel: str) -> Tuple[bool, st
 
 not_found, not_found_reason = charm_channel_missing(CHARMCRAFT_DIRS, CHARM_UPGRADE_FROM)
 
-# This pytest mark configures the test environment to use the Canonical Kubernetes
-# deploying charms from the edge channels, then upgrading them to the built charm.
 pytestmark = [
     pytest.mark.skipif(not_found, reason=not_found_reason),
     pytest.mark.bundle(

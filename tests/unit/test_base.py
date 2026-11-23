@@ -7,13 +7,17 @@
 """Unit tests."""
 
 import contextlib
+import itertools
 import json
 from pathlib import Path
 from unittest import mock
 
 import containerd
+import k8s.node
 import ops
 import pytest
+from charmlibs.snap import SnapError
+from charms.contextual_status import ReconcilerError
 from k8sd_api_manager import (
     BootstrapConfig,
     UpdateClusterConfigRequest,
@@ -457,3 +461,122 @@ def test_external_load_balancer_address(harness):
         mock_elb.is_available = True
         mock_elb.get_response.return_value = MockELBResponse(lb_addr)
         assert harness.charm.external_load_balancer_address == lb_addr
+
+
+@pytest.fixture
+def removing_unit(harness):
+    """Prepare a dying unit with simulated node and snap operations."""
+    harness.disable_hooks()
+    harness.set_leader(True)
+    peer = harness.add_relation("upgrade", harness.charm.app.name)
+    for number in (1, 2):
+        harness.add_relation_unit(peer, f"{harness.charm.app.name}/{number}")
+    harness.charm._stored.is_dying = True
+    harness.charm._stored.cluster_name = "original-cluster"
+    with (
+        mock.patch.object(harness.charm, "_evaluate_removal", return_value=True),
+        mock.patch.object(
+            harness.charm,
+            "_apply_proxy_environment",
+            side_effect=AssertionError("Removed units must not resume normal reconciliation"),
+        ),
+        mock.patch("charm.k8s.node.ready", return_value=k8s.node.Status.UNRESPONSIVE) as readiness,
+        mock.patch.object(
+            harness.charm.api_manager, "is_cluster_bootstrapped", return_value=False
+        ),
+        mock.patch.object(harness.charm.update_status, "run"),
+        mock.patch.object(harness.charm, "_revoke_cluster_tokens"),
+        mock.patch("charm.sleep"),
+        mock.patch("charm.snap_management") as remove,
+    ):
+        harness.enable_hooks()
+        yield harness, peer, readiness, remove
+
+
+@pytest.fixture
+def removing_worker(removing_unit):
+    """Restrict the dying-unit fixture to workers."""
+    if removing_unit[0].charm.is_control_plane:
+        pytest.skip("Not applicable on control planes")
+    yield removing_unit
+
+
+def test_completed_cleanup_is_not_repeated(removing_worker):
+    """Later hooks skip teardown after cleanup removes the snap and its API proxy."""
+    harness, peer, readiness, remove = removing_worker
+    with mock.patch.object(
+        harness.charm, "_last_gasp", wraps=harness.charm._last_gasp
+    ) as last_gasp:
+        harness.charm.on.stop.emit()
+        assert harness.charm._stored.cleanup_complete
+
+        readiness.side_effect = FileNotFoundError("kubectl was removed with the snap")
+        remove.side_effect = SnapError("snap is already removed")
+        for number in (1, 2):
+            harness.remove_relation_unit(peer, f"{harness.charm.app.name}/{number}")
+        harness.charm.on.stop.emit()
+        harness.charm.on.remove.emit()
+        assert harness.charm._stored.cleanup_complete
+        harness.charm.update_status.run.assert_called_once_with()
+        last_gasp.assert_called_once_with()
+        remove.assert_called_once_with(harness.charm, remove=True)
+
+
+@pytest.mark.parametrize(
+    ("node_status", "bootstrapped", "removed"),
+    [
+        (k8s.node.Status.UNRESPONSIVE, False, True),
+        (k8s.node.Status.NOT_READY, False, True),
+        (k8s.node.Status.READY, False, False),
+        (k8s.node.Status.UNRESPONSIVE, True, False),
+    ],
+)
+def test_removal_follows_node_readiness(removing_unit, node_status, bootstrapped, removed):
+    """A departed unit may not reach its own API server; a Ready Node is still clustered."""
+    harness, _, readiness, remove = removing_unit
+    readiness.return_value = node_status
+    harness.charm.api_manager.is_cluster_bootstrapped.return_value = bootstrapped
+
+    harness.charm.on.stop.emit()
+
+    assert remove.called is removed
+
+
+def test_removal_requires_consecutive_unclustered_observations(removing_unit):
+    """A Node reporting Ready again resets the removal confirmation."""
+    harness, _, readiness, remove = removing_unit
+    states = itertools.cycle(
+        [k8s.node.Status.NOT_READY, k8s.node.Status.NOT_READY, k8s.node.Status.READY]
+    )
+    readiness.side_effect = lambda *args: next(states)
+
+    harness.charm.on.stop.emit()
+
+    remove.assert_not_called()
+
+
+def test_cleanup_retries_after_uncluster_timeout(removing_worker):
+    """A later hook can complete cleanup after an uncluster polling timeout."""
+    harness, _, readiness, remove = removing_worker
+    readiness.return_value = k8s.node.Status.READY
+    harness.charm.on.stop.emit()
+    assert not harness.charm._stored.cleanup_complete
+    remove.assert_not_called()
+
+    readiness.return_value = k8s.node.Status.UNRESPONSIVE
+    harness.charm.on.stop.emit()
+    assert harness.charm._stored.cleanup_complete
+    remove.assert_called_once()
+
+
+@pytest.mark.parametrize("error", [SnapError("snap removal failed"), ReconcilerError("pending")])
+def test_cleanup_retries_after_snap_removal_failure(removing_worker, error):
+    """Snap failures leave cleanup incomplete and retryable."""
+    harness, _, _, remove = removing_worker
+    remove.side_effect = [error, None]
+    harness.charm.on.stop.emit()
+    assert not harness.charm._stored.cleanup_complete
+    assert isinstance(harness.model.unit.status, ops.WaitingStatus)
+
+    harness.charm.on.stop.emit()
+    assert harness.charm._stored.cleanup_complete
