@@ -104,7 +104,7 @@ jobs:
             --build-context "$GITHUB_WORKSPACE" \
             --project-dir "${{ matrix.project-directory }}" \
             pack \
-            --platform ubuntu@20.04:amd64 \
+            --platform ubuntu-20.04-amd64 \
             --verbose
 
       - name: Upload Focal charm
