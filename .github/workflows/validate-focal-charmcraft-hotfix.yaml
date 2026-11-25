@@ -1,4 +1,4 @@
-name: Validate Focal with Charmcraft hotfix
+name: Validate Focal with Charmcraft 4.5.1
 
 on:
   pull_request:
@@ -14,48 +14,11 @@ permissions:
   contents: read
 
 env:
-  CHARMCRAFT_REF: hotfix/4.5
   OPERATOR_WORKFLOWS_REF: 011250c1cbc944fd99b1a16ebb995f55483a57b3
 
 jobs:
-  build-charmcraft:
-    name: Build Charmcraft from hotfix/4.5
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout Charmcraft
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: canonical/charmcraft
-          ref: ${{ env.CHARMCRAFT_REF }}
-          path: charmcraft
-          persist-credentials: false
-
-      - name: Record Charmcraft source revision
-        working-directory: charmcraft
-        run: |
-          echo "Building Charmcraft from $(git rev-parse HEAD)"
-          grep -A2 -F 'name = "craft-providers"' uv.lock
-
-      - name: Use dependency wheels
-        run: |
-          yq e 'del(.parts.charmcraft."build-environment"[] | select(.UV_NO_BINARY == "true"))' \
-            -i charmcraft/snap/snapcraft.yaml
-
-      - name: Build Charmcraft snap
-        id: charmcraft
-        uses: canonical/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1
-        with:
-          path: charmcraft
-
-      - name: Upload Charmcraft snap
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: charmcraft-hotfix-4.5
-          path: ${{ steps.charmcraft.outputs.snap }}
-
   build-focal-charms:
     name: Build ${{ matrix.name }} for Focal
-    needs: build-charmcraft
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -74,18 +37,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download Charmcraft snap
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: charmcraft-hotfix-4.5
-          path: .charmcraft-snap
-
-      - name: Install Charmcraft hotfix
+      - name: Install Charmcraft 4.5.1 candidate
         run: |
-          sudo snap install --dangerous --classic .charmcraft-snap/*.snap
+          sudo snap install charmcraft --classic --channel=4.x/candidate
           charmcraft version
           /snap/charmcraft/current/bin/python -c \
-            'from importlib.metadata import version; print("craft-providers", version("craft-providers"))'
+            'from importlib.metadata import version; assert version("craft-providers") == "3.7.3"'
+          grep -F "_disable_apparmor_diff_encode" \
+            /snap/charmcraft/current/lib/python3.12/site-packages/craft_providers/bases/ubuntu.py
 
       - name: Set up UV
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
