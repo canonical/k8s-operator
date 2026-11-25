@@ -70,5 +70,5 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ matrix.name }}-focal
-          path: "*.charm"
+          path: ${{ matrix.project-directory }}/*.charm
           if-no-files-found: error
