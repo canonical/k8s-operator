@@ -1,0 +1,74 @@
+name: Validate Focal with Charmcraft 4.5.1
+
+on:
+  pull_request:
+    branches:
+      - fix/add-focal-to-1.32
+    paths:
+      - .github/workflows/validate-focal-charmcraft-hotfix.yaml
+      - charms/worker/charmcraft.yaml
+      - charms/worker/k8s/charmcraft.yaml
+      - charms/worker/**
+
+permissions:
+  contents: read
+
+env:
+  OPERATOR_WORKFLOWS_REF: 011250c1cbc944fd99b1a16ebb995f55483a57b3
+
+jobs:
+  build-focal-charms:
+    name: Build ${{ matrix.name }} for Focal
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: k8s
+            project-directory: charms/worker/k8s
+          - name: k8s-worker
+            project-directory: charms/worker
+    steps:
+      - name: Set up LXD
+        uses: canonical/setup-lxd@a3c85fc6fb7fff43fcfeae87659e41a8f635b7dd # v0.1.3
+
+      - name: Checkout k8s-operator
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Charmcraft 4.5.1 candidate
+        run: |
+          sudo snap install charmcraft --classic --channel=4.x/candidate
+          charmcraft version
+          /snap/charmcraft/current/bin/python -c \
+            'from importlib.metadata import version; assert version("craft-providers") == "3.7.3"'
+          grep -F "_disable_apparmor_diff_encode" \
+            /snap/charmcraft/current/lib/python3.12/site-packages/craft_providers/bases/ubuntu.py
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.11"
+          python-version: "3.12"
+
+      - name: Install charmbuild
+        run: |
+          uv tool install \
+            "git+https://github.com/canonical/operator-workflows@${OPERATOR_WORKFLOWS_REF}#subdirectory=charmbuild"
+
+      - name: Build Focal charm
+        run: |
+          charmbuild \
+            --build-context "$GITHUB_WORKSPACE" \
+            --project-dir "${{ matrix.project-directory }}" \
+            pack \
+            --platform ubuntu-20.04-amd64 \
+            --verbose
+
+      - name: Upload Focal charm
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ matrix.name }}-focal
+          path: ${{ matrix.project-directory }}/*.charm
+          if-no-files-found: error
